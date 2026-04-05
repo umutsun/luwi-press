@@ -1,0 +1,391 @@
+{
+  "name": "SEO-Aware Translation Pipeline",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "translation-request",
+        "options": {}
+      },
+      "name": "Translation Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "trans-webhook"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 250],
+      "id": "trans-schedule"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/site-config",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": { "timeout": 15000 }
+      },
+      "name": "Site Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 250],
+      "id": "trans-site-config"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine source: single-product webhook, batch webhook (translate_missing), or scheduled\nconst webhookData = $('Translation Request Webhook').first()?.json;\nconst siteConfig = $('Site Config').first().json;\nconst defaultLanguages = (siteConfig.n8npress?.target_languages || [siteConfig.n8npress?.target_language || 'tr']).join(',');\nconst isSingleProduct = !!webhookData?.product_id;\nconst isBatchRequest = webhookData?.event === 'translate_missing' || !!webhookData?.fetch_pending;\n\nif (isSingleProduct) {\n  const body = webhookData.body || webhookData;\n  return [{\n    json: {\n      product_ids: [body.product_id],\n      target_languages: (body.target_languages || defaultLanguages).split(',').map(l => l.trim()),\n      source: 'webhook'\n    }\n  }];\n}\n\nif (isBatchRequest) {\n  const body = webhookData.body || webhookData;\n  const langs = body.target_languages\n    ? body.target_languages.split(',').map(l => l.trim())\n    : defaultLanguages.split(',').map(l => l.trim());\n  return [{\n    json: {\n      product_ids: [],\n      target_languages: langs,\n      source: 'batch_webhook',\n      fetch_pending: true\n    }\n  }];\n}\n\n// Scheduled: use site-config target_languages\nreturn [{\n  json: {\n    product_ids: [],\n    target_languages: defaultLanguages.split(',').map(l => l.trim()),\n    source: 'schedule',\n    fetch_pending: true\n  }\n}];"
+      },
+      "name": "Determine Source",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 100],
+      "id": "trans-source"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/translation/pending",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Fetch Pending Translations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 250],
+      "id": "trans-fetch-pending"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sourceData = $('Determine Source').first().json;\nlet productIds = sourceData.product_ids;\n\nif (sourceData.fetch_pending) {\n  const pending = $input.first().json;\n  productIds = (pending.products || []).map(p => p.id).slice(0, 10);\n}\n\nconst targetLanguages = sourceData.target_languages;\n\n// Create one item per product-language combination\nconst items = [];\nfor (const productId of productIds) {\n  for (const lang of targetLanguages) {\n    items.push({\n      json: { product_id: productId, target_language: lang }\n    });\n  }\n}\n\nif (items.length === 0) {\n  return [{ json: { skip: true, message: 'No products to translate' } }];\n}\n\nreturn items;"
+      },
+      "name": "Build Translation Matrix",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 100],
+      "id": "trans-matrix"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Products?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 100],
+      "id": "trans-if-products"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/wp/v2/product/{{ $json.product_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Fetch Product Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 50],
+      "id": "trans-fetch-product"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $('Site Config').first().json.n8npress?.ai?.api_key }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $('Site Config').first().json.n8npress?.ai?.model || 'claude-haiku-4-5' }}\",\n  \"max_tokens\": {{ $('Site Config').first().json.n8npress?.ai?.max_tokens || 3000 }},\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are an expert SEO-aware translator for e-commerce. Translate the following product content to {{ $json.target_language }}.\\n\\nIMPORTANT RULES:\\n- Preserve brand names exactly as-is (do NOT translate brand names)\\n- Meta title must be under 60 characters\\n- Meta description must be under 160 characters\\n- Maintain keyword density appropriate for the target language\\n- Use natural, native-sounding language\\n- Preserve HTML structure in description\\n\\nProduct Title: {{ $json.title?.rendered || $json.name }}\\nProduct Description: {{ $json.content?.rendered || $json.description }}\\nShort Description: {{ $json.excerpt?.rendered || $json.short_description }}\\nMeta Title: {{ $json.yoast_head_json?.title || $json.title?.rendered || $json.name }}\\nMeta Description: {{ $json.yoast_head_json?.description || '' }}\\n\\nRespond in valid JSON with these keys:\\n{\\n  \\\"title\\\": \\\"translated title\\\",\\n  \\\"description\\\": \\\"translated full description (with HTML)\\\",\\n  \\\"short_description\\\": \\\"translated short description\\\",\\n  \\\"meta_title\\\": \\\"translated meta title (<60 chars)\\\",\\n  \\\"meta_description\\\": \\\"translated meta description (<160 chars)\\\",\\n  \\\"slug\\\": \\\"seo-friendly-url-slug\\\"\\n}\\n\\nRespond ONLY with valid JSON.\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "name": "Claude Translate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 50],
+      "id": "trans-claude"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst content = response.content?.[0]?.text || '{}';\nlet translated;\ntry {\n  translated = JSON.parse(content);\n} catch(e) {\n  const match = content.match(/\\{[\\s\\S]*\\}/);\n  translated = match ? JSON.parse(match[0]) : null;\n}\n\nif (!translated) {\n  return [{ json: { valid: false, error: 'JSON parse failed', product_id: $json.product_id, target_language: $json.target_language } }];\n}\n\nconst errors = [];\n\n// Validate meta title length\nif (translated.meta_title && translated.meta_title.length > 60) {\n  errors.push(`Meta title too long: ${translated.meta_title.length} chars (max 60)`);\n}\n\n// Validate meta description length\nif (translated.meta_description && translated.meta_description.length > 160) {\n  errors.push(`Meta description too long: ${translated.meta_description.length} chars (max 160)`);\n}\n\n// Check brand name preservation (basic check)\nconst originalTitle = $('Fetch Product Data').first().json.title?.rendered || '';\nconst brandPatterns = originalTitle.match(/[A-Z][a-z]+(?:\\s[A-Z][a-z]+)*/g) || [];\nfor (const brand of brandPatterns) {\n  if (brand.length > 3 && !translated.title.includes(brand)) {\n    errors.push(`Brand name possibly not preserved: ${brand}`);\n  }\n}\n\nconst productData = $('Fetch Product Data').first().json;\n\nreturn [{\n  json: {\n    product_id: productData.id,\n    product_name: productData.title?.rendered || productData.name,\n    target_language: $('Build Translation Matrix').first().json.target_language,\n    translated,\n    valid: errors.length === 0,\n    errors\n  }\n}];"
+      },
+      "name": "Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 50],
+      "id": "trans-validate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "valid-check",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2250, 50],
+      "id": "trans-if-valid"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/translation/callback",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"product_id\": {{ $json.product_id }},\n  \"target_language\": \"{{ $json.target_language }}\",\n  \"translated\": {{ JSON.stringify($json.translated) }},\n  \"status\": \"completed\"\n}",
+        "options": {}
+      },
+      "name": "Save Translation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2500, -50],
+      "id": "trans-save"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/translation/callback",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"product_id\": {{ $json.product_id }},\n  \"target_language\": \"{{ $json.target_language }}\",\n  \"translated\": {{ JSON.stringify($json.translated) }},\n  \"status\": \"needs_review\",\n  \"errors\": {{ JSON.stringify($json.errors) }}\n}",
+        "options": {}
+      },
+      "name": "Flag for Human Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2500, 150],
+      "id": "trans-flag-review"
+    },
+    {
+      "parameters": {
+        "jsCode": "// After saving translation, delete hreflang transient so tags regenerate\nconst saved = $input.first().json;\nconst productId = saved.product_id || saved.body?.product_id;\n// The transient is auto-deleted on next page load if stale,\n// but we log it for awareness.\nreturn [{ json: { ...saved, hreflang_note: 'Hreflang tags will regenerate on next page view for product ' + productId } }];"
+      },
+      "name": "Clear Hreflang Cache",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2625, -50],
+      "id": "trans-clear-hreflang"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst now = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });\nconst siteName = $('Site Config').first().json.site?.name || 'Site';\n\nconst completed = allItems.filter(i => i.json.valid === true);\nconst needsReview = allItems.filter(i => i.json.valid === false);\n\nlet report = `Translation Pipeline Report - ${siteName}\\nDate: ${now}\\n\\n`;\nreport += `Successful: ${completed.length} | Needs Review: ${needsReview.length}\\n\\n`;\n\nif (needsReview.length > 0) {\n  report += `Translations Needing Review:\\n`;\n  needsReview.forEach(item => {\n    report += `  - ${item.json.product_name} (${item.json.target_language})\\n`;\n    (item.json.errors || []).forEach(e => {\n      report += `    Error: ${e}\\n`;\n    });\n  });\n}\n\nreturn [{ json: { report, date: now } }];"
+      },
+      "name": "Translation Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2750, 50],
+      "id": "trans-report"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/send-email",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $('Site Config').first().json.site.admin_email }}\",\n  \"subject\": \"Translation Report - {{ $('Site Config').first().json.site.name }} - {{ $json.date }}\",\n  \"message\": {{ JSON.stringify($json.report) }}\n}",
+        "options": {}
+      },
+      "name": "Email Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3000, 50],
+      "id": "trans-email"
+    }
+  ],
+  "connections": {
+    "Translation Request Webhook": {
+      "main": [
+        [
+          { "node": "Site Config", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Daily Schedule": {
+      "main": [
+        [
+          { "node": "Site Config", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Site Config": {
+      "main": [
+        [
+          { "node": "Determine Source", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Determine Source": {
+      "main": [
+        [
+          { "node": "Fetch Pending Translations", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Pending Translations": {
+      "main": [
+        [
+          { "node": "Build Translation Matrix", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Build Translation Matrix": {
+      "main": [
+        [
+          { "node": "Has Products?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Has Products?": {
+      "main": [
+        [
+          { "node": "Fetch Product Data", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Fetch Product Data": {
+      "main": [
+        [
+          { "node": "Claude Translate", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Claude Translate": {
+      "main": [
+        [
+          { "node": "Validate", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Validate": {
+      "main": [
+        [
+          { "node": "Is Valid?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          { "node": "Save Translation", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Flag for Human Review", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Save Translation": {
+      "main": [
+        [
+          { "node": "Clear Hreflang Cache", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Clear Hreflang Cache": {
+      "main": [
+        [
+          { "node": "Translation Report", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Flag for Human Review": {
+      "main": [
+        [
+          { "node": "Translation Report", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Translation Report": {
+      "main": [
+        [
+          { "node": "Email Report", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Europe/Istanbul",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  }
+}

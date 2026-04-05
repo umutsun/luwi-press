@@ -1,0 +1,462 @@
+<?php
+/**
+ * n8nPress AEO (Answer Engine Optimization)
+ *
+ * Provides REST API endpoints for FAQ generation, HowTo schema,
+ * speakable markup, and AEO coverage tracking.
+ *
+ * @package n8nPress
+ * @since 1.1.0
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class N8nPress_AEO {
+
+    private static $instance = null;
+
+    public static function get_instance() {
+        if (null === self::$instance) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    private function __construct() {
+        add_action('rest_api_init', [$this, 'register_endpoints']);
+        add_action('wp_head', [$this, 'output_aeo_schema'], 5);
+    }
+
+    /**
+     * Register REST API endpoints
+     */
+    public function register_endpoints() {
+        $namespace = 'n8npress/v1';
+
+        register_rest_route($namespace, '/aeo/generate-faq', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'trigger_faq_generation'],
+            'permission_callback' => [$this, 'check_admin_permission'],
+            'args' => [
+                'product_id' => ['required' => true, 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
+        register_rest_route($namespace, '/aeo/generate-howto', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'trigger_howto_generation'],
+            'permission_callback' => [$this, 'check_admin_permission'],
+            'args' => [
+                'product_id' => ['required' => true, 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
+        register_rest_route($namespace, '/aeo/save-faq', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'save_faq_data'],
+            'permission_callback' => [$this, 'check_token_permission'],
+        ]);
+
+        register_rest_route($namespace, '/aeo/save-howto', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'save_howto_data'],
+            'permission_callback' => [$this, 'check_token_permission'],
+        ]);
+
+        register_rest_route($namespace, '/aeo/save-speakable', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'save_speakable_data'],
+            'permission_callback' => [$this, 'check_token_permission'],
+        ]);
+
+        register_rest_route($namespace, '/aeo/coverage', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'get_aeo_coverage'],
+            'permission_callback' => [$this, 'check_admin_permission'],
+        ]);
+    }
+
+    /**
+     * Admin permission check
+     */
+    public function check_admin_permission($request) {
+        $auth = $request->get_header('Authorization');
+        if ($auth) {
+            $token = str_replace('Bearer ', '', $auth);
+            $stored = get_option('n8npress_seo_api_token', '');
+            if (!empty($stored) && hash_equals($stored, $token)) {
+                return true;
+            }
+        }
+        return current_user_can('manage_options');
+    }
+
+    /**
+     * Token-only permission
+     */
+    public function check_token_permission($request) {
+        $auth = $request->get_header('Authorization');
+        if (!$auth) {
+            return false;
+        }
+        $token = str_replace('Bearer ', '', $auth);
+        $stored = get_option('n8npress_seo_api_token', '');
+        return !empty($stored) && hash_equals($stored, $token);
+    }
+
+    /**
+     * POST /aeo/generate-faq — Trigger FAQ generation via n8n
+     */
+    public function trigger_faq_generation($request) {
+        $product_id = $request->get_param('product_id');
+        $product = wc_get_product($product_id);
+
+        if (!$product) {
+            return new WP_Error('not_found', 'Product not found', ['status' => 404]);
+        }
+
+        $payload = [
+            'product_id'    => $product_id,
+            'name'          => $product->get_name(),
+            'description'   => wp_strip_all_tags($product->get_description()),
+            'categories'    => wp_list_pluck(get_the_terms($product_id, 'product_cat') ?: [], 'name'),
+            'price'         => $product->get_price(),
+            'type'          => 'faq',
+            'target_language' => get_option('n8npress_target_language', 'tr'),
+        ];
+
+        $result = $this->send_to_n8n('aeo_generate_faq', $payload, rest_url('n8npress/v1/aeo/save-faq'));
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        update_post_meta($product_id, '_n8npress_aeo_faq_status', 'processing');
+
+        return rest_ensure_response([
+            'status'     => 'processing',
+            'product_id' => $product_id,
+        ]);
+    }
+
+    /**
+     * POST /aeo/generate-howto — Trigger HowTo generation via n8n
+     */
+    public function trigger_howto_generation($request) {
+        $product_id = $request->get_param('product_id');
+        $product = wc_get_product($product_id);
+
+        if (!$product) {
+            return new WP_Error('not_found', 'Product not found', ['status' => 404]);
+        }
+
+        $payload = [
+            'product_id'    => $product_id,
+            'name'          => $product->get_name(),
+            'description'   => wp_strip_all_tags($product->get_description()),
+            'categories'    => wp_list_pluck(get_the_terms($product_id, 'product_cat') ?: [], 'name'),
+            'type'          => 'howto',
+            'target_language' => get_option('n8npress_target_language', 'tr'),
+        ];
+
+        $result = $this->send_to_n8n('aeo_generate_howto', $payload, rest_url('n8npress/v1/aeo/save-howto'));
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        update_post_meta($product_id, '_n8npress_aeo_howto_status', 'processing');
+
+        return rest_ensure_response([
+            'status'     => 'processing',
+            'product_id' => $product_id,
+        ]);
+    }
+
+    /**
+     * POST /aeo/save-faq — Callback from n8n with generated FAQ data
+     */
+    public function save_faq_data($request) {
+        $data = $request->get_json_params();
+        $product_id = isset($data['product_id']) ? absint($data['product_id']) : 0;
+
+        if (!$product_id || !wc_get_product($product_id)) {
+            return new WP_Error('invalid_product', 'Invalid product ID', ['status' => 400]);
+        }
+
+        $faq_items = isset($data['faq']) ? $data['faq'] : [];
+        if (empty($faq_items) || !is_array($faq_items)) {
+            return new WP_Error('invalid_data', 'FAQ data is required', ['status' => 400]);
+        }
+
+        // Sanitize FAQ items
+        $sanitized = [];
+        foreach ($faq_items as $item) {
+            if (!empty($item['question']) && !empty($item['answer'])) {
+                $sanitized[] = [
+                    'question' => sanitize_text_field($item['question']),
+                    'answer'   => wp_kses_post($item['answer']),
+                ];
+            }
+        }
+
+        update_post_meta($product_id, '_n8npress_faq', $sanitized);
+        update_post_meta($product_id, '_n8npress_aeo_faq_status', 'completed');
+        update_post_meta($product_id, '_n8npress_aeo_faq_updated', current_time('c'));
+
+        return rest_ensure_response([
+            'status'     => 'saved',
+            'product_id' => $product_id,
+            'faq_count'  => count($sanitized),
+        ]);
+    }
+
+    /**
+     * POST /aeo/save-howto — Callback from n8n with HowTo schema
+     */
+    public function save_howto_data($request) {
+        $data = $request->get_json_params();
+        $product_id = isset($data['product_id']) ? absint($data['product_id']) : 0;
+
+        if (!$product_id || !wc_get_product($product_id)) {
+            return new WP_Error('invalid_product', 'Invalid product ID', ['status' => 400]);
+        }
+
+        $howto = isset($data['howto']) ? $data['howto'] : [];
+        if (empty($howto)) {
+            return new WP_Error('invalid_data', 'HowTo data is required', ['status' => 400]);
+        }
+
+        // Sanitize HowTo steps
+        if (isset($howto['steps']) && is_array($howto['steps'])) {
+            foreach ($howto['steps'] as &$step) {
+                $step['name'] = sanitize_text_field($step['name'] ?? '');
+                $step['text'] = wp_kses_post($step['text'] ?? '');
+                if (isset($step['image'])) {
+                    $step['image'] = esc_url_raw($step['image']);
+                }
+            }
+            unset($step);
+        }
+
+        $howto['name'] = sanitize_text_field($howto['name'] ?? '');
+        $howto['description'] = wp_kses_post($howto['description'] ?? '');
+
+        update_post_meta($product_id, '_n8npress_howto', $howto);
+        update_post_meta($product_id, '_n8npress_aeo_howto_status', 'completed');
+        update_post_meta($product_id, '_n8npress_aeo_howto_updated', current_time('c'));
+
+        return rest_ensure_response([
+            'status'     => 'saved',
+            'product_id' => $product_id,
+        ]);
+    }
+
+    /**
+     * POST /aeo/save-speakable — Callback from n8n with speakable content
+     */
+    public function save_speakable_data($request) {
+        $data = $request->get_json_params();
+        $product_id = isset($data['product_id']) ? absint($data['product_id']) : 0;
+
+        if (!$product_id || !wc_get_product($product_id)) {
+            return new WP_Error('invalid_product', 'Invalid product ID', ['status' => 400]);
+        }
+
+        $speakable = isset($data['speakable']) ? sanitize_text_field($data['speakable']) : '';
+        if (empty($speakable)) {
+            return new WP_Error('invalid_data', 'Speakable content is required', ['status' => 400]);
+        }
+
+        update_post_meta($product_id, '_n8npress_speakable', $speakable);
+        update_post_meta($product_id, '_n8npress_aeo_speakable_updated', current_time('c'));
+
+        return rest_ensure_response([
+            'status'     => 'saved',
+            'product_id' => $product_id,
+        ]);
+    }
+
+    /**
+     * GET /aeo/coverage — AEO coverage statistics
+     */
+    public function get_aeo_coverage($request) {
+        global $wpdb;
+
+        $total_products = intval($wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts}
+             WHERE post_type = 'product' AND post_status = 'publish'"
+        ));
+
+        if (0 === $total_products) {
+            return rest_ensure_response([
+                'total_products' => 0,
+                'faq_coverage'   => 0,
+                'howto_coverage' => 0,
+                'schema_coverage' => 0,
+                'speakable_coverage' => 0,
+            ]);
+        }
+
+        $with_faq = intval($wpdb->get_var(
+            "SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
+             WHERE meta_key = '_n8npress_faq' AND meta_value != '' AND meta_value != 'a:0:{}'"
+        ));
+
+        $with_howto = intval($wpdb->get_var(
+            "SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
+             WHERE meta_key = '_n8npress_howto' AND meta_value != ''"
+        ));
+
+        $with_schema = intval($wpdb->get_var(
+            "SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
+             WHERE meta_key = '_n8npress_schema' AND meta_value != ''"
+        ));
+
+        $with_speakable = intval($wpdb->get_var(
+            "SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
+             WHERE meta_key = '_n8npress_speakable' AND meta_value != ''"
+        ));
+
+        // Get products that have NONE of the AEO elements
+        $products_without_any = $wpdb->get_results(
+            "SELECT p.ID, p.post_title
+             FROM {$wpdb->posts} p
+             WHERE p.post_type = 'product' AND p.post_status = 'publish'
+               AND p.ID NOT IN (
+                   SELECT DISTINCT post_id FROM {$wpdb->postmeta}
+                   WHERE meta_key IN ('_n8npress_faq', '_n8npress_howto', '_n8npress_schema', '_n8npress_speakable')
+                     AND meta_value != '' AND meta_value != 'a:0:{}'
+               )
+             ORDER BY p.post_date DESC
+             LIMIT 50"
+        );
+
+        $uncovered = [];
+        foreach ($products_without_any as $p) {
+            $uncovered[] = [
+                'product_id' => $p->ID,
+                'name'       => $p->post_title,
+                'permalink'  => get_permalink($p->ID),
+            ];
+        }
+
+        return rest_ensure_response([
+            'total_products'     => $total_products,
+            'with_faq'           => $with_faq,
+            'with_howto'         => $with_howto,
+            'with_schema'        => $with_schema,
+            'with_speakable'     => $with_speakable,
+            'faq_coverage'       => round(($with_faq / $total_products) * 100, 1),
+            'howto_coverage'     => round(($with_howto / $total_products) * 100, 1),
+            'schema_coverage'    => round(($with_schema / $total_products) * 100, 1),
+            'speakable_coverage' => round(($with_speakable / $total_products) * 100, 1),
+            'uncovered_products' => $uncovered,
+        ]);
+    }
+
+    /**
+     * Output AEO schema markup in <head>
+     */
+    public function output_aeo_schema() {
+        if (!is_singular('product')) {
+            return;
+        }
+
+        global $post;
+        $product_id = $post->ID;
+
+        // Output HowTo schema
+        $howto = get_post_meta($product_id, '_n8npress_howto', true);
+        if (!empty($howto) && is_array($howto)) {
+            $howto_schema = [
+                '@context' => 'https://schema.org',
+                '@type'    => 'HowTo',
+                'name'     => $howto['name'] ?? '',
+                'description' => $howto['description'] ?? '',
+            ];
+
+            if (!empty($howto['steps'])) {
+                $howto_schema['step'] = [];
+                foreach ($howto['steps'] as $i => $step) {
+                    $s = [
+                        '@type' => 'HowToStep',
+                        'name'  => $step['name'],
+                        'text'  => $step['text'],
+                        'position' => $i + 1,
+                    ];
+                    if (!empty($step['image'])) {
+                        $s['image'] = $step['image'];
+                    }
+                    $howto_schema['step'][] = $s;
+                }
+            }
+
+            echo '<script type="application/ld+json">' . wp_json_encode($howto_schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>' . "\n";
+        }
+
+        // Output Speakable schema
+        $speakable = get_post_meta($product_id, '_n8npress_speakable', true);
+        if (!empty($speakable)) {
+            $speakable_schema = [
+                '@context' => 'https://schema.org',
+                '@type'    => 'WebPage',
+                'name'     => get_the_title($product_id),
+                'speakable' => [
+                    '@type'    => 'SpeakableSpecification',
+                    'xpath'    => ['/html/head/title', "/html/body//div[@class='n8npress-speakable']"],
+                ],
+            ];
+
+            echo '<script type="application/ld+json">' . wp_json_encode($speakable_schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>' . "\n";
+        }
+    }
+
+    /**
+     * Send payload to n8n webhook
+     */
+    private function send_to_n8n($event, $payload, $callback_url = '') {
+        $budget = N8nPress_Token_Tracker::check_budget( 'aeo-generator' );
+        if ( is_wp_error( $budget ) ) {
+            return $budget;
+        }
+
+        $url = get_option('n8npress_seo_webhook_url', '');
+        if (empty($url)) {
+            return new WP_Error('no_webhook_url', 'n8n webhook URL not configured', ['status' => 500]);
+        }
+
+        $body = wp_json_encode(array_merge(
+            ['event' => $event, '_meta' => n8npress_build_meta_block($callback_url)],
+            $payload
+        ));
+
+        $headers = [
+            'Content-Type'     => 'application/json',
+            'X-n8nPress-Event' => $event,
+        ];
+
+        $token = get_option('n8npress_seo_api_token', '');
+        if (!empty($token)) {
+            $headers['Authorization'] = 'Bearer ' . $token;
+        }
+
+        if (class_exists('N8nPress_HMAC')) {
+            N8nPress_HMAC::add_signature_headers($headers, $body);
+        }
+
+        $response = wp_remote_post($url, [
+            'headers' => $headers,
+            'body'    => $body,
+            'timeout' => 10,
+        ]);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        return true;
+    }
+}

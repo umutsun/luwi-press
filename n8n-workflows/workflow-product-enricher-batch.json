@@ -1,0 +1,204 @@
+{
+  "name": "n8nPress — Batch Product Enricher",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "product-enrich-batch",
+        "responseMode": "responseNode",
+        "options": { "rawBody": true }
+      },
+      "name": "Webhook - Batch Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 400],
+      "id": "wh-batch-enrich-01"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, batch_id: $json.body.batch_id, queued: $json.body.products?.length || 0 }) }}",
+        "options": {}
+      },
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 280],
+      "id": "respond-batch-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract products array from webhook payload\nconst body = $input.first().json.body;\nconst meta = body._meta || {};\nconst products = body.products || [];\nconst batchId = body.batch_id || 'unknown';\nconst callbackUrl = meta.callback_url || body.callback_url || '';\nconst options = body.options || {};\n\nreturn products.map(p => ({\n  json: {\n    product_id: p.id,\n    product_name: p.name,\n    product_content: p.content || '',\n    product_short_desc: p.short_description || '',\n    product_url: p.url || '',\n    categories: (p.categories || []).join(', '),\n    batch_id: batchId,\n    callback_url: callbackUrl,\n    options: options\n  }\n}));"
+      },
+      "name": "Split Products",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 500],
+      "id": "code-split-products-01"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/site-config",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": { "timeout": 15000 }
+      },
+      "name": "Site Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 500],
+      "id": "batch-site-config"
+    },
+    {
+      "parameters": {
+        "batchSize": 3,
+        "options": {
+          "reset": false
+        }
+      },
+      "name": "Batch 3 at a time",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [960, 500],
+      "id": "batch-split-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build AI enrichment prompt for this product\nconst product = $input.first().json;\nconst siteConfig = $('Site Config').first().json;\nconst storeName = siteConfig.site?.name || 'Store';\nconst language = siteConfig.n8npress?.target_language || 'tr';\n\nconst systemPrompt = `You are an expert e-commerce content writer for ${storeName}, a musical instrument store. Generate SEO-optimized product content in Turkish.\n\nFor each product, generate:\n1. A compelling product description (300-500 words) highlighting features, craftsmanship, and who it's for\n2. An SEO meta title (max 60 chars) with the main keyword\n3. An SEO meta description (max 155 chars) with call to action\n4. 3-5 FAQ questions and answers about the product\n5. A short description (2-3 sentences)\n\nOutput as JSON with keys: description, meta_title, meta_description, short_description, faq (array of {question, answer})`;\n\nconst userPrompt = `Enrich this product:\nName: ${product.product_name}\nCurrent description: ${product.product_content || 'None'}\nCategories: ${product.categories || 'Uncategorized'}\nURL: ${product.product_url || ''}`;\n\nreturn [{\n  json: {\n    ...product,\n    systemPrompt,\n    userPrompt\n  }\n}];"
+      },
+      "name": "Build Enrich Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 500],
+      "id": "code-build-enrich-01"
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $('Site Config').first().json.n8npress?.ai?.api_key }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $('Site Config').first().json.n8npress?.ai?.model || 'claude-haiku-4-5' }}\",\n  \"max_tokens\": {{ $('Site Config').first().json.n8npress?.ai?.max_tokens || 2000 }},\n  \"system\": \"{{ $json.systemPrompt }}\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"{{ $json.userPrompt }}\" }\n  ]\n}",
+        "method": "POST",
+        "options": { "timeout": 60000 }
+      },
+      "name": "Claude Enrich",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1440, 500],
+      "id": "http-claude-enrich-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude response and send callback\nconst aiResponse = $input.first().json;\nconst productData = $('Build Enrich Prompt').first().json;\n\nlet enriched;\ntry {\n  const text = aiResponse.content?.[0]?.text || '';\n  // Extract JSON from response (may be wrapped in markdown code blocks)\n  const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n  enriched = jsonMatch ? JSON.parse(jsonMatch[0]) : {};\n} catch (e) {\n  enriched = { error: 'Failed to parse AI response: ' + e.message };\n}\n\nreturn [{\n  json: {\n    product_id: productData.product_id,\n    batch_id: productData.batch_id,\n    callback_url: productData.callback_url,\n    enriched_data: {\n      description: enriched.description || '',\n      short_description: enriched.short_description || '',\n      meta_title: enriched.meta_title || '',\n      meta_description: enriched.meta_description || '',\n      faq: enriched.faq || []\n    },\n    success: !enriched.error\n  }\n}];"
+      },
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 500],
+      "id": "code-parse-enrich-01"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Authorization", "value": "Bearer {{ $('Site Config').first().json.n8npress?.api_token }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"product_id\": {{ $json.product_id }},\n  \"batch_id\": {{ JSON.stringify($json.batch_id) }},\n  \"enriched_data\": {{ JSON.stringify($json.enriched_data) }},\n  \"success\": {{ $json.success }}\n}",
+        "options": { "timeout": 15000 }
+      },
+      "name": "Send Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1920, 500],
+      "id": "http-callback-enrich-01"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "Wait 2s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2160, 500],
+      "id": "wait-batch-01",
+      "webhookId": "wait-batch-webhook"
+    }
+  ],
+  "connections": {
+    "Webhook - Batch Received": {
+      "main": [
+        [
+          { "node": "Respond OK", "type": "main", "index": 0 },
+          { "node": "Split Products", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Split Products": {
+      "main": [
+        [{ "node": "Site Config", "type": "main", "index": 0 }]
+      ]
+    },
+    "Site Config": {
+      "main": [
+        [{ "node": "Batch 3 at a time", "type": "main", "index": 0 }]
+      ]
+    },
+    "Batch 3 at a time": {
+      "main": [
+        [{ "node": "Build Enrich Prompt", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Enrich Prompt": {
+      "main": [
+        [{ "node": "Claude Enrich", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude Enrich": {
+      "main": [
+        [{ "node": "Parse AI Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [{ "node": "Send Callback", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Callback": {
+      "main": [
+        [{ "node": "Wait 2s", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait 2s": {
+      "main": [
+        [{ "node": "Batch 3 at a time", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Europe/Istanbul",
+    "saveManualExecutions": true,
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Receives batch of products via webhook, enriches each with Claude AI (description, meta, FAQ), sends results back via callback. Processes 3 products at a time with 2s delay to avoid rate limits.",
+    "required_env": ["WP_SITE_URL"],
+    "required_credentials": [],
+    "workflow_flow": "Webhook → Respond OK + Split Products → Site Config → Batch(3) → Claude AI → Parse → Callback → Wait 2s → Next Batch"
+  }
+}

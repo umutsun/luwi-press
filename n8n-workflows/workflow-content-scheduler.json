@@ -1,0 +1,311 @@
+{
+  "name": "n8nPress - Content Scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "n8npress-content-scheduler",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook: Content Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-action",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "generate_content",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "validate-request",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "model": "={{ $('Webhook: Content Request').first().json.body?._meta?.model || 'claude-haiku-4-5' }}",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert SEO content writer. You write engaging, well-structured, SEO-optimized articles. Always include proper headings (H2, H3), internal linking opportunities marked as [INTERNAL_LINK: topic], and a clear call-to-action. Write in the specified language."
+            },
+            {
+              "role": "user",
+              "content": "=Write a comprehensive article about: {{ $json.topic }}\n\nTarget language: {{ $json.language }}\nTone: {{ $json.tone }}\nApproximate word count: {{ $json.word_count }}\nSEO Keywords: {{ $json.keywords }}\nSite name: {{ $json.site_name }}\n\nReturn a JSON object with these fields:\n- title: SEO-optimized title\n- content: Full HTML article content with proper heading tags (h2, h3)\n- excerpt: 2-3 sentence summary (max 160 chars)\n- meta_title: SEO meta title (max 60 chars)\n- meta_description: SEO meta description (max 155 chars)\n- tags: array of 5-8 relevant tags\n\nIMPORTANT: Return ONLY valid JSON, no markdown code blocks."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": "={{ $('Webhook: Content Request').first().json.body?._meta?.max_tokens || 4096 }}",
+          "temperature": 0.7
+        }
+      },
+      "id": "ai-content-generation",
+      "name": "Claude: Generate Content",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [660, 200],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-credentials",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI response to extract JSON\nconst aiResponse = $input.first().json.message?.content || $input.first().json.text || '';\n\nlet parsed;\ntry {\n  // Try direct JSON parse\n  parsed = JSON.parse(aiResponse);\n} catch (e) {\n  // Try extracting JSON from markdown code block\n  const match = aiResponse.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (match) {\n    parsed = JSON.parse(match[1].trim());\n  } else {\n    throw new Error('Could not parse AI response as JSON');\n  }\n}\n\n// Merge with original request data (_meta block carries callback_url)\nconst raw = $('Webhook: Content Request').first().json;\nconst body = raw.body || raw;\nconst meta = body._meta || {};\n\nreturn [{\n  json: {\n    schedule_id: body.schedule_id,\n    callback_url: meta.callback_url,\n    title: parsed.title || body.topic,\n    content: parsed.content || '',\n    excerpt: parsed.excerpt || '',\n    meta_title: parsed.meta_title || '',\n    meta_description: parsed.meta_description || '',\n    tags: parsed.tags || [],\n    generate_image: body.generate_image,\n    topic: body.topic,\n    language: body.language || meta.language\n  }\n}];"
+      },
+      "id": "parse-ai-response",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-image",
+              "leftValue": "={{ $json.generate_image }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "image-check",
+      "name": "Image Required?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.openai.com/v1/images/generations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"dall-e-3\",\n  \"prompt\": \"Professional blog featured image for article about: {{ $json.topic }}. Clean, modern, editorial style. No text overlays.\",\n  \"n\": 1,\n  \"size\": \"1792x1024\",\n  \"quality\": \"standard\"\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "generate-image",
+      "name": "DALL-E: Generate Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Webhook: Content Request').first().json.body?._meta?.site_url }}/wp-json/wp/v2/media",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Disposition",
+              "value": "=attachment; filename=\"{{ $json.topic.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 50) }}.png\""
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "options": {}
+      },
+      "id": "upload-image",
+      "name": "WP: Upload Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 100],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "wp-credentials",
+          "name": "WordPress API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge content data with image ID (if generated)\nconst contentData = $('Parse AI Response').first().json;\nconst result = { ...contentData };\n\ntry {\n  const imageData = $('WP: Upload Image').first().json;\n  if (imageData && imageData.id) {\n    result.image_id = imageData.id;\n    result.image_url = imageData.source_url || '';\n  }\n} catch (e) {\n  // No image generated, that's fine\n}\n\nreturn [{ json: result }];"
+      },
+      "id": "merge-data",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8nPress-Token",
+              "value": "={{ $('Webhook: Content Request').first().json.body?._meta?.api_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"schedule_id\": {{ $json.schedule_id }},\n  \"title\": {{ JSON.stringify($json.title) }},\n  \"content\": {{ JSON.stringify($json.content) }},\n  \"excerpt\": {{ JSON.stringify($json.excerpt) }},\n  \"meta_title\": {{ JSON.stringify($json.meta_title) }},\n  \"meta_description\": {{ JSON.stringify($json.meta_description) }},\n  \"tags\": {{ JSON.stringify($json.tags) }},\n  \"image_url\": {{ JSON.stringify($json.image_url || '') }},\n  \"image_id\": {{ $json.image_id || 0 }}\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "callback-wordpress",
+      "name": "WP: Send Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"message\": \"Content generation started\", \"schedule_id\": {{ $('Webhook: Content Request').first().json.schedule_id }}}"
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [660, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": false, \"message\": \"Invalid action\"}"
+      },
+      "id": "error-response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [660, 500]
+    }
+  ],
+  "connections": {
+    "Webhook: Content Request": {
+      "main": [
+        [
+          { "node": "Validate Request", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          { "node": "Claude: Generate Content", "type": "main", "index": 0 },
+          { "node": "Webhook Response", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Error Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Claude: Generate Content": {
+      "main": [
+        [
+          { "node": "Parse AI Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          { "node": "Image Required?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Image Required?": {
+      "main": [
+        [
+          { "node": "DALL-E: Generate Image", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Merge Data", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "DALL-E: Generate Image": {
+      "main": [
+        [
+          { "node": "WP: Upload Image", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "WP: Upload Image": {
+      "main": [
+        [
+          { "node": "Merge Data", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          { "node": "WP: Send Callback", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Istanbul",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "tags": [
+    { "name": "n8nPress" },
+    { "name": "content" },
+    { "name": "AI" },
+    { "name": "scheduler" }
+  ],
+  "pinData": {}
+}

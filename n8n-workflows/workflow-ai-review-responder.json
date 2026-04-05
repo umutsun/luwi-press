@@ -1,0 +1,358 @@
+{
+  "name": "AI Review Responder",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "name": "Check Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 400],
+      "id": "sched-reviews-01"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/site-config",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": { "timeout": 15000 }
+      },
+      "name": "Site Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 400],
+      "id": "review-site-config"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/wc/v3/products/reviews",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wooCommerceApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "status", "value": "approved" },
+            { "name": "per_page", "value": "50" }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Fetch Approved Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [720, 400],
+      "id": "http-get-reviews-01",
+      "credentials": {
+        "wooCommerceApi": {
+          "id": "WC_CREDENTIAL_ID",
+          "name": "WooCommerce API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter unanswered reviews (no reply from store)\nconst reviews = $input.all().map(i => i.json).flat();\nconst items = Array.isArray(reviews) ? reviews : [reviews];\n\nconst unanswered = items.filter(r => {\n  // Check if review has no reply (status check or custom meta)\n  // WooCommerce doesn't natively track replies, so we check by convention\n  return r && r.id && !r.reviewer_avatar_urls?.store_replied;\n});\n\nif (unanswered.length === 0) {\n  return [{ json: { hasReviews: false, message: 'No unanswered reviews found' } }];\n}\n\nreturn unanswered.map(r => ({\n  json: {\n    hasReviews: true,\n    reviewId: r.id,\n    productId: r.product_id,\n    reviewer: r.reviewer,\n    reviewerEmail: r.reviewer_email,\n    rating: r.rating,\n    review: r.review?.replace(/<[^>]*>/g, '') || '',\n    dateCreated: r.date_created,\n    productName: r.product_name || 'Product'\n  }\n}));"
+      },
+      "name": "Filter Unanswered Reviews",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 400],
+      "id": "code-filter-reviews-01"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.hasReviews }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "name": "Has Reviews?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1180, 400],
+      "id": "if-has-reviews-01"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "name": "Batch 5",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1420, 340],
+      "id": "batch-reviews-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Claude prompt for review response\nconst review = $input.first().json;\nconst storeName = $('Site Config').first().json.site?.name || 'Store';\nconst rating = review.rating;\nconst isPositive = rating >= 4;\n\nconst systemPrompt = `Sen ${storeName} adlı müzik enstrümanları mağazasının müşteri ilişkileri yöneticisisin. Müşteri yorumlarına Türkçe yanıt yazıyorsun.\n\nKurallar:\n- Profesyonel ve samimi ol\n- Müşteriyi adıyla hitap et\n- Ürün adını yanıtta kullan\n- Olumlu yorumlarda teşekkür et ve tekrar alışveriş için davet et\n- Olumsuz yorumlarda özür dile, çözüm öner ve iletişim bilgisi ver\n- Yanıt 2-4 cümle olsun\n- Emoji kullanma\n- Mağaza imzası ekle: \"${storeName} Ekibi\"`;\n\nconst userPrompt = `Aşağıdaki müşteri yorumuna yanıt yaz:\n\nMüşteri: ${review.reviewer}\nÜrün: ${review.productName}\nPuan: ${rating}/5\nYorum: ${review.review}`;\n\nreturn [{\n  json: {\n    ...review,\n    systemPrompt,\n    userPrompt,\n    isPositive\n  }\n}];"
+      },
+      "name": "Build Claude Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1660, 340],
+      "id": "code-build-prompt-01"
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $('Site Config').first().json.n8npress?.ai?.api_key || $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $('Site Config').first().json.n8npress?.ai?.model || 'claude-haiku-4-5' }}\",\n  \"max_tokens\": {{ $('Site Config').first().json.n8npress?.ai?.max_tokens || 500 }},\n  \"system\": \"{{ $json.systemPrompt }}\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"{{ $json.userPrompt }}\" }\n  ]\n}",
+        "method": "POST",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Claude Generate Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 340],
+      "id": "http-claude-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract AI response and prepare for posting + sentiment\nconst aiResponse = $input.first().json;\nconst reviewData = $('Build Claude Prompt').first().json;\n\nlet replyText;\ntry {\n  replyText = aiResponse.content?.[0]?.text || aiResponse.text || '';\n} catch (e) {\n  replyText = 'Dear customer, thank you for your review.';\n}\n\n// Derive sentiment from rating\nconst rating = reviewData.rating;\nlet sentiment = 'neutral';\nlet sentimentScore = 0.5;\nif (rating >= 4) {\n  sentiment = 'positive';\n  sentimentScore = rating === 5 ? 0.95 : 0.75;\n} else if (rating <= 2) {\n  sentiment = 'negative';\n  sentimentScore = rating === 1 ? 0.1 : 0.3;\n}\n\n// Extract themes from review text\nconst reviewLower = (reviewData.review || '').toLowerCase();\nconst themes = [];\nconst themeKeywords = {\n  'quality': ['quality', 'kalite', 'build', 'material', 'malzeme'],\n  'shipping': ['shipping', 'kargo', 'delivery', 'teslimat', 'paketleme'],\n  'price': ['price', 'fiyat', 'expensive', 'pahali', 'cheap', 'ucuz', 'value', 'deger'],\n  'sound': ['sound', 'ses', 'tone', 'ton', 'tuning', 'akort'],\n  'service': ['service', 'hizmet', 'support', 'destek', 'communication', 'iletisim'],\n  'appearance': ['look', 'gorunus', 'beautiful', 'guzel', 'design', 'tasarim']\n};\nfor (const [theme, keywords] of Object.entries(themeKeywords)) {\n  if (keywords.some(k => reviewLower.includes(k))) themes.push(theme);\n}\n\nreturn [{\n  json: {\n    reviewId: reviewData.reviewId,\n    productId: reviewData.productId,\n    rating: reviewData.rating,\n    reviewer: reviewData.reviewer,\n    reviewerEmail: reviewData.reviewerEmail,\n    originalReview: reviewData.review,\n    replyText: replyText.trim(),\n    isPositive: reviewData.isPositive,\n    autoPublish: reviewData.rating >= 4,\n    sentiment: sentiment,\n    sentimentScore: sentimentScore,\n    themes: themes,\n    summary: replyText.trim().substring(0, 200)\n  }\n}];"
+      },
+      "name": "Process Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2140, 340],
+      "id": "code-process-reply-01"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.autoPublish }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "name": "Rating >= 4?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2380, 340],
+      "id": "if-rating-check-01"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/wp/v2/comments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Authorization", "value": "Bearer {{ $('Site Config').first().json.n8npress?.api_token }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"post\": {{ $json.productId }},\n  \"parent\": {{ $json.reviewId }},\n  \"content\": {{ JSON.stringify($json.replyText) }},\n  \"author_name\": \"{{ $('Site Config').first().json.site?.name || 'Store' }} Team\",\n  \"status\": \"approved\"\n}",
+        "method": "POST",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "name": "Auto-Publish Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2620, 240],
+      "id": "http-post-reply-publish-01"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/wp/v2/comments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Authorization", "value": "Bearer {{ $('Site Config').first().json.n8npress?.api_token }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"post\": {{ $json.productId }},\n  \"parent\": {{ $json.reviewId }},\n  \"content\": {{ JSON.stringify($json.replyText) }},\n  \"author_name\": \"{{ $('Site Config').first().json.site?.name || 'Store' }} Team\",\n  \"status\": \"hold\"\n}",
+        "method": "POST",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "name": "Queue Reply for Approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2620, 440],
+      "id": "http-post-reply-hold-01"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/send-email",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $('Site Config').first().json.site.admin_email }}\",\n  \"subject\": \"Low Rating Review Alert — {{ $json.reviewer }} ({{ $json.rating }}/5)\",\n  \"html\": \"<h3>Low Rating Review — Human Approval Required</h3>\\n<p><strong>Customer:</strong> {{ $json.reviewer }} ({{ $json.reviewerEmail }})</p>\\n<p><strong>Rating:</strong> {{ $json.rating }}/5</p>\\n<p><strong>Review:</strong> {{ $json.originalReview }}</p>\\n<hr>\\n<p><strong>AI Suggestion:</strong></p>\\n<blockquote>{{ $json.replyText }}</blockquote>\\n<hr>\\n<p>This reply has been queued for approval. You can approve or edit it from the WordPress admin panel.</p>\"\n}",
+        "options": {}
+      },
+      "name": "Send Low Rating Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, 440],
+      "id": "email-low-rating-alert-01"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/review/sentiment-callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Authorization", "value": "Bearer {{ $('Site Config').first().json.n8npress?.api_token }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"review_id\": {{ $json.reviewId }},\n  \"product_id\": {{ $json.productId }},\n  \"sentiment\": {{ JSON.stringify($json.sentiment) }},\n  \"sentiment_score\": {{ $json.sentimentScore }},\n  \"themes\": {{ JSON.stringify($json.themes) }},\n  \"summary\": {{ JSON.stringify($json.summary) }}\n}",
+        "options": { "timeout": 10000 }
+      },
+      "name": "Save Sentiment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2140, 540],
+      "id": "http-save-sentiment-01"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "log-done",
+              "name": "status",
+              "value": "=Review #{{ $json.reviewId }} — {{ $json.autoPublish ? 'Auto-published' : 'Sent for approval' }} | Sentiment: {{ $json.sentiment }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "name": "Action Log",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [3100, 340],
+      "id": "set-log-review-01"
+    }
+  ],
+  "connections": {
+    "Check Every 6 Hours": {
+      "main": [
+        [{ "node": "Site Config", "type": "main", "index": 0 }]
+      ]
+    },
+    "Site Config": {
+      "main": [
+        [{ "node": "Fetch Approved Reviews", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Approved Reviews": {
+      "main": [
+        [{ "node": "Filter Unanswered Reviews", "type": "main", "index": 0 }]
+      ]
+    },
+    "Filter Unanswered Reviews": {
+      "main": [
+        [{ "node": "Has Reviews?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Reviews?": {
+      "main": [
+        [{ "node": "Batch 5", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Batch 5": {
+      "main": [
+        [{ "node": "Build Claude Prompt", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Claude Prompt": {
+      "main": [
+        [{ "node": "Claude Generate Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude Generate Reply": {
+      "main": [
+        [{ "node": "Process Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Reply": {
+      "main": [
+        [
+          { "node": "Rating >= 4?", "type": "main", "index": 0 },
+          { "node": "Save Sentiment", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Rating >= 4?": {
+      "main": [
+        [{ "node": "Auto-Publish Reply", "type": "main", "index": 0 }],
+        [{ "node": "Queue Reply for Approval", "type": "main", "index": 0 }]
+      ]
+    },
+    "Auto-Publish Reply": {
+      "main": [
+        [{ "node": "Action Log", "type": "main", "index": 0 }]
+      ]
+    },
+    "Queue Reply for Approval": {
+      "main": [
+        [{ "node": "Send Low Rating Alert", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Low Rating Alert": {
+      "main": [
+        [{ "node": "Action Log", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Europe/Istanbul",
+    "saveManualExecutions": true,
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Checks WooCommerce reviews every 6 hours, generates replies via Claude AI + sentiment analysis. Rating >= 4 auto-publishes, low ratings queued for approval with admin alert. Sentiment data sent to n8nPress Review Analytics.",
+    "required_env": ["WP_SITE_URL"],
+    "required_credentials": ["wooCommerceApi"],
+    "workflow_flow": "Schedule (6h) → Site Config → Fetch Reviews → Filter Unanswered → Batch(5) → Claude AI → Process Reply → [Rating Check + Sentiment Callback] → Auto-publish / Queue + Alert"
+  }
+}
