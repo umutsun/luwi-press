@@ -2,7 +2,6 @@
 .vscode/
 .idea/
 *.swp
-*.swo
 
 # OS
 .DS_Store
@@ -12,10 +11,18 @@ Thumbs.db
 node_modules/
 vendor/
 
-# Build
+# Build artifacts
 releases/
 scripts/
 
 # Environment
 .env
 .env.local
+
+# Claude Code config (local dev only)
+.claude/
+
+# Legacy plugins (deprecated)
+n8npress-seo-off/
+n8npress-seo-woo/
+CLAUDE.md

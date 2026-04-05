@@ -187,8 +187,8 @@ Need help getting started? We offer:
 = Resources =
 
 * [Documentation & Guides](https://luwi.dev)
-* [GitHub Repository](https://github.com/n8npress/n8npress)
-* [n8n Workflow Templates](https://github.com/n8npress/n8npress/tree/main/n8n-workflows)
+* [GitHub Repository](https://github.com/umutsun/n8npress)
+* [n8n Workflow Templates](https://github.com/umutsun/n8npress/tree/main/n8n-workflows)
 
 = Contact =
 
