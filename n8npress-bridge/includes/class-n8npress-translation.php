@@ -262,7 +262,14 @@ class N8nPress_Translation {
     public function get_translation_status($request) {
         global $wpdb;
 
-        $target_languages = array_map('trim', explode(',', get_option('n8npress_translation_languages', 'en,de,ar,fr')));
+        $raw_langs = get_option( 'n8npress_translation_languages', array() );
+        $target_languages = is_array( $raw_langs ) ? $raw_langs : array_map( 'trim', explode( ',', $raw_langs ) );
+        if ( empty( $target_languages ) ) {
+            // Fallback: get from translation plugin
+            $detector = N8nPress_Plugin_Detector::get_instance();
+            $t = $detector->detect_translation();
+            $target_languages = array_diff( $t['active_languages'] ?? array(), array( $t['default_language'] ?? 'tr' ) );
+        }
 
         $stats = [];
         foreach ($target_languages as $lang) {
@@ -485,25 +492,102 @@ class N8nPress_Translation {
      * Create WPML translation
      */
     private function create_wpml_translation($product_id, $language, $translated) {
-        if (!defined('ICL_SITEPRESS_VERSION') || !function_exists('wpml_get_create_term_args')) {
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            N8nPress_Logger::log( 'WPML not active, cannot save translation', 'warning' );
             return;
         }
 
-        // Use WPML API to create translation
-        $trid = apply_filters('wpml_element_trid', null, $product_id, 'post_product');
-        if (!$trid) {
+        $trid = apply_filters( 'wpml_element_trid', null, $product_id, 'post_product' );
+        if ( ! $trid ) {
+            N8nPress_Logger::log( 'No WPML trid for product #' . $product_id, 'warning' );
             return;
         }
 
-        $translated_id = apply_filters('wpml_object_id', $product_id, 'product', false, $language);
-        if ($translated_id) {
-            // Update existing
-            wp_update_post([
+        $translated_id = apply_filters( 'wpml_object_id', $product_id, 'product', false, $language );
+
+        if ( $translated_id && $translated_id !== $product_id ) {
+            // Update existing translation post
+            wp_update_post( array(
                 'ID'           => $translated_id,
                 'post_title'   => $translated['name'],
                 'post_content' => $translated['description'],
                 'post_excerpt' => $translated['short_description'],
-            ]);
+            ) );
+
+            N8nPress_Logger::log( 'WPML translation updated: product #' . $translated_id . ' (' . $language . ')', 'info' );
+        } else {
+            // Create new translation post
+            $original = get_post( $product_id );
+            if ( ! $original ) {
+                return;
+            }
+
+            $new_post = array(
+                'post_title'   => $translated['name'],
+                'post_content' => $translated['description'],
+                'post_excerpt' => $translated['short_description'],
+                'post_type'    => 'product',
+                'post_status'  => $original->post_status,
+                'post_author'  => $original->post_author,
+            );
+
+            $new_id = wp_insert_post( $new_post );
+            if ( is_wp_error( $new_id ) ) {
+                N8nPress_Logger::log( 'Failed to create translation post: ' . $new_id->get_error_message(), 'error' );
+                return;
+            }
+
+            // Link to WPML translation group
+            $default_lang = apply_filters( 'wpml_default_language', 'tr' );
+            do_action( 'wpml_set_element_language_details', array(
+                'element_id'           => $new_id,
+                'element_type'         => 'post_product',
+                'trid'                 => $trid,
+                'language_code'        => $language,
+                'source_language_code' => $default_lang,
+            ) );
+
+            // Copy product meta from original
+            $meta_keys = array( '_price', '_regular_price', '_sale_price', '_sku', '_stock_status', '_manage_stock', '_stock', '_weight', '_length', '_width', '_height', '_thumbnail_id' );
+            foreach ( $meta_keys as $key ) {
+                $val = get_post_meta( $product_id, $key, true );
+                if ( '' !== $val ) {
+                    update_post_meta( $new_id, $key, $val );
+                }
+            }
+
+            // Copy product gallery
+            $gallery = get_post_meta( $product_id, '_product_image_gallery', true );
+            if ( $gallery ) {
+                update_post_meta( $new_id, '_product_image_gallery', $gallery );
+            }
+
+            // Set product type
+            $terms = wp_get_object_terms( $product_id, 'product_type', array( 'fields' => 'slugs' ) );
+            if ( ! empty( $terms ) ) {
+                wp_set_object_terms( $new_id, $terms, 'product_type' );
+            }
+
+            N8nPress_Logger::log( 'WPML translation created: product #' . $new_id . ' (' . $language . ') from #' . $product_id, 'info', array(
+                'original_id'   => $product_id,
+                'translated_id' => $new_id,
+                'language'      => $language,
+            ) );
+        }
+
+        // Save SEO meta if available
+        if ( ! empty( $translated['meta_title'] ) || ! empty( $translated['meta_description'] ) ) {
+            $target_id = $translated_id ?: $new_id ?? 0;
+            if ( $target_id ) {
+                $detector = N8nPress_Plugin_Detector::get_instance();
+                $seo = $detector->detect_seo();
+                if ( ! empty( $seo['meta_keys']['title'] ) ) {
+                    update_post_meta( $target_id, $seo['meta_keys']['title'], $translated['meta_title'] ?? '' );
+                }
+                if ( ! empty( $seo['meta_keys']['description'] ) ) {
+                    update_post_meta( $target_id, $seo['meta_keys']['description'], $translated['meta_description'] ?? '' );
+                }
+            }
         }
     }
 

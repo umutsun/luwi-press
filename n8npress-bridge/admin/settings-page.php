@@ -602,12 +602,20 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				<h2><?php esc_html_e( 'Translation Pipeline Settings', 'n8npress' ); ?></h2>
 				<table class="form-table">
 					<tr>
-						<th><label for="n8npress_translation_languages_text"><?php esc_html_e( 'Target Languages', 'n8npress' ); ?></label></th>
+						<th><?php esc_html_e( 'Target Languages', 'n8npress' ); ?></th>
 						<td>
-							<input type="text" id="n8npress_translation_languages_text" name="n8npress_translation_languages_text"
-							       value="<?php echo esc_attr( implode( ', ', (array) $translation_langs ) ); ?>" class="regular-text"
-							       placeholder="en, de, fr, ar" />
-							<p class="description"><?php esc_html_e( 'Comma-separated ISO language codes. These languages will be used by the n8n translation workflow.', 'n8npress' ); ?></p>
+							<?php
+							$detector = N8nPress_Plugin_Detector::get_instance();
+							$t_env    = $detector->detect_translation();
+							$t_langs  = array_diff( $t_env['active_languages'] ?? array(), array( $t_env['default_language'] ?? '' ) );
+							if ( ! empty( $t_langs ) ) :
+								foreach ( $t_langs as $tl ) : ?>
+									<code class="lang-tag" style="margin-right:4px;"><?php echo esc_html( strtoupper( $tl ) ); ?></code>
+								<?php endforeach; ?>
+								<p class="description"><?php printf( esc_html__( 'Auto-detected from %s. Add or remove languages in your translation plugin settings.', 'n8npress' ), esc_html( ucwords( $t_env['plugin'] ) ) ); ?></p>
+							<?php else : ?>
+								<span style="color:#6b7280;"><?php esc_html_e( 'No translation plugin detected. Install WPML or Polylang to enable multilingual support.', 'n8npress' ); ?></span>
+							<?php endif; ?>
 						</td>
 					</tr>
 				</table>
