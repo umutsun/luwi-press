@@ -75,6 +75,45 @@ if ( isset( $_POST['n8npress_trigger_translation'] ) && check_admin_referer( 'n8
 $post_types = array( 'product', 'post', 'page' );
 $coverage   = array();
 
+// Category/Tag coverage
+$taxonomy_coverage = array();
+$taxonomies_to_check = array( 'product_cat' => 'Product Categories', 'product_tag' => 'Product Tags' );
+foreach ( $taxonomies_to_check as $tax_slug => $tax_label ) {
+	$terms = get_terms( array( 'taxonomy' => $tax_slug, 'hide_empty' => false ) );
+	if ( is_wp_error( $terms ) || empty( $terms ) ) {
+		continue;
+	}
+
+	if ( 'wpml' === $translation['plugin'] ) {
+		// WPML: use icl_translations table directly for accurate counts
+		global $wpdb;
+		$element_type = 'tax_' . $tax_slug;
+
+		// Count default language terms
+		$total = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations
+			 WHERE element_type = %s AND language_code = %s",
+			$element_type, $default_lang
+		) );
+
+		$taxonomy_coverage[ $tax_slug ] = array( 'label' => $tax_label, 'total' => $total, 'languages' => array() );
+
+		foreach ( $target_langs as $lang ) {
+			$translated_count = (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations
+				 WHERE element_type = %s AND language_code = %s
+				   AND source_language_code IS NOT NULL",
+				$element_type, $lang
+			) );
+			$taxonomy_coverage[ $tax_slug ]['languages'][ $lang ] = $translated_count;
+		}
+	} else {
+		// Polylang or no translation plugin
+		$total = count( $terms );
+		$taxonomy_coverage[ $tax_slug ] = array( 'label' => $tax_label, 'total' => $total, 'languages' => array() );
+	}
+}
+
 foreach ( $post_types as $pt ) {
 	$total_obj = wp_count_posts( $pt );
 	$total     = absint( $total_obj->publish ?? 0 );
@@ -242,12 +281,62 @@ foreach ( $post_types as $pt ) {
 			</table>
 		</div>
 		<?php endforeach; ?>
+
+		<!-- Taxonomy Translation Coverage -->
+		<?php foreach ( $taxonomy_coverage as $tax_slug => $tax_data ) :
+			if ( $tax_data['total'] === 0 ) continue;
+		?>
+		<div class="n8npress-translation-coverage">
+			<h3>
+				<?php echo esc_html( $tax_data['label'] ); ?>
+				<span style="font-weight:400;color:#6b7280;"> — <?php echo $tax_data['total']; ?> <?php _e( 'terms', 'n8npress' ); ?></span>
+			</h3>
+			<table class="n8npress-table">
+				<thead>
+					<tr>
+						<th><?php _e( 'Language', 'n8npress' ); ?></th>
+						<th><?php _e( 'Translated', 'n8npress' ); ?></th>
+						<th><?php _e( 'Missing', 'n8npress' ); ?></th>
+						<th><?php _e( 'Coverage', 'n8npress' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $target_langs as $lang ) :
+						$t_count = $tax_data['languages'][ $lang ] ?? 0;
+						$missing = max( 0, $tax_data['total'] - $t_count );
+						$percent = $tax_data['total'] > 0 ? round( ( $t_count / $tax_data['total'] ) * 100 ) : 0;
+					?>
+					<tr>
+						<td>
+							<code class="lang-tag"><?php echo esc_html( strtoupper( $lang ) ); ?></code>
+							<?php echo esc_html( $language_names[ $lang ] ?? $lang ); ?>
+						</td>
+						<td><strong><?php echo $t_count; ?></strong></td>
+						<td>
+							<?php if ( $missing > 0 ) : ?>
+								<span style="color:#dc2626;font-weight:600;"><?php echo $missing; ?></span>
+							<?php else : ?>
+								<span style="color:#16a34a;">0</span>
+							<?php endif; ?>
+						</td>
+						<td>
+							<div class="n8npress-progress-bar">
+								<div class="progress-fill <?php echo $percent === 100 ? 'progress-complete' : ''; ?>" style="width:<?php echo $percent; ?>%;"></div>
+							</div>
+							<span class="progress-text"><?php echo $percent; ?>%</span>
+						</td>
+					</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php endforeach; ?>
 	</div>
 
 	<!-- Bulk Translation Form -->
 	<div class="n8npress-section">
 		<h2><?php _e( 'Bulk Translation', 'n8npress' ); ?></h2>
-		<p class="description"><?php _e( 'Trigger AI translation for multiple items at once. Content is sent to n8n workflow for processing via Claude AI.', 'n8npress' ); ?></p>
+		<p class="description"><?php _e( 'Trigger AI translation for multiple items at once. Content is sent to n8n workflow for AI-powered translation.', 'n8npress' ); ?></p>
 
 		<form method="post" class="n8npress-bulk-form">
 			<?php wp_nonce_field( 'n8npress_translation_nonce' ); ?>
@@ -298,40 +387,6 @@ foreach ( $post_types as $pt ) {
 
 	<?php endif; // target_langs check ?>
 
-	<!-- How it works -->
-	<div class="n8npress-section">
-		<h2><?php _e( 'How Translation Works', 'n8npress' ); ?></h2>
-		<div class="n8npress-import-steps">
-			<div class="import-step">
-				<span class="step-number">1</span>
-				<div>
-					<strong><?php _e( 'Detect Missing', 'n8npress' ); ?></strong>
-					<p><?php printf( __( 'n8nPress reads %s to find content without translations.', 'n8npress' ), $plugin_name ); ?></p>
-				</div>
-			</div>
-			<div class="import-step">
-				<span class="step-number">2</span>
-				<div>
-					<strong><?php _e( 'Send to n8n', 'n8npress' ); ?></strong>
-					<p><?php _e( 'Source text, SEO keywords, and meta are sent to the n8n translation workflow.', 'n8npress' ); ?></p>
-				</div>
-			</div>
-			<div class="import-step">
-				<span class="step-number">3</span>
-				<div>
-					<strong><?php _e( 'AI Translation', 'n8npress' ); ?></strong>
-					<p><?php _e( 'Claude AI translates with SEO awareness: keyword density, meta length limits, brand names preserved.', 'n8npress' ); ?></p>
-				</div>
-			</div>
-			<div class="import-step">
-				<span class="step-number">4</span>
-				<div>
-					<strong><?php _e( 'Save & Sync', 'n8npress' ); ?></strong>
-					<p><?php printf( __( 'Translations are saved via %s API — proper language associations, SEO meta, and hreflang tags.', 'n8npress' ), $plugin_name ); ?></p>
-				</div>
-			</div>
-		</div>
-	</div>
 </div>
 
 <style>

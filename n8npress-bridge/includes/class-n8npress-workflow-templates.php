@@ -92,7 +92,7 @@ class N8nPress_Workflow_Templates {
                 'category'    => 'content',
                 'icon'        => 'dashicons-edit-large',
                 'trigger'     => 'webhook',
-                'services'    => array('Claude AI', 'WooCommerce'),
+                'services'    => array('AI', 'WooCommerce'),
                 'file'        => $workflow_dir . '/workflow-product-enricher.json',
             ),
             'product-enricher-batch' => array(
@@ -101,7 +101,7 @@ class N8nPress_Workflow_Templates {
                 'category'    => 'content',
                 'icon'        => 'dashicons-screenoptions',
                 'trigger'     => 'webhook',
-                'services'    => array('Claude AI', 'WooCommerce'),
+                'services'    => array('AI', 'WooCommerce'),
                 'file'        => $workflow_dir . '/workflow-product-enricher-batch.json',
             ),
             'content-scheduler' => array(
@@ -110,7 +110,7 @@ class N8nPress_Workflow_Templates {
                 'category'    => 'content',
                 'icon'        => 'dashicons-calendar-alt',
                 'trigger'     => 'webhook',
-                'services'    => array('Claude AI', 'DALL-E', 'WordPress'),
+                'services'    => array('AI', 'DALL-E', 'WordPress'),
                 'file'        => $workflow_dir . '/workflow-content-scheduler.json',
             ),
             'aeo-generator' => array(
@@ -119,16 +119,16 @@ class N8nPress_Workflow_Templates {
                 'category'    => 'seo',
                 'icon'        => 'dashicons-microphone',
                 'trigger'     => 'schedule',
-                'services'    => array('Claude AI', 'WordPress'),
+                'services'    => array('AI', 'WordPress'),
                 'file'        => $workflow_dir . '/workflow-aeo-generator.json',
             ),
             'internal-linker' => array(
                 'name'        => __('AI Internal Link Resolver', 'n8npress'),
-                'description' => __('Resolves [INTERNAL_LINK: topic] markers using Claude AI. Matches to existing product/category/blog URLs.', 'n8npress'),
+                'description' => __('Resolves [INTERNAL_LINK: topic] markers using AI. Matches to existing product/category/blog URLs.', 'n8npress'),
                 'category'    => 'seo',
                 'icon'        => 'dashicons-admin-links',
                 'trigger'     => 'schedule',
-                'services'    => array('Claude AI', 'WordPress'),
+                'services'    => array('AI', 'WordPress'),
                 'file'        => $workflow_dir . '/workflow-internal-linker.json',
             ),
             'translation-pipeline' => array(
@@ -137,7 +137,7 @@ class N8nPress_Workflow_Templates {
                 'category'    => 'translation',
                 'icon'        => 'dashicons-translation',
                 'trigger'     => 'webhook',
-                'services'    => array('Claude AI', 'WordPress', 'WPML/Polylang'),
+                'services'    => array('AI', 'WordPress', 'WPML/Polylang'),
                 'file'        => $workflow_dir . '/workflow-translation-pipeline.json',
             ),
             'ai-review-responder' => array(
@@ -146,7 +146,7 @@ class N8nPress_Workflow_Templates {
                 'category'    => 'woocommerce',
                 'icon'        => 'dashicons-star-filled',
                 'trigger'     => 'schedule',
-                'services'    => array('Claude AI', 'WooCommerce'),
+                'services'    => array('AI', 'WooCommerce'),
                 'file'        => $workflow_dir . '/workflow-ai-review-responder.json',
             ),
             'crm-lifecycle' => array(
@@ -160,11 +160,11 @@ class N8nPress_Workflow_Templates {
             ),
             'open-claw' => array(
                 'name'        => __('Open Claw AI Assistant', 'n8npress'),
-                'description' => __('AI-powered store management via admin panel, Telegram, or WhatsApp. Claude AI processes complex queries.', 'n8npress'),
+                'description' => __('AI-powered store management via admin panel, Telegram, or WhatsApp. Processes complex queries with your selected AI model.', 'n8npress'),
                 'category'    => 'integration',
                 'icon'        => 'dashicons-superhero-alt',
                 'trigger'     => 'webhook',
-                'services'    => array('Claude AI', 'WordPress', 'Telegram', 'WhatsApp'),
+                'services'    => array('AI', 'WordPress', 'Telegram', 'WhatsApp'),
                 'file'        => $workflow_dir . '/workflow-open-claw.json',
             ),
         );

@@ -707,8 +707,8 @@ class N8nPress_API {
         $data = $request->get_json_params();
         $cost = N8nPress_Token_Tracker::record( array(
             'workflow'      => sanitize_text_field( $data['workflow'] ?? 'unknown' ),
-            'provider'      => sanitize_text_field( $data['provider'] ?? 'anthropic' ),
-            'model'         => sanitize_text_field( $data['model'] ?? 'claude-sonnet-4-20250514' ),
+            'provider'      => sanitize_text_field( $data['provider'] ?? 'openai' ),
+            'model'         => sanitize_text_field( $data['model'] ?? 'gpt-4o-mini' ),
             'input_tokens'  => absint( $data['input_tokens'] ?? 0 ),
             'output_tokens' => absint( $data['output_tokens'] ?? 0 ),
             'execution_id'  => sanitize_text_field( $data['execution_id'] ?? '' ),

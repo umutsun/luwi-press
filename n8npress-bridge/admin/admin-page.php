@@ -452,7 +452,7 @@ $wc_currency = $wc_active ? get_woocommerce_currency() : '—';
 					'name'       => __( 'AI Content Engine', 'n8npress' ),
 					'icon'       => 'dashicons-edit-large',
 					'class'      => 'N8nPress_AI_Content',
-					'desc'       => __( 'Product enrichment via Claude AI — descriptions, meta, FAQ, schema, alt text', 'n8npress' ),
+					'desc'       => __( 'AI product enrichment — descriptions, meta, FAQ, schema, alt text', 'n8npress' ),
 					'color'      => '#6366f1',
 					'health_key' => 'ai_content',
 				),

@@ -46,7 +46,7 @@ if ( isset( $_POST['n8npress_save_settings'] ) && check_admin_referer( 'n8npress
 	update_option( 'n8npress_anthropic_api_key', sanitize_text_field( $_POST['n8npress_anthropic_api_key'] ?? '' ) );
 	update_option( 'n8npress_google_ai_api_key', sanitize_text_field( $_POST['n8npress_google_ai_api_key'] ?? '' ) );
 	update_option( 'n8npress_ai_provider', sanitize_text_field( $_POST['n8npress_ai_provider'] ?? 'openai' ) );
-	update_option( 'n8npress_ai_model', sanitize_text_field( $_POST['n8npress_ai_model'] ?? 'claude-haiku-4-5' ) );
+	update_option( 'n8npress_ai_model', sanitize_text_field( $_POST['n8npress_ai_model'] ?? 'gpt-4o-mini' ) );
 	update_option( 'n8npress_daily_token_limit', floatval( $_POST['n8npress_daily_token_limit'] ?? 1.00 ) );
 	update_option( 'n8npress_max_output_tokens', absint( $_POST['n8npress_max_output_tokens'] ?? 1024 ) );
 
@@ -112,7 +112,7 @@ $openai_key         = get_option( 'n8npress_openai_api_key', '' );
 $anthropic_key      = get_option( 'n8npress_anthropic_api_key', '' );
 $google_ai_key      = get_option( 'n8npress_google_ai_api_key', '' );
 $ai_provider        = get_option( 'n8npress_ai_provider', 'openai' );
-$ai_model           = get_option( 'n8npress_ai_model', 'claude-haiku-4-5' );
+$ai_model           = get_option( 'n8npress_ai_model', 'gpt-4o-mini' );
 $daily_token_limit  = floatval( get_option( 'n8npress_daily_token_limit', 1.00 ) );
 $max_output_tokens  = absint( get_option( 'n8npress_max_output_tokens', 1024 ) );
 $crm_vip_threshold  = get_option( 'n8npress_crm_vip_threshold', 1000 );

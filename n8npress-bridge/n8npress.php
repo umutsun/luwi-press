@@ -3,7 +3,7 @@
  * Plugin Name: n8nPress
  * Plugin URI: https://github.com/umutsun/n8npress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores via n8n workflows.
- * Version: 1.7.1
+ * Version: 1.7.3
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('N8NPRESS_VERSION', '1.7.1');
+define('N8NPRESS_VERSION', '1.7.3');
 define('N8NPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('N8NPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('N8NPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -733,7 +733,7 @@ function n8npress_get_option($option, $default = false) {
  * Build the standard _meta block sent with every WP→n8n webhook payload.
  *
  * Workflows read $json.body._meta.* so they never need per-site env variables.
- * Only global AI credentials (Anthropic/OpenAI API key) stay in n8n credentials store.
+ * Only the user's AI API key stays in n8n credentials store.
  *
  * @param string $callback_url  Full REST URL n8n should POST results back to.
  * @return array
@@ -744,7 +744,7 @@ function n8npress_build_meta_block( $callback_url = '' ) {
         'rest_base'    => rest_url( 'n8npress/v1/' ),
         'callback_url' => $callback_url,
         'api_token'    => get_option( 'n8npress_seo_api_token', '' ),
-        'model'        => get_option( 'n8npress_ai_model', 'claude-haiku-4-5' ),
+        'model'        => get_option( 'n8npress_ai_model', 'gpt-4o-mini' ),
         'max_tokens'   => absint( get_option( 'n8npress_max_output_tokens', 1024 ) ),
         'language'     => get_option( 'n8npress_target_language', 'en' ),
         'site_name'    => get_bloginfo( 'name' ),

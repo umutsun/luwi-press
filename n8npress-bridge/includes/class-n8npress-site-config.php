@@ -165,7 +165,7 @@ class N8nPress_Site_Config {
 	}
 
 	private function get_n8npress_info() {
-		$ai_provider = get_option( 'n8npress_ai_provider', 'anthropic' );
+		$ai_provider = get_option( 'n8npress_ai_provider', 'openai' );
 
 		$info = array(
 			'version'          => defined( 'N8NPRESS_VERSION' ) ? N8NPRESS_VERSION : null,
@@ -177,7 +177,7 @@ class N8nPress_Site_Config {
 			'auto_enrich'      => (bool) get_option( 'n8npress_auto_enrich', false ),
 			'ai'               => array(
 				'provider'   => $ai_provider,
-				'model'      => get_option( 'n8npress_ai_model', 'claude-haiku-4-5' ),
+				'model'      => get_option( 'n8npress_ai_model', 'gpt-4o-mini' ),
 				'max_tokens' => absint( get_option( 'n8npress_max_output_tokens', 1024 ) ),
 				'api_key'    => $this->get_active_ai_key( $ai_provider ),
 			),

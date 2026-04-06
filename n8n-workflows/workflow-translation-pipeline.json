@@ -29,7 +29,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [0, 250],
-      "id": "trans-schedule"
+      "id": "trans-schedule",
+      "disabled": true
     },
     {
       "parameters": {
@@ -42,12 +43,12 @@
       "name": "Site Config",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [250, 250],
+      "position": [250, 100],
       "id": "trans-site-config"
     },
     {
       "parameters": {
-        "jsCode": "// Determine source: single-product webhook, batch webhook (translate_missing), or scheduled\nconst webhookData = $('Translation Request Webhook').first()?.json;\nconst siteConfig = $('Site Config').first().json;\nconst defaultLanguages = (siteConfig.n8npress?.target_languages || [siteConfig.n8npress?.target_language || 'tr']).join(',');\nconst isSingleProduct = !!webhookData?.product_id;\nconst isBatchRequest = webhookData?.event === 'translate_missing' || !!webhookData?.fetch_pending;\n\nif (isSingleProduct) {\n  const body = webhookData.body || webhookData;\n  return [{\n    json: {\n      product_ids: [body.product_id],\n      target_languages: (body.target_languages || defaultLanguages).split(',').map(l => l.trim()),\n      source: 'webhook'\n    }\n  }];\n}\n\nif (isBatchRequest) {\n  const body = webhookData.body || webhookData;\n  const langs = body.target_languages\n    ? body.target_languages.split(',').map(l => l.trim())\n    : defaultLanguages.split(',').map(l => l.trim());\n  return [{\n    json: {\n      product_ids: [],\n      target_languages: langs,\n      source: 'batch_webhook',\n      fetch_pending: true\n    }\n  }];\n}\n\n// Scheduled: use site-config target_languages\nreturn [{\n  json: {\n    product_ids: [],\n    target_languages: defaultLanguages.split(',').map(l => l.trim()),\n    source: 'schedule',\n    fetch_pending: true\n  }\n}];"
+        "jsCode": "// Determine source: single-product webhook, batch webhook (translate_missing), or scheduled\nconst siteConfig = $('Site Config').first().json;\nconst defaultLang = siteConfig.translation?.default_language || siteConfig.n8npress?.target_language || 'tr';\nconst activeLangs = siteConfig.translation?.active_languages || [];\nconst targetLangs = activeLangs.filter(l => l !== defaultLang);\nconst defaultLanguages = targetLangs.length > 0 ? targetLangs : ['en'];\n\n// Try to get webhook data (may not exist if triggered by schedule)\nlet webhookData = null;\ntry {\n  webhookData = $('Translation Request Webhook').first()?.json;\n} catch(e) {\n  webhookData = null;\n}\n\nconst body = webhookData?.body || webhookData || {};\nconst isSingleProduct = !!body.product_id && body.event !== 'translate_missing';\nconst isBatchRequest = body.event === 'translate_missing' || !!body.fetch_pending;\n\nif (isSingleProduct) {\n  let langs = defaultLanguages;\n  if (body.target_languages) {\n    langs = Array.isArray(body.target_languages)\n      ? body.target_languages\n      : body.target_languages.split(',').map(l => l.trim());\n  }\n  return [{\n    json: {\n      product_ids: [body.product_id],\n      target_languages: langs,\n      default_language: defaultLang,\n      source: 'webhook'\n    }\n  }];\n}\n\nif (isBatchRequest) {\n  let langs = defaultLanguages;\n  if (body.target_languages) {\n    langs = Array.isArray(body.target_languages)\n      ? body.target_languages\n      : body.target_languages.split(',').map(l => l.trim());\n  }\n  return [{\n    json: {\n      product_ids: [],\n      target_languages: langs,\n      default_language: defaultLang,\n      post_type: body.post_type || 'product',\n      limit: body.limit || 10,\n      source: 'batch_webhook',\n      fetch_pending: true\n    }\n  }];\n}\n\n// Scheduled: use site-config target_languages\nreturn [{\n  json: {\n    product_ids: [],\n    target_languages: defaultLanguages,\n    default_language: defaultLang,\n    source: 'schedule',\n    fetch_pending: true\n  }\n}];"
       },
       "name": "Determine Source",
       "type": "n8n-nodes-base.code",
@@ -58,22 +59,22 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/translation/pending",
+        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/translation/missing?target_language={{ $json.target_languages[0] }}&post_type={{ $json.post_type || 'product' }}&limit={{ $json.limit || 10 }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "options": {
           "timeout": 30000
         }
       },
-      "name": "Fetch Pending Translations",
+      "name": "Fetch Missing Translations",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [750, 250],
-      "id": "trans-fetch-pending"
+      "id": "trans-fetch-missing"
     },
     {
       "parameters": {
-        "jsCode": "const sourceData = $('Determine Source').first().json;\nlet productIds = sourceData.product_ids;\n\nif (sourceData.fetch_pending) {\n  const pending = $input.first().json;\n  productIds = (pending.products || []).map(p => p.id).slice(0, 10);\n}\n\nconst targetLanguages = sourceData.target_languages;\n\n// Create one item per product-language combination\nconst items = [];\nfor (const productId of productIds) {\n  for (const lang of targetLanguages) {\n    items.push({\n      json: { product_id: productId, target_language: lang }\n    });\n  }\n}\n\nif (items.length === 0) {\n  return [{ json: { skip: true, message: 'No products to translate' } }];\n}\n\nreturn items;"
+        "jsCode": "const sourceData = $('Determine Source').first().json;\nconst siteConfig = $('Site Config').first().json;\nlet productIds = sourceData.product_ids || [];\n\nif (sourceData.fetch_pending) {\n  const response = $input.first().json;\n  const products = response.products || [];\n  productIds = products.map(p => p.product_id || p.id).slice(0, sourceData.limit || 10);\n}\n\nconst targetLanguages = sourceData.target_languages || [];\n\n// Grab site config values once\nconst siteUrl = siteConfig.site?.url || siteConfig.site?.home_url || '';\nconst apiToken = siteConfig.n8npress?.api_token || '';\nconst aiApiKey = siteConfig.n8npress?.ai?.api_key || '';\nconst aiModel = siteConfig.n8npress?.ai?.model || 'gpt-4o-mini';\nconst aiMaxTokens = siteConfig.n8npress?.ai?.max_tokens || 3000;\nconst defaultLang = sourceData.default_language || 'tr';\n\n// Create one item per product-language combination, each carrying full context\nconst items = [];\nfor (const productId of productIds) {\n  for (const lang of targetLanguages) {\n    items.push({\n      json: {\n        product_id: productId,\n        target_language: lang,\n        default_language: defaultLang,\n        _site_url: siteUrl,\n        _api_token: apiToken,\n        _ai_api_key: aiApiKey,\n        _ai_model: aiModel,\n        _ai_max_tokens: aiMaxTokens\n      }\n    });\n  }\n}\n\nif (items.length === 0) {\n  return [{ json: { skip: true, message: 'No products to translate' } }];\n}\n\nreturn items;"
       },
       "name": "Build Translation Matrix",
       "type": "n8n-nodes-base.code",
@@ -112,8 +113,19 @@
     },
     {
       "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1450, 50],
+      "id": "trans-loop"
+    },
+    {
+      "parameters": {
         "method": "GET",
-        "url": "={{ $env.WP_SITE_URL }}/wp-json/wp/v2/product/{{ $json.product_id }}",
+        "url": "={{ $json._site_url }}/wp-json/wp/v2/product/{{ $json.product_id }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "options": {
@@ -123,152 +135,97 @@
       "name": "Fetch Product Data",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1500, 50],
+      "position": [1650, 50],
       "id": "trans-fetch-product"
     },
     {
       "parameters": {
+        "jsCode": "// Build OpenAI request body safely in Code node\n// Read context from the current Loop batch item (stored in Build Translation Matrix output)\nconst loopItem = $('Loop Over Items').first().json;\nconst product = $input.first().json;\n\nconst ctx = {\n  _product_id: loopItem.product_id,\n  _target_language: loopItem.target_language,\n  _default_language: loopItem.default_language || 'tr',\n  _site_url: loopItem._site_url,\n  _api_token: loopItem._api_token,\n  _ai_api_key: loopItem._ai_api_key,\n  _ai_model: loopItem._ai_model || 'gpt-4o-mini',\n  _ai_max_tokens: loopItem._ai_max_tokens || 3000\n};\n\n// WP REST API uses title.rendered, content.rendered, excerpt.rendered\nconst productName = product.title?.rendered || product.name || '';\nconst productDesc = product.content?.rendered || product.description || '';\nconst shortDesc = product.excerpt?.rendered || product.short_description || '';\n// Meta fields: WP REST API returns meta object, WC API returns meta_data array\nconst meta = product.meta || {};\nconst metaArr = product.meta_data || [];\nconst metaTitle = meta.rank_math_title || metaArr.find(m => m.key === 'rank_math_title')?.value || productName;\nconst metaDesc = meta.rank_math_description || metaArr.find(m => m.key === 'rank_math_description')?.value || '';\nconst focusKw = meta.rank_math_focus_keyword || metaArr.find(m => m.key === 'rank_math_focus_keyword')?.value || '';\n\nconst prompt = `You are an expert SEO-aware translator for e-commerce. Translate the following product content from ${ctx._default_language} to ${ctx._target_language}.\n\nIMPORTANT RULES:\n- Preserve brand names exactly as-is (do NOT translate brand names)\n- Meta title must be under 60 characters\n- Meta description must be under 160 characters\n- Maintain keyword density appropriate for the target language\n- Use natural, native-sounding language\n- Preserve HTML structure in description\n\nProduct ID: ${ctx._product_id}\nTarget Language: ${ctx._target_language}\nProduct Title: ${productName}\nProduct Description: ${productDesc}\nShort Description: ${shortDesc}\nMeta Title: ${metaTitle}\nMeta Description: ${metaDesc}\nFocus Keyword: ${focusKw}\n\nRespond in valid JSON with these keys:\n{\n  \"product_id\": ${ctx._product_id},\n  \"target_language\": \"${ctx._target_language}\",\n  \"title\": \"translated title\",\n  \"description\": \"translated full description (with HTML)\",\n  \"short_description\": \"translated short description\",\n  \"meta_title\": \"translated meta title (<60 chars)\",\n  \"meta_description\": \"translated meta description (<160 chars)\",\n  \"focus_keyword\": \"translated focus keyword\",\n  \"slug\": \"seo-friendly-url-slug\"\n}\n\nRespond ONLY with valid JSON.`;\n\nconst body = JSON.stringify({\n  model: ctx._ai_model,\n  max_tokens: ctx._ai_max_tokens,\n  messages: [\n    { role: 'user', content: prompt }\n  ]\n});\n\nreturn [{\n  json: {\n    ...ctx,\n    _ai_body: body,\n    product_name: productName\n  }\n}];"
+      },
+      "name": "Enrich Product Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 50],
+      "id": "trans-enrich"
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-api-key",
-              "value": "={{ $('Site Config').first().json.n8npress?.ai?.api_key }}"
+              "name": "Authorization",
+              "value": "=Bearer {{ $json._ai_api_key }}"
             },
             {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
-            },
-            {
-              "name": "content-type",
+              "name": "Content-Type",
               "value": "application/json"
             }
           ]
         },
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"{{ $('Site Config').first().json.n8npress?.ai?.model || 'claude-haiku-4-5' }}\",\n  \"max_tokens\": {{ $('Site Config').first().json.n8npress?.ai?.max_tokens || 3000 }},\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are an expert SEO-aware translator for e-commerce. Translate the following product content to {{ $json.target_language }}.\\n\\nIMPORTANT RULES:\\n- Preserve brand names exactly as-is (do NOT translate brand names)\\n- Meta title must be under 60 characters\\n- Meta description must be under 160 characters\\n- Maintain keyword density appropriate for the target language\\n- Use natural, native-sounding language\\n- Preserve HTML structure in description\\n\\nProduct Title: {{ $json.title?.rendered || $json.name }}\\nProduct Description: {{ $json.content?.rendered || $json.description }}\\nShort Description: {{ $json.excerpt?.rendered || $json.short_description }}\\nMeta Title: {{ $json.yoast_head_json?.title || $json.title?.rendered || $json.name }}\\nMeta Description: {{ $json.yoast_head_json?.description || '' }}\\n\\nRespond in valid JSON with these keys:\\n{\\n  \\\"title\\\": \\\"translated title\\\",\\n  \\\"description\\\": \\\"translated full description (with HTML)\\\",\\n  \\\"short_description\\\": \\\"translated short description\\\",\\n  \\\"meta_title\\\": \\\"translated meta title (<60 chars)\\\",\\n  \\\"meta_description\\\": \\\"translated meta description (<160 chars)\\\",\\n  \\\"slug\\\": \\\"seo-friendly-url-slug\\\"\\n}\\n\\nRespond ONLY with valid JSON.\"\n    }\n  ]\n}",
+        "specifyBody": "string",
+        "body": "={{ $json._ai_body }}",
         "options": {
           "timeout": 90000
         }
       },
-      "name": "Claude Translate",
+      "name": "AI Translate",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1750, 50],
-      "id": "trans-claude"
+      "position": [2050, 50],
+      "id": "trans-ai"
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nconst content = response.content?.[0]?.text || '{}';\nlet translated;\ntry {\n  translated = JSON.parse(content);\n} catch(e) {\n  const match = content.match(/\\{[\\s\\S]*\\}/);\n  translated = match ? JSON.parse(match[0]) : null;\n}\n\nif (!translated) {\n  return [{ json: { valid: false, error: 'JSON parse failed', product_id: $json.product_id, target_language: $json.target_language } }];\n}\n\nconst errors = [];\n\n// Validate meta title length\nif (translated.meta_title && translated.meta_title.length > 60) {\n  errors.push(`Meta title too long: ${translated.meta_title.length} chars (max 60)`);\n}\n\n// Validate meta description length\nif (translated.meta_description && translated.meta_description.length > 160) {\n  errors.push(`Meta description too long: ${translated.meta_description.length} chars (max 160)`);\n}\n\n// Check brand name preservation (basic check)\nconst originalTitle = $('Fetch Product Data').first().json.title?.rendered || '';\nconst brandPatterns = originalTitle.match(/[A-Z][a-z]+(?:\\s[A-Z][a-z]+)*/g) || [];\nfor (const brand of brandPatterns) {\n  if (brand.length > 3 && !translated.title.includes(brand)) {\n    errors.push(`Brand name possibly not preserved: ${brand}`);\n  }\n}\n\nconst productData = $('Fetch Product Data').first().json;\n\nreturn [{\n  json: {\n    product_id: productData.id,\n    product_name: productData.title?.rendered || productData.name,\n    target_language: $('Build Translation Matrix').first().json.target_language,\n    translated,\n    valid: errors.length === 0,\n    errors\n  }\n}];"
+        "jsCode": "// Parse OpenAI response and validate\nconst ctx = $('Enrich Product Data').first().json;\nconst response = $input.first().json;\n\nconst rawContent = response.choices?.[0]?.message?.content || '{}';\nlet translated;\ntry {\n  translated = JSON.parse(rawContent);\n} catch(e) {\n  const match = rawContent.match(/```(?:json)?\\s*([\\s\\S]*?)```/) || rawContent.match(/\\{[\\s\\S]*\\}/);\n  try {\n    translated = match ? JSON.parse(match[1] || match[0]) : null;\n  } catch(e2) {\n    translated = null;\n  }\n}\n\nif (!translated) {\n  return [{\n    json: {\n      valid: false,\n      error: 'JSON parse failed',\n      product_id: ctx._product_id,\n      target_language: ctx._target_language,\n      product_name: ctx.product_name,\n      _site_url: ctx._site_url,\n      _api_token: ctx._api_token\n    }\n  }];\n}\n\nconst errors = [];\nif (translated.meta_title && translated.meta_title.length > 65) {\n  errors.push('Meta title too long: ' + translated.meta_title.length + ' chars');\n}\nif (translated.meta_description && translated.meta_description.length > 165) {\n  errors.push('Meta description too long: ' + translated.meta_description.length + ' chars');\n}\n\n// Build the callback body right here to avoid expression issues\nconst callbackPayload = {\n  product_id: ctx._product_id,\n  language: ctx._target_language,\n  content: {\n    name: translated.title || translated.name || '',\n    description: translated.description || '',\n    short_description: translated.short_description || '',\n    meta_title: translated.meta_title || '',\n    meta_description: translated.meta_description || '',\n    focus_keyword: translated.focus_keyword || '',\n    slug: translated.slug || ''\n  },\n  status: errors.length === 0 ? 'completed' : 'needs_review',\n  errors: errors\n};\n\nreturn [{\n  json: {\n    product_id: ctx._product_id,\n    product_name: ctx.product_name,\n    target_language: ctx._target_language,\n    _site_url: ctx._site_url,\n    _api_token: ctx._api_token,\n    _callback_body: JSON.stringify(callbackPayload),\n    _callback_url: ctx._site_url + '/wp-json/n8npress/v1/translation/callback',\n    valid: errors.length === 0,\n    errors\n  }\n}];"
       },
-      "name": "Validate",
+      "name": "Validate and Prepare",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2000, 50],
+      "position": [2250, 50],
       "id": "trans-validate"
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "valid-check",
-              "leftValue": "={{ $json.valid }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "name": "Is Valid?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [2250, 50],
-      "id": "trans-if-valid"
-    },
-    {
-      "parameters": {
         "method": "POST",
-        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/translation/callback",
+        "url": "={{ $json._callback_url }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"product_id\": {{ $json.product_id }},\n  \"target_language\": \"{{ $json.target_language }}\",\n  \"translated\": {{ JSON.stringify($json.translated) }},\n  \"status\": \"completed\"\n}",
-        "options": {}
+        "specifyBody": "string",
+        "body": "={{ $json._callback_body }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
       },
       "name": "Save Translation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2500, -50],
+      "position": [2450, 50],
       "id": "trans-save"
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/translation/callback",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"product_id\": {{ $json.product_id }},\n  \"target_language\": \"{{ $json.target_language }}\",\n  \"translated\": {{ JSON.stringify($json.translated) }},\n  \"status\": \"needs_review\",\n  \"errors\": {{ JSON.stringify($json.errors) }}\n}",
-        "options": {}
+        "jsCode": "// Just pass through — translation saved successfully\nconst saved = $input.first().json;\nreturn [{ json: { done: true } }];"
       },
-      "name": "Flag for Human Review",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [2500, 150],
-      "id": "trans-flag-review"
-    },
-    {
-      "parameters": {
-        "jsCode": "// After saving translation, delete hreflang transient so tags regenerate\nconst saved = $input.first().json;\nconst productId = saved.product_id || saved.body?.product_id;\n// The transient is auto-deleted on next page load if stale,\n// but we log it for awareness.\nreturn [{ json: { ...saved, hreflang_note: 'Hreflang tags will regenerate on next page view for product ' + productId } }];"
-      },
-      "name": "Clear Hreflang Cache",
+      "name": "Mark Done",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2625, -50],
-      "id": "trans-clear-hreflang"
-    },
-    {
-      "parameters": {
-        "jsCode": "const allItems = $input.all();\nconst now = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });\nconst siteName = $('Site Config').first().json.site?.name || 'Site';\n\nconst completed = allItems.filter(i => i.json.valid === true);\nconst needsReview = allItems.filter(i => i.json.valid === false);\n\nlet report = `Translation Pipeline Report - ${siteName}\\nDate: ${now}\\n\\n`;\nreport += `Successful: ${completed.length} | Needs Review: ${needsReview.length}\\n\\n`;\n\nif (needsReview.length > 0) {\n  report += `Translations Needing Review:\\n`;\n  needsReview.forEach(item => {\n    report += `  - ${item.json.product_name} (${item.json.target_language})\\n`;\n    (item.json.errors || []).forEach(e => {\n      report += `    Error: ${e}\\n`;\n    });\n  });\n}\n\nreturn [{ json: { report, date: now } }];"
-      },
-      "name": "Translation Report",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [2750, 50],
-      "id": "trans-report"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/send-email",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"to\": \"{{ $('Site Config').first().json.site.admin_email }}\",\n  \"subject\": \"Translation Report - {{ $('Site Config').first().json.site.name }} - {{ $json.date }}\",\n  \"message\": {{ JSON.stringify($json.report) }}\n}",
-        "options": {}
-      },
-      "name": "Email Report",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [3000, 50],
-      "id": "trans-email"
+      "position": [2650, 50],
+      "id": "trans-mark-done"
     }
   ],
   "connections": {
@@ -296,11 +253,11 @@
     "Determine Source": {
       "main": [
         [
-          { "node": "Fetch Pending Translations", "type": "main", "index": 0 }
+          { "node": "Fetch Missing Translations", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Fetch Pending Translations": {
+    "Fetch Missing Translations": {
       "main": [
         [
           { "node": "Build Translation Matrix", "type": "main", "index": 0 }
@@ -317,6 +274,14 @@
     "Has Products?": {
       "main": [
         [
+          { "node": "Loop Over Items", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
           { "node": "Fetch Product Data", "type": "main", "index": 0 }
         ],
         []
@@ -325,59 +290,42 @@
     "Fetch Product Data": {
       "main": [
         [
-          { "node": "Claude Translate", "type": "main", "index": 0 }
+          { "node": "Enrich Product Data", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Claude Translate": {
+    "Enrich Product Data": {
       "main": [
         [
-          { "node": "Validate", "type": "main", "index": 0 }
+          { "node": "AI Translate", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Validate": {
+    "AI Translate": {
       "main": [
         [
-          { "node": "Is Valid?", "type": "main", "index": 0 }
+          { "node": "Validate and Prepare", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Is Valid?": {
+    "Validate and Prepare": {
       "main": [
         [
           { "node": "Save Translation", "type": "main", "index": 0 }
-        ],
-        [
-          { "node": "Flag for Human Review", "type": "main", "index": 0 }
         ]
       ]
     },
     "Save Translation": {
       "main": [
         [
-          { "node": "Clear Hreflang Cache", "type": "main", "index": 0 }
+          { "node": "Mark Done", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Clear Hreflang Cache": {
+    "Mark Done": {
       "main": [
         [
-          { "node": "Translation Report", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Flag for Human Review": {
-      "main": [
-        [
-          { "node": "Translation Report", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Translation Report": {
-      "main": [
-        [
-          { "node": "Email Report", "type": "main", "index": 0 }
+          { "node": "Loop Over Items", "type": "main", "index": 0 }
         ]
       ]
     }

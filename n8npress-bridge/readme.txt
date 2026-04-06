@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, n8n, product enrichment
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.7.0
+Stable tag: 1.7.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -131,6 +131,15 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 1.7.3 =
+* Fixed translation pipeline — OpenAI API, correct callback fields, data flow
+* Fixed product image copy for WPML translations (shared across languages)
+* Added category/tag translation coverage to Translation Manager
+* Removed vendor-specific naming — all AI references are now generic
+* Changed all default AI model/provider to GPT-4o Mini / OpenAI
+* Fixed callback body construction (HTML content breaking JSON)
+* Added Prepare Callback code nodes to safely build JSON bodies
 
 = 1.7.0 =
 * Added AI Token Usage tracking with daily/monthly cost breakdown

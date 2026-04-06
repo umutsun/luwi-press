@@ -224,11 +224,13 @@ class N8nPress_Translation {
 
         // Store translated content
         $translated = [
-            'name'              => sanitize_text_field($content['name'] ?? ''),
-            'description'       => wp_kses_post($content['description'] ?? ''),
-            'short_description' => wp_kses_post($content['short_description'] ?? ''),
-            'meta_title'        => sanitize_text_field($content['meta_title'] ?? ''),
-            'meta_description'  => sanitize_text_field($content['meta_description'] ?? ''),
+            'name'              => sanitize_text_field( $content['name'] ?? $content['title'] ?? '' ),
+            'description'       => wp_kses_post( $content['description'] ?? '' ),
+            'short_description' => wp_kses_post( $content['short_description'] ?? '' ),
+            'meta_title'        => sanitize_text_field( $content['meta_title'] ?? '' ),
+            'meta_description'  => sanitize_text_field( $content['meta_description'] ?? '' ),
+            'focus_keyword'     => sanitize_text_field( $content['focus_keyword'] ?? '' ),
+            'slug'              => sanitize_title( $content['slug'] ?? '' ),
             'faq'               => $content['faq'] ?? [],
         ];
 
@@ -491,7 +493,7 @@ class N8nPress_Translation {
     /**
      * Create WPML translation
      */
-    private function create_wpml_translation($product_id, $language, $translated) {
+    private function create_wpml_translation( $product_id, $language, $translated ) {
         if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
             N8nPress_Logger::log( 'WPML not active, cannot save translation', 'warning' );
             return;
@@ -503,42 +505,42 @@ class N8nPress_Translation {
             return;
         }
 
+        $default_lang  = apply_filters( 'wpml_default_language', 'tr' );
         $translated_id = apply_filters( 'wpml_object_id', $product_id, 'product', false, $language );
 
         if ( $translated_id && $translated_id !== $product_id ) {
-            // Update existing translation post
+            // ── Update existing translation ──
             wp_update_post( array(
                 'ID'           => $translated_id,
                 'post_title'   => $translated['name'],
                 'post_content' => $translated['description'],
-                'post_excerpt' => $translated['short_description'],
+                'post_excerpt' => $translated['short_description'] ?? '',
             ) );
+            $target_id = $translated_id;
 
-            N8nPress_Logger::log( 'WPML translation updated: product #' . $translated_id . ' (' . $language . ')', 'info' );
+            N8nPress_Logger::log( 'WPML translation updated: #' . $translated_id . ' (' . strtoupper( $language ) . ')', 'info' );
         } else {
-            // Create new translation post
+            // ── Create new translation post ──
             $original = get_post( $product_id );
             if ( ! $original ) {
                 return;
             }
 
-            $new_post = array(
+            $new_id = wp_insert_post( array(
                 'post_title'   => $translated['name'],
                 'post_content' => $translated['description'],
-                'post_excerpt' => $translated['short_description'],
+                'post_excerpt' => $translated['short_description'] ?? '',
                 'post_type'    => 'product',
                 'post_status'  => $original->post_status,
                 'post_author'  => $original->post_author,
-            );
+            ) );
 
-            $new_id = wp_insert_post( $new_post );
             if ( is_wp_error( $new_id ) ) {
-                N8nPress_Logger::log( 'Failed to create translation post: ' . $new_id->get_error_message(), 'error' );
+                N8nPress_Logger::log( 'Failed to create translation: ' . $new_id->get_error_message(), 'error' );
                 return;
             }
 
             // Link to WPML translation group
-            $default_lang = apply_filters( 'wpml_default_language', 'tr' );
             do_action( 'wpml_set_element_language_details', array(
                 'element_id'           => $new_id,
                 'element_type'         => 'post_product',
@@ -547,47 +549,159 @@ class N8nPress_Translation {
                 'source_language_code' => $default_lang,
             ) );
 
-            // Copy product meta from original
-            $meta_keys = array( '_price', '_regular_price', '_sale_price', '_sku', '_stock_status', '_manage_stock', '_stock', '_weight', '_length', '_width', '_height', '_thumbnail_id' );
-            foreach ( $meta_keys as $key ) {
-                $val = get_post_meta( $product_id, $key, true );
-                if ( '' !== $val ) {
-                    update_post_meta( $new_id, $key, $val );
+            $target_id = $new_id;
+
+            // ── Copy ALL product meta from original ──
+            $all_meta = get_post_meta( $product_id );
+            $skip_keys = array( '_edit_lock', '_edit_last', '_wp_old_slug' );
+            foreach ( $all_meta as $key => $values ) {
+                if ( in_array( $key, $skip_keys, true ) ) {
+                    continue;
+                }
+                // Skip n8nPress internal meta
+                if ( 0 === strpos( $key, '_n8npress_' ) ) {
+                    continue;
+                }
+                foreach ( $values as $val ) {
+                    update_post_meta( $new_id, $key, maybe_unserialize( $val ) );
                 }
             }
 
-            // Copy product gallery
-            $gallery = get_post_meta( $product_id, '_product_image_gallery', true );
-            if ( $gallery ) {
-                update_post_meta( $new_id, '_product_image_gallery', $gallery );
+            // ── Ensure product images are shared across WPML languages ──
+            $this->wpml_share_product_images( $product_id, $new_id, $language );
+
+            // ── Copy product type taxonomy ──
+            $type_terms = wp_get_object_terms( $product_id, 'product_type', array( 'fields' => 'slugs' ) );
+            if ( ! empty( $type_terms ) && ! is_wp_error( $type_terms ) ) {
+                wp_set_object_terms( $new_id, $type_terms, 'product_type' );
             }
 
-            // Set product type
-            $terms = wp_get_object_terms( $product_id, 'product_type', array( 'fields' => 'slugs' ) );
-            if ( ! empty( $terms ) ) {
-                wp_set_object_terms( $new_id, $terms, 'product_type' );
+            // ── Copy product visibility ──
+            $visibility = wp_get_object_terms( $product_id, 'product_visibility', array( 'fields' => 'slugs' ) );
+            if ( ! empty( $visibility ) && ! is_wp_error( $visibility ) ) {
+                wp_set_object_terms( $new_id, $visibility, 'product_visibility' );
             }
 
-            N8nPress_Logger::log( 'WPML translation created: product #' . $new_id . ' (' . $language . ') from #' . $product_id, 'info', array(
-                'original_id'   => $product_id,
-                'translated_id' => $new_id,
-                'language'      => $language,
-            ) );
+            // ── Translate and link categories ──
+            $this->copy_wpml_taxonomy_translations( $product_id, $new_id, $language, 'product_cat' );
+            $this->copy_wpml_taxonomy_translations( $product_id, $new_id, $language, 'product_tag' );
+
+            N8nPress_Logger::log(
+                sprintf( 'WPML translation created: #%d (%s) from #%d — "%s"', $new_id, strtoupper( $language ), $product_id, $translated['name'] ),
+                'info',
+                array( 'original_id' => $product_id, 'translated_id' => $new_id, 'language' => $language )
+            );
         }
 
-        // Save SEO meta if available
-        if ( ! empty( $translated['meta_title'] ) || ! empty( $translated['meta_description'] ) ) {
-            $target_id = $translated_id ?: $new_id ?? 0;
-            if ( $target_id ) {
-                $detector = N8nPress_Plugin_Detector::get_instance();
-                $seo = $detector->detect_seo();
-                if ( ! empty( $seo['meta_keys']['title'] ) ) {
-                    update_post_meta( $target_id, $seo['meta_keys']['title'], $translated['meta_title'] ?? '' );
-                }
-                if ( ! empty( $seo['meta_keys']['description'] ) ) {
-                    update_post_meta( $target_id, $seo['meta_keys']['description'], $translated['meta_description'] ?? '' );
+        // ── Save SEO meta (Rank Math / Yoast) ──
+        if ( $target_id && ( ! empty( $translated['meta_title'] ) || ! empty( $translated['meta_description'] ) ) ) {
+            $detector = N8nPress_Plugin_Detector::get_instance();
+            $seo      = $detector->detect_seo();
+
+            if ( ! empty( $seo['meta_keys']['title'] ) && ! empty( $translated['meta_title'] ) ) {
+                update_post_meta( $target_id, $seo['meta_keys']['title'], sanitize_text_field( $translated['meta_title'] ) );
+            }
+            if ( ! empty( $seo['meta_keys']['description'] ) && ! empty( $translated['meta_description'] ) ) {
+                update_post_meta( $target_id, $seo['meta_keys']['description'], sanitize_text_field( $translated['meta_description'] ) );
+            }
+            // Rank Math focus keyword
+            if ( ! empty( $translated['focus_keyword'] ) && ! empty( $seo['meta_keys']['focus_keyword'] ) ) {
+                update_post_meta( $target_id, $seo['meta_keys']['focus_keyword'], sanitize_text_field( $translated['focus_keyword'] ) );
+            }
+        }
+    }
+
+    /**
+     * Share product images (thumbnail + gallery) across WPML languages.
+     * WPML may look for translated attachment IDs — this ensures the original
+     * attachments are registered for the target language so images display correctly.
+     */
+    private function wpml_share_product_images( $source_id, $target_id, $language ) {
+        $default_lang = apply_filters( 'wpml_default_language', 'tr' );
+        $attachment_ids = array();
+
+        // Collect thumbnail
+        $thumb_id = get_post_meta( $source_id, '_thumbnail_id', true );
+        if ( $thumb_id ) {
+            $attachment_ids[] = (int) $thumb_id;
+        }
+
+        // Collect gallery images
+        $gallery = get_post_meta( $source_id, '_product_image_gallery', true );
+        if ( ! empty( $gallery ) ) {
+            $gallery_ids = array_map( 'intval', explode( ',', $gallery ) );
+            $attachment_ids = array_merge( $attachment_ids, $gallery_ids );
+        }
+
+        $attachment_ids = array_unique( array_filter( $attachment_ids ) );
+
+        foreach ( $attachment_ids as $att_id ) {
+            // Check if this attachment already has a WPML translation for target language
+            $translated_att = apply_filters( 'wpml_object_id', $att_id, 'attachment', false, $language );
+
+            if ( ! $translated_att || $translated_att === $att_id ) {
+                // Register the original attachment as its own translation for target language
+                $att_trid = apply_filters( 'wpml_element_trid', null, $att_id, 'post_attachment' );
+                if ( $att_trid ) {
+                    // WPML already tracks this attachment — add language link
+                    do_action( 'wpml_set_element_language_details', array(
+                        'element_id'           => $att_id,
+                        'element_type'         => 'post_attachment',
+                        'trid'                 => $att_trid,
+                        'language_code'        => $language,
+                        'source_language_code' => null,
+                    ) );
                 }
             }
+
+            // If WPML created a different attachment ID for this language, update meta
+            $final_att_id = apply_filters( 'wpml_object_id', $att_id, 'attachment', false, $language );
+            if ( $final_att_id && $final_att_id !== $att_id ) {
+                // Update thumbnail if this was the thumbnail
+                if ( (int) $thumb_id === $att_id ) {
+                    update_post_meta( $target_id, '_thumbnail_id', $final_att_id );
+                }
+            }
+        }
+
+        // Re-map gallery IDs for translated product
+        if ( ! empty( $gallery ) ) {
+            $gallery_ids = array_map( 'intval', explode( ',', $gallery ) );
+            $translated_gallery = array();
+            foreach ( $gallery_ids as $gid ) {
+                $translated_gid = apply_filters( 'wpml_object_id', $gid, 'attachment', true, $language );
+                $translated_gallery[] = $translated_gid ?: $gid;
+            }
+            update_post_meta( $target_id, '_product_image_gallery', implode( ',', $translated_gallery ) );
+        }
+    }
+
+    /**
+     * Copy taxonomy terms with WPML translation linking.
+     * If translated term exists in WPML, use it. Otherwise, copy original terms.
+     */
+    private function copy_wpml_taxonomy_translations( $source_id, $target_id, $language, $taxonomy ) {
+        $terms = wp_get_object_terms( $source_id, $taxonomy );
+        if ( empty( $terms ) || is_wp_error( $terms ) ) {
+            return;
+        }
+
+        $translated_term_ids = array();
+
+        foreach ( $terms as $term ) {
+            // Check if WPML has a translation for this term
+            $translated_term_id = apply_filters( 'wpml_object_id', $term->term_id, $taxonomy, false, $language );
+
+            if ( $translated_term_id && $translated_term_id !== $term->term_id ) {
+                $translated_term_ids[] = (int) $translated_term_id;
+            } else {
+                // No translation exists — use the original term
+                $translated_term_ids[] = (int) $term->term_id;
+            }
+        }
+
+        if ( ! empty( $translated_term_ids ) ) {
+            wp_set_object_terms( $target_id, $translated_term_ids, $taxonomy );
         }
     }
 
