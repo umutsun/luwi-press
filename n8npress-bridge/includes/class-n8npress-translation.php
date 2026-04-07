@@ -524,6 +524,17 @@ class N8nPress_Translation {
             ) );
             $target_id = $translated_id;
 
+            // ── Ensure product images match original ──
+            $orig_thumb = get_post_meta( $product_id, '_thumbnail_id', true );
+            if ( $orig_thumb ) {
+                update_post_meta( $translated_id, '_thumbnail_id', $orig_thumb );
+            }
+            $orig_gallery = get_post_meta( $product_id, '_product_image_gallery', true );
+            if ( $orig_gallery ) {
+                update_post_meta( $translated_id, '_product_image_gallery', $orig_gallery );
+            }
+            $this->wpml_share_product_images( $product_id, $translated_id, $language );
+
             N8nPress_Logger::log( 'WPML translation updated: #' . $translated_id . ' (' . strtoupper( $language ) . ')', 'info' );
         } else {
             // ── Create new translation post ──
