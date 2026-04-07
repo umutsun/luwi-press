@@ -115,15 +115,31 @@ foreach ( $taxonomies_to_check as $tax_slug => $tax_label ) {
 }
 
 foreach ( $post_types as $pt ) {
-	$total_obj = wp_count_posts( $pt );
-	$total     = absint( $total_obj->publish ?? 0 );
+	global $wpdb;
+
+	if ( 'wpml' === $translation['plugin'] ) {
+		// Count only default language posts (exclude WPML translations from total)
+		$element_type = 'post_' . $pt;
+		$total = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(DISTINCT t.element_id)
+			 FROM {$wpdb->prefix}icl_translations t
+			 WHERE t.element_type = %s
+			   AND t.language_code = %s
+			   AND t.element_id IN (
+			       SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish'
+			   )",
+			$element_type, $default_lang, $pt
+		) );
+	} else {
+		$total_obj = wp_count_posts( $pt );
+		$total     = absint( $total_obj->publish ?? 0 );
+	}
+
 	$coverage[ $pt ] = array( 'total' => $total, 'languages' => array() );
 
 	if ( $total === 0 || empty( $target_langs ) ) {
 		continue;
 	}
-
-	global $wpdb;
 
 	if ( 'wpml' === $translation['plugin'] ) {
 		$element_type = 'post_' . $pt;
