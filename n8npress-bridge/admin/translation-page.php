@@ -1,25 +1,26 @@
 <?php
 /**
- * n8nPress Translation Manager Page
+ * n8nPress Translation Manager
  *
- * Admin UI for viewing translation status and triggering bulk translations.
- * Reads active languages from WPML/Polylang Plugin Detector — no manual config needed.
+ * Unified translation dashboard — coverage overview, one-click translate,
+ * image fix, bulk operations. Reads languages from WPML/Polylang.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// Get translation environment from Plugin Detector
-$detector    = N8nPress_Plugin_Detector::get_instance();
-$translation = $detector->detect_translation();
-$plugin_name = ucwords( str_replace( '-', ' ', $translation['plugin'] ) );
-$plugin_ver  = $translation['version'] ?? '';
-$default_lang    = $translation['default_language'] ?? 'tr';
-$active_langs    = $translation['active_languages'] ?? array();
-$target_langs    = array_diff( $active_langs, array( $default_lang ) );
-$has_wc_support  = ! empty( $translation['features']['woocommerce'] );
-$webhook_url     = get_option( 'n8npress_seo_webhook_url', '' );
+// ── Environment ──
+$detector       = N8nPress_Plugin_Detector::get_instance();
+$translation    = $detector->detect_translation();
+$plugin_name    = ucwords( str_replace( '-', ' ', $translation['plugin'] ) );
+$plugin_ver     = $translation['version'] ?? '';
+$default_lang   = $translation['default_language'] ?? 'en';
+$active_langs   = $translation['active_languages'] ?? array();
+$target_langs   = array_diff( $active_langs, array( $default_lang ) );
+$has_wc_support = ! empty( $translation['features']['woocommerce'] );
+$webhook_url    = get_option( 'n8npress_seo_webhook_url', '' );
+$is_wpml        = 'wpml' === $translation['plugin'];
 
 $language_names = array(
 	'tr' => 'Türkçe', 'en' => 'English', 'de' => 'Deutsch', 'fr' => 'Français',
@@ -28,7 +29,14 @@ $language_names = array(
 	'ko' => '한국어', 'sv' => 'Svenska', 'pl' => 'Polski', 'uk' => 'Українська',
 );
 
-// Handle bulk translation trigger
+$language_flags = array(
+	'tr' => '🇹🇷', 'en' => '🇬🇧', 'de' => '🇩🇪', 'fr' => '🇫🇷',
+	'ar' => '🇸🇦', 'es' => '🇪🇸', 'it' => '🇮🇹', 'nl' => '🇳🇱',
+	'ru' => '🇷🇺', 'ja' => '🇯🇵', 'zh' => '🇨🇳', 'pt-pt' => '🇵🇹',
+	'ko' => '🇰🇷', 'sv' => '🇸🇪', 'pl' => '🇵🇱', 'uk' => '🇺🇦',
+);
+
+// ── Handle translation trigger ──
 if ( isset( $_POST['n8npress_trigger_translation'] ) && check_admin_referer( 'n8npress_translation_nonce' ) ) {
 	$lang  = sanitize_text_field( $_POST['translate_language'] ?? '' );
 	$type  = sanitize_text_field( $_POST['translate_post_type'] ?? 'product' );
@@ -53,403 +61,324 @@ if ( isset( $_POST['n8npress_trigger_translation'] ) && check_admin_referer( 'n8
 		) );
 
 		$code = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
-
 		if ( ! is_wp_error( $response ) && $code >= 200 && $code < 300 ) {
-			echo '<div class="notice notice-success is-dismissible"><p>' .
-				sprintf( __( 'Translation pipeline triggered for %s (%s, up to %d items).', 'n8npress' ),
-					strtoupper( $lang ), $type, $limit ) .
-				'</p></div>';
-			N8nPress_Logger::log( 'Bulk translation triggered: ' . strtoupper( $lang ), 'info', array(
-				'language' => $lang, 'type' => $type, 'limit' => $limit,
-			) );
+			$type_label = get_post_type_object( $type )->labels->name ?? $type;
+			echo '<div class="notice notice-success is-dismissible"><p>';
+			printf( __( 'Translation started: %s %s, up to %d items.', 'n8npress' ), strtoupper( $lang ), $type_label, $limit );
+			echo '</p></div>';
+			N8nPress_Logger::log( 'Bulk translation triggered: ' . strtoupper( $lang ), 'info', array( 'language' => $lang, 'type' => $type, 'limit' => $limit ) );
 		} else {
 			$err = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP ' . $code;
-			echo '<div class="notice notice-error is-dismissible"><p>' .
-				sprintf( __( 'Translation trigger failed: %s', 'n8npress' ), esc_html( $err ) ) .
-				'</p></div>';
+			echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( __( 'Translation trigger failed: %s', 'n8npress' ), esc_html( $err ) ) . '</p></div>';
 		}
 	}
 }
 
-// Calculate real translation coverage using WPML/Polylang data
-$post_types = array( 'product', 'post', 'page' );
-$coverage   = array();
+// ── Calculate coverage for all content types ──
+global $wpdb;
+$content_types = array(
+	'product' => array( 'icon' => 'dashicons-cart', 'color' => '#6366f1' ),
+	'post'    => array( 'icon' => 'dashicons-admin-post', 'color' => '#2563eb' ),
+	'page'    => array( 'icon' => 'dashicons-admin-page', 'color' => '#16a34a' ),
+);
+$coverage = array();
 
-// Category/Tag coverage
-$taxonomy_coverage = array();
-$taxonomies_to_check = array( 'product_cat' => 'Product Categories', 'product_tag' => 'Product Tags' );
-foreach ( $taxonomies_to_check as $tax_slug => $tax_label ) {
-	$terms = get_terms( array( 'taxonomy' => $tax_slug, 'hide_empty' => false ) );
-	if ( is_wp_error( $terms ) || empty( $terms ) ) {
-		continue;
-	}
+foreach ( $content_types as $pt => $pt_meta ) {
+	$pt_obj = get_post_type_object( $pt );
+	if ( ! $pt_obj ) continue;
 
-	if ( 'wpml' === $translation['plugin'] ) {
-		// WPML: use icl_translations table directly for accurate counts
-		global $wpdb;
-		$element_type = 'tax_' . $tax_slug;
-
-		// Count default language terms
-		$total = (int) $wpdb->get_var( $wpdb->prepare(
-			"SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations
-			 WHERE element_type = %s AND language_code = %s",
-			$element_type, $default_lang
-		) );
-
-		$taxonomy_coverage[ $tax_slug ] = array( 'label' => $tax_label, 'total' => $total, 'languages' => array() );
-
-		foreach ( $target_langs as $lang ) {
-			$translated_count = (int) $wpdb->get_var( $wpdb->prepare(
-				"SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations
-				 WHERE element_type = %s AND language_code = %s
-				   AND source_language_code IS NOT NULL",
-				$element_type, $lang
-			) );
-			$taxonomy_coverage[ $tax_slug ]['languages'][ $lang ] = $translated_count;
-		}
-	} else {
-		// Polylang or no translation plugin
-		$total = count( $terms );
-		$taxonomy_coverage[ $tax_slug ] = array( 'label' => $tax_label, 'total' => $total, 'languages' => array() );
-	}
-}
-
-foreach ( $post_types as $pt ) {
-	global $wpdb;
-
-	if ( 'wpml' === $translation['plugin'] ) {
-		// Count only default language posts (exclude WPML translations from total)
+	if ( $is_wpml ) {
 		$element_type = 'post_' . $pt;
 		$total = (int) $wpdb->get_var( $wpdb->prepare(
-			"SELECT COUNT(DISTINCT t.element_id)
-			 FROM {$wpdb->prefix}icl_translations t
-			 WHERE t.element_type = %s
-			   AND t.language_code = %s
-			   AND t.element_id IN (
-			       SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish'
-			   )",
+			"SELECT COUNT(DISTINCT t.element_id) FROM {$wpdb->prefix}icl_translations t
+			 WHERE t.element_type = %s AND t.language_code = %s AND t.source_language_code IS NULL
+			   AND t.element_id IN (SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish')",
 			$element_type, $default_lang, $pt
 		) );
 	} else {
-		$total_obj = wp_count_posts( $pt );
-		$total     = absint( $total_obj->publish ?? 0 );
+		$total = absint( wp_count_posts( $pt )->publish ?? 0 );
 	}
 
-	$coverage[ $pt ] = array( 'total' => $total, 'languages' => array() );
-
-	if ( $total === 0 || empty( $target_langs ) ) {
-		continue;
-	}
-
-	if ( 'wpml' === $translation['plugin'] ) {
-		$element_type = 'post_' . $pt;
+	$langs = array();
+	if ( $total > 0 && $is_wpml ) {
 		foreach ( $target_langs as $lang ) {
-			$translated = $wpdb->get_var( $wpdb->prepare(
-				"SELECT COUNT(DISTINCT t.element_id)
-				 FROM {$wpdb->prefix}icl_translations t
-				 WHERE t.element_type = %s
-				   AND t.language_code = %s
-				   AND t.element_id IN (
-				       SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish'
-				   )",
+			$langs[ $lang ] = (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT COUNT(DISTINCT t.element_id) FROM {$wpdb->prefix}icl_translations t
+				 WHERE t.element_type = %s AND t.language_code = %s
+				   AND t.element_id IN (SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish')",
 				$element_type, $lang, $pt
 			) );
-			$coverage[ $pt ]['languages'][ $lang ] = intval( $translated );
 		}
-	} elseif ( 'polylang' === $translation['plugin'] && function_exists( 'pll_count_posts' ) ) {
+	}
+
+	$coverage[ $pt ] = array( 'label' => $pt_obj->labels->name, 'total' => $total, 'languages' => $langs, 'icon' => $pt_meta['icon'], 'color' => $pt_meta['color'] );
+}
+
+// ── Taxonomy coverage ──
+$tax_types = array( 'product_cat' => 'Product Categories', 'product_tag' => 'Product Tags', 'category' => 'Post Categories' );
+$tax_coverage = array();
+foreach ( $tax_types as $tax => $label ) {
+	if ( ! taxonomy_exists( $tax ) ) continue;
+	if ( $is_wpml ) {
+		$el_type = 'tax_' . $tax;
+		$total = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations WHERE element_type = %s AND language_code = %s AND source_language_code IS NULL",
+			$el_type, $default_lang
+		) );
+		$langs = array();
 		foreach ( $target_langs as $lang ) {
-			$count = pll_count_posts( $lang, array( 'post_type' => $pt ) );
-			$coverage[ $pt ]['languages'][ $lang ] = intval( $count );
-		}
-	} else {
-		// Fallback: n8nPress own tracking via post_meta
-		foreach ( $target_langs as $lang ) {
-			$translated = $wpdb->get_var( $wpdb->prepare(
-				"SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
-				 INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
-				 WHERE p.post_type = %s AND p.post_status = 'publish'
-				   AND pm.meta_key = %s AND pm.meta_value = 'completed'",
-				$pt, '_n8npress_translation_' . $lang . '_status'
+			$langs[ $lang ] = (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations WHERE element_type = %s AND language_code = %s AND source_language_code IS NOT NULL",
+				$el_type, $lang
 			) );
-			$coverage[ $pt ]['languages'][ $lang ] = intval( $translated );
+		}
+		if ( $total > 0 ) {
+			$tax_coverage[ $tax ] = array( 'label' => $label, 'total' => $total, 'languages' => $langs );
 		}
 	}
 }
+
+// ── Overall stats ──
+$total_content = 0;
+$total_translated = 0;
+$total_possible = 0;
+foreach ( $coverage as $c ) {
+	$total_content += $c['total'];
+	foreach ( $c['languages'] as $count ) {
+		$total_translated += $count;
+	}
+	$total_possible += $c['total'] * count( $target_langs );
+}
+$overall_pct = $total_possible > 0 ? round( ( $total_translated / $total_possible ) * 100 ) : 0;
 ?>
 
 <div class="wrap n8npress-dashboard">
-	<h1>
-		<span class="dashicons dashicons-translation"></span>
-		<?php _e( 'Translation Manager', 'n8npress' ); ?>
-	</h1>
-
-	<!-- Status Bar -->
-	<div class="n8npress-status-bar">
-		<div class="n8npress-status-item status-ok">
-			<span class="dashicons dashicons-admin-plugins"></span>
-			<strong><?php _e( 'Backend:', 'n8npress' ); ?></strong>
-			<span class="status-text"><?php echo esc_html( $plugin_name . ( $plugin_ver ? ' v' . $plugin_ver : '' ) ); ?></span>
-		</div>
-		<div class="n8npress-status-item status-ok">
-			<span class="dashicons dashicons-admin-site-alt3"></span>
-			<strong><?php _e( 'Default:', 'n8npress' ); ?></strong>
-			<code class="lang-tag"><?php echo esc_html( strtoupper( $default_lang ) ); ?></code>
-			<span class="status-text"><?php echo esc_html( $language_names[ $default_lang ] ?? $default_lang ); ?></span>
-		</div>
-		<div class="n8npress-status-item <?php echo count( $target_langs ) > 0 ? 'status-ok' : 'status-warning'; ?>">
-			<span class="dashicons dashicons-translation"></span>
-			<strong><?php _e( 'Targets:', 'n8npress' ); ?></strong>
-			<?php if ( ! empty( $target_langs ) ) : ?>
-				<?php foreach ( $target_langs as $lang ) : ?>
-					<code class="lang-tag"><?php echo esc_html( strtoupper( $lang ) ); ?></code>
-				<?php endforeach; ?>
-			<?php else : ?>
-				<span class="status-text"><?php _e( 'No target languages configured', 'n8npress' ); ?></span>
-			<?php endif; ?>
-		</div>
-		<?php if ( class_exists( 'WooCommerce' ) ) : ?>
-		<div class="n8npress-status-item <?php echo $has_wc_support ? 'status-ok' : 'status-warning'; ?>">
-			<span class="dashicons <?php echo $has_wc_support ? 'dashicons-yes-alt' : 'dashicons-warning'; ?>"></span>
-			<strong><?php _e( 'WooCommerce:', 'n8npress' ); ?></strong>
-			<span class="status-text">
-				<?php echo $has_wc_support
-					? __( 'Product translation supported', 'n8npress' )
-					: sprintf( __( '%s for WooCommerce required', 'n8npress' ), $plugin_name ); ?>
-			</span>
-		</div>
-		<?php endif; ?>
-	</div>
+	<h1><span class="dashicons dashicons-translation"></span> <?php esc_html_e( 'Translation Manager', 'n8npress' ); ?></h1>
 
 	<?php if ( empty( $target_langs ) ) : ?>
-		<div class="notice notice-info">
-			<p><?php printf( __( 'Add target languages in %s settings to start translating.', 'n8npress' ), $plugin_name ); ?></p>
-		</div>
+		<div class="notice notice-info"><p><?php printf( __( 'Configure target languages in %s to start translating.', 'n8npress' ), $plugin_name ); ?></p></div>
 	<?php else : ?>
 
-	<!-- Coverage Stats -->
-	<div class="n8npress-section">
-		<h2><?php _e( 'Translation Coverage', 'n8npress' ); ?></h2>
-
-		<?php foreach ( $post_types as $pt ) :
-			$pt_obj = get_post_type_object( $pt );
-			if ( ! $pt_obj || $coverage[ $pt ]['total'] === 0 ) {
-				continue;
-			}
-		?>
-		<div class="n8npress-translation-coverage">
-			<h3>
-				<?php echo esc_html( $pt_obj->labels->name ); ?>
-				<span style="font-weight:400;color:#6b7280;"> — <?php echo $coverage[ $pt ]['total']; ?> <?php _e( 'published', 'n8npress' ); ?></span>
-			</h3>
-			<table class="n8npress-table">
-				<thead>
-					<tr>
-						<th><?php _e( 'Language', 'n8npress' ); ?></th>
-						<th><?php _e( 'Translated', 'n8npress' ); ?></th>
-						<th><?php _e( 'Missing', 'n8npress' ); ?></th>
-						<th><?php _e( 'Coverage', 'n8npress' ); ?></th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php foreach ( $target_langs as $lang ) :
-						$translated = $coverage[ $pt ]['languages'][ $lang ] ?? 0;
-						$missing    = max( 0, $coverage[ $pt ]['total'] - $translated );
-						$percent    = $coverage[ $pt ]['total'] > 0 ? round( ( $translated / $coverage[ $pt ]['total'] ) * 100 ) : 0;
-					?>
-					<tr>
-						<td>
-							<code class="lang-tag"><?php echo esc_html( strtoupper( $lang ) ); ?></code>
-							<?php echo esc_html( $language_names[ $lang ] ?? $lang ); ?>
-						</td>
-						<td><strong><?php echo $translated; ?></strong></td>
-						<td>
-							<?php if ( $missing > 0 ) : ?>
-								<span style="color:#dc2626;font-weight:600;"><?php echo $missing; ?></span>
-							<?php else : ?>
-								<span style="color:#16a34a;">✓ 0</span>
-							<?php endif; ?>
-						</td>
-						<td>
-							<div class="n8npress-progress-bar">
-								<div class="progress-fill <?php echo $percent === 100 ? 'progress-complete' : ''; ?>"
-									 style="width:<?php echo $percent; ?>%;"></div>
-							</div>
-							<span class="progress-text"><?php echo $percent; ?>%</span>
-						</td>
-						<td>
-							<?php if ( $missing > 0 ) : ?>
-							<form method="post" style="display:inline;">
-								<?php wp_nonce_field( 'n8npress_translation_nonce' ); ?>
-								<input type="hidden" name="translate_language" value="<?php echo esc_attr( $lang ); ?>" />
-								<input type="hidden" name="translate_post_type" value="<?php echo esc_attr( $pt ); ?>" />
-								<input type="hidden" name="translate_limit" value="<?php echo min( $missing, 20 ); ?>" />
-								<button type="submit" name="n8npress_trigger_translation" class="button button-small"
-										<?php echo empty( $webhook_url ) ? 'disabled title="Configure n8n webhook first"' : ''; ?>>
-									<?php printf( __( 'Translate %d', 'n8npress' ), min( $missing, 20 ) ); ?>
-								</button>
-							</form>
-							<?php endif; ?>
-						</td>
-					</tr>
-					<?php endforeach; ?>
-				</tbody>
-			</table>
+	<!-- ── OVERVIEW CARDS ── -->
+	<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:16px 0 24px;">
+		<div class="postbox" style="margin:0;padding:14px 18px;border-left:4px solid #6366f1;">
+			<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;"><?php esc_html_e( 'Overall Coverage', 'n8npress' ); ?></div>
+			<div style="font-size:28px;font-weight:700;color:<?php echo $overall_pct >= 80 ? '#16a34a' : ( $overall_pct >= 50 ? '#f59e0b' : '#dc2626' ); ?>;"><?php echo $overall_pct; ?>%</div>
+			<div style="margin-top:6px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;">
+				<div style="height:100%;width:<?php echo $overall_pct; ?>%;background:<?php echo $overall_pct >= 80 ? '#16a34a' : ( $overall_pct >= 50 ? '#f59e0b' : '#dc2626' ); ?>;border-radius:3px;"></div>
+			</div>
 		</div>
-		<?php endforeach; ?>
-
-		<!-- Taxonomy Translation Coverage -->
-		<?php foreach ( $taxonomy_coverage as $tax_slug => $tax_data ) :
-			if ( $tax_data['total'] === 0 ) continue;
-		?>
-		<div class="n8npress-translation-coverage">
-			<h3>
-				<?php echo esc_html( $tax_data['label'] ); ?>
-				<span style="font-weight:400;color:#6b7280;"> — <?php echo $tax_data['total']; ?> <?php _e( 'terms', 'n8npress' ); ?></span>
-			</h3>
-			<table class="n8npress-table">
-				<thead>
-					<tr>
-						<th><?php _e( 'Language', 'n8npress' ); ?></th>
-						<th><?php _e( 'Translated', 'n8npress' ); ?></th>
-						<th><?php _e( 'Missing', 'n8npress' ); ?></th>
-						<th><?php _e( 'Coverage', 'n8npress' ); ?></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php foreach ( $target_langs as $lang ) :
-						$t_count = $tax_data['languages'][ $lang ] ?? 0;
-						$missing = max( 0, $tax_data['total'] - $t_count );
-						$percent = $tax_data['total'] > 0 ? round( ( $t_count / $tax_data['total'] ) * 100 ) : 0;
-					?>
-					<tr>
-						<td>
-							<code class="lang-tag"><?php echo esc_html( strtoupper( $lang ) ); ?></code>
-							<?php echo esc_html( $language_names[ $lang ] ?? $lang ); ?>
-						</td>
-						<td><strong><?php echo $t_count; ?></strong></td>
-						<td>
-							<?php if ( $missing > 0 ) : ?>
-								<span style="color:#dc2626;font-weight:600;"><?php echo $missing; ?></span>
-							<?php else : ?>
-								<span style="color:#16a34a;">0</span>
-							<?php endif; ?>
-						</td>
-						<td>
-							<div class="n8npress-progress-bar">
-								<div class="progress-fill <?php echo $percent === 100 ? 'progress-complete' : ''; ?>" style="width:<?php echo $percent; ?>%;"></div>
-							</div>
-							<span class="progress-text"><?php echo $percent; ?>%</span>
-						</td>
-					</tr>
-					<?php endforeach; ?>
-				</tbody>
-			</table>
+		<div class="postbox" style="margin:0;padding:14px 18px;">
+			<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;"><?php esc_html_e( 'Content Items', 'n8npress' ); ?></div>
+			<div style="font-size:28px;font-weight:700;"><?php echo $total_content; ?></div>
+			<div style="font-size:12px;color:#6b7280;"><?php echo count( $target_langs ); ?> <?php esc_html_e( 'languages', 'n8npress' ); ?></div>
 		</div>
-		<?php endforeach; ?>
+		<div class="postbox" style="margin:0;padding:14px 18px;">
+			<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;"><?php esc_html_e( 'Translated', 'n8npress' ); ?></div>
+			<div style="font-size:28px;font-weight:700;color:#16a34a;"><?php echo $total_translated; ?></div>
+			<div style="font-size:12px;color:#6b7280;"><?php esc_html_e( 'of', 'n8npress' ); ?> <?php echo $total_possible; ?> <?php esc_html_e( 'needed', 'n8npress' ); ?></div>
+		</div>
+		<div class="postbox" style="margin:0;padding:14px 18px;">
+			<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;"><?php esc_html_e( 'Backend', 'n8npress' ); ?></div>
+			<div style="font-size:16px;font-weight:600;margin-top:4px;"><?php echo esc_html( $plugin_name ); ?></div>
+			<div style="font-size:12px;color:#6b7280;">
+				<?php echo esc_html( strtoupper( $default_lang ) ); ?> →
+				<?php foreach ( $target_langs as $lang ) : ?>
+					<span style="font-weight:600;"><?php echo esc_html( strtoupper( $lang ) ); ?></span>
+				<?php endforeach; ?>
+			</div>
+		</div>
 	</div>
 
-	<!-- Bulk Translation Form -->
-	<div class="n8npress-section">
-		<h2><?php _e( 'Bulk Translation', 'n8npress' ); ?></h2>
-		<p class="description"><?php _e( 'Trigger AI translation for multiple items at once. Content is sent to n8n workflow for AI-powered translation.', 'n8npress' ); ?></p>
+	<!-- ── CONTENT COVERAGE ── -->
+	<?php foreach ( $coverage as $pt => $data ) :
+		if ( $data['total'] === 0 ) continue;
+	?>
+	<div class="postbox" style="margin-bottom:16px;">
+		<div class="postbox-header" style="padding:12px 16px;border-bottom:1px solid #e5e7eb;">
+			<h2 style="margin:0;font-size:14px;display:flex;align-items:center;gap:8px;">
+				<span class="dashicons <?php echo esc_attr( $data['icon'] ); ?>" style="color:<?php echo esc_attr( $data['color'] ); ?>;"></span>
+				<?php echo esc_html( $data['label'] ); ?>
+				<span style="font-weight:400;color:#6b7280;font-size:13px;"><?php echo $data['total']; ?> <?php esc_html_e( 'published', 'n8npress' ); ?></span>
+			</h2>
+		</div>
+		<div style="padding:0;">
+			<table class="wp-list-table widefat fixed" style="border:0;font-size:13px;">
+				<thead>
+					<tr style="background:#f8fafc;">
+						<th style="padding:10px 16px;"><?php esc_html_e( 'Language', 'n8npress' ); ?></th>
+						<th style="padding:10px 16px;text-align:center;width:100px;"><?php esc_html_e( 'Done', 'n8npress' ); ?></th>
+						<th style="padding:10px 16px;text-align:center;width:100px;"><?php esc_html_e( 'Missing', 'n8npress' ); ?></th>
+						<th style="padding:10px 16px;width:200px;"><?php esc_html_e( 'Coverage', 'n8npress' ); ?></th>
+						<th style="padding:10px 16px;width:120px;"></th>
+					</tr>
+				</thead>
+				<tbody>
+				<?php foreach ( $target_langs as $lang ) :
+					$done    = $data['languages'][ $lang ] ?? 0;
+					$missing = max( 0, $data['total'] - $done );
+					$pct     = $data['total'] > 0 ? round( ( $done / $data['total'] ) * 100 ) : 0;
+					$bar_color = $pct >= 100 ? '#16a34a' : ( $pct >= 60 ? '#6366f1' : '#f59e0b' );
+				?>
+				<tr>
+					<td style="padding:10px 16px;">
+						<strong><?php echo esc_html( strtoupper( $lang ) ); ?></strong>
+						<span style="color:#6b7280;"><?php echo esc_html( $language_names[ $lang ] ?? $lang ); ?></span>
+					</td>
+					<td style="padding:10px 16px;text-align:center;font-weight:600;"><?php echo $done; ?></td>
+					<td style="padding:10px 16px;text-align:center;">
+						<?php if ( $missing > 0 ) : ?>
+							<span style="color:#dc2626;font-weight:600;"><?php echo $missing; ?></span>
+						<?php else : ?>
+							<span style="color:#16a34a;font-weight:600;">0</span>
+						<?php endif; ?>
+					</td>
+					<td style="padding:10px 16px;">
+						<div style="display:flex;align-items:center;gap:8px;">
+							<div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;">
+								<div style="height:100%;width:<?php echo $pct; ?>%;background:<?php echo esc_attr( $bar_color ); ?>;border-radius:4px;transition:width .3s;"></div>
+							</div>
+							<span style="font-size:12px;font-weight:600;color:#374151;min-width:36px;"><?php echo $pct; ?>%</span>
+						</div>
+					</td>
+					<td style="padding:10px 16px;">
+						<?php if ( $missing > 0 && ! empty( $webhook_url ) ) : ?>
+						<form method="post" style="display:inline;">
+							<?php wp_nonce_field( 'n8npress_translation_nonce' ); ?>
+							<input type="hidden" name="translate_language" value="<?php echo esc_attr( $lang ); ?>" />
+							<input type="hidden" name="translate_post_type" value="<?php echo esc_attr( $pt ); ?>" />
+							<input type="hidden" name="translate_limit" value="<?php echo min( $missing, 20 ); ?>" />
+							<button type="submit" name="n8npress_trigger_translation" class="button button-primary button-small">
+								<?php printf( __( 'Translate %d', 'n8npress' ), min( $missing, 20 ) ); ?>
+							</button>
+						</form>
+						<?php elseif ( $pct >= 100 ) : ?>
+							<span style="color:#16a34a;font-size:12px;font-weight:600;">Complete</span>
+						<?php endif; ?>
+					</td>
+				</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+	</div>
+	<?php endforeach; ?>
 
-		<form method="post" class="n8npress-bulk-form">
-			<?php wp_nonce_field( 'n8npress_translation_nonce' ); ?>
-			<div class="n8npress-bulk-row">
-				<label>
-					<?php _e( 'Post Type:', 'n8npress' ); ?>
-					<select name="translate_post_type">
-						<option value="product"><?php _e( 'Products', 'n8npress' ); ?></option>
-						<option value="post"><?php _e( 'Posts', 'n8npress' ); ?></option>
-						<option value="page"><?php _e( 'Pages', 'n8npress' ); ?></option>
+	<!-- ── TAXONOMY COVERAGE ── -->
+	<?php if ( ! empty( $tax_coverage ) ) : ?>
+	<div class="postbox" style="margin-bottom:16px;">
+		<div class="postbox-header" style="padding:12px 16px;border-bottom:1px solid #e5e7eb;">
+			<h2 style="margin:0;font-size:14px;display:flex;align-items:center;gap:8px;">
+				<span class="dashicons dashicons-tag" style="color:#f59e0b;"></span>
+				<?php esc_html_e( 'Taxonomies', 'n8npress' ); ?>
+			</h2>
+		</div>
+		<div style="padding:16px;">
+			<?php foreach ( $tax_coverage as $tax_slug => $tax_data ) : ?>
+			<div style="margin-bottom:16px;">
+				<h4 style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">
+					<?php echo esc_html( $tax_data['label'] ); ?>
+					<span style="font-weight:400;color:#9ca3af;">(<?php echo $tax_data['total']; ?>)</span>
+				</h4>
+				<div style="display:flex;gap:12px;flex-wrap:wrap;">
+					<?php foreach ( $target_langs as $lang ) :
+						$done    = $tax_data['languages'][ $lang ] ?? 0;
+						$missing = max( 0, $tax_data['total'] - $done );
+						$pct     = $tax_data['total'] > 0 ? round( ( $done / $tax_data['total'] ) * 100 ) : 0;
+					?>
+					<div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+						<strong><?php echo esc_html( strtoupper( $lang ) ); ?></strong>
+						<div style="width:60px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;">
+							<div style="height:100%;width:<?php echo $pct; ?>%;background:<?php echo $pct >= 100 ? '#16a34a' : '#6366f1'; ?>;border-radius:3px;"></div>
+						</div>
+						<span style="color:<?php echo $missing > 0 ? '#dc2626' : '#16a34a'; ?>;font-weight:600;"><?php echo $pct; ?>%</span>
+					</div>
+					<?php endforeach; ?>
+				</div>
+			</div>
+			<?php endforeach; ?>
+		</div>
+	</div>
+	<?php endif; ?>
+
+	<!-- ── BULK TRANSLATION ── -->
+	<div class="postbox" style="margin-bottom:16px;">
+		<div class="postbox-header" style="padding:12px 16px;border-bottom:1px solid #e5e7eb;">
+			<h2 style="margin:0;font-size:14px;"><?php esc_html_e( 'Bulk Translation', 'n8npress' ); ?></h2>
+		</div>
+		<div style="padding:16px;">
+			<?php if ( empty( $webhook_url ) ) : ?>
+				<p style="color:#dc2626;">
+					<span class="dashicons dashicons-warning"></span>
+					<?php esc_html_e( 'n8n webhook URL not configured.', 'n8npress' ); ?>
+					<a href="<?php echo admin_url( 'admin.php?page=n8npress-settings' ); ?>"><?php esc_html_e( 'Configure', 'n8npress' ); ?></a>
+				</p>
+			<?php else : ?>
+			<form method="post" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+				<?php wp_nonce_field( 'n8npress_translation_nonce' ); ?>
+				<label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500;">
+					<?php esc_html_e( 'Content Type', 'n8npress' ); ?>
+					<select name="translate_post_type" style="min-width:140px;">
+						<option value="product"><?php esc_html_e( 'Products', 'n8npress' ); ?></option>
+						<option value="post"><?php esc_html_e( 'Posts', 'n8npress' ); ?></option>
+						<option value="page"><?php esc_html_e( 'Pages', 'n8npress' ); ?></option>
 					</select>
 				</label>
-				<label>
-					<?php _e( 'Language:', 'n8npress' ); ?>
-					<select name="translate_language">
+				<label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500;">
+					<?php esc_html_e( 'Language', 'n8npress' ); ?>
+					<select name="translate_language" style="min-width:140px;">
 						<?php foreach ( $target_langs as $lang ) : ?>
-						<option value="<?php echo esc_attr( $lang ); ?>">
-							<?php echo esc_html( strtoupper( $lang ) . ' — ' . ( $language_names[ $lang ] ?? $lang ) ); ?>
-						</option>
+						<option value="<?php echo esc_attr( $lang ); ?>"><?php echo esc_html( strtoupper( $lang ) . ' — ' . ( $language_names[ $lang ] ?? $lang ) ); ?></option>
 						<?php endforeach; ?>
 					</select>
 				</label>
-				<label>
-					<?php _e( 'Limit:', 'n8npress' ); ?>
-					<select name="translate_limit">
+				<label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500;">
+					<?php esc_html_e( 'Limit', 'n8npress' ); ?>
+					<select name="translate_limit" style="min-width:80px;">
 						<option value="5">5</option>
 						<option value="10" selected>10</option>
 						<option value="20">20</option>
 						<option value="50">50</option>
 					</select>
 				</label>
-				<button type="submit" name="n8npress_trigger_translation" class="button button-primary"
-						<?php echo empty( $webhook_url ) ? 'disabled' : ''; ?>>
-					<span class="dashicons dashicons-controls-play" style="margin-top:4px;"></span>
-					<?php _e( 'Start Translation', 'n8npress' ); ?>
+				<button type="submit" name="n8npress_trigger_translation" class="button button-primary" style="height:32px;">
+					<?php esc_html_e( 'Start Translation', 'n8npress' ); ?>
 				</button>
-			</div>
-		</form>
-
-		<?php if ( empty( $webhook_url ) ) : ?>
-		<div class="n8npress-info-box" style="margin-top:12px;">
-			<span class="dashicons dashicons-warning" style="color:#eab308;"></span>
-			<?php _e( 'n8n webhook URL not configured.', 'n8npress' ); ?>
-			<a href="<?php echo admin_url( 'admin.php?page=n8npress-settings&tab=connection' ); ?>"><?php _e( 'Configure', 'n8npress' ); ?></a>
+			</form>
+			<?php endif; ?>
 		</div>
-		<?php endif; ?>
 	</div>
 
-	<?php endif; // target_langs check ?>
+	<!-- ── MAINTENANCE ── -->
+	<div class="postbox">
+		<div class="postbox-header" style="padding:12px 16px;border-bottom:1px solid #e5e7eb;">
+			<h2 style="margin:0;font-size:14px;"><?php esc_html_e( 'Maintenance', 'n8npress' ); ?></h2>
+		</div>
+		<div style="padding:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+			<button type="button" id="n8npress-fix-images" class="button">
+				<span class="dashicons dashicons-format-image" style="margin-top:4px;"></span>
+				<?php esc_html_e( 'Fix Translation Images', 'n8npress' ); ?>
+			</button>
+			<span id="n8npress-fix-images-result" style="font-size:13px;"></span>
+			<span style="color:#6b7280;font-size:12px;"><?php esc_html_e( 'Copies original product images to all translated products.', 'n8npress' ); ?></span>
+		</div>
+	</div>
 
+	<script>
+	document.getElementById('n8npress-fix-images')?.addEventListener('click', function() {
+		var btn = this, result = document.getElementById('n8npress-fix-images-result');
+		btn.disabled = true; btn.textContent = <?php echo wp_json_encode( __( 'Fixing...', 'n8npress' ) ); ?>;
+		result.textContent = '';
+		fetch(ajaxurl + '?action=n8npress_fix_translation_images&nonce=<?php echo wp_create_nonce( 'n8npress_fix_images' ); ?>', {method:'POST'})
+			.then(function(r){return r.json()}).then(function(d){
+				btn.disabled = false;
+				btn.innerHTML = '<span class="dashicons dashicons-format-image" style="margin-top:4px;"></span> ' + <?php echo wp_json_encode( __( 'Fix Translation Images', 'n8npress' ) ); ?>;
+				result.innerHTML = d.success
+					? '<span style="color:#16a34a;">' + d.data.fixed + ' ' + <?php echo wp_json_encode( __( 'fixed', 'n8npress' ) ); ?> + '</span>'
+					: '<span style="color:#dc2626;">' + (d.data || 'Error') + '</span>';
+			});
+	});
+	</script>
+
+	<?php endif; ?>
 </div>
-
-<style>
-.n8npress-translation-coverage { margin-bottom: 24px; }
-.n8npress-translation-coverage h3 {
-	font-size: 14px;
-	font-weight: 600;
-	margin: 0 0 12px 0;
-	padding-bottom: 8px;
-	border-bottom: 1px solid #f3f4f6;
-}
-.n8npress-progress-bar {
-	display: inline-block;
-	width: 120px;
-	height: 8px;
-	background: #f3f4f6;
-	border-radius: 4px;
-	overflow: hidden;
-	vertical-align: middle;
-}
-.progress-fill {
-	height: 100%;
-	background: #6366f1;
-	border-radius: 4px;
-	transition: width 0.3s;
-}
-.progress-fill.progress-complete { background: #16a34a; }
-.progress-text {
-	font-size: 12px;
-	font-weight: 600;
-	margin-left: 8px;
-	color: #6b7280;
-}
-.n8npress-bulk-form { margin-top: 12px; }
-.n8npress-bulk-row {
-	display: flex;
-	gap: 16px;
-	align-items: flex-end;
-	flex-wrap: wrap;
-}
-.n8npress-bulk-row label {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	font-size: 13px;
-	font-weight: 500;
-}
-.n8npress-bulk-row select { min-width: 140px; }
-.n8npress-bulk-row .button { margin-bottom: 1px; }
-</style>

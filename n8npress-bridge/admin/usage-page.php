@@ -338,8 +338,9 @@ $base_url  = admin_url( 'admin.php?page=n8npress-usage' );
 (function($) {
 	// Context modal
 	$(document).on('click', '.n8npress-show-context', function() {
-		var ctx = $(this).data('context');
-		try { ctx = JSON.stringify(JSON.parse(ctx), null, 2); } catch(e) {}
+		var raw = $(this).attr('data-context');
+		var ctx;
+		try { ctx = JSON.stringify(JSON.parse(raw), null, 2); } catch(e) { ctx = raw; }
 		$('#n8npress-context-data').text(ctx);
 		$('#n8npress-context-modal').css('display', 'flex');
 	});

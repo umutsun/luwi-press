@@ -422,6 +422,7 @@ class N8nPress_Translation {
         // Find default-language posts that either:
         // 1. Have no translation record for the target language, OR
         // 2. Have a translation record but the translated post is not published
+        // source_language_code IS NULL = original post (not a translation)
         $products = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID, p.post_title
              FROM {$wpdb->posts} p
@@ -430,6 +431,7 @@ class N8nPress_Translation {
                AND p.post_status = 'publish'
                AND t.language_code = %s
                AND t.element_type = CONCAT('post_', %s)
+               AND t.source_language_code IS NULL
                AND t.trid NOT IN (
                    SELECT tr.trid FROM {$wpdb->prefix}icl_translations tr
                    JOIN {$wpdb->posts} tp ON tr.element_id = tp.ID
