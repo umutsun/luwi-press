@@ -537,40 +537,77 @@ $wc_currency = $wc_active ? get_woocommerce_currency() : '—';
 	</div>
 
 	<!-- ============================================
-	     TWO COLUMN: Recent Activity + Workflow Table
+	     QUICK ACTIONS
+	     ============================================ -->
+	<div class="n8npress-section">
+		<h2>
+			<span class="dashicons dashicons-controls-play"></span>
+			<?php esc_html_e( 'Quick Actions', 'n8npress' ); ?>
+		</h2>
+		<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+			<?php
+			$actions = array(
+				array(
+					'label' => __( 'Translate Products', 'n8npress' ),
+					'desc'  => __( 'AI translation for all languages', 'n8npress' ),
+					'icon'  => 'dashicons-translation',
+					'url'   => admin_url( 'admin.php?page=n8npress-translations' ),
+					'color' => '#2563eb',
+				),
+				array(
+					'label' => __( 'Enrich Products', 'n8npress' ),
+					'desc'  => __( 'AI descriptions, meta, FAQ', 'n8npress' ),
+					'icon'  => 'dashicons-edit-large',
+					'url'   => admin_url( 'admin.php?page=n8npress-settings&tab=ai-content' ),
+					'color' => '#6366f1',
+				),
+				array(
+					'label' => __( 'Open Claw Chat', 'n8npress' ),
+					'desc'  => __( 'AI assistant for your store', 'n8npress' ),
+					'icon'  => 'dashicons-format-chat',
+					'url'   => admin_url( 'admin.php?page=n8npress-claw' ),
+					'color' => '#16a34a',
+				),
+				array(
+					'label' => __( 'Usage & Logs', 'n8npress' ),
+					'desc'  => __( 'AI spend, activity, API calls', 'n8npress' ),
+					'icon'  => 'dashicons-chart-area',
+					'url'   => admin_url( 'admin.php?page=n8npress-usage' ),
+					'color' => '#f59e0b',
+				),
+			);
+			foreach ( $actions as $act ) : ?>
+			<a href="<?php echo esc_url( $act['url'] ); ?>" style="display:flex;gap:12px;align-items:center;padding:14px 16px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;border-left:4px solid <?php echo esc_attr( $act['color'] ); ?>;text-decoration:none;transition:box-shadow .2s;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow='none'">
+				<span class="dashicons <?php echo esc_attr( $act['icon'] ); ?>" style="font-size:24px;width:24px;height:24px;color:<?php echo esc_attr( $act['color'] ); ?>;"></span>
+				<div>
+					<div style="font-size:14px;font-weight:600;color:#1e293b;"><?php echo esc_html( $act['label'] ); ?></div>
+					<div style="font-size:12px;color:#6b7280;"><?php echo esc_html( $act['desc'] ); ?></div>
+				</div>
+			</a>
+			<?php endforeach; ?>
+		</div>
+	</div>
+
+	<!-- ============================================
+	     RECENT ACTIVITY + AI SPEND (compact)
 	     ============================================ -->
 	<div class="n8npress-two-col">
-		<!-- Activity Feed -->
+		<!-- Recent Activity (compact) -->
 		<div class="n8npress-section">
 			<h2>
 				<span class="dashicons dashicons-clock"></span>
 				<?php esc_html_e( 'Recent Activity', 'n8npress' ); ?>
-				<a href="<?php echo esc_url( admin_url( 'admin.php?page=n8npress-logs' ) ); ?>" class="n8npress-view-all"><?php esc_html_e( 'View All', 'n8npress' ); ?></a>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=n8npress-usage&tab=logs' ) ); ?>" class="n8npress-view-all"><?php esc_html_e( 'View All', 'n8npress' ); ?></a>
 			</h2>
-
-			<div class="n8npress-activity-filters">
-				<button type="button" class="button activity-filter active" data-filter="all"><?php esc_html_e( 'All', 'n8npress' ); ?></button>
-				<button type="button" class="button activity-filter" data-filter="info">
-					<span class="activity-dot dot-info"></span> <?php printf( esc_html__( 'Success (%d)', 'n8npress' ), $log_counts['info'] ); ?>
-				</button>
-				<button type="button" class="button activity-filter" data-filter="warning">
-					<span class="activity-dot dot-warning"></span> <?php printf( esc_html__( 'Warnings (%d)', 'n8npress' ), $log_counts['warning'] ); ?>
-				</button>
-				<button type="button" class="button activity-filter" data-filter="error">
-					<span class="activity-dot dot-error"></span> <?php printf( esc_html__( 'Errors (%d)', 'n8npress' ), $log_counts['error'] ); ?>
-				</button>
-			</div>
-
 			<div class="n8npress-activity-feed">
 				<?php
-				$recent_logs = array_slice( $logs, 0, 15 );
+				$recent_logs = array_slice( $logs, 0, 8 );
 				if ( empty( $recent_logs ) ) : ?>
 					<div class="activity-empty"><?php esc_html_e( 'No recent activity.', 'n8npress' ); ?></div>
 				<?php else :
 					foreach ( $recent_logs as $log ) :
 						$icon_class = 'info' === $log->level ? 'dashicons-yes-alt' : ( 'warning' === $log->level ? 'dashicons-warning' : 'dashicons-dismiss' );
 						$level_class = esc_attr( $log->level );
-						$context_data = ! empty( $log->context ) ? $log->context : '';
 					?>
 					<div class="activity-item activity-<?php echo $level_class; ?>" data-level="<?php echo $level_class; ?>">
 						<span class="activity-icon activity-icon-<?php echo $level_class; ?>">
@@ -580,214 +617,52 @@ $wc_currency = $wc_active ? get_woocommerce_currency() : '—';
 							<span class="activity-message"><?php echo esc_html( $log->message ); ?></span>
 							<span class="activity-time"><?php echo esc_html( human_time_diff( strtotime( $log->timestamp ), current_time( 'timestamp' ) ) ); ?> ago</span>
 						</div>
-						<?php if ( $context_data ) : ?>
-							<button type="button" class="button button-small activity-details-btn" data-context="<?php echo esc_attr( is_string( $context_data ) ? $context_data : wp_json_encode( $context_data ) ); ?>">
-								<?php esc_html_e( 'Details', 'n8npress' ); ?>
-							</button>
-						<?php endif; ?>
 					</div>
 					<?php endforeach;
 				endif; ?>
 			</div>
 		</div>
 
-		<!-- AI Token Usage -->
+		<!-- AI Spend (compact) -->
 		<?php
 		$token_stats = class_exists( 'N8nPress_Token_Tracker' ) ? N8nPress_Token_Tracker::get_stats( 30 ) : null;
 		if ( $token_stats ) :
-			$today      = $token_stats['today'];
-			$month      = $token_stats['month'];
-			$limit      = $token_stats['daily_limit'];
-			$limit_pct  = $token_stats['limit_used'];
-			$provider   = get_option( 'n8npress_ai_provider', 'openai' );
-			$model      = get_option( 'n8npress_ai_model', 'gpt-4o-mini' );
+			$today     = $token_stats['today'];
+			$month     = $token_stats['month'];
+			$limit     = $token_stats['daily_limit'];
+			$limit_pct = $token_stats['limit_used'];
 		?>
 		<div class="n8npress-section">
-			<div style="display:flex;justify-content:space-between;align-items:center;">
-				<h2>
-					<span class="dashicons dashicons-chart-bar"></span>
-					<?php esc_html_e( 'AI Token Usage', 'n8npress' ); ?>
-				</h2>
-				<span style="font-size:12px;color:#6b7280;background:#f3f4f6;padding:4px 10px;border-radius:12px;">
-					<?php echo esc_html( ucfirst( $provider ) . ' / ' . $model ); ?>
-				</span>
-			</div>
-
-			<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;">
-				<!-- Today -->
-				<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;text-align:center;">
-					<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;"><?php esc_html_e( 'Today', 'n8npress' ); ?></div>
-					<div style="font-size:24px;font-weight:700;color:#1e293b;">$<?php echo number_format( $today['cost'], 4 ); ?></div>
-					<div style="font-size:12px;color:#6b7280;"><?php echo number_format( $today['tokens'] ); ?> tokens / <?php echo $today['calls']; ?> calls</div>
+			<h2>
+				<span class="dashicons dashicons-chart-bar"></span>
+				<?php esc_html_e( 'AI Spend', 'n8npress' ); ?>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=n8npress-usage' ) ); ?>" class="n8npress-view-all"><?php esc_html_e( 'Details', 'n8npress' ); ?></a>
+			</h2>
+			<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+				<div style="text-align:center;padding:12px;background:#f8fafc;border-radius:8px;">
+					<div style="font-size:11px;color:#6b7280;text-transform:uppercase;"><?php esc_html_e( 'Today', 'n8npress' ); ?></div>
+					<div style="font-size:22px;font-weight:700;">$<?php echo number_format( $today['cost'], 4 ); ?></div>
+					<div style="font-size:11px;color:#6b7280;"><?php echo $today['calls']; ?> calls</div>
 				</div>
-				<!-- This Month -->
-				<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;text-align:center;">
-					<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;"><?php esc_html_e( 'This Month', 'n8npress' ); ?></div>
-					<div style="font-size:24px;font-weight:700;color:#1e293b;">$<?php echo number_format( $month['cost'], 4 ); ?></div>
-					<div style="font-size:12px;color:#6b7280;"><?php echo number_format( $month['tokens'] ); ?> tokens / <?php echo $month['calls']; ?> calls</div>
+				<div style="text-align:center;padding:12px;background:#f8fafc;border-radius:8px;">
+					<div style="font-size:11px;color:#6b7280;text-transform:uppercase;"><?php esc_html_e( 'Month', 'n8npress' ); ?></div>
+					<div style="font-size:22px;font-weight:700;">$<?php echo number_format( $month['cost'], 4 ); ?></div>
+					<div style="font-size:11px;color:#6b7280;"><?php echo $month['calls']; ?> calls</div>
 				</div>
-				<!-- Daily Limit -->
-				<div style="background:<?php echo $limit_pct >= 90 ? '#fef2f2' : '#f8fafc'; ?>;border:1px solid <?php echo $limit_pct >= 90 ? '#fecaca' : '#e2e8f0'; ?>;border-radius:8px;padding:16px;text-align:center;">
-					<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;"><?php esc_html_e( 'Daily Limit', 'n8npress' ); ?></div>
+				<div style="text-align:center;padding:12px;background:<?php echo $limit_pct >= 90 ? '#fef2f2' : '#f8fafc'; ?>;border-radius:8px;">
+					<div style="font-size:11px;color:#6b7280;text-transform:uppercase;"><?php esc_html_e( 'Limit', 'n8npress' ); ?></div>
 					<?php if ( $limit > 0 ) : ?>
-						<div style="font-size:24px;font-weight:700;color:<?php echo $limit_pct >= 90 ? '#dc2626' : '#1e293b'; ?>;"><?php echo $limit_pct; ?>%</div>
-						<div style="font-size:12px;color:#6b7280;">$<?php echo number_format( $today['cost'], 2 ); ?> / $<?php echo number_format( $limit, 2 ); ?></div>
-						<div style="margin-top:6px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden;">
-							<div style="height:100%;width:<?php echo min( 100, $limit_pct ); ?>%;background:<?php echo $limit_pct >= 90 ? '#dc2626' : ( $limit_pct >= 70 ? '#f59e0b' : '#16a34a' ); ?>;border-radius:2px;"></div>
+						<div style="font-size:22px;font-weight:700;color:<?php echo $limit_pct >= 90 ? '#dc2626' : '#111'; ?>;"><?php echo $limit_pct; ?>%</div>
+						<div style="margin-top:4px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden;">
+							<div style="height:100%;width:<?php echo min( 100, $limit_pct ); ?>%;background:<?php echo $limit_pct >= 90 ? '#dc2626' : ( $limit_pct >= 70 ? '#f59e0b' : '#16a34a' ); ?>;"></div>
 						</div>
 					<?php else : ?>
-						<div style="font-size:18px;font-weight:600;color:#6b7280;">--</div>
-						<div style="font-size:12px;color:#9ca3af;"><?php esc_html_e( 'No limit set', 'n8npress' ); ?></div>
-						<a href="<?php echo admin_url( 'admin.php?page=n8npress-settings' ); ?>" style="font-size:11px;"><?php esc_html_e( 'Set limit', 'n8npress' ); ?></a>
+						<div style="font-size:18px;color:#6b7280;">--</div>
 					<?php endif; ?>
 				</div>
 			</div>
-
-			<?php if ( ! empty( $token_stats['by_workflow'] ) ) : ?>
-			<table class="n8npress-table" style="font-size:13px;">
-				<thead>
-					<tr>
-						<th><?php esc_html_e( 'Workflow', 'n8npress' ); ?></th>
-						<th><?php esc_html_e( 'Calls', 'n8npress' ); ?></th>
-						<th><?php esc_html_e( 'Tokens', 'n8npress' ); ?></th>
-						<th><?php esc_html_e( 'Cost', 'n8npress' ); ?></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php foreach ( $token_stats['by_workflow'] as $wf ) : ?>
-					<tr>
-						<td><?php echo esc_html( ucwords( str_replace( '-', ' ', $wf->workflow ) ) ); ?></td>
-						<td><?php echo intval( $wf->calls ); ?></td>
-						<td><?php echo number_format( intval( $wf->tokens ) ); ?></td>
-						<td>$<?php echo number_format( floatval( $wf->cost ), 4 ); ?></td>
-					</tr>
-					<?php endforeach; ?>
-				</tbody>
-			</table>
-			<?php endif; ?>
 		</div>
 		<?php endif; ?>
-
-		<!-- Workflow Breakdown -->
-		<div class="n8npress-section">
-			<h2><?php esc_html_e( 'Workflow Breakdown (7d)', 'n8npress' ); ?></h2>
-			<?php if ( ! empty( $workflow_stats['by_type'] ) ) : ?>
-				<table class="n8npress-table">
-					<thead>
-						<tr>
-							<th><?php esc_html_e( 'Workflow', 'n8npress' ); ?></th>
-							<th><?php esc_html_e( 'Runs', 'n8npress' ); ?></th>
-							<th><?php esc_html_e( 'Rate', 'n8npress' ); ?></th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ( $workflow_stats['by_type'] as $wf ) :
-							$rate = $wf->count > 0 ? round( ( $wf->success_count / $wf->count ) * 100 ) : 0;
-						?>
-						<tr>
-							<td><strong><?php echo esc_html( ucfirst( str_replace( '-', ' ', $wf->workflow_type ) ) ); ?></strong></td>
-							<td><?php echo intval( $wf->count ); ?></td>
-							<td>
-								<div class="n8npress-progress-bar">
-									<div class="n8npress-progress-fill" style="width:<?php echo intval( $rate ); ?>%;background:<?php echo $rate >= 90 ? '#16a34a' : ( $rate >= 70 ? '#eab308' : '#dc2626' ); ?>"></div>
-								</div>
-								<span class="progress-label"><?php echo intval( $rate ); ?>%</span>
-							</td>
-						</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
-			<?php else : ?>
-				<p class="n8npress-empty"><?php esc_html_e( 'No workflows executed yet.', 'n8npress' ); ?></p>
-			<?php endif; ?>
-		</div>
-	</div>
-
-	<!-- ============================================
-	     RECENT ERRORS
-	     ============================================ -->
-	<?php if ( ! empty( $recent_errors ) ) : ?>
-	<div class="n8npress-section n8npress-errors-section">
-		<h2><span class="dashicons dashicons-warning"></span> <?php esc_html_e( 'Recent Errors', 'n8npress' ); ?></h2>
-		<table class="n8npress-table n8npress-table-errors">
-			<thead>
-				<tr>
-					<th><?php esc_html_e( 'Time', 'n8npress' ); ?></th>
-					<th><?php esc_html_e( 'Message', 'n8npress' ); ?></th>
-					<th><?php esc_html_e( 'Context', 'n8npress' ); ?></th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php foreach ( $recent_errors as $error ) : ?>
-				<tr>
-					<td class="log-time"><?php echo esc_html( $error->timestamp ); ?></td>
-					<td class="log-message"><?php echo esc_html( $error->message ); ?></td>
-					<td class="log-context">
-						<?php if ( ! empty( $error->context ) ) :
-							$ctx = json_decode( $error->context, true );
-							if ( is_array( $ctx ) ) :
-						?>
-							<code><?php echo esc_html( wp_json_encode( $ctx, JSON_UNESCAPED_UNICODE ) ); ?></code>
-						<?php endif; endif; ?>
-					</td>
-				</tr>
-				<?php endforeach; ?>
-			</tbody>
-		</table>
-	</div>
-	<?php endif; ?>
-
-	<!-- ============================================
-	     API ENDPOINTS
-	     ============================================ -->
-	<div class="n8npress-section">
-		<h2><?php esc_html_e( 'API Endpoints', 'n8npress' ); ?></h2>
-		<div class="n8npress-endpoints-grid">
-			<?php
-			$endpoint_groups = array(
-				__( 'Bridge Services', 'n8npress' ) => array(
-					'GET  /n8npress/v1/site-config',
-					'POST /n8npress/v1/send-email',
-					'GET  /n8npress/v1/content/opportunities',
-				),
-				__( 'Core', 'n8npress' ) => array(
-					'GET  /n8npress/v1/status',
-					'GET  /n8npress/v1/health',
-					'POST /n8npress/v1/webhook',
-				),
-				__( 'AI Content', 'n8npress' ) => array(
-					'POST /n8npress/v1/product/enrich',
-					'POST /n8npress/v1/product/enrich-callback',
-					'GET  /n8npress/v1/content/stale',
-				),
-				__( 'AEO', 'n8npress' ) => array(
-					'POST /n8npress/v1/aeo/save-faq',
-					'POST /n8npress/v1/aeo/save-howto',
-					'GET  /n8npress/v1/aeo/coverage',
-				),
-				__( 'Translation', 'n8npress' ) => array(
-					'GET  /n8npress/v1/translation/missing',
-					'POST /n8npress/v1/translation/callback',
-					'GET  /n8npress/v1/translation/status',
-				),
-				__( 'Authentication', 'n8npress' ) => array(
-					'POST /jwt-auth/v1/token',
-					'POST /jwt-auth/v1/token/validate',
-					'POST /jwt-auth/v1/token/refresh',
-				),
-			);
-
-			foreach ( $endpoint_groups as $group_name => $endpoints ) : ?>
-			<div class="endpoint-group">
-				<h4><?php echo esc_html( $group_name ); ?></h4>
-				<ul>
-					<?php foreach ( $endpoints as $endpoint ) : ?>
-					<li><code><?php echo esc_html( $endpoint ); ?></code></li>
-					<?php endforeach; ?>
-				</ul>
-			</div>
-			<?php endforeach; ?>
-		</div>
 	</div>
 
 	<!-- Customer Intelligence -->

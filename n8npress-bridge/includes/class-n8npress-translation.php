@@ -27,6 +27,7 @@ class N8nPress_Translation {
     private function __construct() {
         add_action('rest_api_init', [$this, 'register_endpoints']);
         add_action('admin_menu', [$this, 'add_submenu']);
+        add_action('wp_ajax_n8npress_fix_translation_images', [$this, 'ajax_fix_translation_images']);
     }
 
     /**
@@ -521,19 +522,12 @@ class N8nPress_Translation {
                 'post_title'   => $translated['name'],
                 'post_content' => $translated['description'],
                 'post_excerpt' => $translated['short_description'] ?? '',
+                'post_status'  => 'publish',
             ) );
             $target_id = $translated_id;
 
             // ── Ensure product images match original ──
-            $orig_thumb = get_post_meta( $product_id, '_thumbnail_id', true );
-            if ( $orig_thumb ) {
-                update_post_meta( $translated_id, '_thumbnail_id', $orig_thumb );
-            }
-            $orig_gallery = get_post_meta( $product_id, '_product_image_gallery', true );
-            if ( $orig_gallery ) {
-                update_post_meta( $translated_id, '_product_image_gallery', $orig_gallery );
-            }
-            $this->wpml_share_product_images( $product_id, $translated_id, $language );
+            $this->copy_product_images( $product_id, $translated_id );
 
             N8nPress_Logger::log( 'WPML translation updated: #' . $translated_id . ' (' . strtoupper( $language ) . ')', 'info' );
         } else {
@@ -568,6 +562,9 @@ class N8nPress_Translation {
 
             $target_id = $new_id;
 
+            // ── Force publish status (WPML may reset to draft) ──
+            wp_update_post( array( 'ID' => $new_id, 'post_status' => 'publish' ) );
+
             // ── Copy ALL product meta from original ──
             $all_meta = get_post_meta( $product_id );
             $skip_keys = array( '_edit_lock', '_edit_last', '_wp_old_slug' );
@@ -583,9 +580,6 @@ class N8nPress_Translation {
                     update_post_meta( $new_id, $key, maybe_unserialize( $val ) );
                 }
             }
-
-            // ── Ensure product images are shared across WPML languages ──
-            $this->wpml_share_product_images( $product_id, $new_id, $language );
 
             // ── Copy product type taxonomy ──
             $type_terms = wp_get_object_terms( $product_id, 'product_type', array( 'fields' => 'slugs' ) );
@@ -629,6 +623,68 @@ class N8nPress_Translation {
     }
 
     /**
+     * AJAX: Fix images for all existing WPML translations.
+     * Copies _thumbnail_id and _product_image_gallery from original to all translated products.
+     */
+    public function ajax_fix_translation_images() {
+        check_ajax_referer( 'n8npress_fix_images', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            wp_send_json_error( 'WPML not active' );
+        }
+
+        global $wpdb;
+        $default_lang = apply_filters( 'wpml_default_language', 'en' );
+
+        // Get all default-language products
+        $products = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.element_id AS product_id, t.trid
+             FROM {$wpdb->prefix}icl_translations t
+             JOIN {$wpdb->posts} p ON t.element_id = p.ID
+             WHERE t.element_type = 'post_product'
+               AND t.language_code = %s
+               AND p.post_status = 'publish'",
+            $default_lang
+        ) );
+
+        $fixed = 0;
+        foreach ( $products as $row ) {
+            // Find all translations of this product
+            $translations = $wpdb->get_results( $wpdb->prepare(
+                "SELECT element_id FROM {$wpdb->prefix}icl_translations
+                 WHERE trid = %d AND language_code != %s AND element_id IS NOT NULL",
+                $row->trid, $default_lang
+            ) );
+
+            foreach ( $translations as $tr ) {
+                $this->copy_product_images( $row->product_id, $tr->element_id );
+                $fixed++;
+            }
+        }
+
+        wp_send_json_success( array( 'fixed' => $fixed ) );
+    }
+
+    /**
+     * Copy product images from original to translated product.
+     * Simply copies _thumbnail_id and _product_image_gallery meta.
+     */
+    private function copy_product_images( $source_id, $target_id ) {
+        $thumb_id = get_post_meta( $source_id, '_thumbnail_id', true );
+        if ( $thumb_id ) {
+            update_post_meta( $target_id, '_thumbnail_id', $thumb_id );
+        }
+        $gallery = get_post_meta( $source_id, '_product_image_gallery', true );
+        if ( ! empty( $gallery ) ) {
+            update_post_meta( $target_id, '_product_image_gallery', $gallery );
+        }
+    }
+
+    /**
+     * @deprecated Use copy_product_images() instead.
      * Share product images (thumbnail + gallery) across WPML languages.
      * WPML may look for translated attachment IDs — this ensures the original
      * attachments are registered for the target language so images display correctly.

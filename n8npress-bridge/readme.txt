@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, n8n, product enrichment
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.7.6
+Stable tag: 1.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -131,6 +131,18 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 1.8.0 =
+* Merged Logs + Token Usage into unified "Usage & Logs" page with tabs
+* Added Quick Actions to dashboard (Translate, Enrich, Open Claw, Usage)
+* Removed emoji from menu items
+* Removed API Endpoints section from dashboard (developer info, not user-facing)
+* Dashboard now shows compact activity feed + AI spend summary
+* Grouped logs by date for better readability
+* Fixed translation image copy on both create and update paths
+* Fixed draft translations not being published
+* Fixed large product translation (dynamic max_tokens scaling)
+* Fixed batch translation item matching by product ID (not index)
 
 = 1.7.4 =
 * Fixed translation coverage percentage (exclude WPML translations from total count)

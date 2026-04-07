@@ -3,7 +3,7 @@
  * Plugin Name: n8nPress
  * Plugin URI: https://github.com/umutsun/n8npress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores via n8n workflows.
- * Version: 1.7.6
+ * Version: 1.8.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('N8NPRESS_VERSION', '1.7.6');
+define('N8NPRESS_VERSION', '1.8.0');
 define('N8NPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('N8NPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('N8NPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -438,20 +438,11 @@ class N8nPress {
 
         add_submenu_page(
             'n8npress',
-            'Logs',
-            'Logs',
+            __( 'Usage & Logs', 'n8npress' ),
+            __( 'Usage & Logs', 'n8npress' ),
             'manage_options',
-            'n8npress-logs',
-            array($this, 'logs_page')
-        );
-
-        add_submenu_page(
-            'n8npress',
-            'AI Token Usage',
-            '💰 Token Usage',
-            'manage_options',
-            'n8npress-token-usage',
-            array($this, 'token_usage_page')
+            'n8npress-usage',
+            array($this, 'usage_page')
         );
     }
     
@@ -477,17 +468,10 @@ class N8nPress {
     }
 
     /**
-     * Logs page
+     * Unified Usage & Logs page
      */
-    public function logs_page() {
-        include N8NPRESS_PLUGIN_DIR . 'admin/logs-page.php';
-    }
-
-    /**
-     * Token Usage page
-     */
-    public function token_usage_page() {
-        include N8NPRESS_PLUGIN_DIR . 'admin/token-dashboard.php';
+    public function usage_page() {
+        include N8NPRESS_PLUGIN_DIR . 'admin/usage-page.php';
     }
 
     /**
