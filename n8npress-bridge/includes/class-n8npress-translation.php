@@ -418,6 +418,9 @@ class N8nPress_Translation {
 
         $default_lang = apply_filters('wpml_default_language', 'tr');
 
+        // Find default-language posts that either:
+        // 1. Have no translation record for the target language, OR
+        // 2. Have a translation record but the translated post is not published
         $products = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID, p.post_title
              FROM {$wpdb->posts} p
@@ -427,8 +430,11 @@ class N8nPress_Translation {
                AND t.language_code = %s
                AND t.element_type = CONCAT('post_', %s)
                AND t.trid NOT IN (
-                   SELECT trid FROM {$wpdb->prefix}icl_translations
-                   WHERE language_code = %s AND element_type = CONCAT('post_', %s)
+                   SELECT tr.trid FROM {$wpdb->prefix}icl_translations tr
+                   JOIN {$wpdb->posts} tp ON tr.element_id = tp.ID
+                   WHERE tr.language_code = %s
+                     AND tr.element_type = CONCAT('post_', %s)
+                     AND tp.post_status = 'publish'
                )
              ORDER BY p.post_date DESC
              LIMIT %d",
