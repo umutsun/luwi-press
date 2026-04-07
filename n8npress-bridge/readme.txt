@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, n8n, product enrichment
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.7.3
+Stable tag: 1.7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -131,6 +131,14 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 1.7.4 =
+* Fixed translation coverage percentage (exclude WPML translations from total count)
+* Fixed batch translation workflow (SplitInBatches → native multi-item processing)
+* Fixed n8n webhook registration (webhookId required for production URLs)
+* Fixed n8n credential binding (credentials block required in workflow JSON)
+* Fixed WP REST API for product data (WC API returns empty with Bearer token)
+* Fixed product image sharing across WPML languages
 
 = 1.7.3 =
 * Fixed translation pipeline — OpenAI API, correct callback fields, data flow

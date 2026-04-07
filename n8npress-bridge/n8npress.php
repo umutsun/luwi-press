@@ -3,7 +3,7 @@
  * Plugin Name: n8nPress
  * Plugin URI: https://github.com/umutsun/n8npress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores via n8n workflows.
- * Version: 1.7.3
+ * Version: 1.7.4
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('N8NPRESS_VERSION', '1.7.3');
+define('N8NPRESS_VERSION', '1.7.4');
 define('N8NPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('N8NPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('N8NPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
