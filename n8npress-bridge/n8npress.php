@@ -746,7 +746,7 @@ class N8nPress {
             'n8npress_ai_provider' => 'openai',
             'n8npress_ai_model' => 'gpt-4o-mini',
             'n8npress_daily_token_limit' => 1.00,
-            'n8npress_webmcp_enabled'   => 0,
+            'n8npress_webmcp_enabled'   => 1,
         );
         
         foreach ($defaults as $option => $value) {
