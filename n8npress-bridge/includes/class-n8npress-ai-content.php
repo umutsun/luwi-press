@@ -164,7 +164,7 @@ class N8nPress_AI_Content {
     }
 
     /**
-     * Build product payload and POST to n8n webhook
+     * Send product for AI enrichment — native (Job Queue) or n8n (legacy webhook).
      */
     private function send_to_n8n_for_enrichment($product, $options = array()) {
         $budget = N8nPress_Token_Tracker::check_budget( 'product-enricher' );
@@ -172,8 +172,16 @@ class N8nPress_AI_Content {
             return $budget;
         }
 
-        if (empty($this->n8n_webhook_url)) {
-            return new WP_Error('no_webhook', 'n8n webhook URL is not configured.', array('status' => 500));
+        // Native mode: if no webhook URL configured, use Job Queue + AI Engine
+        if ( empty( $this->n8n_webhook_url ) ) {
+            $job_id = N8nPress_Job_Queue::add( 'enrich_product', array(
+                'product_id' => $product->get_id(),
+                'options'    => $options ?: array(),
+            ) );
+            if ( ! $job_id ) {
+                return new WP_Error( 'queue_failed', 'Failed to queue enrichment job.' );
+            }
+            return array( 'mode' => 'native', 'job_id' => $job_id );
         }
 
         $product_id = $product->get_id();

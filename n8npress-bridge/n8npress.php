@@ -71,6 +71,7 @@ class N8nPress {
         add_action('wp_ajax_n8npress_scan_opportunities', array($this, 'ajax_scan_opportunities'));
         add_action('wp_ajax_n8npress_get_thin_products', array($this, 'ajax_get_thin_products'));
         add_action('wp_ajax_n8npress_emergency_stop', array($this, 'ajax_emergency_stop'));
+        add_action('wp_ajax_n8npress_dashboard_data', array($this, 'ajax_dashboard_data'));
     }
     
     /**
@@ -91,6 +92,10 @@ class N8nPress {
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-plugin-detector.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-site-config.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-email-proxy.php';
+
+        // Native AI engine & job queue (n8n-independent)
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-ai-engine.php';
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-job-queue.php';
 
         // Content & automation modules
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-ai-content.php';
@@ -120,10 +125,11 @@ class N8nPress {
         // Set default options
         $this->set_default_options();
 
-        // Create all database tables (single source of truth per class)
+        // Create all database tables
         N8nPress_Logger::create_table();
         N8nPress_Token_Tracker::create_table();
         N8nPress_Workflow_Tracker::create_table();
+        N8nPress_Job_Queue::create_table();
 
         // Generate HMAC secret if not set
         N8nPress_HMAC::ensure_secret();
@@ -145,6 +151,7 @@ class N8nPress {
      */
     public function deactivate() {
         wp_clear_scheduled_hook( 'n8npress_daily_cleanup' );
+        N8nPress_Job_Queue::deactivate();
         flush_rewrite_rules();
         N8nPress_Logger::log('Plugin deactivated', 'info');
     }
@@ -157,6 +164,9 @@ class N8nPress {
 
         // Daily cleanup cron
         add_action( 'n8npress_daily_cleanup', array( $this, 'run_daily_cleanup' ) );
+
+        // Native AI job queue
+        N8nPress_Job_Queue::init();
 
         // Core infrastructure
         N8nPress_API::get_instance();
@@ -506,6 +516,155 @@ class N8nPress {
         ));
 
         wp_send_json_success(array('product_ids' => array_map('absint', $product_ids)));
+    }
+
+    /**
+     * AJAX: Dashboard data — all stats in one call for fast render.
+     */
+    public function ajax_dashboard_data() {
+        check_ajax_referer( 'n8npress_dashboard_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        // Hero stats
+        $product_counts = wp_count_posts( 'product' );
+        $total_products = absint( $product_counts->publish ?? 0 );
+
+        // Revenue (30d)
+        $revenue_30d = 0;
+        $orders_30d  = 0;
+        if ( class_exists( 'WooCommerce' ) ) {
+            global $wpdb;
+            $row = $wpdb->get_row( $wpdb->prepare(
+                "SELECT COUNT(*) as cnt, COALESCE(SUM(pm.meta_value),0) as total
+                 FROM {$wpdb->posts} p
+                 JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_order_total'
+                 WHERE p.post_type IN ('shop_order','shop_order_placehold')
+                   AND p.post_status IN ('wc-completed','wc-processing')
+                   AND p.post_date >= %s",
+                gmdate( 'Y-m-d', strtotime( '-30 days' ) )
+            ) );
+            if ( $row ) {
+                $revenue_30d = floatval( $row->total );
+                $orders_30d  = intval( $row->cnt );
+            }
+        }
+
+        // Token stats
+        $token_stats = class_exists( 'N8nPress_Token_Tracker' ) ? N8nPress_Token_Tracker::get_stats( 30 ) : null;
+        $today_calls = $token_stats ? intval( $token_stats['today']['calls'] ) : 0;
+        $today_cost  = $token_stats ? floatval( $token_stats['today']['cost'] ) : 0;
+        $limit_pct   = $token_stats ? intval( $token_stats['limit_used'] ) : 0;
+
+        // 7-day cost breakdown
+        $daily_costs = array();
+        if ( class_exists( 'N8nPress_Token_Tracker' ) ) {
+            global $wpdb;
+            $table = $wpdb->prefix . 'n8npress_token_usage';
+            if ( $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" ) === $table ) {
+                $rows = $wpdb->get_results( $wpdb->prepare(
+                    "SELECT DATE(created_at) as day, SUM(estimated_cost) as cost
+                     FROM {$table}
+                     WHERE created_at >= %s
+                     GROUP BY DATE(created_at)
+                     ORDER BY day ASC",
+                    gmdate( 'Y-m-d', strtotime( '-6 days' ) )
+                ) );
+                $day_map = array();
+                foreach ( $rows as $r ) {
+                    $day_map[ $r->day ] = floatval( $r->cost );
+                }
+                for ( $i = 6; $i >= 0; $i-- ) {
+                    $d = gmdate( 'Y-m-d', strtotime( "-{$i} days" ) );
+                    $daily_costs[] = array(
+                        'day'   => gmdate( 'D', strtotime( $d ) ),
+                        'date'  => $d,
+                        'cost'  => $day_map[ $d ] ?? 0,
+                    );
+                }
+            }
+        }
+
+        // Opportunities (reuse existing scan)
+        $opps = array();
+        if ( class_exists( 'N8nPress_Site_Config' ) ) {
+            $config  = N8nPress_Site_Config::get_instance();
+            $request = new WP_REST_Request( 'GET', '/n8npress/v1/content/opportunities' );
+            $request->set_param( 'limit', 50 );
+            $response = $config->get_content_opportunities( $request );
+            $data     = $response->get_data();
+            $opps = array(
+                'missing_translations' => count( $data['missing_translations'] ?? array() ),
+                'thin_content'         => count( $data['thin_content'] ?? array() ),
+                'missing_seo'          => count( $data['missing_seo_meta'] ?? array() ),
+                'missing_alt'          => count( $data['missing_alt_text'] ?? array() ),
+                'stale_content'        => count( $data['stale_content'] ?? array() ),
+            );
+        }
+
+        // Content health percentages
+        $total_content   = $total_products > 0 ? $total_products : 1;
+        $optimized_count = $total_content - ( $opps['thin_content'] ?? 0 ) - ( $opps['missing_seo'] ?? 0 );
+        $optimized_pct   = max( 0, round( ( $optimized_count / $total_content ) * 100 ) );
+
+        // Recent logs
+        $logs = array();
+        if ( class_exists( 'N8nPress_Logger' ) ) {
+            $raw_logs = N8nPress_Logger::get_logs( 8 );
+            foreach ( $raw_logs as $log ) {
+                $logs[] = array(
+                    'level'   => $log->level,
+                    'message' => $log->message,
+                    'time'    => human_time_diff( strtotime( $log->timestamp ), current_time( 'timestamp' ) ),
+                );
+            }
+        }
+
+        // Translation coverage
+        $trans_coverage = array();
+        $target_langs = get_option( 'n8npress_translation_languages', array() );
+        if ( ! empty( $target_langs ) && class_exists( 'N8nPress_Translation' ) ) {
+            global $wpdb;
+            $meta_keys = array();
+            foreach ( $target_langs as $lang ) {
+                $meta_keys[] = '_n8npress_translation_' . $lang . '_status';
+            }
+            $key_ph = implode( ',', array_fill( 0, count( $meta_keys ), '%s' ) );
+            $rows = $wpdb->get_results( $wpdb->prepare(
+                "SELECT meta_key, COUNT(DISTINCT post_id) AS cnt
+                 FROM {$wpdb->postmeta}
+                 WHERE meta_key IN ({$key_ph}) AND meta_value = 'completed'
+                 GROUP BY meta_key",
+                $meta_keys
+            ) );
+            $done_map = array();
+            foreach ( $rows as $r ) {
+                $done_map[ $r->meta_key ] = intval( $r->cnt );
+            }
+            foreach ( $target_langs as $lang ) {
+                $key  = '_n8npress_translation_' . $lang . '_status';
+                $done = $done_map[ $key ] ?? 0;
+                $trans_coverage[ $lang ] = $total_products > 0 ? round( ( $done / $total_products ) * 100 ) : 0;
+            }
+        }
+
+        wp_send_json_success( array(
+            'products'      => $total_products,
+            'revenue'       => $revenue_30d,
+            'orders'        => $orders_30d,
+            'ai_calls'      => $today_calls,
+            'ai_cost_today' => $today_cost,
+            'budget_pct'    => $limit_pct,
+            'daily_costs'   => $daily_costs,
+            'opportunities' => $opps,
+            'health_pct'    => $optimized_pct,
+            'health_thin'   => $opps['thin_content'] ?? 0,
+            'health_seo'    => $opps['missing_seo'] ?? 0,
+            'logs'          => $logs,
+            'trans_coverage' => $trans_coverage,
+            'currency'      => class_exists( 'WooCommerce' ) ? get_woocommerce_currency_symbol() : '$',
+        ) );
     }
 
     /**

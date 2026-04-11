@@ -7,6 +7,202 @@
     $(document).ready(function() {
 
         // ========================================
+        // Dashboard v2 — AJAX loader
+        // ========================================
+        if ($('#n8np-hero').length) {
+            n8npLoadDashboard();
+            // Auto-refresh activity every 30s
+            setInterval(function() { n8npRefreshActivity(); }, 30000);
+        }
+
+        function n8npLoadDashboard() {
+            $.post(n8npress.ajax_url, {
+                action: 'n8npress_dashboard_data',
+                nonce: n8npress.nonce
+            }, function(res) {
+                if (!res.success) return;
+                var d = res.data;
+
+                // Hero counters (animated)
+                n8npAnimateNum('[data-key="products"] .n8np-hero-num', d.products);
+                n8npAnimateNum('[data-key="revenue"] .n8np-hero-num', d.currency + n8npFormatNum(d.revenue));
+                n8npAnimateNum('[data-key="ai_calls"] .n8np-hero-num', d.ai_calls);
+                n8npAnimateNum('[data-key="budget"] .n8np-hero-num', d.budget_pct + '%');
+
+                // Budget bar
+                var $bf = $('[data-key="budget_pct"]');
+                $bf.css('width', Math.min(100, d.budget_pct) + '%');
+                if (d.budget_pct >= 90) $bf.addClass('budget-crit');
+                else if (d.budget_pct >= 70) $bf.addClass('budget-warn');
+
+                // 7-day chart
+                n8npRenderChart(d.daily_costs);
+
+                // Content health ring
+                n8npRenderHealthRing(d.health_pct, d.health_thin, d.health_seo, d.products);
+
+                // Opportunities
+                if (d.opportunities) {
+                    $.each(d.opportunities, function(key, val) {
+                        var $row = $('[data-opp="' + key + '"]');
+                        $row.find('.n8np-opp-count').removeClass('n8np-skeleton').text(val);
+                    });
+                }
+
+                // Activity
+                n8npRenderActivity(d.logs);
+
+                // Translation coverage
+                if (d.trans_coverage) {
+                    $.each(d.trans_coverage, function(lang, pct) {
+                        var $row = $('[data-lang="' + lang + '"]');
+                        $row.find('.n8np-trans-fill').removeClass('n8np-skeleton').css('width', pct + '%');
+                        if (pct >= 80) $row.find('.n8np-trans-fill').css('background', 'var(--n8n-success)');
+                        else if (pct >= 40) $row.find('.n8np-trans-fill').css('background', 'var(--n8n-warning)');
+                        else $row.find('.n8np-trans-fill').css('background', 'var(--n8n-error)');
+                        $row.find('.n8np-trans-pct').removeClass('n8np-skeleton').text(pct + '%');
+                    });
+                }
+            });
+        }
+
+        function n8npAnimateNum(sel, target) {
+            var $el = $(sel);
+            $el.removeClass('n8np-skeleton').css('animation', 'n8np-count-in 0.4s ease');
+            if (typeof target === 'string') {
+                $el.text(target);
+                return;
+            }
+            var start = 0, end = parseInt(target, 10) || 0, dur = 800;
+            if (end === 0) { $el.text('0'); return; }
+            var startTime = null;
+            function step(ts) {
+                if (!startTime) startTime = ts;
+                var p = Math.min((ts - startTime) / dur, 1);
+                p = 1 - Math.pow(1 - p, 3); // ease-out cubic
+                $el.text(Math.floor(p * end).toLocaleString());
+                if (p < 1) requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+        }
+
+        function n8npFormatNum(n) {
+            if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+            return n.toFixed(2);
+        }
+
+        function n8npRenderChart(days) {
+            if (!days || !days.length) return;
+            var $chart = $('#n8np-cost-chart');
+            var maxCost = Math.max.apply(null, days.map(function(d) { return d.cost; })) || 0.01;
+            var total = 0;
+            var html = '';
+            days.forEach(function(d) {
+                total += d.cost;
+                var h = Math.max(4, (d.cost / maxCost) * 100);
+                html += '<div class="n8np-chart-bar" style="height:' + h + '%">' +
+                    '<span class="bar-tooltip">$' + d.cost.toFixed(4) + '</span></div>';
+            });
+            $chart.html(html);
+
+            // Labels
+            var labels = '<div class="n8np-chart-labels">';
+            days.forEach(function(d) { labels += '<span>' + d.day + '</span>'; });
+            labels += '</div>';
+            $chart.after(labels);
+
+            // Footer
+            $('#n8np-cost-footer .n8np-chart-total').removeClass('n8np-skeleton').text('$' + total.toFixed(4));
+        }
+
+        function n8npRenderHealthRing(pct, thin, seo, total) {
+            var $wrap = $('#n8np-health');
+            var thinPct = total > 0 ? Math.round((thin / total) * 100) : 0;
+            var seoPct = total > 0 ? Math.round((seo / total) * 100) : 0;
+            var goodPct = Math.max(0, 100 - thinPct - seoPct);
+
+            var gradient = 'conic-gradient(' +
+                'var(--n8n-success) 0% ' + goodPct + '%, ' +
+                '#ea580c ' + goodPct + '% ' + (goodPct + thinPct) + '%, ' +
+                'var(--n8n-error) ' + (goodPct + thinPct) + '% 100%)';
+
+            $wrap.html(
+                '<div class="n8np-health-ring" style="background:' + gradient + '">' +
+                    '<div class="n8np-health-ring-inner">' +
+                        '<span class="n8np-health-pct">' + pct + '%</span>' +
+                        '<span class="n8np-health-sub">Optimized</span>' +
+                    '</div>' +
+                '</div>'
+            );
+
+            $('#n8np-health-legend').html(
+                '<span class="n8np-health-legend-item"><span class="n8np-health-legend-dot" style="background:var(--n8n-success)"></span> Optimized (' + goodPct + '%)</span>' +
+                '<span class="n8np-health-legend-item"><span class="n8np-health-legend-dot" style="background:#ea580c"></span> Thin (' + thinPct + '%)</span>' +
+                '<span class="n8np-health-legend-item"><span class="n8np-health-legend-dot" style="background:var(--n8n-error)"></span> Missing SEO (' + seoPct + '%)</span>'
+            );
+        }
+
+        function n8npRenderActivity(logs) {
+            var $feed = $('#n8np-activity');
+            if (!logs || !logs.length) {
+                $feed.html('<div class="n8np-empty">No recent activity.</div>');
+                return;
+            }
+            var html = '';
+            logs.forEach(function(log) {
+                html += '<div class="n8np-activity-item">' +
+                    '<span class="n8np-activity-dot dot-' + log.level + '"></span>' +
+                    '<span class="n8np-activity-msg">' + $('<span>').text(log.message).html() + '</span>' +
+                    '<span class="n8np-activity-time">' + log.time + ' ago</span>' +
+                '</div>';
+            });
+            $feed.html(html);
+        }
+
+        function n8npRefreshActivity() {
+            $.post(n8npress.ajax_url, {
+                action: 'n8npress_dashboard_data',
+                nonce: n8npress.nonce
+            }, function(res) {
+                if (res.success) n8npRenderActivity(res.data.logs);
+            });
+        }
+
+        // Scan button
+        $('#n8np-scan-btn').on('click', function() {
+            var $btn = $(this);
+            $btn.prop('disabled', true).find('.dashicons').addClass('spin');
+            n8npLoadDashboard();
+            setTimeout(function() { $btn.prop('disabled', false).find('.dashicons').removeClass('spin'); }, 2000);
+        });
+
+        // Bulk enrich
+        $('#n8np-bulk-enrich').on('click', function() {
+            if (!confirm('Start bulk AI enrichment for thin content products?')) return;
+            var $btn = $(this);
+            $btn.prop('disabled', true).text('Processing...');
+            $.post(n8npress.ajax_url, {
+                action: 'n8npress_get_thin_products',
+                nonce: n8npress.nonce
+            }, function(res) {
+                if (res.success && res.data.product_ids && res.data.product_ids.length > 0) {
+                    $.post(n8npress.ajax_url, {
+                        action: 'n8npress_batch_enrich',
+                        nonce: n8npress.nonce,
+                        product_ids: res.data.product_ids
+                    }, function() {
+                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-edit-large"></span> Bulk Enrich');
+                        window.n8npressToast && window.n8npressToast('Bulk enrichment started for ' + res.data.product_ids.length + ' products', 'success');
+                    });
+                } else {
+                    $btn.prop('disabled', false).html('<span class="dashicons dashicons-edit-large"></span> Bulk Enrich');
+                    window.n8npressToast && window.n8npressToast('No thin content products found', 'info');
+                }
+            });
+        });
+
+        // ========================================
         // Password toggle
         // ========================================
         $('.n8npress-toggle-password').on('click', function() {
