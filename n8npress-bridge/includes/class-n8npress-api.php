@@ -825,9 +825,11 @@ class N8nPress_API {
             '_yoast_wpseo_metadesc',
         );
 
+        // Prime meta cache once — all keyed calls below are free
+        $all_meta = get_post_meta( $post_id );
         $meta = array();
         foreach ( $rank_math_keys as $key ) {
-            $val = get_post_meta( $post_id, $key, true );
+            $val = isset( $all_meta[ $key ][0] ) ? $all_meta[ $key ][0] : '';
             if ( '' !== $val ) {
                 $meta[ $key ] = $val;
             }

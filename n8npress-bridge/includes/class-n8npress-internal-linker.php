@@ -400,13 +400,20 @@ class N8nPress_Internal_Linker {
 	}
 
 	public function check_n8n_token( $request ) {
-		$auth = $request->get_header( 'Authorization' );
-		if ( empty( $auth ) ) {
+		$stored = get_option( 'n8npress_seo_api_token', '' );
+		if ( empty( $stored ) ) {
 			return false;
 		}
 
-		$token  = str_replace( 'Bearer ', '', $auth );
-		$stored = get_option( 'n8npress_seo_api_token', '' );
-		return ! empty( $stored ) && hash_equals( $stored, $token );
+		$auth = $request->get_header( 'authorization' );
+		if ( ! empty( $auth ) ) {
+			$token = str_replace( 'Bearer ', '', $auth );
+			if ( hash_equals( $stored, $token ) ) {
+				return true;
+			}
+		}
+
+		$custom = $request->get_header( 'x-n8npress-token' );
+		return ! empty( $custom ) && hash_equals( $stored, $custom );
 	}
 }

@@ -449,6 +449,12 @@ class N8nPress_Content_Scheduler {
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $items = self::get_scheduled_items($status);
 
+        // Prime post meta cache for all schedule items in one query
+        $item_ids = wp_list_pluck( $items, 'ID' );
+        if ( ! empty( $item_ids ) ) {
+            update_postmeta_cache( $item_ids );
+        }
+
         $result = array();
         foreach ($items as $item) {
             $result[] = array(

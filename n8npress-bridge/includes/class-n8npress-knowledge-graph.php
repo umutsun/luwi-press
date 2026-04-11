@@ -273,7 +273,8 @@ class N8nPress_Knowledge_Graph {
 				 WHERE p.post_type = 'product'
 				   AND p.post_status = 'publish'
 				   AND t.source_language_code IS NULL
-				 ORDER BY p.ID ASC"
+				 ORDER BY p.ID ASC
+				 LIMIT 2000"
 			);
 		}
 
@@ -284,7 +285,8 @@ class N8nPress_Knowledge_Graph {
 			 FROM {$wpdb->posts} p
 			 WHERE p.post_type = 'product'
 			   AND p.post_status = 'publish'
-			 ORDER BY p.ID ASC"
+			 ORDER BY p.ID ASC
+			 LIMIT 2000"
 		);
 	}
 
@@ -1013,6 +1015,12 @@ class N8nPress_Knowledge_Graph {
 			 LIMIT 10"
 		);
 
+		// Prime post cache for all top seller IDs in one query
+		$top_pids = wp_list_pluck( $top_sellers, 'product_id' );
+		if ( ! empty( $top_pids ) ) {
+			_prime_post_caches( array_map( 'absint', $top_pids ), false, false );
+		}
+
 		$top_list = array();
 		foreach ( $top_sellers as $ts ) {
 			$pid = absint( $ts->product_id );
@@ -1326,6 +1334,31 @@ class N8nPress_Knowledge_Graph {
 				$el_type, $default_lang
 			) );
 
+			// Bulk-fetch all translations for these trids in one query
+			$trid_list = wp_list_pluck( $originals, 'trid' );
+			$trid_translation_map = array();
+			if ( ! empty( $trid_list ) ) {
+				$trid_placeholders = implode( ',', array_fill( 0, count( $trid_list ), '%d' ) );
+				$bulk_translations = $wpdb->get_results( $wpdb->prepare(
+					"SELECT element_id, trid, language_code
+					 FROM {$wpdb->prefix}icl_translations
+					 WHERE trid IN ({$trid_placeholders}) AND element_type = %s AND source_language_code IS NOT NULL",
+					array_merge( $trid_list, array( $el_type ) )
+				) );
+				foreach ( $bulk_translations as $bt ) {
+					$trid_translation_map[ $bt->trid ][ $bt->language_code ] = absint( $bt->element_id );
+				}
+			}
+
+			// Prime term cache for all element IDs
+			$all_element_ids = wp_list_pluck( $originals, 'element_id' );
+			foreach ( $trid_translation_map as $trid_translations ) {
+				$all_element_ids = array_merge( $all_element_ids, array_values( $trid_translations ) );
+			}
+			if ( ! empty( $all_element_ids ) ) {
+				_prime_term_caches( array_map( 'absint', $all_element_ids ) );
+			}
+
 			foreach ( $originals as $orig ) {
 				$term = get_term( absint( $orig->element_id ), $taxonomy );
 				if ( ! $term || is_wp_error( $term ) ) {
@@ -1334,16 +1367,12 @@ class N8nPress_Knowledge_Graph {
 
 				$translations = array();
 				foreach ( $target_languages as $lang ) {
-					$translated_id = $wpdb->get_var( $wpdb->prepare(
-						"SELECT element_id FROM {$wpdb->prefix}icl_translations
-						 WHERE trid = %d AND language_code = %s AND element_type = %s",
-						$orig->trid, $lang, $el_type
-					) );
+					$translated_id = $trid_translation_map[ $orig->trid ][ $lang ] ?? null;
 
 					if ( $translated_id ) {
-						$tr_term = get_term( absint( $translated_id ), $taxonomy );
+						$tr_term = get_term( $translated_id, $taxonomy );
 						$translations[ $lang ] = array(
-							'term_id' => absint( $translated_id ),
+							'term_id' => $translated_id,
 							'name'    => $tr_term && ! is_wp_error( $tr_term ) ? $tr_term->name : '',
 							'status'  => 'translated',
 						);

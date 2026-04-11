@@ -1025,12 +1025,19 @@ class N8nPress_AI_Content {
      * Verify request comes from n8n using the API token
      */
     public function check_n8n_token($request) {
-        $auth = $request->get_header('Authorization');
-        if (empty($auth)) {
+        if ( empty( $this->n8n_api_token ) ) {
             return false;
         }
 
-        $token = str_replace('Bearer ', '', $auth);
-        return !empty($this->n8n_api_token) && hash_equals($this->n8n_api_token, $token);
+        $auth = $request->get_header('authorization');
+        if ( ! empty( $auth ) ) {
+            $token = str_replace( 'Bearer ', '', $auth );
+            if ( hash_equals( $this->n8n_api_token, $token ) ) {
+                return true;
+            }
+        }
+
+        $custom = $request->get_header( 'x-n8npress-token' );
+        return ! empty( $custom ) && hash_equals( $this->n8n_api_token, $custom );
     }
 }

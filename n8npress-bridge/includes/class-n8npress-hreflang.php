@@ -203,7 +203,11 @@ class N8nPress_Hreflang {
 			$alternates[ $default_lang ] = get_permalink( $post_id );
 		}
 
-		// Check for n8nPress-tracked translations
+		// Prime the meta cache once — all subsequent get_post_meta calls are free
+		get_post_meta( $post_id );
+
+		// Collect translated post IDs for batch permalink resolution
+		$translated_ids = array();
 		foreach ( $trans['active_languages'] as $lang ) {
 			if ( $lang === $default_lang ) {
 				continue;
@@ -216,10 +220,19 @@ class N8nPress_Hreflang {
 
 			$translation_data = get_post_meta( $post_id, '_n8npress_translation_' . $lang, true );
 			if ( ! empty( $translation_data['post_id'] ) ) {
-				$translated_post = get_post( $translation_data['post_id'] );
-				if ( $translated_post && 'publish' === $translated_post->post_status ) {
-					$alternates[ $lang ] = get_permalink( $translation_data['post_id'] );
-				}
+				$translated_ids[ $lang ] = intval( $translation_data['post_id'] );
+			}
+		}
+
+		// Prime post cache for all translated IDs in one query
+		if ( ! empty( $translated_ids ) ) {
+			_prime_post_caches( array_values( $translated_ids ), false, false );
+		}
+
+		foreach ( $translated_ids as $lang => $tid ) {
+			$translated_post = get_post( $tid );
+			if ( $translated_post && 'publish' === $translated_post->post_status ) {
+				$alternates[ $lang ] = get_permalink( $tid );
 			}
 		}
 
