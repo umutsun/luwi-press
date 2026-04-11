@@ -50,38 +50,9 @@ class N8nPress_Site_Config {
 	}
 
 	public function check_permission( $request ) {
-		$stored = get_option( 'n8npress_seo_api_token', '' );
-
-		// Accept Bearer token (JWT or API token)
-		$auth_header = $request->get_header( 'authorization' );
-		if ( ! empty( $auth_header ) ) {
-			$token = str_replace( 'Bearer ', '', $auth_header );
-
-			// Check against stored API token first (faster, no expiry)
-			if ( ! empty( $stored ) && hash_equals( $stored, $token ) ) {
-				return true;
-			}
-
-			// Try JWT validation as fallback
-			if ( class_exists( 'N8nPress_Auth' ) ) {
-				$user = N8nPress_Auth::validate_token( $token );
-				if ( ! is_wp_error( $user ) ) {
-					return true;
-				}
-			}
-		}
-
-		// Accept n8npress API token via custom header
-		$api_token = $request->get_header( 'x-n8npress-token' );
-		if ( ! empty( $api_token ) && ! empty( $stored ) && hash_equals( $stored, $api_token ) ) {
+		if ( N8nPress_Permission::check_token_or_admin( $request ) ) {
 			return true;
 		}
-
-		// Allow logged-in admins (cookie + nonce auth, used by WebMCP)
-		if ( current_user_can( 'manage_options' ) ) {
-			return true;
-		}
-
 		return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
 	}
 

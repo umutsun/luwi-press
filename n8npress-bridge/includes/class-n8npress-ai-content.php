@@ -867,7 +867,7 @@ class N8nPress_AI_Content {
 
         // Output FAQ HTML
         echo '<div class="n8npress-faq" style="margin-top:2em;">';
-        echo '<h2>Sıkça Sorulan Sorular</h2>';
+        echo '<h2>' . esc_html__( 'Frequently Asked Questions', 'n8npress' ) . '</h2>';
 
         foreach ($faq as $item) {
             $q = esc_html($item['question']);
@@ -1017,27 +1017,11 @@ class N8nPress_AI_Content {
 
     // ─── PERMISSION CALLBACKS ───────────────────────────────────────────
 
-    public function check_admin_permission() {
-        return current_user_can('manage_woocommerce');
+    public function check_admin_permission( $request ) {
+        return N8nPress_Permission::check_token_or_admin( $request );
     }
 
-    /**
-     * Verify request comes from n8n using the API token
-     */
-    public function check_n8n_token($request) {
-        if ( empty( $this->n8n_api_token ) ) {
-            return false;
-        }
-
-        $auth = $request->get_header('authorization');
-        if ( ! empty( $auth ) ) {
-            $token = str_replace( 'Bearer ', '', $auth );
-            if ( hash_equals( $this->n8n_api_token, $token ) ) {
-                return true;
-            }
-        }
-
-        $custom = $request->get_header( 'x-n8npress-token' );
-        return ! empty( $custom ) && hash_equals( $this->n8n_api_token, $custom );
+    public function check_n8n_token( $request ) {
+        return N8nPress_Permission::check_token( $request );
     }
 }

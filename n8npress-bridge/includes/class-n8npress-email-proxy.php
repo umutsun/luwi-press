@@ -78,28 +78,7 @@ class N8nPress_Email_Proxy {
 	}
 
 	public function check_permission( $request ) {
-		$stored = get_option( 'n8npress_seo_api_token', '' );
-
-		$auth_header = $request->get_header( 'authorization' );
-		if ( ! empty( $auth_header ) ) {
-			$token = str_replace( 'Bearer ', '', $auth_header );
-			if ( ! empty( $stored ) && hash_equals( $stored, $token ) ) {
-				return true;
-			}
-			if ( class_exists( 'N8nPress_Auth' ) ) {
-				$user = N8nPress_Auth::validate_token( $token );
-				if ( ! is_wp_error( $user ) ) {
-					return true;
-				}
-			}
-		}
-
-		$api_token = $request->get_header( 'x-n8npress-token' );
-		if ( ! empty( $api_token ) && ! empty( $stored ) && hash_equals( $stored, $api_token ) ) {
-			return true;
-		}
-
-		return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+		return N8nPress_Permission::require_token( $request );
 	}
 
 	public function validate_email_list( $value, $request, $param ) {

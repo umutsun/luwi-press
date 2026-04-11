@@ -97,32 +97,13 @@ class N8nPress_WebMCP {
      * Also validates Origin header to prevent DNS rebinding (per MCP spec).
      */
     public function check_mcp_permission( $request ) {
-        // Origin validation (MCP spec security requirement)
+        // Origin validation (MCP spec security requirement — DNS rebinding protection)
         if ( ! $this->validate_origin( $request ) ) {
             return new WP_Error( 'origin_denied', 'Origin not allowed', array( 'status' => 403 ) );
         }
 
-        // WordPress admin session (cookie auth)
-        if ( current_user_can( 'manage_options' ) ) {
-            return true;
-        }
-
-        // Bearer token or custom header
-        $stored = get_option( 'n8npress_seo_api_token', '' );
-        if ( empty( $stored ) ) {
-            return new WP_Error( 'mcp_no_token', 'API token not configured', array( 'status' => 401 ) );
-        }
-
-        $auth = $request->get_header( 'authorization' );
-        if ( ! empty( $auth ) ) {
-            $token = str_replace( 'Bearer ', '', $auth );
-            if ( hash_equals( $stored, $token ) ) {
-                return true;
-            }
-        }
-
-        $custom = $request->get_header( 'x-n8npress-token' );
-        if ( ! empty( $custom ) && hash_equals( $stored, $custom ) ) {
+        // Admin cookie or API token
+        if ( N8nPress_Permission::check_token_or_admin( $request ) ) {
             return true;
         }
 

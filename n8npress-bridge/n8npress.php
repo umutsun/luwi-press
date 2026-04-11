@@ -78,6 +78,7 @@ class N8nPress {
      */
     private function load_dependencies() {
         // Core infrastructure
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-permission.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-api.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-auth.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-logger.php';

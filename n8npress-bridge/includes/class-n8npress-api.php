@@ -635,25 +635,7 @@ class N8nPress_API {
      * Permission check: API token via Authorization header or X-n8nPress-Token
      */
     public function check_api_token_permission( $request ) {
-        $stored = get_option( 'n8npress_seo_api_token', '' );
-        if ( empty( $stored ) ) {
-            return false;
-        }
-
-        $auth = $request->get_header( 'authorization' );
-        if ( ! empty( $auth ) ) {
-            $token = str_replace( 'Bearer ', '', $auth );
-            if ( hash_equals( $stored, $token ) ) {
-                return true;
-            }
-        }
-
-        $custom = $request->get_header( 'x-n8npress-token' );
-        if ( ! empty( $custom ) && hash_equals( $stored, $custom ) ) {
-            return true;
-        }
-
-        return false;
+        return N8nPress_Permission::check_token( $request );
     }
 
     /**
@@ -799,8 +781,8 @@ class N8nPress_API {
     /**
      * Permission check: WordPress admin (manage_options)
      */
-    public function check_admin_permission() {
-        return current_user_can( 'manage_options' );
+    public function check_admin_permission( $request ) {
+        return N8nPress_Permission::check_token_or_admin( $request );
     }
 
     /**

@@ -75,28 +75,7 @@ class N8nPress_Knowledge_Graph {
 	}
 
 	public function check_permission( $request ) {
-		$stored = get_option( 'n8npress_seo_api_token', '' );
-
-		$auth_header = $request->get_header( 'authorization' );
-		if ( ! empty( $auth_header ) ) {
-			$token = str_replace( 'Bearer ', '', $auth_header );
-			if ( ! empty( $stored ) && hash_equals( $stored, $token ) ) {
-				return true;
-			}
-			if ( class_exists( 'N8nPress_Auth' ) ) {
-				$user = N8nPress_Auth::validate_token( $token );
-				if ( ! is_wp_error( $user ) ) {
-					return true;
-				}
-			}
-		}
-
-		$api_token = $request->get_header( 'x-n8npress-token' );
-		if ( ! empty( $api_token ) && ! empty( $stored ) && hash_equals( $stored, $api_token ) ) {
-			return true;
-		}
-
-		return current_user_can( 'manage_options' );
+		return N8nPress_Permission::check_token_or_admin( $request );
 	}
 
 	// ─── MAIN HANDLER ──────────────────────────────────────────────────
@@ -1245,12 +1224,20 @@ class N8nPress_Knowledge_Graph {
 				continue;
 			}
 
+			// Batch: single GROUP BY query instead of per-language loop
+			$lang_placeholders = implode( ',', array_fill( 0, count( $target_languages ), '%s' ) );
+			$params = array_merge( array( $el_type ), $target_languages );
+			$rows = $wpdb->get_results( $wpdb->prepare(
+				"SELECT language_code, COUNT(*) AS cnt FROM {$wpdb->prefix}icl_translations WHERE element_type = %s AND language_code IN ({$lang_placeholders}) AND source_language_code IS NOT NULL GROUP BY language_code",
+				$params
+			) );
+			$done_map = array();
+			foreach ( $rows as $row ) {
+				$done_map[ $row->language_code ] = (int) $row->cnt;
+			}
 			$langs = array();
 			foreach ( $target_languages as $lang ) {
-				$done = (int) $wpdb->get_var( $wpdb->prepare(
-					"SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations WHERE element_type = %s AND language_code = %s AND source_language_code IS NOT NULL",
-					$el_type, $lang
-				) );
+				$done = $done_map[ $lang ] ?? 0;
 				$langs[ $lang ] = array(
 					'done'    => $done,
 					'missing' => max( 0, $total - $done ),

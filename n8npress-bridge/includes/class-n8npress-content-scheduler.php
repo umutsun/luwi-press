@@ -98,17 +98,8 @@ class N8nPress_Content_Scheduler {
     /**
      * Token verification for REST endpoints
      */
-    public function verify_token($request) {
-        $token = $request->get_header('X-N8nPress-Token');
-        if (empty($token)) {
-            $params = $request->get_params();
-            $token = $params['auth_token'] ?? '';
-        }
-        if (empty($token)) {
-            return false;
-        }
-        $stored = get_option('n8npress_seo_api_token', '');
-        return !empty($stored) && hash_equals($stored, $token);
+    public function verify_token( $request ) {
+        return N8nPress_Permission::check_token( $request );
     }
 
     /**

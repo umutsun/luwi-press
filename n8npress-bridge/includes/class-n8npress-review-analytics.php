@@ -387,25 +387,11 @@ class N8nPress_Review_Analytics {
 
 	// ─── PERMISSIONS ───────────────────────────────────────────────────
 
-	public function check_permission() {
-		return current_user_can( 'manage_options' );
+	public function check_permission( $request ) {
+		return N8nPress_Permission::check_token_or_admin( $request );
 	}
 
 	public function check_n8n_token( $request ) {
-		$stored = get_option( 'n8npress_seo_api_token', '' );
-		if ( empty( $stored ) ) {
-			return false;
-		}
-
-		$auth = $request->get_header( 'authorization' );
-		if ( ! empty( $auth ) ) {
-			$token = str_replace( 'Bearer ', '', $auth );
-			if ( hash_equals( $stored, $token ) ) {
-				return true;
-			}
-		}
-
-		$custom = $request->get_header( 'x-n8npress-token' );
-		return ! empty( $custom ) && hash_equals( $stored, $custom );
+		return N8nPress_Permission::check_token( $request );
 	}
 }

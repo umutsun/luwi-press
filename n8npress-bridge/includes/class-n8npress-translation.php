@@ -143,34 +143,12 @@ class N8nPress_Translation {
     /**
      * Permission checks
      */
-    public function check_permission($request) {
-        $auth = $request->get_header('Authorization');
-        if ($auth) {
-            $token = str_replace('Bearer ', '', $auth);
-            $stored = get_option('n8npress_seo_api_token', '');
-            if (!empty($stored) && hash_equals($stored, $token)) {
-                return true;
-            }
-        }
-        return current_user_can('manage_options');
+    public function check_permission( $request ) {
+        return N8nPress_Permission::check_token_or_admin( $request );
     }
 
-    public function check_token_permission($request) {
-        $stored = get_option('n8npress_seo_api_token', '');
-        if ( empty( $stored ) ) {
-            return false;
-        }
-
-        $auth = $request->get_header('authorization');
-        if ( ! empty( $auth ) ) {
-            $token = str_replace('Bearer ', '', $auth);
-            if ( hash_equals( $stored, $token ) ) {
-                return true;
-            }
-        }
-
-        $custom = $request->get_header('x-n8npress-token');
-        return ! empty( $custom ) && hash_equals( $stored, $custom );
+    public function check_token_permission( $request ) {
+        return N8nPress_Permission::check_token( $request );
     }
 
     /**
@@ -426,23 +404,29 @@ class N8nPress_Translation {
             $target_languages = array_diff( $t['active_languages'] ?? array(), array( $t['default_language'] ?? 'tr' ) );
         }
 
+        // Batch: single query counts all statuses across all languages
+        $meta_keys = array();
+        foreach ( $target_languages as $lang ) {
+            $meta_keys[] = '_n8npress_translation_' . $lang . '_status';
+        }
+        $key_placeholders = implode( ',', array_fill( 0, count( $meta_keys ), '%s' ) );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT meta_key, meta_value, COUNT(DISTINCT post_id) AS cnt
+             FROM {$wpdb->postmeta}
+             WHERE meta_key IN ({$key_placeholders}) AND meta_value IN ('processing','completed')
+             GROUP BY meta_key, meta_value",
+            $meta_keys
+        ) );
+        $counts = array();
+        foreach ( $rows as $row ) {
+            $counts[ $row->meta_key ][ $row->meta_value ] = (int) $row->cnt;
+        }
         $stats = [];
-        foreach ($target_languages as $lang) {
-            $processing = intval($wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
-                 WHERE meta_key = %s AND meta_value = 'processing'",
-                '_n8npress_translation_' . $lang . '_status'
-            )));
-
-            $completed = intval($wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
-                 WHERE meta_key = %s AND meta_value = 'completed'",
-                '_n8npress_translation_' . $lang . '_status'
-            )));
-
-            $stats[$lang] = [
-                'processing' => $processing,
-                'completed'  => $completed,
+        foreach ( $target_languages as $lang ) {
+            $key = '_n8npress_translation_' . $lang . '_status';
+            $stats[ $lang ] = [
+                'processing' => $counts[ $key ]['processing'] ?? 0,
+                'completed'  => $counts[ $key ]['completed'] ?? 0,
             ];
         }
 

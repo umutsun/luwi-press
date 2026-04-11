@@ -645,12 +645,12 @@ $wc_currency = $wc_active ? get_woocommerce_currency() : '—';
 				<div style="text-align:center;padding:12px;background:#f8fafc;border-radius:8px;">
 					<div style="font-size:11px;color:#6b7280;text-transform:uppercase;"><?php esc_html_e( 'Today', 'n8npress' ); ?></div>
 					<div style="font-size:22px;font-weight:700;">$<?php echo number_format( $today['cost'], 4 ); ?></div>
-					<div style="font-size:11px;color:#6b7280;"><?php echo $today['calls']; ?> calls</div>
+					<div style="font-size:11px;color:#6b7280;"><?php echo absint( $today['calls'] ); ?> calls</div>
 				</div>
 				<div style="text-align:center;padding:12px;background:#f8fafc;border-radius:8px;">
 					<div style="font-size:11px;color:#6b7280;text-transform:uppercase;"><?php esc_html_e( 'Month', 'n8npress' ); ?></div>
 					<div style="font-size:22px;font-weight:700;">$<?php echo number_format( $month['cost'], 4 ); ?></div>
-					<div style="font-size:11px;color:#6b7280;"><?php echo $month['calls']; ?> calls</div>
+					<div style="font-size:11px;color:#6b7280;"><?php echo absint( $month['calls'] ); ?> calls</div>
 				</div>
 				<div style="text-align:center;padding:12px;background:<?php echo $limit_pct >= 90 ? '#fef2f2' : '#f8fafc'; ?>;border-radius:8px;">
 					<div style="font-size:11px;color:#6b7280;text-transform:uppercase;"><?php esc_html_e( 'Limit', 'n8npress' ); ?></div>

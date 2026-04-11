@@ -123,24 +123,7 @@ class N8nPress_Chatwoot {
 	 * Check API permission (same as site-config)
 	 */
 	public function check_api_permission( $request ) {
-		$auth_header = $request->get_header( 'Authorization' );
-		if ( $auth_header && 0 === strpos( $auth_header, 'Bearer ' ) ) {
-			$token = substr( $auth_header, 7 );
-			$stored = get_option( 'n8npress_seo_api_token', '' );
-			if ( ! empty( $stored ) && hash_equals( $stored, $token ) ) {
-				return true;
-			}
-		}
-
-		$x_token = $request->get_header( 'X-N8nPress-Token' );
-		if ( $x_token ) {
-			$stored = get_option( 'n8npress_seo_api_token', '' );
-			if ( ! empty( $stored ) && hash_equals( $stored, $x_token ) ) {
-				return true;
-			}
-		}
-
-		return new WP_Error( 'unauthorized', __( 'Unauthorized', 'n8npress' ), array( 'status' => 401 ) );
+		return N8nPress_Permission::require_token( $request );
 	}
 
 	// ------------------------------------------------------------------

@@ -26,7 +26,18 @@ class N8nPress_AEO {
 
     private function __construct() {
         add_action('rest_api_init', [$this, 'register_endpoints']);
+        // Schema output works without WooCommerce (reads from post meta)
         add_action('wp_head', [$this, 'output_aeo_schema'], 5);
+    }
+
+    /**
+     * Check if WooCommerce is available (guard for wc_get_product calls)
+     */
+    private function require_woocommerce() {
+        if ( ! function_exists( 'wc_get_product' ) ) {
+            return new WP_Error( 'wc_required', 'WooCommerce is required for this endpoint.', array( 'status' => 501 ) );
+        }
+        return true;
     }
 
     /**
@@ -81,43 +92,21 @@ class N8nPress_AEO {
     /**
      * Admin permission check
      */
-    public function check_admin_permission($request) {
-        $auth = $request->get_header('Authorization');
-        if ($auth) {
-            $token = str_replace('Bearer ', '', $auth);
-            $stored = get_option('n8npress_seo_api_token', '');
-            if (!empty($stored) && hash_equals($stored, $token)) {
-                return true;
-            }
-        }
-        return current_user_can('manage_options');
+    public function check_admin_permission( $request ) {
+        return N8nPress_Permission::check_token_or_admin( $request );
     }
 
-    /**
-     * Token-only permission
-     */
-    public function check_token_permission($request) {
-        $stored = get_option('n8npress_seo_api_token', '');
-        if ( empty( $stored ) ) {
-            return false;
-        }
-
-        $auth = $request->get_header('authorization');
-        if ( ! empty( $auth ) ) {
-            $token = str_replace('Bearer ', '', $auth);
-            if ( hash_equals( $stored, $token ) ) {
-                return true;
-            }
-        }
-
-        $custom = $request->get_header('x-n8npress-token');
-        return ! empty( $custom ) && hash_equals( $stored, $custom );
+    public function check_token_permission( $request ) {
+        return N8nPress_Permission::check_token( $request );
     }
 
     /**
      * POST /aeo/generate-faq — Trigger FAQ generation via n8n
      */
     public function trigger_faq_generation($request) {
+        $wc_check = $this->require_woocommerce();
+        if ( is_wp_error( $wc_check ) ) return $wc_check;
+
         $product_id = $request->get_param('product_id');
         $product = wc_get_product($product_id);
 
@@ -153,6 +142,9 @@ class N8nPress_AEO {
      * POST /aeo/generate-howto — Trigger HowTo generation via n8n
      */
     public function trigger_howto_generation($request) {
+        $wc_check = $this->require_woocommerce();
+        if ( is_wp_error( $wc_check ) ) return $wc_check;
+
         $product_id = $request->get_param('product_id');
         $product = wc_get_product($product_id);
 
