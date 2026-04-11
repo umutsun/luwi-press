@@ -229,6 +229,46 @@ class N8nPress_Open_Claw {
 		wp_send_json_success( $result );
 	}
 
+	/**
+	 * POST /claw/execute — REST handler for executing a confirmed action.
+	 */
+	public function handle_execute_action( $request ) {
+		$data        = $request->get_json_params();
+		$action_type = sanitize_text_field( $data['action'] ?? $data['action_type'] ?? '' );
+		$action_data = isset( $data['params'] ) && is_array( $data['params'] ) ? $data['params'] : array();
+		$conv_id     = sanitize_text_field( $data['conversation_id'] ?? '' );
+
+		if ( empty( $action_type ) ) {
+			return new WP_Error( 'missing_action', 'action is required', array( 'status' => 400 ) );
+		}
+
+		// Sanitize action_data values
+		$action_data = array_map( 'sanitize_text_field', $action_data );
+
+		$result = $this->execute_action( $action_type, $action_data );
+
+		if ( is_wp_error( $result ) ) {
+			N8nPress_Logger::log( 'Claw execute failed: ' . $action_type, 'error', array(
+				'error' => $result->get_error_message(),
+			) );
+			return $result;
+		}
+
+		if ( $conv_id ) {
+			$this->save_message( $conv_id, 'system', 'Action executed: ' . $action_type, array(
+				'result' => $result,
+			) );
+		}
+
+		N8nPress_Logger::log( 'Claw execute: ' . $action_type, 'info' );
+
+		return rest_ensure_response( array(
+			'success' => true,
+			'action'  => $action_type,
+			'result'  => $result,
+		) );
+	}
+
 	// ─── AJAX: Test Open Claw connection ───────────────────────────────
 
 	public function ajax_test_connection() {

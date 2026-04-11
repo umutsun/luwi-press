@@ -1035,6 +1035,33 @@ class N8nPress_WebMCP {
             $data = $api->test_rank_math_meta( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
+
+        $this->register_tool( 'seo_write_meta', array(
+            'description' => 'Write SEO meta fields (title, description, focus keyword) for a post via detected plugin (Rank Math, Yoast, AIOSEO)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'          => array( 'type' => 'integer', 'description' => 'Post/product ID (required)' ),
+                    'meta_title'       => array( 'type' => 'string', 'description' => 'SEO title' ),
+                    'meta_description' => array( 'type' => 'string', 'description' => 'SEO meta description' ),
+                    'focus_keyword'    => array( 'type' => 'string', 'description' => 'Focus keyword' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'            => 'Write SEO Meta',
+                'readOnlyHint'     => false,
+                'idempotentHint'   => true,
+                'openWorldHint'    => false,
+            ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'N8nPress_API', 'handle_save_seo_meta', array(
+                'post_id'          => intval( $args['post_id'] ),
+                'meta_title'       => $args['meta_title'] ?? '',
+                'meta_description' => $args['meta_description'] ?? '',
+                'focus_keyword'    => $args['focus_keyword'] ?? '',
+            ) );
+        } );
     }
 
     /* ───────────────────── AEO Tools ───────────────────────────────── */
@@ -1084,6 +1111,52 @@ class N8nPress_WebMCP {
             $request = new WP_REST_Request( 'GET', '/n8npress/v1/aeo/coverage' );
             $data    = $aeo->get_aeo_coverage( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'aeo_save_faq', array(
+            'description' => 'Save FAQ schema data for a product (JSON-LD FAQPage)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'product_id' => array( 'type' => 'integer', 'description' => 'Product ID (required)' ),
+                    'faqs'       => array( 'type' => 'array', 'description' => 'Array of {question, answer} objects', 'items' => array( 'type' => 'object' ) ),
+                ),
+                'required'   => array( 'product_id', 'faqs' ),
+            ),
+            'annotations' => array( 'title' => 'Save FAQ Schema', 'readOnlyHint' => false, 'idempotentHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'N8nPress_AEO', 'save_faq_data', $args );
+        } );
+
+        $this->register_tool( 'aeo_save_howto', array(
+            'description' => 'Save HowTo schema data for a product',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'product_id' => array( 'type' => 'integer', 'description' => 'Product ID (required)' ),
+                    'name'       => array( 'type' => 'string', 'description' => 'HowTo title' ),
+                    'steps'      => array( 'type' => 'array', 'description' => 'Array of {name, text} step objects', 'items' => array( 'type' => 'object' ) ),
+                ),
+                'required'   => array( 'product_id', 'name', 'steps' ),
+            ),
+            'annotations' => array( 'title' => 'Save HowTo Schema', 'readOnlyHint' => false, 'idempotentHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'N8nPress_AEO', 'save_howto_data', $args );
+        } );
+
+        $this->register_tool( 'aeo_save_speakable', array(
+            'description' => 'Save Speakable schema data for a product',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'product_id'     => array( 'type' => 'integer', 'description' => 'Product ID (required)' ),
+                    'css_selectors'  => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'CSS selectors for speakable content' ),
+                ),
+                'required'   => array( 'product_id' ),
+            ),
+            'annotations' => array( 'title' => 'Save Speakable Schema', 'readOnlyHint' => false, 'idempotentHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'N8nPress_AEO', 'save_speakable_data', $args );
         } );
     }
 
@@ -1280,6 +1353,20 @@ class N8nPress_WebMCP {
             $crm     = N8nPress_CRM_Bridge::get_instance();
             $request = new WP_REST_Request( 'GET', '/n8npress/v1/crm/customer/' . intval( $args['customer_id'] ) );
             $data    = $crm->handle_customer_profile( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'crm_lifecycle_queue', array(
+            'description' => 'Get pending CRM lifecycle events (welcome, review request, win-back emails queued for sending)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Lifecycle Queue', 'readOnlyHint' => true, 'idempotentHint' => true ),
+        ), function () {
+            $crm     = N8nPress_CRM_Bridge::get_instance();
+            $request = new WP_REST_Request( 'GET', '/n8npress/v1/crm/lifecycle-queue' );
+            $data    = $crm->handle_lifecycle_queue( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
     }

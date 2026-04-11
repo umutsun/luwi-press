@@ -1,125 +1,222 @@
 {
-  "name": "n8nPress — Open Claw AI Assistant",
-  "active": true,
-  "nodes": [
-    {
-      "parameters": {
-        "path": "open-claw",
-        "responseMode": "lastNode",
-        "options": { "rawBody": true }
-      },
-      "name": "Webhook - Chat Message",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [240, 400],
-      "id": "wh-claw-01"
-    },
-    {
-      "parameters": {
-        "jsCode": "const body = $input.first().json.body;\nconst message = body.message || '';\nconst conversationId = body.conversation_id || '';\nconst callbackUrl = body.callback_url || '';\nconst context = body.site_context || {};\nconst user = body.user || {};\nconst channel = context.channel || 'admin';\nconst meta = body._meta || {};\n\n// Provider detection from _meta or site_context\nconst provider = meta.provider || context.ai?.provider || context.ai_provider || 'openai';\nconst model = meta.model || context.ai?.model || 'gpt-4o-mini';\nconst maxTokens = meta.max_tokens || context.ai?.max_tokens || 1000;\n\n// API key: from _meta, site_context, or env\nlet apiKey = '';\nif (provider === 'anthropic') {\n  apiKey = context.ai?.api_key || meta.api_key || $env.ANTHROPIC_API_KEY || '';\n} else if (provider === 'google') {\n  apiKey = context.ai?.api_key || meta.api_key || $env.GOOGLE_AI_API_KEY || '';\n} else {\n  apiKey = context.ai?.api_key || meta.api_key || $env.OPENAI_API_KEY || '';\n}\n\nconst systemPrompt = `You are Open Claw, an AI assistant for managing WordPress + WooCommerce stores.\\n\\nStore: ${context.site_name || 'Store'} (${context.site_url || ''})\\nProducts: ${context.products || 0} | Posts: ${context.posts || 0}\\nSEO Plugin: ${context.seo_plugin || 'none'}\\nTranslation: ${context.translation_plugin || 'none'}\\nLanguages: ${(context.active_languages || []).join(', ') || 'default'}\\nChannel: ${channel}\\n\\nAvailable actions:\\n${Object.entries(context.available_actions || {}).map(([k,v]) => '- ' + k + ': ' + v).join('\\n')}\\n\\nRules:\\n- Be concise and helpful\\n- Use markdown for formatting\\n- For actions, end with JSON: {\"action\": \"type\", \"params\": {}, \"confirm\": true}\\n- Include specific numbers when possible`;\n\n// Build provider-specific request\nlet apiUrl, headers, requestBody;\n\nif (provider === 'anthropic') {\n  apiUrl = 'https://api.anthropic.com/v1/messages';\n  headers = { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' };\n  requestBody = JSON.stringify({ model, max_tokens: maxTokens, system: systemPrompt, messages: [{ role: 'user', content: message }] });\n} else if (provider === 'google') {\n  apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;\n  headers = { 'Content-Type': 'application/json' };\n  requestBody = JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt }] }, contents: [{ role: 'user', parts: [{ text: message }] }], generationConfig: { maxOutputTokens: maxTokens } });\n} else {\n  // OpenAI (default)\n  apiUrl = 'https://api.openai.com/v1/chat/completions';\n  headers = { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };\n  requestBody = JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: message }] });\n}\n\nreturn [{ json: { message, conversationId, callbackUrl, systemPrompt, channel, provider, model, apiUrl, headers, requestBody } }];"
-      },
-      "name": "Build AI Context",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [500, 400],
-      "id": "code-claw-context-01"
-    },
-    {
-      "parameters": {
-        "url": "={{ $json.apiUrl }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
-          ]
+    "name": "n8nPress — Open Claw AI Assistant",
+    "active": true,
+    "nodes": [
+        {
+            "parameters": {
+                "path": "open-claw",
+                "responseMode": "lastNode",
+                "options": {
+                    "rawBody": true
+                }
+            },
+            "name": "Webhook - Chat Message",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                240,
+                400
+            ],
+            "id": "wh-claw-01"
         },
-        "sendBody": true,
-        "specifyBody": "string",
-        "body": "={{ $json.requestBody }}",
-        "method": "POST",
-        "options": {
-          "timeout": 60000,
-          "fullResponse": false
-        }
-      },
-      "name": "AI Request",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [740, 400],
-      "id": "http-ai-claw-01"
-    },
-    {
-      "parameters": {
-        "jsCode": "const aiResponse = $input.first().json;\nconst inputData = $('Build AI Context').first().json;\nconst provider = inputData.provider || 'openai';\n\n// Extract text based on provider response format\nlet responseText = '';\ntry {\n  if (provider === 'anthropic') {\n    responseText = aiResponse.content?.[0]?.text || '';\n  } else if (provider === 'google') {\n    responseText = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  } else {\n    // OpenAI\n    responseText = aiResponse.choices?.[0]?.message?.content || '';\n  }\n} catch (e) {\n  responseText = 'Error processing AI response.';\n}\n\nif (!responseText) {\n  responseText = 'I could not process that request. Please try again.';\n}\n\n// Extract action suggestions\nlet actions = [];\nconst actionMatch = responseText.match(/\\{[\\s\\S]*?\"action\"[\\s\\S]*?\\}/);\nif (actionMatch) {\n  try {\n    const actionJson = JSON.parse(actionMatch[0]);\n    if (actionJson.action) {\n      actions.push({\n        type: actionJson.action,\n        label: actionJson.label || actionJson.action,\n        description: actionJson.description || '',\n        data: actionJson.params || {},\n        confirm: actionJson.confirm !== false\n      });\n      responseText = responseText.replace(actionMatch[0], '').trim();\n    }\n  } catch (e) {}\n}\n\nconst result = {\n  conversation_id: inputData.conversationId,\n  response: responseText,\n  actions: actions,\n  channel: inputData.channel\n};\n\nif (inputData.callbackUrl) {\n  result.callback_url = inputData.callbackUrl;\n}\n\nreturn [{ json: result }];"
-      },
-      "name": "Parse Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [980, 400],
-      "id": "code-parse-claw-01"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": true },
-          "conditions": [
-            {
-              "leftValue": "={{ $json.callback_url }}",
-              "rightValue": "",
-              "operator": { "type": "string", "operation": "notEquals" }
-            }
-          ]
-        }
-      },
-      "name": "Has Callback?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [1220, 400],
-      "id": "if-callback-claw-01"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $json.callback_url }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Authorization", "value": "Bearer {{ $('Webhook - Chat Message').first().json.body?._meta?.api_token }}" }
-          ]
+        {
+            "parameters": {
+                "jsCode": "const body = $input.first().json.body;\nconst message = body.message || '';\nconst conversationId = body.conversation_id || '';\nconst callbackUrl = body.callback_url || '';\nconst context = body.site_context || {};\nconst user = body.user || {};\nconst channel = context.channel || 'admin';\nconst meta = body._meta || {};\n\n// Provider detection from _meta or site_context\nconst provider = meta.provider || context.ai?.provider || context.ai_provider || 'openai';\nconst model = meta.model || context.ai?.model || 'gpt-4o-mini';\nconst maxTokens = meta.max_tokens || context.ai?.max_tokens || 1000;\n\n// API key: from _meta, site_context, or env\nlet apiKey = '';\nif (provider === 'anthropic') {\n  apiKey = context.ai?.api_key || meta.api_key || $env.ANTHROPIC_API_KEY || '';\n} else if (provider === 'google') {\n  apiKey = context.ai?.api_key || meta.api_key || $env.GOOGLE_AI_API_KEY || '';\n} else {\n  apiKey = context.ai?.api_key || meta.api_key || $env.OPENAI_API_KEY || '';\n}\n\nconst systemPrompt = `You are Open Claw, an AI assistant for managing WordPress + WooCommerce stores.\\n\\nStore: ${context.site_name || 'Store'} (${context.site_url || ''})\\nProducts: ${context.products || 0} | Posts: ${context.posts || 0}\\nSEO Plugin: ${context.seo_plugin || 'none'}\\nTranslation: ${context.translation_plugin || 'none'}\\nLanguages: ${(context.active_languages || []).join(', ') || 'default'}\\nChannel: ${channel}\\n\\nAvailable actions:\\n${Object.entries(context.available_actions || {}).map(([k,v]) => '- ' + k + ': ' + v).join('\\n')}\\n\\nRules:\\n- Be concise and helpful\\n- Use markdown for formatting\\n- For actions, end with JSON: {\"action\": \"type\", \"params\": {}, \"confirm\": true}\\n- Include specific numbers when possible`;\n\n// Build provider-specific request\nlet apiUrl, headers, requestBody;\n\nif (provider === 'anthropic') {\n  apiUrl = 'https://api.anthropic.com/v1/messages';\n  headers = { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' };\n  requestBody = JSON.stringify({ model, max_tokens: maxTokens, system: systemPrompt, messages: [{ role: 'user', content: message }] });\n} else if (provider === 'google') {\n  apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;\n  headers = { 'Content-Type': 'application/json' };\n  requestBody = JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt }] }, contents: [{ role: 'user', parts: [{ text: message }] }], generationConfig: { maxOutputTokens: maxTokens } });\n} else {\n  // OpenAI (default)\n  apiUrl = 'https://api.openai.com/v1/chat/completions';\n  headers = { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };\n  requestBody = JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: message }] });\n}\n\nreturn [{ json: { message, conversationId, callbackUrl, systemPrompt, channel, provider, model, apiUrl, headers, requestBody } }];"
+            },
+            "name": "Build AI Context",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                500,
+                400
+            ],
+            "id": "code-claw-context-01"
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"conversation_id\": {{ JSON.stringify($json.conversation_id) }},\n  \"response\": {{ JSON.stringify($json.response) }},\n  \"actions\": {{ JSON.stringify($json.actions) }}\n}",
-        "options": { "timeout": 10000 }
-      },
-      "name": "Send Callback",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1460, 340],
-      "id": "http-callback-claw-01"
+        {
+            "parameters": {
+                "url": "={{ $json.apiUrl }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "string",
+                "body": "={{ $json.requestBody }}",
+                "method": "POST",
+                "options": {
+                    "timeout": 60000,
+                    "fullResponse": false
+                }
+            },
+            "name": "AI Request",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                740,
+                400
+            ],
+            "id": "http-ai-claw-01"
+        },
+        {
+            "parameters": {
+                "jsCode": "const aiResponse = $input.first().json;\nconst inputData = $('Build AI Context').first().json;\nconst provider = inputData.provider || 'openai';\n\n// Extract text based on provider response format\nlet responseText = '';\ntry {\n  if (provider === 'anthropic') {\n    responseText = aiResponse.content?.[0]?.text || '';\n  } else if (provider === 'google') {\n    responseText = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  } else {\n    // OpenAI\n    responseText = aiResponse.choices?.[0]?.message?.content || '';\n  }\n} catch (e) {\n  responseText = 'Error processing AI response.';\n}\n\nif (!responseText) {\n  responseText = 'I could not process that request. Please try again.';\n}\n\n// Extract action suggestions\nlet actions = [];\nconst actionMatch = responseText.match(/\\{[\\s\\S]*?\"action\"[\\s\\S]*?\\}/);\nif (actionMatch) {\n  try {\n    const actionJson = JSON.parse(actionMatch[0]);\n    if (actionJson.action) {\n      actions.push({\n        type: actionJson.action,\n        label: actionJson.label || actionJson.action,\n        description: actionJson.description || '',\n        data: actionJson.params || {},\n        confirm: actionJson.confirm !== false\n      });\n      responseText = responseText.replace(actionMatch[0], '').trim();\n    }\n  } catch (e) {}\n}\n\nconst result = {\n  conversation_id: inputData.conversationId,\n  response: responseText,\n  actions: actions,\n  channel: inputData.channel\n};\n\nif (inputData.callbackUrl) {\n  result.callback_url = inputData.callbackUrl;\n}\n\nreturn [{ json: result }];"
+            },
+            "name": "Parse Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                980,
+                400
+            ],
+            "id": "code-parse-claw-01"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.callback_url }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "notEquals"
+                            }
+                        }
+                    ]
+                }
+            },
+            "name": "Has Callback?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                1220,
+                400
+            ],
+            "id": "if-callback-claw-01"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $json.callback_url }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        },
+                        {
+                            "name": "Authorization",
+                            "value": "Bearer {{ $('Webhook - Chat Message').first().json.body?._meta?.api_token }}"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"conversation_id\": {{ JSON.stringify($json.conversation_id) }},\n  \"response\": {{ JSON.stringify($json.response) }},\n  \"actions\": {{ JSON.stringify($json.actions) }}\n}",
+                "options": {
+                    "timeout": 10000
+                }
+            },
+            "name": "Send Callback",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                1460,
+                340
+            ],
+            "id": "http-callback-claw-01"
+        },
+        {
+            "parameters": {
+                "jsCode": "const data = $('Parse Response').first().json;\nreturn [{\n  json: {\n    success: true,\n    response: data.response,\n    actions: data.actions,\n    conversation_id: data.conversation_id\n  }\n}];"
+            },
+            "name": "Return Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1460,
+                500
+            ],
+            "id": "code-return-claw-01"
+        }
+    ],
+    "connections": {
+        "Webhook - Chat Message": {
+            "main": [
+                [
+                    {
+                        "node": "Build AI Context",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build AI Context": {
+            "main": [
+                [
+                    {
+                        "node": "AI Request",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "AI Request": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Response": {
+            "main": [
+                [
+                    {
+                        "node": "Has Callback?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Has Callback?": {
+            "main": [
+                [
+                    {
+                        "node": "Send Callback",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Return Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
     },
-    {
-      "parameters": {
-        "jsCode": "const data = $('Parse Response').first().json;\nreturn [{\n  json: {\n    success: true,\n    response: data.response,\n    actions: data.actions,\n    conversation_id: data.conversation_id\n  }\n}];"
-      },
-      "name": "Return Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1460, 500],
-      "id": "code-return-claw-01"
+    "settings": {
+        "timezone": "Europe/Istanbul",
+        "saveManualExecutions": true,
+        "executionOrder": "v1",
+        "errorWorkflow": "7Pv7BtdURlzf9HsZ"
     }
-  ],
-  "connections": {
-    "Webhook - Chat Message": { "main": [[{ "node": "Build AI Context", "type": "main", "index": 0 }]] },
-    "Build AI Context": { "main": [[{ "node": "AI Request", "type": "main", "index": 0 }]] },
-    "AI Request": { "main": [[{ "node": "Parse Response", "type": "main", "index": 0 }]] },
-    "Parse Response": { "main": [[{ "node": "Has Callback?", "type": "main", "index": 0 }]] },
-    "Has Callback?": { "main": [[{ "node": "Send Callback", "type": "main", "index": 0 }], [{ "node": "Return Response", "type": "main", "index": 0 }]] }
-  },
-  "settings": {
-    "timezone": "Europe/Istanbul",
-    "saveManualExecutions": true,
-    "executionOrder": "v1"
-  }
 }

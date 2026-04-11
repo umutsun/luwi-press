@@ -249,6 +249,15 @@ class N8nPress {
 
         add_submenu_page(
             'n8npress',
+            __( 'Knowledge Graph', 'n8npress' ),
+            __( 'Knowledge Graph', 'n8npress' ),
+            'manage_options',
+            'n8npress-knowledge-graph',
+            array( $this, 'knowledge_graph_page' )
+        );
+
+        add_submenu_page(
+            'n8npress',
             __( 'WebMCP', 'n8npress' ),
             __( 'WebMCP', 'n8npress' ),
             'manage_options',
@@ -283,6 +292,13 @@ class N8nPress {
      */
     public function usage_page() {
         include N8NPRESS_PLUGIN_DIR . 'admin/usage-page.php';
+    }
+
+    /**
+     * Knowledge Graph page
+     */
+    public function knowledge_graph_page() {
+        include N8NPRESS_PLUGIN_DIR . 'admin/knowledge-graph-page.php';
     }
 
     /**

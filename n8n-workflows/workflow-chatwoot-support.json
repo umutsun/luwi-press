@@ -1,190 +1,294 @@
 {
-  "id": "chatwoot-support-01",
-  "name": "n8nPress — Chatwoot Customer Support",
-  "active": true,
-  "nodes": [
-    {
-      "parameters": {
-        "path": "chatwoot",
-        "responseMode": "responseNode",
-        "options": { "rawBody": true }
-      },
-      "name": "Chatwoot Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [240, 400],
-      "id": "wh-chatwoot-01"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Parse Chatwoot event forwarded by n8nPress\nconst body = $input.first().json.body;\nconst event = body.event || 'unknown';\nconst messageType = body.message_type || '';\nconst content = body.content || '';\nconst conversation = body.conversation || {};\nconst sender = body.sender || {};\nconst contact = body.contact || conversation.contact || {};\nconst account = body.account || {};\n\n// Extract useful info\nconst contactEmail = contact.email || sender.email || '';\nconst contactName = contact.name || sender.name || 'Unknown';\nconst contactPhone = contact.phone_number || '';\nconst conversationId = conversation.id || body.conversation_id || '';\nconst inboxName = (conversation.inbox || {}).name || '';\nconst isIncoming = messageType === 'incoming' || (sender.type === 'contact');\n\nreturn [{\n  json: {\n    event,\n    messageType,\n    content,\n    contactEmail,\n    contactName,\n    contactPhone,\n    conversationId,\n    inboxName,\n    isIncoming,\n    senderId: sender.id || '',\n    senderType: sender.type || '',\n    accountId: account.id || '',\n    timestamp: body.created_at || new Date().toISOString(),\n    rawEvent: body\n  }\n}];"
-      },
-      "name": "Parse Event",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [500, 400],
-      "id": "code-chatwoot-parse-01"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": false },
-          "combinator": "and",
-          "conditions": [
-            {
-              "leftValue": "={{ $json.isIncoming }}",
-              "rightValue": true,
-              "operator": { "type": "boolean", "operation": "equals" }
+    "id": "chatwoot-support-01",
+    "name": "n8nPress — Chatwoot Customer Support",
+    "active": true,
+    "nodes": [
+        {
+            "parameters": {
+                "path": "chatwoot",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
             },
-            {
-              "leftValue": "={{ $json.event }}",
-              "rightValue": "message_created",
-              "operator": { "type": "string", "operation": "equals" }
-            }
-          ]
-        }
-      },
-      "name": "Is Incoming Message?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [740, 400],
-      "id": "if-chatwoot-incoming-01"
-    },
-    {
-      "parameters": {
-        "url": "={{ $('Chatwoot Webhook').first().json.body?._meta?.site_url }}/wp-json/n8npress/v1/chatwoot/customer-lookup",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $('Chatwoot Webhook').first().json.body?._meta?.api_token }}" }
-          ]
+            "name": "Chatwoot Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                240,
+                400
+            ],
+            "id": "wh-chatwoot-01"
         },
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            { "name": "email", "value": "={{ $json.contactEmail }}" }
-          ]
+        {
+            "parameters": {
+                "jsCode": "// Parse Chatwoot event forwarded by n8nPress\nconst body = $input.first().json.body;\nconst event = body.event || 'unknown';\nconst messageType = body.message_type || '';\nconst content = body.content || '';\nconst conversation = body.conversation || {};\nconst sender = body.sender || {};\nconst contact = body.contact || conversation.contact || {};\nconst account = body.account || {};\n\n// Extract useful info\nconst contactEmail = contact.email || sender.email || '';\nconst contactName = contact.name || sender.name || 'Unknown';\nconst contactPhone = contact.phone_number || '';\nconst conversationId = conversation.id || body.conversation_id || '';\nconst inboxName = (conversation.inbox || {}).name || '';\nconst isIncoming = messageType === 'incoming' || (sender.type === 'contact');\n\nreturn [{\n  json: {\n    event,\n    messageType,\n    content,\n    contactEmail,\n    contactName,\n    contactPhone,\n    conversationId,\n    inboxName,\n    isIncoming,\n    senderId: sender.id || '',\n    senderType: sender.type || '',\n    accountId: account.id || '',\n    timestamp: body.created_at || new Date().toISOString(),\n    rawEvent: body\n  }\n}];"
+            },
+            "name": "Parse Event",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                500,
+                400
+            ],
+            "id": "code-chatwoot-parse-01"
         },
-        "method": "GET",
-        "options": {
-          "timeout": 10000,
-          "allowUnauthorizedCerts": false
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": false
+                    },
+                    "combinator": "and",
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.isIncoming }}",
+                            "rightValue": true,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "equals"
+                            }
+                        },
+                        {
+                            "leftValue": "={{ $json.event }}",
+                            "rightValue": "message_created",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals"
+                            }
+                        }
+                    ]
+                }
+            },
+            "name": "Is Incoming Message?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                740,
+                400
+            ],
+            "id": "if-chatwoot-incoming-01"
+        },
+        {
+            "parameters": {
+                "url": "={{ $('Chatwoot Webhook').first().json.body?._meta?.site_url }}/wp-json/n8npress/v1/chatwoot/customer-lookup",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $('Chatwoot Webhook').first().json.body?._meta?.api_token }}"
+                        }
+                    ]
+                },
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "email",
+                            "value": "={{ $json.contactEmail }}"
+                        }
+                    ]
+                },
+                "method": "GET",
+                "options": {
+                    "timeout": 10000,
+                    "allowUnauthorizedCerts": false
+                }
+            },
+            "name": "WC Customer Lookup",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                1000,
+                300
+            ],
+            "id": "http-wc-lookup-01",
+            "continueOnFail": true
+        },
+        {
+            "parameters": {
+                "jsCode": "// Build Telegram notification message\nconst event = $('Parse Event').first().json;\nconst wcData = $('WC Customer Lookup').first().json;\n\nconst customerName = event.contactName;\nconst email = event.contactEmail || 'no email';\nconst message = event.content || '(no content)';\nconst inbox = event.inboxName || 'unknown';\nconst convId = event.conversationId;\n\n// WooCommerce customer info\nlet wcInfo = '';\nif (wcData && wcData.customer && !wcData.error) {\n  const c = wcData.customer;\n  wcInfo = `\\n\\n🛒 *WooCommerce Customer*\\nOrders: ${c.total_orders || 0}\\nTotal Spent: ${c.total_spent || '0'}\\nSegment: ${c.segment || 'unknown'}`;\n  if (c.last_order_date) {\n    wcInfo += `\\nLast Order: ${c.last_order_date}`;\n  }\n} else {\n  wcInfo = '\\n\\n🛒 _Not a WooCommerce customer_';\n}\n\nconst telegramMsg = `💬 *New Customer Message*\\n\\n👤 *${customerName}* (${email})\\n📥 Inbox: ${inbox}\\n🔗 Conversation #${convId}\\n\\n💭 ${message}${wcInfo}`;\n\nreturn [{\n  json: {\n    telegramMessage: telegramMsg,\n    chatId: $env.TELEGRAM_CHAT_ID || '8678007975',\n    conversationId: convId,\n    customerEmail: email,\n    customerName: customerName,\n    wcCustomer: wcData && wcData.customer ? wcData.customer : null\n  }\n}];"
+            },
+            "name": "Build Notification",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1260,
+                300
+            ],
+            "id": "code-chatwoot-notify-01"
+        },
+        {
+            "parameters": {
+                "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"chat_id\": \"{{ $json.chatId }}\",\n  \"text\": {{ JSON.stringify($json.telegramMessage) }},\n  \"parse_mode\": \"Markdown\",\n  \"disable_web_page_preview\": true\n}",
+                "method": "POST",
+                "options": {
+                    "timeout": 10000
+                }
+            },
+            "name": "Telegram Notify",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                1520,
+                300
+            ],
+            "id": "http-telegram-chatwoot-01",
+            "continueOnFail": true
+        },
+        {
+            "parameters": {
+                "jsCode": "// Build response for webhook\nreturn [{\n  json: {\n    success: true,\n    event: 'message_created',\n    processed: true\n  }\n}];"
+            },
+            "name": "Build Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1780,
+                300
+            ],
+            "id": "code-chatwoot-response-01"
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify($json) }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "name": "Respond OK",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2040,
+                300
+            ],
+            "id": "resp-chatwoot-ok-01"
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={\"success\": true, \"skipped\": true, \"reason\": \"not_incoming_message\"}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "name": "Respond Skip",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                1000,
+                560
+            ],
+            "id": "resp-chatwoot-skip-01"
         }
-      },
-      "name": "WC Customer Lookup",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1000, 300],
-      "id": "http-wc-lookup-01",
-      "continueOnFail": true
+    ],
+    "connections": {
+        "Chatwoot Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Event",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Event": {
+            "main": [
+                [
+                    {
+                        "node": "Is Incoming Message?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Is Incoming Message?": {
+            "main": [
+                [
+                    {
+                        "node": "WC Customer Lookup",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Respond Skip",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "WC Customer Lookup": {
+            "main": [
+                [
+                    {
+                        "node": "Build Notification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Notification": {
+            "main": [
+                [
+                    {
+                        "node": "Telegram Notify",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Telegram Notify": {
+            "main": [
+                [
+                    {
+                        "node": "Build Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Response": {
+            "main": [
+                [
+                    {
+                        "node": "Respond OK",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
     },
-    {
-      "parameters": {
-        "jsCode": "// Build Telegram notification message\nconst event = $('Parse Event').first().json;\nconst wcData = $('WC Customer Lookup').first().json;\n\nconst customerName = event.contactName;\nconst email = event.contactEmail || 'no email';\nconst message = event.content || '(no content)';\nconst inbox = event.inboxName || 'unknown';\nconst convId = event.conversationId;\n\n// WooCommerce customer info\nlet wcInfo = '';\nif (wcData && wcData.customer && !wcData.error) {\n  const c = wcData.customer;\n  wcInfo = `\\n\\n🛒 *WooCommerce Customer*\\nOrders: ${c.total_orders || 0}\\nTotal Spent: ${c.total_spent || '0'}\\nSegment: ${c.segment || 'unknown'}`;\n  if (c.last_order_date) {\n    wcInfo += `\\nLast Order: ${c.last_order_date}`;\n  }\n} else {\n  wcInfo = '\\n\\n🛒 _Not a WooCommerce customer_';\n}\n\nconst telegramMsg = `💬 *New Customer Message*\\n\\n👤 *${customerName}* (${email})\\n📥 Inbox: ${inbox}\\n🔗 Conversation #${convId}\\n\\n💭 ${message}${wcInfo}`;\n\nreturn [{\n  json: {\n    telegramMessage: telegramMsg,\n    chatId: '8678007975',\n    conversationId: convId,\n    customerEmail: email,\n    customerName: customerName,\n    wcCustomer: wcData && wcData.customer ? wcData.customer : null\n  }\n}];"
-      },
-      "name": "Build Notification",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1260, 300],
-      "id": "code-chatwoot-notify-01"
+    "settings": {
+        "executionOrder": "v1",
+        "saveManualExecutions": true,
+        "timezone": "Europe/Istanbul",
+        "errorWorkflow": "7Pv7BtdURlzf9HsZ"
     },
-    {
-      "parameters": {
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"chat_id\": \"{{ $json.chatId }}\",\n  \"text\": {{ JSON.stringify($json.telegramMessage) }},\n  \"parse_mode\": \"Markdown\",\n  \"disable_web_page_preview\": true\n}",
-        "method": "POST",
-        "options": { "timeout": 10000 }
-      },
-      "name": "Telegram Notify",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1520, 300],
-      "id": "http-telegram-chatwoot-01",
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "jsCode": "// Build response for webhook\nreturn [{\n  json: {\n    success: true,\n    event: 'message_created',\n    processed: true\n  }\n}];"
-      },
-      "name": "Build Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1780, 300],
-      "id": "code-chatwoot-response-01"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
-        "options": { "responseCode": 200 }
-      },
-      "name": "Respond OK",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [2040, 300],
-      "id": "resp-chatwoot-ok-01"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={\"success\": true, \"skipped\": true, \"reason\": \"not_incoming_message\"}",
-        "options": { "responseCode": 200 }
-      },
-      "name": "Respond Skip",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [1000, 560],
-      "id": "resp-chatwoot-skip-01"
-    }
-  ],
-  "connections": {
-    "Chatwoot Webhook": {
-      "main": [
-        [{ "node": "Parse Event", "type": "main", "index": 0 }]
-      ]
-    },
-    "Parse Event": {
-      "main": [
-        [{ "node": "Is Incoming Message?", "type": "main", "index": 0 }]
-      ]
-    },
-    "Is Incoming Message?": {
-      "main": [
-        [{ "node": "WC Customer Lookup", "type": "main", "index": 0 }],
-        [{ "node": "Respond Skip", "type": "main", "index": 0 }]
-      ]
-    },
-    "WC Customer Lookup": {
-      "main": [
-        [{ "node": "Build Notification", "type": "main", "index": 0 }]
-      ]
-    },
-    "Build Notification": {
-      "main": [
-        [{ "node": "Telegram Notify", "type": "main", "index": 0 }]
-      ]
-    },
-    "Telegram Notify": {
-      "main": [
-        [{ "node": "Build Response", "type": "main", "index": 0 }]
-      ]
-    },
-    "Build Response": {
-      "main": [
-        [{ "node": "Respond OK", "type": "main", "index": 0 }]
-      ]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1",
-    "saveManualExecutions": true,
-    "timezone": "Europe/Istanbul"
-  },
-  "tags": [
-    { "name": "n8nPress" },
-    { "name": "Chatwoot" },
-    { "name": "Customer Support" }
-  ]
+    "tags": [
+        {
+            "name": "n8nPress"
+        },
+        {
+            "name": "Chatwoot"
+        },
+        {
+            "name": "Customer Support"
+        }
+    ]
 }

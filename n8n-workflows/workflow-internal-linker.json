@@ -1,256 +1,396 @@
 {
-  "name": "n8nPress — AI Internal Link Resolver",
-  "active": true,
-  "nodes": [
-    {
-      "parameters": {
-        "path": "internal-linker",
-        "responseMode": "responseNode",
-        "options": { "rawBody": true }
-      },
-      "name": "Webhook - Link Request",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [240, 400],
-      "id": "wh-linker-01"
-    },
-    {
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "cronExpression",
-              "expression": "0 3 * * *"
-            }
-          ]
+    "name": "n8nPress — AI Internal Link Resolver",
+    "active": true,
+    "nodes": [
+        {
+            "parameters": {
+                "path": "internal-linker",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
+            },
+            "name": "Webhook - Link Request",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                240,
+                400
+            ],
+            "id": "wh-linker-01"
+        },
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "cronExpression",
+                            "expression": "0 3 * * *"
+                        }
+                    ]
+                }
+            },
+            "name": "Daily 3AM",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.2,
+            "position": [
+                240,
+                600
+            ],
+            "id": "sched-linker-01"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/site-config",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "httpHeaderAuth",
+                "options": {
+                    "timeout": 15000
+                }
+            },
+            "name": "Site Config",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                500,
+                500
+            ],
+            "id": "linker-site-config"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/content/unresolved-links?limit=20",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "Bearer {{ $('Site Config').first().json.n8npress?.api_token }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "timeout": 15000
+                }
+            },
+            "name": "Fetch Unresolved",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                740,
+                500
+            ],
+            "id": "http-unresolved-01"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Flatten posts with markers into individual items\nconst data = $input.first().json;\nconst posts = data.posts || [];\n\nif (posts.length === 0) {\n  return [{ json: { hasPosts: false, message: 'No unresolved links found' } }];\n}\n\nreturn posts.map(p => ({\n  json: {\n    hasPosts: true,\n    post_id: p.post_id,\n    title: p.title,\n    post_type: p.post_type,\n    markers: p.markers,\n    count: p.count\n  }\n}));"
+            },
+            "name": "Process Posts",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                980,
+                500
+            ],
+            "id": "code-process-posts-01"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.hasPosts }}",
+                            "rightValue": true,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "equals"
+                            }
+                        }
+                    ]
+                }
+            },
+            "name": "Has Posts?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                1200,
+                500
+            ],
+            "id": "if-has-posts-01"
+        },
+        {
+            "parameters": {
+                "batchSize": 3,
+                "options": []
+            },
+            "name": "Batch 3",
+            "type": "n8n-nodes-base.splitInBatches",
+            "typeVersion": 3,
+            "position": [
+                1440,
+                440
+            ],
+            "id": "batch-linker-01"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Build AI prompt for link matching\nconst post = $input.first().json;\nconst siteConfig = $('Site Config').first().json;\nconst storeName = siteConfig.site?.name || 'Store';\nconst siteUrl = siteConfig.site?.url || '';\n\nconst markers = post.markers || [];\n\nconst systemPrompt = `You are an internal linking expert for ${storeName} (${siteUrl}). For each topic marker, suggest the best URL and anchor text from the store's existing pages.\n\nOutput a JSON array of objects: [{\"topic\": \"original topic\", \"url\": \"best matching URL\", \"anchor\": \"optimized anchor text\"}]\n\nRules:\n- Use existing product, category, or blog post URLs from the store\n- Anchor text should be natural and SEO-friendly\n- If you cannot find a match, set url to empty string\n- Prefer product pages over category pages\n- Keep anchor text under 50 characters`;\n\nconst userPrompt = `Post: \"${post.title}\" (${post.post_type})\n\nResolve these internal link markers:\n${markers.map((m, i) => `${i+1}. [INTERNAL_LINK: ${m}]`).join('\\n')}\n\nStore URL: ${siteUrl}`;\n\nreturn [{\n  json: {\n    ...post,\n    systemPrompt,\n    userPrompt\n  }\n}];"
+            },
+            "name": "Build Link Prompt",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1680,
+                440
+            ],
+            "id": "code-link-prompt-01"
+        },
+        {
+            "parameters": {
+                "url": "https://api.anthropic.com/v1/messages",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "x-api-key",
+                            "value": "={{ $('Site Config').first().json.n8npress?.ai?.api_key }}"
+                        },
+                        {
+                            "name": "anthropic-version",
+                            "value": "2023-06-01"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"model\": \"{{ $('Site Config').first().json.n8npress?.ai?.model || 'claude-haiku-4-5' }}\",\n  \"max_tokens\": {{ $('Site Config').first().json.n8npress?.ai?.max_tokens || 1000 }},\n  \"system\": \"{{ $json.systemPrompt }}\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"{{ $json.userPrompt }}\" }\n  ]\n}",
+                "method": "POST",
+                "options": {
+                    "timeout": 30000
+                }
+            },
+            "name": "Claude Match Links",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                1920,
+                440
+            ],
+            "id": "http-claude-linker-01"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Parse AI response and prepare callback\nconst aiResponse = $input.first().json;\nconst postData = $('Build Link Prompt').first().json;\n\nlet links = [];\ntry {\n  const text = aiResponse.content?.[0]?.text || '';\n  const jsonMatch = text.match(/\\[([\\s\\S]*?)\\]/);\n  if (jsonMatch) {\n    links = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  links = [];\n}\n\n// Filter out empty URLs\nlinks = links.filter(l => l.url && l.topic);\n\nreturn [{\n  json: {\n    post_id: postData.post_id,\n    links: links,\n    resolved_count: links.length,\n    total_markers: postData.count\n  }\n}];"
+            },
+            "name": "Parse Links",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2160,
+                440
+            ],
+            "id": "code-parse-links-01"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/content/resolve-links-callback",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        },
+                        {
+                            "name": "Authorization",
+                            "value": "Bearer {{ $('Site Config').first().json.n8npress?.api_token }}"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"post_id\": {{ $json.post_id }},\n  \"links\": {{ JSON.stringify($json.links) }}\n}",
+                "options": {
+                    "timeout": 15000
+                }
+            },
+            "name": "Send Resolved Links",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                2400,
+                440
+            ],
+            "id": "http-callback-links-01"
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, message: 'Link resolution started' }) }}",
+                "options": []
+            },
+            "name": "Respond Webhook",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                500,
+                340
+            ],
+            "id": "respond-linker-01"
         }
-      },
-      "name": "Daily 3AM",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [240, 600],
-      "id": "sched-linker-01"
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/site-config",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
-        "options": { "timeout": 15000 }
-      },
-      "name": "Site Config",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [500, 500],
-      "id": "linker-site-config"
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/content/unresolved-links?limit=20",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Authorization", "value": "Bearer {{ $('Site Config').first().json.n8npress?.api_token }}" }
-          ]
+    ],
+    "connections": {
+        "Webhook - Link Request": {
+            "main": [
+                [
+                    {
+                        "node": "Respond Webhook",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Site Config",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
         },
-        "options": { "timeout": 15000 }
-      },
-      "name": "Fetch Unresolved",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [740, 500],
-      "id": "http-unresolved-01"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Flatten posts with markers into individual items\nconst data = $input.first().json;\nconst posts = data.posts || [];\n\nif (posts.length === 0) {\n  return [{ json: { hasPosts: false, message: 'No unresolved links found' } }];\n}\n\nreturn posts.map(p => ({\n  json: {\n    hasPosts: true,\n    post_id: p.post_id,\n    title: p.title,\n    post_type: p.post_type,\n    markers: p.markers,\n    count: p.count\n  }\n}));"
-      },
-      "name": "Process Posts",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [980, 500],
-      "id": "code-process-posts-01"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": true },
-          "conditions": [
-            {
-              "leftValue": "={{ $json.hasPosts }}",
-              "rightValue": true,
-              "operator": { "type": "boolean", "operation": "equals" }
-            }
-          ]
+        "Daily 3AM": {
+            "main": [
+                [
+                    {
+                        "node": "Site Config",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Site Config": {
+            "main": [
+                [
+                    {
+                        "node": "Fetch Unresolved",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch Unresolved": {
+            "main": [
+                [
+                    {
+                        "node": "Process Posts",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Process Posts": {
+            "main": [
+                [
+                    {
+                        "node": "Has Posts?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Has Posts?": {
+            "main": [
+                [
+                    {
+                        "node": "Batch 3",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                []
+            ]
+        },
+        "Batch 3": {
+            "main": [
+                [
+                    {
+                        "node": "Build Link Prompt",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Link Prompt": {
+            "main": [
+                [
+                    {
+                        "node": "Claude Match Links",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Claude Match Links": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Links",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Links": {
+            "main": [
+                [
+                    {
+                        "node": "Send Resolved Links",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send Resolved Links": {
+            "main": [
+                [
+                    {
+                        "node": "Batch 3",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
         }
-      },
-      "name": "Has Posts?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [1200, 500],
-      "id": "if-has-posts-01"
     },
-    {
-      "parameters": {
-        "batchSize": 3,
-        "options": {}
-      },
-      "name": "Batch 3",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [1440, 440],
-      "id": "batch-linker-01"
+    "settings": {
+        "timezone": "Europe/Istanbul",
+        "saveManualExecutions": true,
+        "executionOrder": "v1",
+        "errorWorkflow": "7Pv7BtdURlzf9HsZ"
     },
-    {
-      "parameters": {
-        "jsCode": "// Build AI prompt for link matching\nconst post = $input.first().json;\nconst siteConfig = $('Site Config').first().json;\nconst storeName = siteConfig.site?.name || 'Store';\nconst siteUrl = siteConfig.site?.url || '';\n\nconst markers = post.markers || [];\n\nconst systemPrompt = `You are an internal linking expert for ${storeName} (${siteUrl}). For each topic marker, suggest the best URL and anchor text from the store's existing pages.\n\nOutput a JSON array of objects: [{\"topic\": \"original topic\", \"url\": \"best matching URL\", \"anchor\": \"optimized anchor text\"}]\n\nRules:\n- Use existing product, category, or blog post URLs from the store\n- Anchor text should be natural and SEO-friendly\n- If you cannot find a match, set url to empty string\n- Prefer product pages over category pages\n- Keep anchor text under 50 characters`;\n\nconst userPrompt = `Post: \"${post.title}\" (${post.post_type})\n\nResolve these internal link markers:\n${markers.map((m, i) => `${i+1}. [INTERNAL_LINK: ${m}]`).join('\\n')}\n\nStore URL: ${siteUrl}`;\n\nreturn [{\n  json: {\n    ...post,\n    systemPrompt,\n    userPrompt\n  }\n}];"
-      },
-      "name": "Build Link Prompt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1680, 440],
-      "id": "code-link-prompt-01"
-    },
-    {
-      "parameters": {
-        "url": "https://api.anthropic.com/v1/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "x-api-key", "value": "={{ $('Site Config').first().json.n8npress?.ai?.api_key }}" },
-            { "name": "anthropic-version", "value": "2023-06-01" },
-            { "name": "Content-Type", "value": "application/json" }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"{{ $('Site Config').first().json.n8npress?.ai?.model || 'claude-haiku-4-5' }}\",\n  \"max_tokens\": {{ $('Site Config').first().json.n8npress?.ai?.max_tokens || 1000 }},\n  \"system\": \"{{ $json.systemPrompt }}\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"{{ $json.userPrompt }}\" }\n  ]\n}",
-        "method": "POST",
-        "options": { "timeout": 30000 }
-      },
-      "name": "Claude Match Links",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1920, 440],
-      "id": "http-claude-linker-01"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Parse AI response and prepare callback\nconst aiResponse = $input.first().json;\nconst postData = $('Build Link Prompt').first().json;\n\nlet links = [];\ntry {\n  const text = aiResponse.content?.[0]?.text || '';\n  const jsonMatch = text.match(/\\[([\\s\\S]*?)\\]/);\n  if (jsonMatch) {\n    links = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  links = [];\n}\n\n// Filter out empty URLs\nlinks = links.filter(l => l.url && l.topic);\n\nreturn [{\n  json: {\n    post_id: postData.post_id,\n    links: links,\n    resolved_count: links.length,\n    total_markers: postData.count\n  }\n}];"
-      },
-      "name": "Parse Links",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [2160, 440],
-      "id": "code-parse-links-01"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.WP_SITE_URL }}/wp-json/n8npress/v1/content/resolve-links-callback",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Authorization", "value": "Bearer {{ $('Site Config').first().json.n8npress?.api_token }}" }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"post_id\": {{ $json.post_id }},\n  \"links\": {{ JSON.stringify($json.links) }}\n}",
-        "options": { "timeout": 15000 }
-      },
-      "name": "Send Resolved Links",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [2400, 440],
-      "id": "http-callback-links-01"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ success: true, message: 'Link resolution started' }) }}",
-        "options": {}
-      },
-      "name": "Respond Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [500, 340],
-      "id": "respond-linker-01"
+    "meta": {
+        "description": "Resolves [INTERNAL_LINK: topic] markers in posts using Claude AI. Runs daily at 3AM or on-demand via webhook. AI matches topics to existing product/category/blog URLs.",
+        "required_env": [
+            "WP_SITE_URL"
+        ],
+        "required_credentials": [],
+        "workflow_flow": "Schedule/Webhook → Site Config → Fetch Unresolved → Batch(3) → Claude AI → Parse → Callback"
     }
-  ],
-  "connections": {
-    "Webhook - Link Request": {
-      "main": [
-        [
-          { "node": "Respond Webhook", "type": "main", "index": 0 },
-          { "node": "Site Config", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Daily 3AM": {
-      "main": [
-        [{ "node": "Site Config", "type": "main", "index": 0 }]
-      ]
-    },
-    "Site Config": {
-      "main": [
-        [{ "node": "Fetch Unresolved", "type": "main", "index": 0 }]
-      ]
-    },
-    "Fetch Unresolved": {
-      "main": [
-        [{ "node": "Process Posts", "type": "main", "index": 0 }]
-      ]
-    },
-    "Process Posts": {
-      "main": [
-        [{ "node": "Has Posts?", "type": "main", "index": 0 }]
-      ]
-    },
-    "Has Posts?": {
-      "main": [
-        [{ "node": "Batch 3", "type": "main", "index": 0 }],
-        []
-      ]
-    },
-    "Batch 3": {
-      "main": [
-        [{ "node": "Build Link Prompt", "type": "main", "index": 0 }]
-      ]
-    },
-    "Build Link Prompt": {
-      "main": [
-        [{ "node": "Claude Match Links", "type": "main", "index": 0 }]
-      ]
-    },
-    "Claude Match Links": {
-      "main": [
-        [{ "node": "Parse Links", "type": "main", "index": 0 }]
-      ]
-    },
-    "Parse Links": {
-      "main": [
-        [{ "node": "Send Resolved Links", "type": "main", "index": 0 }]
-      ]
-    },
-    "Send Resolved Links": {
-      "main": [
-        [{ "node": "Batch 3", "type": "main", "index": 0 }]
-      ]
-    }
-  },
-  "settings": {
-    "timezone": "Europe/Istanbul",
-    "saveManualExecutions": true,
-    "executionOrder": "v1"
-  },
-  "meta": {
-    "description": "Resolves [INTERNAL_LINK: topic] markers in posts using Claude AI. Runs daily at 3AM or on-demand via webhook. AI matches topics to existing product/category/blog URLs.",
-    "required_env": ["WP_SITE_URL"],
-    "required_credentials": [],
-    "workflow_flow": "Schedule/Webhook → Site Config → Fetch Unresolved → Batch(3) → Claude AI → Parse → Callback"
-  }
 }
