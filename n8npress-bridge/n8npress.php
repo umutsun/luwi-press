@@ -1,9 +1,9 @@
-<?php
+﻿<?php
 /**
  * Plugin Name: n8nPress
  * Plugin URI: https://github.com/umutsun/n8npress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores via n8n workflows.
- * Version: 1.8.0
+ * Version: 1.10.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('N8NPRESS_VERSION', '1.8.0');
+define('N8NPRESS_VERSION', '1.10.0');
 define('N8NPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('N8NPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('N8NPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -71,6 +71,7 @@ class N8nPress {
         add_action('wp_ajax_n8npress_scan_opportunities', array($this, 'ajax_scan_opportunities'));
         add_action('wp_ajax_n8npress_get_thin_products', array($this, 'ajax_get_thin_products'));
         add_action('wp_ajax_n8npress_emergency_stop', array($this, 'ajax_emergency_stop'));
+        add_action('admin_init', array($this, 'maybe_create_tables'));
     }
     
     /**
@@ -102,6 +103,10 @@ class N8nPress {
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-open-claw.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-crm-bridge.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-chatwoot.php';
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-knowledge-graph.php';
+
+        // WebMCP server (MCP Streamable HTTP transport)
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-webmcp.php';
 
         // Workflow management
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-workflow-templates.php';
@@ -118,14 +123,18 @@ class N8nPress {
         // Set default options
         $this->set_default_options();
 
-        // Create workflow tracking table
+        // Create all database tables
+        N8nPress_Logger::create_table();
         N8nPress_Workflow_Tracker::create_table();
-
-        // Create token usage tracking table
         N8nPress_Token_Tracker::create_table();
 
         // Generate HMAC secret if not set
         N8nPress_HMAC::ensure_secret();
+
+        // Schedule daily cleanup
+        if ( ! wp_next_scheduled( 'n8npress_daily_cleanup' ) ) {
+            wp_schedule_event( time(), 'daily', 'n8npress_daily_cleanup' );
+        }
 
         // Flush rewrite rules
         flush_rewrite_rules();
@@ -138,10 +147,8 @@ class N8nPress {
      * Plugin deactivation
      */
     public function deactivate() {
-        // Flush rewrite rules
+        wp_clear_scheduled_hook( 'n8npress_daily_cleanup' );
         flush_rewrite_rules();
-        
-        // Log deactivation
         N8nPress_Logger::log('Plugin deactivated', 'info');
     }
     
@@ -149,9 +156,11 @@ class N8nPress {
      * Initialize plugin
      */
     public function init() {
-        // Load text domain
         load_plugin_textdomain('n8npress', false, dirname(N8NPRESS_PLUGIN_BASENAME) . '/languages');
-        
+
+        // Daily cleanup cron
+        add_action( 'n8npress_daily_cleanup', array( $this, 'run_daily_cleanup' ) );
+
         // Core infrastructure
         N8nPress_API::get_instance();
         N8nPress_Auth::get_instance();
@@ -174,6 +183,12 @@ class N8nPress {
         N8nPress_Open_Claw::get_instance();
         N8nPress_CRM_Bridge::get_instance();
         N8nPress_Chatwoot::get_instance();
+        N8nPress_Knowledge_Graph::get_instance();
+
+        // WebMCP server (load after all modules so tools can reference them)
+        if ( N8nPress_WebMCP::is_enabled() ) {
+            N8nPress_WebMCP::get_instance();
+        }
 
         // Chatwoot frontend widget
         add_action( 'wp_footer', array( 'N8nPress_Chatwoot', 'maybe_output_widget' ) );
@@ -444,6 +459,15 @@ class N8nPress {
             'n8npress-usage',
             array($this, 'usage_page')
         );
+
+        add_submenu_page(
+            'n8npress',
+            __( 'WebMCP', 'n8npress' ),
+            __( 'WebMCP', 'n8npress' ),
+            'manage_options',
+            'n8npress-webmcp',
+            array( $this, 'webmcp_page' )
+        );
     }
     
     /**
@@ -475,6 +499,13 @@ class N8nPress {
     }
 
     /**
+     * WebMCP admin page
+     */
+    public function webmcp_page() {
+        include N8NPRESS_PLUGIN_DIR . 'admin/webmcp-page.php';
+    }
+
+    /**
      * AJAX: Emergency stop — disables all AI enrichment and sets limit to $0.001
      */
     public function ajax_emergency_stop() {
@@ -495,7 +526,27 @@ class N8nPress {
 
         wp_send_json_success(array('message' => 'Emergency stop activated. All AI enrichment disabled.'));
     }
-    
+
+    /**
+     * Daily cleanup: remove old logs, token records, and expired transients.
+     */
+    public function run_daily_cleanup() {
+        $log_days   = absint( get_option( 'n8npress_log_retention_days', 30 ) );
+        $token_days = absint( get_option( 'n8npress_token_retention_days', 90 ) );
+
+        if ( method_exists( 'N8nPress_Logger', 'cleanup' ) ) {
+            N8nPress_Logger::cleanup( $log_days );
+        }
+        if ( method_exists( 'N8nPress_Token_Tracker', 'cleanup' ) ) {
+            N8nPress_Token_Tracker::cleanup( $token_days );
+        }
+        if ( method_exists( 'N8nPress_Workflow_Tracker', 'cleanup' ) ) {
+            N8nPress_Workflow_Tracker::cleanup( $token_days );
+        }
+
+        N8nPress_Logger::log( 'Daily cleanup completed', 'info' );
+    }
+
     /**
      * Admin init
      */
@@ -546,6 +597,17 @@ class N8nPress {
                 'claw_nonce'   => wp_create_nonce('n8npress_claw_nonce'),
                 'user_initial' => mb_strtoupper( mb_substr( $user->display_name, 0, 1 ) ),
             ));
+        }
+
+        // WebMCP client JS: load on WebMCP admin page only
+        if ( strpos( $hook, 'n8npress-webmcp' ) !== false ) {
+            wp_enqueue_script(
+                'n8npress-webmcp-client',
+                N8NPRESS_PLUGIN_URL . 'assets/js/webmcp-client.js',
+                array(),
+                N8NPRESS_VERSION,
+                true
+            );
         }
     }
     
@@ -684,12 +746,25 @@ class N8nPress {
             'n8npress_ai_provider' => 'openai',
             'n8npress_ai_model' => 'gpt-4o-mini',
             'n8npress_daily_token_limit' => 1.00,
+            'n8npress_webmcp_enabled'   => 0,
         );
         
         foreach ($defaults as $option => $value) {
             if (get_option($option) === false) {
                 add_option($option, $value);
             }
+        }
+    }
+    /**
+     * Ensure all DB tables exist; runs on every admin_init after a version bump.
+     */
+    public function maybe_create_tables() {
+        $db_version = get_option('n8npress_db_version', '0');
+        if ( version_compare($db_version, N8NPRESS_VERSION, '<') ) {
+            N8nPress_Logger::create_table();
+            N8nPress_Token_Tracker::create_table();
+            N8nPress_Workflow_Tracker::create_table();
+            update_option('n8npress_db_version', N8NPRESS_VERSION);
         }
     }
 }
@@ -724,14 +799,16 @@ function n8npress_get_option($option, $default = false) {
  */
 function n8npress_build_meta_block( $callback_url = '' ) {
     return array(
-        'site_url'     => get_site_url(),
-        'rest_base'    => rest_url( 'n8npress/v1/' ),
-        'callback_url' => $callback_url,
-        'api_token'    => get_option( 'n8npress_seo_api_token', '' ),
-        'model'        => get_option( 'n8npress_ai_model', 'gpt-4o-mini' ),
-        'max_tokens'   => absint( get_option( 'n8npress_max_output_tokens', 1024 ) ),
-        'language'     => get_option( 'n8npress_target_language', 'en' ),
-        'site_name'    => get_bloginfo( 'name' ),
-        'currency'     => function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'USD',
+        'site_url'       => get_site_url(),
+        'rest_base'      => rest_url( 'n8npress/v1/' ),
+        'callback_url'   => $callback_url,
+        'api_token'      => get_option( 'n8npress_seo_api_token', '' ),
+        'provider'       => get_option( 'n8npress_ai_provider', 'openai' ),
+        'model'          => get_option( 'n8npress_ai_model', 'gpt-4o-mini' ),
+        'max_tokens'     => absint( get_option( 'n8npress_max_output_tokens', 1024 ) ),
+        'image_provider' => get_option( 'n8npress_image_provider', 'dall-e-3' ),
+        'language'       => get_option( 'n8npress_target_language', 'en' ),
+        'site_name'      => get_bloginfo( 'name' ),
+        'currency'       => function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'USD',
     );
 }

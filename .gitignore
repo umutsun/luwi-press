@@ -21,8 +21,12 @@ scripts/
 
 # Claude Code config (local dev only)
 .claude/
+CLAUDE.md
+CONTINUATION-PROMPT.md
+
+# n8n execution debug exports
+exec*.json
 
 # Legacy plugins (deprecated)
 n8npress-seo-off/
 n8npress-seo-woo/
-CLAUDE.md

@@ -9,6 +9,9 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+if ( ! current_user_can( 'manage_options' ) ) {
+	wp_die( __( 'You do not have permission to access this page.', 'n8npress' ) );
+}
 
 $current_user = wp_get_current_user();
 ?>

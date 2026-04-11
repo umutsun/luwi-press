@@ -9,6 +9,10 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+if ( ! current_user_can( 'manage_options' ) ) {
+    wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'n8npress' ) );
+}
+
 // Handle log actions
 if (isset($_POST['n8npress_clear_logs']) && check_admin_referer('n8npress_logs_nonce')) {
     $days = absint($_POST['n8npress_clear_days'] ?? 30);

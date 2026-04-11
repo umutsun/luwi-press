@@ -9,6 +9,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( ! current_user_can( 'manage_options' ) ) {
+	wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'n8npress' ) );
+}
+
 // Handle settings save
 if ( isset( $_POST['n8npress_save_settings'] ) && check_admin_referer( 'n8npress_settings_nonce' ) ) {
 	// Connection
@@ -50,6 +54,10 @@ if ( isset( $_POST['n8npress_save_settings'] ) && check_admin_referer( 'n8npress
 	update_option( 'n8npress_daily_token_limit', floatval( $_POST['n8npress_daily_token_limit'] ?? 1.00 ) );
 	update_option( 'n8npress_max_output_tokens', absint( $_POST['n8npress_max_output_tokens'] ?? 1024 ) );
 
+	// Image generation
+	update_option( 'n8npress_image_provider', sanitize_text_field( $_POST['n8npress_image_provider'] ?? 'dall-e-3' ) );
+	update_option( 'n8npress_enrich_generate_image', isset( $_POST['n8npress_enrich_generate_image'] ) ? 1 : 0 );
+
 	// Translation
 	update_option( 'n8npress_hreflang_mode', sanitize_text_field( $_POST['n8npress_hreflang_mode'] ?? 'auto' ) );
 	$languages  = sanitize_text_field( $_POST['n8npress_translation_languages_text'] ?? '' );
@@ -84,6 +92,9 @@ if ( isset( $_POST['n8npress_save_settings'] ) && check_admin_referer( 'n8npress
 	update_option( 'n8npress_chatwoot_widget_position', sanitize_text_field( $_POST['n8npress_chatwoot_widget_position'] ?? 'right' ) );
 	update_option( 'n8npress_chatwoot_widget_locale', sanitize_text_field( $_POST['n8npress_chatwoot_widget_locale'] ?? '' ) );
 
+	// WebMCP
+	update_option( 'n8npress_webmcp_enabled', isset( $_POST['n8npress_webmcp_enabled'] ) ? 1 : 0 );
+
 	// Security
 	update_option( 'n8npress_security_headers', isset( $_POST['n8npress_security_headers'] ) ? 1 : 0 );
 	update_option( 'n8npress_ip_whitelist', sanitize_text_field( $_POST['n8npress_ip_whitelist'] ?? '' ) );
@@ -115,6 +126,8 @@ $ai_provider        = get_option( 'n8npress_ai_provider', 'openai' );
 $ai_model           = get_option( 'n8npress_ai_model', 'gpt-4o-mini' );
 $daily_token_limit  = floatval( get_option( 'n8npress_daily_token_limit', 1.00 ) );
 $max_output_tokens  = absint( get_option( 'n8npress_max_output_tokens', 1024 ) );
+$image_provider     = get_option( 'n8npress_image_provider', 'dall-e-3' );
+$enrich_gen_image   = get_option( 'n8npress_enrich_generate_image', 0 );
 $crm_vip_threshold  = get_option( 'n8npress_crm_vip_threshold', 1000 );
 $crm_active_days    = get_option( 'n8npress_crm_active_days', 90 );
 $crm_at_risk_days   = get_option( 'n8npress_crm_at_risk_days', 180 );
@@ -135,6 +148,7 @@ $chatwoot_widget_tkn = get_option( 'n8npress_chatwoot_widget_token', '' );
 $chatwoot_show_wdgt  = get_option( 'n8npress_chatwoot_show_widget', 0 );
 $chatwoot_wdgt_pos   = get_option( 'n8npress_chatwoot_widget_position', 'right' );
 $chatwoot_wdgt_loc   = get_option( 'n8npress_chatwoot_widget_locale', '' );
+$webmcp_enabled     = get_option( 'n8npress_webmcp_enabled', 0 );
 $security_headers   = get_option( 'n8npress_security_headers', 1 );
 $ip_whitelist       = get_option( 'n8npress_ip_whitelist', '' );
 $hmac_secret        = get_option( 'n8npress_hmac_secret', '' );
@@ -176,6 +190,9 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		</a>
 		<a href="?page=n8npress-settings&tab=chatwoot" class="nav-tab <?php echo 'chatwoot' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-format-chat"></span> <?php esc_html_e( 'Chatwoot', 'n8npress' ); ?>
+		</a>
+		<a href="?page=n8npress-settings&tab=webmcp" class="nav-tab <?php echo 'webmcp' === $active_tab ? 'nav-tab-active' : ''; ?>">
+			<span class="dashicons dashicons-cloud"></span> <?php esc_html_e( 'WebMCP', 'n8npress' ); ?>
 		</a>
 		<a href="?page=n8npress-settings&tab=security" class="nav-tab <?php echo 'security' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-shield-alt"></span> <?php esc_html_e( 'Security', 'n8npress' ); ?>
@@ -434,7 +451,9 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 									<option value="gpt-4o" <?php selected( $ai_model, 'gpt-4o' ); ?>>GPT-4o — Güçlü ($2.50/$10.00/M)</option>
 								</optgroup>
 								<optgroup label="Google">
-									<option value="gemini-2.0-flash" <?php selected( $ai_model, 'gemini-2.0-flash' ); ?>>Gemini Flash — Çok Ucuz ($0.10/$0.40/M)</option>
+									<option value="gemini-2.0-flash" <?php selected( $ai_model, 'gemini-2.0-flash' ); ?>>Gemini 2.0 Flash ($0.10/$0.40/M)</option>
+									<option value="gemini-2.5-flash" <?php selected( $ai_model, 'gemini-2.5-flash' ); ?>>Gemini 2.5 Flash ($0.15/$0.60/M)</option>
+									<option value="gemini-2.5-pro" <?php selected( $ai_model, 'gemini-2.5-pro' ); ?>>Gemini 2.5 Pro ($1.25/$10.00/M)</option>
 								</optgroup>
 							</select>
 							<p class="description"><?php esc_html_e( 'Selected model is sent to n8n workflows via the enrichment payload.', 'n8npress' ); ?></p>
@@ -559,6 +578,30 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 							<input type="number" id="n8npress_auto_enrich_batch_size" name="n8npress_auto_enrich_batch_size"
 							       value="<?php echo esc_attr( $thin_batch_size ); ?>" min="1" max="50" class="small-text" />
 							<span class="description"><?php esc_html_e( 'products per daily run', 'n8npress' ); ?></span>
+						</td>
+					</tr>
+				</table>
+
+				<h3 style="margin-top:20px;"><?php esc_html_e( 'Image Generation', 'n8npress' ); ?></h3>
+				<table class="form-table">
+					<tr>
+						<th><label for="n8npress_enrich_generate_image"><?php esc_html_e( 'Generate Images', 'n8npress' ); ?></label></th>
+						<td>
+							<label>
+								<input type="checkbox" id="n8npress_enrich_generate_image" name="n8npress_enrich_generate_image" value="1" <?php checked( $enrich_gen_image, 1 ); ?> />
+								<?php esc_html_e( 'Generate AI images for products and posts during enrichment', 'n8npress' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="n8npress_image_provider"><?php esc_html_e( 'Image Provider', 'n8npress' ); ?></label></th>
+						<td>
+							<select id="n8npress_image_provider" name="n8npress_image_provider">
+								<option value="dall-e-3" <?php selected( $image_provider, 'dall-e-3' ); ?>>OpenAI DALL-E 3 ($0.040/image)</option>
+								<option value="dall-e-2" <?php selected( $image_provider, 'dall-e-2' ); ?>>OpenAI DALL-E 2 ($0.020/image)</option>
+								<option value="gemini-imagen" <?php selected( $image_provider, 'gemini-imagen' ); ?>>Google Gemini Imagen 3 ($0.020/image)</option>
+							</select>
+							<p class="description"><?php esc_html_e( 'DALL-E 3: highest quality. Gemini Imagen 3: fast and cost-effective.', 'n8npress' ); ?></p>
 						</td>
 					</tr>
 				</table>
@@ -997,6 +1040,67 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			<div class="n8npress-info-box">
 				<span class="dashicons dashicons-info"></span>
 				<?php esc_html_e( 'Chatwoot webhook events (message_created, conversation_created, contact_created, etc.) are received here and forwarded to n8n. WooCommerce customer data is automatically synced to Chatwoot contacts.', 'n8npress' ); ?>
+			</div>
+		</div>
+
+		<!-- SECURITY -->
+		<!-- WEBMCP -->
+		<div class="n8npress-tab-content <?php echo 'webmcp' === $active_tab ? 'tab-active' : ''; ?>" id="tab-webmcp">
+			<div class="notice notice-info inline" style="margin:0 0 16px;padding:10px 16px;border-left-color:#0073aa;">
+				<p><strong><?php esc_html_e( 'Web Model Context Protocol', 'n8npress' ); ?></strong> — <?php esc_html_e( 'WebMCP exposes n8nPress tools to AI agents running in your browser. When enabled, AI assistants (Chrome Gemini, Claude, etc.) can list products, update SEO meta, trigger translations, and more — directly from any WordPress admin page.', 'n8npress' ); ?></p>
+			</div>
+			<div class="n8npress-card">
+				<h2><?php esc_html_e( 'WebMCP Settings', 'n8npress' ); ?></h2>
+				<table class="form-table">
+					<tr>
+						<th><label for="n8npress_webmcp_enabled"><?php esc_html_e( 'Enable WebMCP', 'n8npress' ); ?></label></th>
+						<td>
+							<label>
+								<input type="checkbox" id="n8npress_webmcp_enabled" name="n8npress_webmcp_enabled" value="1" <?php checked( $webmcp_enabled, 1 ); ?> />
+								<?php esc_html_e( 'Register AI browser tools on all admin pages', 'n8npress' ); ?>
+							</label>
+							<p class="description"><?php esc_html_e( 'Loads the WebMCP polyfill and registers 17 tools for AI agents. Only available to administrators.', 'n8npress' ); ?></p>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="n8npress-card">
+				<h2><?php esc_html_e( 'Available Tools', 'n8npress' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'When enabled, the following tools are exposed to AI agents:', 'n8npress' ); ?></p>
+				<table class="widefat striped" style="margin-top:12px;">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Category', 'n8npress' ); ?></th>
+							<th><?php esc_html_e( 'Tool', 'n8npress' ); ?></th>
+							<th><?php esc_html_e( 'Description', 'n8npress' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td rowspan="5"><strong><?php esc_html_e( 'Products', 'n8npress' ); ?></strong></td>
+							<td><code>n8npress_list_products</code></td><td><?php esc_html_e( 'List WooCommerce products', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_get_product</code></td><td><?php esc_html_e( 'Get single product details', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_enrich_product</code></td><td><?php esc_html_e( 'Trigger AI enrichment', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_get_stale_content</code></td><td><?php esc_html_e( 'Find outdated content', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_get_content_opportunities</code></td><td><?php esc_html_e( 'Scan for content gaps', 'n8npress' ); ?></td></tr>
+						<tr><td rowspan="2"><strong><?php esc_html_e( 'SEO', 'n8npress' ); ?></strong></td>
+							<td><code>n8npress_get_seo_meta</code></td><td><?php esc_html_e( 'Read SEO title, description, focus keyword', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_set_seo_meta</code></td><td><?php esc_html_e( 'Write SEO meta via detected plugin', 'n8npress' ); ?></td></tr>
+						<tr><td rowspan="3"><strong><?php esc_html_e( 'AEO', 'n8npress' ); ?></strong></td>
+							<td><code>n8npress_get_aeo_coverage</code></td><td><?php esc_html_e( 'Schema coverage statistics', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_generate_faq</code></td><td><?php esc_html_e( 'Generate FAQ schema for product', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_generate_howto</code></td><td><?php esc_html_e( 'Generate HowTo schema for product', 'n8npress' ); ?></td></tr>
+						<tr><td rowspan="3"><strong><?php esc_html_e( 'Translation', 'n8npress' ); ?></strong></td>
+							<td><code>n8npress_get_missing_translations</code></td><td><?php esc_html_e( 'Find untranslated content', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_request_translation</code></td><td><?php esc_html_e( 'Request AI translation', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_get_translation_status</code></td><td><?php esc_html_e( 'Check translation progress', 'n8npress' ); ?></td></tr>
+						<tr><td rowspan="2"><strong><?php esc_html_e( 'CRM', 'n8npress' ); ?></strong></td>
+							<td><code>n8npress_crm_overview</code></td><td><?php esc_html_e( 'Customer intelligence overview', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_crm_segment</code></td><td><?php esc_html_e( 'Filter customers by segment', 'n8npress' ); ?></td></tr>
+						<tr><td rowspan="2"><strong><?php esc_html_e( 'System', 'n8npress' ); ?></strong></td>
+							<td><code>n8npress_get_site_config</code></td><td><?php esc_html_e( 'Full site configuration snapshot', 'n8npress' ); ?></td></tr>
+						<tr><td><code>n8npress_get_token_stats</code></td><td><?php esc_html_e( 'AI token usage and costs', 'n8npress' ); ?></td></tr>
+					</tbody>
+				</table>
 			</div>
 		</div>
 

@@ -98,8 +98,8 @@ class N8nPress_Token_Tracker {
 	 * Estimate cost based on provider pricing.
 	 */
 	public static function estimate_cost( $provider, $model, $input_tokens, $output_tokens ) {
-		// Pricing per million tokens
-		$pricing = array(
+		// Default pricing per million tokens — override via n8npress_token_pricing filter
+		$pricing = apply_filters( 'n8npress_token_pricing', array(
 			'openai' => array(
 				'gpt-4o-mini'    => array( 'input' => 0.15, 'output' => 0.60 ),
 				'gpt-4o'         => array( 'input' => 2.50, 'output' => 10.00 ),
@@ -114,9 +114,11 @@ class N8nPress_Token_Tracker {
 			),
 			'google' => array(
 				'gemini-2.0-flash' => array( 'input' => 0.10, 'output' => 0.40 ),
+				'gemini-2.5-flash' => array( 'input' => 0.15, 'output' => 0.60 ),
+				'gemini-2.5-pro'   => array( 'input' => 1.25, 'output' => 10.00 ),
 				'gemini-1.5-pro'   => array( 'input' => 1.25, 'output' => 5.00 ),
 			),
-		);
+		) );
 
 		$rates = $pricing[ $provider ][ $model ] ?? $pricing['openai']['gpt-4o-mini'];
 

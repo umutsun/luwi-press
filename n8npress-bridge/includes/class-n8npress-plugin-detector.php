@@ -104,15 +104,21 @@ class N8nPress_Plugin_Detector {
 			$result['meta_keys'] = array(
 				'title'       => '_aioseo_title',
 				'description' => '_aioseo_description',
+				'focus_kw'    => '_aioseo_keyphrases',
 			);
 		}
 		// SEOPress
 		elseif ( defined( 'SEOPRESS_VERSION' ) ) {
 			$result['plugin']  = 'seopress';
 			$result['version'] = SEOPRESS_VERSION;
+			$result['features'] = array(
+				'schema'  => function_exists( 'seopress_get_toggle_option' ),
+				'sitemap' => true,
+			);
 			$result['meta_keys'] = array(
 				'title'       => '_seopress_titles_title',
 				'description' => '_seopress_titles_desc',
+				'focus_kw'    => '_seopress_analysis_target_kw',
 			);
 		}
 
@@ -460,6 +466,40 @@ class N8nPress_Plugin_Detector {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Purge cache for a post using the detected cache plugin.
+	 * Falls back to WordPress core clean_post_cache().
+	 *
+	 * @param int $post_id
+	 */
+	public function purge_post_cache( $post_id ) {
+		$cache = $this->detect_cache();
+
+		switch ( $cache['plugin'] ) {
+			case 'wp-rocket':
+				if ( function_exists( 'rocket_clean_post' ) ) {
+					rocket_clean_post( $post_id );
+				}
+				if ( function_exists( 'rocket_clean_home' ) ) {
+					rocket_clean_home();
+				}
+				break;
+
+			case 'litespeed':
+				do_action( 'litespeed_purge_post', $post_id );
+				break;
+
+			case 'w3-total-cache':
+				if ( function_exists( 'w3tc_flush_post' ) ) {
+					w3tc_flush_post( $post_id );
+				}
+				break;
+		}
+
+		// Always clear WordPress core object cache
+		clean_post_cache( $post_id );
 	}
 
 	/**

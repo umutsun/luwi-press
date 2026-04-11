@@ -28,6 +28,8 @@ class N8nPress_Translation {
         add_action('rest_api_init', [$this, 'register_endpoints']);
         add_action('admin_menu', [$this, 'add_submenu']);
         add_action('wp_ajax_n8npress_fix_translation_images', [$this, 'ajax_fix_translation_images']);
+        add_action('wp_ajax_n8npress_fix_category_assignments', [$this, 'ajax_fix_category_assignments']);
+        add_action('wp_ajax_n8npress_clean_orphan_translations', [$this, 'ajax_clean_orphan_translations']);
     }
 
     /**
@@ -68,6 +70,18 @@ class N8nPress_Translation {
             ],
         ]);
 
+        // Multi-language missing: returns products with which languages they're missing
+        register_rest_route($namespace, '/translation/missing-all', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'get_missing_translations_all'],
+            'permission_callback' => [$this, 'check_permission'],
+            'args' => [
+                'target_languages' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+                'post_type'        => ['default' => 'product', 'sanitize_callback' => 'sanitize_text_field'],
+                'limit'            => ['default' => 20, 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
         register_rest_route($namespace, '/translation/request', [
             'methods'             => 'POST',
             'callback'            => [$this, 'request_translation'],
@@ -94,6 +108,35 @@ class N8nPress_Translation {
             'methods'             => 'POST',
             'callback'            => [$this, 'trigger_quality_check'],
             'permission_callback' => [$this, 'check_permission'],
+        ]);
+
+        register_rest_route($namespace, '/translation/taxonomy', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'request_taxonomy_translation'],
+            'permission_callback' => [$this, 'check_permission'],
+            'args' => [
+                'taxonomy'         => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+                'target_languages' => ['required' => true],
+                'limit'            => ['default' => 50, 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
+        // GET endpoint for n8n workflow to fetch missing terms (no webhook loop)
+        register_rest_route($namespace, '/translation/taxonomy-missing', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'get_missing_taxonomy_terms_api'],
+            'permission_callback' => [$this, 'check_permission'],
+            'args' => [
+                'taxonomy'         => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+                'target_languages' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+                'limit'            => ['default' => 50, 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
+        register_rest_route($namespace, '/translation/taxonomy-callback', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'handle_taxonomy_callback'],
+            'permission_callback' => [$this, 'check_token_permission'],
         ]);
     }
 
@@ -140,6 +183,91 @@ class N8nPress_Translation {
 
         // Fallback: use n8nPress own translation tracking
         return $this->get_missing_n8npress($target_lang, $post_type, $limit);
+    }
+
+    /**
+     * GET /translation/missing-all — Products missing any target language.
+     * Returns each product with its list of missing languages.
+     * n8n workflow uses this to translate all missing languages in one pass.
+     */
+    public function get_missing_translations_all($request) {
+        $langs_str   = $request->get_param('target_languages');
+        $post_type   = $request->get_param('post_type');
+        $limit       = min($request->get_param('limit'), 100);
+        $target_langs = array_map('trim', explode(',', $langs_str));
+
+        if (!defined('ICL_SITEPRESS_VERSION')) {
+            return rest_ensure_response(['count' => 0, 'products' => []]);
+        }
+
+        global $wpdb;
+        $default_lang = apply_filters('wpml_default_language', 'en');
+        $element_type = 'post_' . $post_type;
+
+        // Get all original posts
+        $originals = $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title, t.trid
+             FROM {$wpdb->posts} p
+             JOIN {$wpdb->prefix}icl_translations t ON p.ID = t.element_id
+             WHERE p.post_type = %s AND p.post_status = 'publish'
+               AND t.element_type = %s AND t.language_code = %s
+               AND t.source_language_code IS NULL
+             ORDER BY p.post_date DESC
+             LIMIT %d",
+            $post_type, $element_type, $default_lang, $limit * 2
+        ));
+
+        // Bulk-fetch all existing translations for these trids in one query
+        $trids = wp_list_pluck( $originals, 'trid' );
+        $existing_translations = array();
+
+        if ( ! empty( $trids ) ) {
+            $trid_placeholders = implode( ',', array_fill( 0, count( $trids ), '%d' ) );
+            $lang_placeholders = implode( ',', array_fill( 0, count( $target_langs ), '%s' ) );
+            $params = array_merge( $trids, array( $element_type ), $target_langs );
+
+            $rows = $wpdb->get_results( $wpdb->prepare(
+                "SELECT trid, language_code
+                 FROM {$wpdb->prefix}icl_translations
+                 WHERE trid IN ($trid_placeholders)
+                   AND element_type = %s
+                   AND language_code IN ($lang_placeholders)",
+                $params
+            ) );
+
+            foreach ( $rows as $row ) {
+                $existing_translations[ $row->trid ][ $row->language_code ] = true;
+            }
+        }
+
+        $products = [];
+        foreach ($originals as $orig) {
+            $missing_langs = [];
+            foreach ($target_langs as $lang) {
+                if ( empty( $existing_translations[ $orig->trid ][ $lang ] ) ) {
+                    $missing_langs[] = $lang;
+                }
+            }
+
+            if (!empty($missing_langs)) {
+                $products[] = [
+                    'product_id'        => absint($orig->ID),
+                    'name'              => $orig->post_title,
+                    'missing_languages' => $missing_langs,
+                ];
+            }
+
+            if (count($products) >= $limit) {
+                break;
+            }
+        }
+
+        return rest_ensure_response([
+            'target_languages'    => $target_langs,
+            'translation_plugin'  => 'wpml',
+            'count'               => count($products),
+            'products'            => $products,
+        ]);
     }
 
     /**
@@ -246,16 +374,32 @@ class N8nPress_Translation {
 
         // If WPML/Polylang is active, try to create/update the translated post
         $translation_plugin = $this->detect_translation_plugin();
-        if ('wpml' === $translation_plugin) {
-            $this->create_wpml_translation($product_id, $language, $translated);
-        } elseif ('polylang' === $translation_plugin) {
-            $this->create_polylang_translation($product_id, $language, $translated);
+        $save_error = null;
+        try {
+            if ('wpml' === $translation_plugin) {
+                $this->create_wpml_translation($product_id, $language, $translated);
+            } elseif ('polylang' === $translation_plugin) {
+                $this->create_polylang_translation($product_id, $language, $translated);
+            }
+        } catch ( \Exception $e ) {
+            $save_error = $e->getMessage();
+            N8nPress_Logger::log(
+                sprintf('Translation save error: product #%d → %s: %s', $product_id, strtoupper($language), $save_error),
+                'error',
+                ['product_id' => $product_id, 'language' => $language, 'error' => $save_error]
+            );
+            // Don't fail — meta is already saved, WPML post creation just failed
         }
 
+        // Purge cache for original and translated post
+        $detector = N8nPress_Plugin_Detector::get_instance();
+        $detector->purge_post_cache($product_id);
+
         return rest_ensure_response([
-            'status'     => 'saved',
+            'status'     => $save_error ? 'partial' : 'saved',
             'product_id' => $product_id,
             'language'   => $language,
+            'error'      => $save_error,
         ]);
     }
 
@@ -338,32 +482,36 @@ class N8nPress_Translation {
     }
 
     /**
-     * Detect active translation plugin
+     * Detect active translation plugin (cached per-request)
      */
+    private $detected_plugin = null;
+
     private function detect_translation_plugin() {
+        if ( null !== $this->detected_plugin ) {
+            return $this->detected_plugin;
+        }
         if (defined('ICL_SITEPRESS_VERSION')) {
-            return 'wpml';
+            $this->detected_plugin = 'wpml';
+        } elseif (function_exists('pll_languages_list')) {
+            $this->detected_plugin = 'polylang';
+        } else {
+            $this->detected_plugin = 'none';
         }
-        if (function_exists('pll_languages_list')) {
-            return 'polylang';
-        }
-        return 'none';
+        return $this->detected_plugin;
     }
 
     /**
-     * Get SEO meta value (Yoast, RankMath, or n8nPress)
+     * Get SEO meta value via Plugin Detector (supports all SEO plugins).
      */
     private function get_seo_meta($post_id, $type) {
-        $keys = [
-            'title'       => ['_yoast_wpseo_title', 'rank_math_title', '_n8npress_meta_title'],
-            'description' => ['_yoast_wpseo_metadesc', 'rank_math_description', '_n8npress_meta_description'],
-        ];
+        $detector = N8nPress_Plugin_Detector::get_instance();
+        $meta = $detector->get_seo_meta($post_id);
 
-        foreach ($keys[$type] ?? [] as $key) {
-            $val = get_post_meta($post_id, $key, true);
-            if (!empty($val)) {
-                return $val;
-            }
+        if ('title' === $type) {
+            return $meta['title'] ?? '';
+        }
+        if ('description' === $type) {
+            return $meta['description'] ?? '';
         }
         return '';
     }
@@ -503,6 +651,8 @@ class N8nPress_Translation {
      * Create WPML translation
      */
     private function create_wpml_translation( $product_id, $language, $translated ) {
+        global $wpdb;
+
         if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
             N8nPress_Logger::log( 'WPML not active, cannot save translation', 'warning' );
             return;
@@ -553,7 +703,7 @@ class N8nPress_Translation {
                 return;
             }
 
-            // Link to WPML translation group
+            // Link to WPML translation group (with SQL fallback)
             do_action( 'wpml_set_element_language_details', array(
                 'element_id'           => $new_id,
                 'element_type'         => 'post_product',
@@ -562,24 +712,56 @@ class N8nPress_Translation {
                 'source_language_code' => $default_lang,
             ) );
 
+            // Verify WPML action worked — if not, insert directly
+            global $wpdb;
+            $linked = $wpdb->get_var( $wpdb->prepare(
+                "SELECT translation_id FROM {$wpdb->prefix}icl_translations
+                 WHERE element_id = %d AND element_type = 'post_product'",
+                $new_id
+            ) );
+
+            if ( ! $linked ) {
+                $wpdb->insert(
+                    $wpdb->prefix . 'icl_translations',
+                    array(
+                        'element_type'         => 'post_product',
+                        'element_id'           => $new_id,
+                        'trid'                 => $trid,
+                        'language_code'        => $language,
+                        'source_language_code' => $default_lang,
+                    ),
+                    array( '%s', '%d', '%d', '%s', '%s' )
+                );
+
+                N8nPress_Logger::log(
+                    sprintf( 'WPML SQL fallback: post #%d registered in icl_translations (trid=%d, lang=%s)', $new_id, $trid, $language ),
+                    'warning',
+                    array( 'post_id' => $new_id, 'trid' => $trid, 'language' => $language )
+                );
+            }
+
             $target_id = $new_id;
 
             // ── Force publish status (WPML may reset to draft) ──
             wp_update_post( array( 'ID' => $new_id, 'post_status' => 'publish' ) );
 
-            // ── Copy ALL product meta from original ──
-            $all_meta = get_post_meta( $product_id );
-            $skip_keys = array( '_edit_lock', '_edit_last', '_wp_old_slug' );
-            foreach ( $all_meta as $key => $values ) {
-                if ( in_array( $key, $skip_keys, true ) ) {
-                    continue;
-                }
-                // Skip n8nPress internal meta
-                if ( 0 === strpos( $key, '_n8npress_' ) ) {
-                    continue;
-                }
-                foreach ( $values as $val ) {
-                    update_post_meta( $new_id, $key, maybe_unserialize( $val ) );
+            // ── Copy WooCommerce product meta (whitelist approach) ──
+            $wc_meta_keys = array(
+                '_price', '_regular_price', '_sale_price', '_sku',
+                '_stock', '_stock_status', '_manage_stock', '_backorders',
+                '_weight', '_length', '_width', '_height',
+                '_virtual', '_downloadable', '_sold_individually',
+                '_tax_status', '_tax_class',
+                '_thumbnail_id', '_product_image_gallery',
+                '_upsell_ids', '_crosssell_ids',
+                '_product_attributes', '_default_attributes',
+                '_purchase_note', '_product_url', '_button_text',
+                'total_sales', '_wc_average_rating', '_wc_review_count',
+            );
+            foreach ( $wc_meta_keys as $key ) {
+                $val = get_post_meta( $product_id, $key, true );
+                if ( '' !== $val && false !== $val ) {
+                    update_post_meta( $new_id, $key, $val );
                 }
             }
 
@@ -628,6 +810,54 @@ class N8nPress_Translation {
      * AJAX: Fix images for all existing WPML translations.
      * Copies _thumbnail_id and _product_image_gallery from original to all translated products.
      */
+    /**
+     * AJAX: Fix category assignments for all WPML translated products.
+     * Re-assigns each translated product to the correct translated category.
+     */
+    public function ajax_fix_category_assignments() {
+        check_ajax_referer( 'n8npress_fix_categories', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            wp_send_json_error( 'WPML not active' );
+        }
+
+        global $wpdb;
+        $default_lang = apply_filters( 'wpml_default_language', 'en' );
+
+        // Get all original products
+        $products = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.element_id AS product_id, t.trid
+             FROM {$wpdb->prefix}icl_translations t
+             JOIN {$wpdb->posts} p ON t.element_id = p.ID
+             WHERE t.element_type = 'post_product'
+               AND t.language_code = %s
+               AND t.source_language_code IS NULL
+               AND p.post_status = 'publish'",
+            $default_lang
+        ) );
+
+        $fixed = 0;
+        foreach ( $products as $row ) {
+            // Get all translations of this product
+            $translations = $wpdb->get_results( $wpdb->prepare(
+                "SELECT element_id, language_code FROM {$wpdb->prefix}icl_translations
+                 WHERE trid = %d AND language_code != %s AND element_id IS NOT NULL",
+                $row->trid, $default_lang
+            ) );
+
+            foreach ( $translations as $tr ) {
+                $this->copy_wpml_taxonomy_translations( $row->product_id, $tr->element_id, $tr->language_code, 'product_cat' );
+                $this->copy_wpml_taxonomy_translations( $row->product_id, $tr->element_id, $tr->language_code, 'product_tag' );
+                $fixed++;
+            }
+        }
+
+        N8nPress_Logger::log( 'Category assignments fixed for ' . $fixed . ' translated products', 'info' );
+        wp_send_json_success( array( 'fixed' => $fixed ) );
+    }
+
     public function ajax_fix_translation_images() {
         check_ajax_referer( 'n8npress_fix_images', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -692,6 +922,7 @@ class N8nPress_Translation {
      * attachments are registered for the target language so images display correctly.
      */
     private function wpml_share_product_images( $source_id, $target_id, $language ) {
+        global $wpdb;
         $default_lang = apply_filters( 'wpml_default_language', 'tr' );
         $attachment_ids = array();
 
@@ -718,7 +949,6 @@ class N8nPress_Translation {
                 // Register the original attachment as its own translation for target language
                 $att_trid = apply_filters( 'wpml_element_trid', null, $att_id, 'post_attachment' );
                 if ( $att_trid ) {
-                    // WPML already tracks this attachment — add language link
                     do_action( 'wpml_set_element_language_details', array(
                         'element_id'           => $att_id,
                         'element_type'         => 'post_attachment',
@@ -726,6 +956,26 @@ class N8nPress_Translation {
                         'language_code'        => $language,
                         'source_language_code' => null,
                     ) );
+
+                    // SQL fallback if WPML action didn't fire
+                    $att_linked = $wpdb->get_var( $wpdb->prepare(
+                        "SELECT translation_id FROM {$wpdb->prefix}icl_translations
+                         WHERE element_id = %d AND element_type = 'post_attachment' AND language_code = %s",
+                        $att_id, $language
+                    ) );
+                    if ( ! $att_linked ) {
+                        $wpdb->insert(
+                            $wpdb->prefix . 'icl_translations',
+                            array(
+                                'element_type'         => 'post_attachment',
+                                'element_id'           => $att_id,
+                                'trid'                 => $att_trid,
+                                'language_code'        => $language,
+                                'source_language_code' => null,
+                            ),
+                            array( '%s', '%d', '%d', '%s', '%s' )
+                        );
+                    }
                 }
             }
 
@@ -753,7 +1003,8 @@ class N8nPress_Translation {
 
     /**
      * Copy taxonomy terms with WPML translation linking.
-     * If translated term exists in WPML, use it. Otherwise, copy original terms.
+     * If a translated term exists in WPML, use it.
+     * If not, auto-create a term translation linked to the original via WPML.
      */
     private function copy_wpml_taxonomy_translations( $source_id, $target_id, $language, $taxonomy ) {
         $terms = wp_get_object_terms( $source_id, $taxonomy );
@@ -761,17 +1012,24 @@ class N8nPress_Translation {
             return;
         }
 
+        $default_lang = apply_filters( 'wpml_default_language', 'en' );
         $translated_term_ids = array();
 
         foreach ( $terms as $term ) {
-            // Check if WPML has a translation for this term
+            // Check if WPML already has a translation for this term
             $translated_term_id = apply_filters( 'wpml_object_id', $term->term_id, $taxonomy, false, $language );
 
             if ( $translated_term_id && $translated_term_id !== $term->term_id ) {
                 $translated_term_ids[] = (int) $translated_term_id;
             } else {
-                // No translation exists — use the original term
-                $translated_term_ids[] = (int) $term->term_id;
+                // No translation — auto-create one so each language has its own term
+                $new_term_id = $this->auto_create_wpml_term_translation( $term, $taxonomy, $language, $default_lang );
+                if ( $new_term_id ) {
+                    $translated_term_ids[] = $new_term_id;
+                } else {
+                    // Fallback to original if creation fails
+                    $translated_term_ids[] = (int) $term->term_id;
+                }
             }
         }
 
@@ -781,23 +1039,605 @@ class N8nPress_Translation {
     }
 
     /**
-     * Create Polylang translation
+     * Auto-create a WPML term translation.
+     * Creates a new term with the original name (placeholder) and links it via WPML.
+     * The taxonomy translation workflow can later update the name to the real translation.
+     *
+     * @return int|false New term ID or false on failure.
+     */
+    private function auto_create_wpml_term_translation( $original_term, $taxonomy, $language, $default_lang ) {
+        global $wpdb;
+
+        $element_type = 'tax_' . $taxonomy;
+
+        // Get trid of original term
+        $trid = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT trid FROM {$wpdb->prefix}icl_translations
+             WHERE element_id = %d AND element_type = %s",
+            $original_term->term_id, $element_type
+        ) );
+
+        if ( ! $trid ) {
+            return false;
+        }
+
+        // Double-check no translation already exists (race condition guard)
+        $existing = $wpdb->get_var( $wpdb->prepare(
+            "SELECT element_id FROM {$wpdb->prefix}icl_translations
+             WHERE trid = %d AND language_code = %s AND element_type = %s",
+            $trid, $language, $element_type
+        ) );
+
+        if ( $existing ) {
+            return (int) $existing;
+        }
+
+        // Resolve parent: if original term has a parent, find or create its translation
+        $parent = 0;
+        if ( $original_term->parent > 0 ) {
+            $parent_translated = apply_filters( 'wpml_object_id', $original_term->parent, $taxonomy, false, $language );
+            if ( $parent_translated && $parent_translated !== $original_term->parent ) {
+                $parent = (int) $parent_translated;
+            }
+        }
+
+        // Create the term with original name as placeholder
+        $slug = $original_term->slug . '-' . $language;
+        $new_term = wp_insert_term( $original_term->name, $taxonomy, array(
+            'slug'   => $slug,
+            'parent' => $parent,
+        ) );
+
+        if ( is_wp_error( $new_term ) ) {
+            // Slug conflict — try with random suffix
+            $new_term = wp_insert_term( $original_term->name, $taxonomy, array(
+                'slug'   => $slug . '-' . wp_rand( 100, 999 ),
+                'parent' => $parent,
+            ) );
+            if ( is_wp_error( $new_term ) ) {
+                return false;
+            }
+        }
+
+        $new_term_id = $new_term['term_id'];
+
+        // Link to WPML translation group (with SQL fallback)
+        do_action( 'wpml_set_element_language_details', array(
+            'element_id'           => $new_term_id,
+            'element_type'         => $element_type,
+            'trid'                 => $trid,
+            'language_code'        => $language,
+            'source_language_code' => $default_lang,
+        ) );
+
+        // Verify and fallback
+        global $wpdb;
+        $linked = $wpdb->get_var( $wpdb->prepare(
+            "SELECT translation_id FROM {$wpdb->prefix}icl_translations
+             WHERE element_id = %d AND element_type = %s",
+            $new_term_id, $element_type
+        ) );
+
+        if ( ! $linked ) {
+            $wpdb->insert(
+                $wpdb->prefix . 'icl_translations',
+                array(
+                    'element_type'         => $element_type,
+                    'element_id'           => $new_term_id,
+                    'trid'                 => $trid,
+                    'language_code'        => $language,
+                    'source_language_code' => $default_lang,
+                ),
+                array( '%s', '%d', '%d', '%s', '%s' )
+            );
+        }
+
+        return $new_term_id;
+    }
+
+    /**
+     * Create or update Polylang translation.
+     * Mirrors WPML create logic: copies product meta, images, taxonomies, SEO meta.
      */
     private function create_polylang_translation($product_id, $language, $translated) {
-        if (!function_exists('pll_set_post_language')) {
+        if (!function_exists('pll_set_post_language') || !function_exists('pll_save_post_translations')) {
+            N8nPress_Logger::log('Polylang API functions not available', 'warning');
             return;
         }
 
         $translations = pll_get_post_translations($product_id);
+        $target_id = null;
+
         if (isset($translations[$language])) {
-            // Update existing
+            // ── Update existing translation ──
             wp_update_post([
                 'ID'           => $translations[$language],
                 'post_title'   => $translated['name'],
                 'post_content' => $translated['description'],
-                'post_excerpt' => $translated['short_description'],
+                'post_excerpt' => $translated['short_description'] ?? '',
+                'post_status'  => 'publish',
+            ]);
+            $target_id = $translations[$language];
+
+            N8nPress_Logger::log(
+                sprintf('Polylang translation updated: #%d (%s)', $target_id, strtoupper($language)),
+                'info',
+                ['original_id' => $product_id, 'translated_id' => $target_id, 'language' => $language]
+            );
+        } else {
+            // ── Create new translation post ──
+            $original = get_post($product_id);
+            if (!$original) {
+                return;
+            }
+
+            $new_id = wp_insert_post([
+                'post_title'   => $translated['name'],
+                'post_content' => $translated['description'],
+                'post_excerpt' => $translated['short_description'] ?? '',
+                'post_type'    => $original->post_type,
+                'post_status'  => $original->post_status,
+                'post_author'  => $original->post_author,
+            ]);
+
+            if (is_wp_error($new_id)) {
+                N8nPress_Logger::log('Polylang: failed to create translation: ' . $new_id->get_error_message(), 'error');
+                return;
+            }
+
+            // Assign language and link to original
+            pll_set_post_language($new_id, $language);
+            $translations[$language] = $new_id;
+            pll_save_post_translations($translations);
+
+            $target_id = $new_id;
+
+            // ── Copy WooCommerce product meta (whitelist approach) ──
+            $wc_meta_keys = array(
+                '_price', '_regular_price', '_sale_price', '_sku',
+                '_stock', '_stock_status', '_manage_stock', '_backorders',
+                '_weight', '_length', '_width', '_height',
+                '_virtual', '_downloadable', '_sold_individually',
+                '_tax_status', '_tax_class',
+                '_thumbnail_id', '_product_image_gallery',
+                '_upsell_ids', '_crosssell_ids',
+                '_product_attributes', '_default_attributes',
+                '_purchase_note', '_product_url', '_button_text',
+                'total_sales', '_wc_average_rating', '_wc_review_count',
+            );
+            foreach ($wc_meta_keys as $key) {
+                $val = get_post_meta($product_id, $key, true);
+                if ('' !== $val && false !== $val) {
+                    update_post_meta($new_id, $key, $val);
+                }
+            }
+
+            // ── Copy product type taxonomy ──
+            $type_terms = wp_get_object_terms($product_id, 'product_type', ['fields' => 'slugs']);
+            if (!empty($type_terms) && !is_wp_error($type_terms)) {
+                wp_set_object_terms($new_id, $type_terms, 'product_type');
+            }
+
+            // ── Copy product visibility ──
+            $visibility = wp_get_object_terms($product_id, 'product_visibility', ['fields' => 'slugs']);
+            if (!empty($visibility) && !is_wp_error($visibility)) {
+                wp_set_object_terms($new_id, $visibility, 'product_visibility');
+            }
+
+            // ── Copy product categories and tags ──
+            foreach (['product_cat', 'product_tag'] as $taxonomy) {
+                $terms = wp_get_object_terms($product_id, $taxonomy, ['fields' => 'ids']);
+                if (!empty($terms) && !is_wp_error($terms)) {
+                    wp_set_object_terms($new_id, $terms, $taxonomy);
+                }
+            }
+
+            // Force publish (some hooks may reset to draft)
+            wp_update_post(['ID' => $new_id, 'post_status' => 'publish']);
+
+            N8nPress_Logger::log(
+                sprintf('Polylang translation created: #%d (%s) from #%d — "%s"', $new_id, strtoupper($language), $product_id, $translated['name']),
+                'info',
+                ['original_id' => $product_id, 'translated_id' => $new_id, 'language' => $language]
+            );
+        }
+
+        // ── Copy product images (thumbnail + gallery) ──
+        if ($target_id) {
+            $this->copy_product_images($product_id, $target_id);
+        }
+
+        // ── Save SEO meta via Plugin Detector ──
+        if ($target_id && (!empty($translated['meta_title']) || !empty($translated['meta_description']))) {
+            $detector = N8nPress_Plugin_Detector::get_instance();
+            $seo_data = [];
+            if (!empty($translated['meta_title'])) {
+                $seo_data['title'] = $translated['meta_title'];
+            }
+            if (!empty($translated['meta_description'])) {
+                $seo_data['description'] = $translated['meta_description'];
+            }
+            if (!empty($translated['focus_keyword'])) {
+                $seo_data['focus_keyword'] = $translated['focus_keyword'];
+            }
+            $detector->set_seo_meta($target_id, $seo_data);
+        }
+    }
+
+    // ─── TAXONOMY TRANSLATION ──────────────────────────────────────────
+
+    /**
+     * GET /translation/taxonomy-missing — Return missing taxonomy terms for n8n to translate.
+     * This does NOT trigger a webhook — it just returns the data.
+     */
+    public function get_missing_taxonomy_terms_api($request) {
+        $taxonomy = $request->get_param('taxonomy');
+        $target_languages_str = $request->get_param('target_languages');
+        $limit = min($request->get_param('limit'), 200);
+
+        $target_languages = array_map('trim', explode(',', $target_languages_str));
+        $source_language = get_option('n8npress_target_language', 'en');
+
+        if (!taxonomy_exists($taxonomy)) {
+            return new WP_Error('invalid_taxonomy', 'Taxonomy not found: ' . $taxonomy, ['status' => 400]);
+        }
+
+        $terms = $this->get_missing_taxonomy_terms($taxonomy, $target_languages, $source_language, $limit);
+
+        return rest_ensure_response([
+            'taxonomy'         => $taxonomy,
+            'source_language'  => $source_language,
+            'target_languages' => $target_languages,
+            'count'            => count($terms),
+            'terms'            => $terms,
+        ]);
+    }
+
+    /**
+     * POST /translation/taxonomy — Send untranslated terms to n8n for AI translation
+     */
+    public function request_taxonomy_translation($request) {
+        $taxonomy         = $request->get_param('taxonomy');
+        $target_languages = $request->get_param('target_languages');
+        $limit            = min($request->get_param('limit'), 200);
+
+        if (is_string($target_languages)) {
+            $target_languages = array_map('trim', explode(',', $target_languages));
+        }
+
+        if (!taxonomy_exists($taxonomy)) {
+            return new WP_Error('invalid_taxonomy', 'Taxonomy not found: ' . $taxonomy, ['status' => 400]);
+        }
+
+        $source_language = get_option('n8npress_target_language', 'en');
+
+        // Get untranslated terms
+        $missing_terms = $this->get_missing_taxonomy_terms($taxonomy, $target_languages, $source_language, $limit);
+
+        if (empty($missing_terms)) {
+            return rest_ensure_response([
+                'status'  => 'nothing_to_translate',
+                'message' => 'All terms are already translated.',
             ]);
         }
+
+        $payload = [
+            'taxonomy'         => $taxonomy,
+            'source_language'  => $source_language,
+            'target_languages' => $target_languages,
+            'terms'            => $missing_terms,
+        ];
+
+        $result = $this->send_to_n8n('taxonomy_translation_request', $payload, rest_url('n8npress/v1/translation/taxonomy-callback'));
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        N8nPress_Logger::log('Taxonomy translation requested: ' . $taxonomy, 'info', [
+            'taxonomy'  => $taxonomy,
+            'languages' => $target_languages,
+            'count'     => count($missing_terms),
+        ]);
+
+        return rest_ensure_response([
+            'status'           => 'processing',
+            'taxonomy'         => $taxonomy,
+            'target_languages' => $target_languages,
+            'terms_sent'       => count($missing_terms),
+        ]);
+    }
+
+    /**
+     * POST /translation/taxonomy-callback — Receive translated taxonomy terms from n8n
+     */
+    public function handle_taxonomy_callback($request) {
+        $data = $request->get_json_params();
+
+        $taxonomy     = sanitize_text_field($data['taxonomy'] ?? '');
+        $translations = $data['translations'] ?? [];
+
+        if (empty($taxonomy) || empty($translations) || !is_array($translations)) {
+            return new WP_Error('invalid_data', 'taxonomy and translations array required', ['status' => 400]);
+        }
+
+        if (!defined('ICL_SITEPRESS_VERSION')) {
+            return new WP_Error('no_wpml', 'WPML required for taxonomy translation', ['status' => 400]);
+        }
+
+        $saved = 0;
+        $errors = [];
+
+        foreach ($translations as $item) {
+            $term_id  = absint($item['term_id'] ?? 0);
+            $language = sanitize_text_field($item['language'] ?? '');
+            $name     = sanitize_text_field($item['name'] ?? '');
+            $slug     = sanitize_title($item['slug'] ?? $name);
+
+            if (!$term_id || empty($language) || empty($name)) {
+                continue;
+            }
+
+            $result = $this->save_wpml_taxonomy_translation($term_id, $taxonomy, $language, $name, $slug);
+            if (is_wp_error($result)) {
+                $errors[] = sprintf('term #%d → %s: %s', $term_id, $language, $result->get_error_message());
+            } else {
+                $saved++;
+            }
+        }
+
+        N8nPress_Logger::log(sprintf('Taxonomy translations saved: %d of %d for %s', $saved, count($translations), $taxonomy), 'info');
+
+        return rest_ensure_response([
+            'status' => 'saved',
+            'saved'  => $saved,
+            'errors' => $errors,
+        ]);
+    }
+
+    /**
+     * Get terms missing translation for given languages (WPML only).
+     */
+    private function get_missing_taxonomy_terms($taxonomy, $target_languages, $source_language, $limit) {
+        global $wpdb;
+
+        if (!defined('ICL_SITEPRESS_VERSION')) {
+            return [];
+        }
+
+        $element_type = 'tax_' . $taxonomy;
+        $terms = [];
+
+        // Get original terms registered in WPML
+        $originals = $wpdb->get_results($wpdb->prepare(
+            "SELECT t.trid, t.element_id
+             FROM {$wpdb->prefix}icl_translations t
+             WHERE t.element_type = %s
+               AND t.language_code = %s
+               AND t.source_language_code IS NULL",
+            $element_type, $source_language
+        ));
+
+        // Check WPML-registered terms for missing translations
+        foreach ($originals as $orig) {
+            $term = get_term(absint($orig->element_id), $taxonomy);
+            if (!$term || is_wp_error($term)) {
+                continue;
+            }
+
+            $missing_langs = [];
+            foreach ($target_languages as $lang) {
+                $existing = $wpdb->get_var($wpdb->prepare(
+                    "SELECT element_id FROM {$wpdb->prefix}icl_translations
+                     WHERE trid = %d AND language_code = %s AND element_type = %s",
+                    $orig->trid, $lang, $element_type
+                ));
+                if (!$existing) {
+                    $missing_langs[] = $lang;
+                }
+            }
+
+            if (!empty($missing_langs)) {
+                $terms[] = [
+                    'term_id'           => $term->term_id,
+                    'name'              => $term->name,
+                    'slug'              => $term->slug,
+                    'description'       => $term->description,
+                    'missing_languages' => $missing_langs,
+                ];
+            }
+
+            if (count($terms) >= $limit) {
+                break;
+            }
+        }
+
+        return $terms;
+    }
+
+    /**
+     * Register a taxonomy term in WPML as an original-language term.
+     * Uses direct SQL insert as fallback when WPML action hooks are not available in REST context.
+     */
+    private function register_term_in_wpml($term_id, $taxonomy, $language) {
+        if (!defined('ICL_SITEPRESS_VERSION')) {
+            return;
+        }
+
+        global $wpdb;
+        $element_type = 'tax_' . $taxonomy;
+
+        // Check if already registered
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT trid FROM {$wpdb->prefix}icl_translations WHERE element_id = %d AND element_type = %s",
+            $term_id, $element_type
+        ));
+
+        if ($existing) {
+            return;
+        }
+
+        // Try WPML action first
+        do_action('wpml_set_element_language_details', [
+            'element_id'           => $term_id,
+            'element_type'         => $element_type,
+            'trid'                 => false,
+            'language_code'        => $language,
+            'source_language_code' => null,
+        ]);
+
+        // Verify it worked
+        $check = $wpdb->get_var($wpdb->prepare(
+            "SELECT trid FROM {$wpdb->prefix}icl_translations WHERE element_id = %d AND element_type = %s",
+            $term_id, $element_type
+        ));
+
+        if ($check) {
+            return;
+        }
+
+        // WPML action failed (common in REST context) — direct SQL insert
+        // Get next trid
+        $max_trid = (int) $wpdb->get_var("SELECT MAX(trid) FROM {$wpdb->prefix}icl_translations");
+        $new_trid = $max_trid + 1;
+
+        $wpdb->insert(
+            $wpdb->prefix . 'icl_translations',
+            [
+                'element_type'         => $element_type,
+                'element_id'           => $term_id,
+                'trid'                 => $new_trid,
+                'language_code'        => $language,
+                'source_language_code' => null,
+            ],
+            ['%s', '%d', '%d', '%s', '%s']
+        );
+    }
+
+    /**
+     * Create a WPML taxonomy term translation.
+     */
+    private function save_wpml_taxonomy_translation($original_term_id, $taxonomy, $language, $name, $slug) {
+        global $wpdb;
+
+        // Verify original term exists in WordPress
+        $original_term = get_term($original_term_id, $taxonomy);
+        if (!$original_term || is_wp_error($original_term)) {
+            return new WP_Error('term_not_found', 'Original term #' . $original_term_id . ' not found');
+        }
+
+        $element_type = 'tax_' . $taxonomy;
+        $default_lang = apply_filters('wpml_default_language', 'en');
+
+        // Get the trid of the original term
+        $trid = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT trid FROM {$wpdb->prefix}icl_translations
+             WHERE element_id = %d AND element_type = %s",
+            $original_term_id, $element_type
+        ));
+
+        // If not registered in WPML, register it now and re-query
+        if (!$trid) {
+            $this->register_term_in_wpml($original_term_id, $taxonomy, $default_lang);
+            $trid = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT trid FROM {$wpdb->prefix}icl_translations
+                 WHERE element_id = %d AND element_type = %s",
+                $original_term_id, $element_type
+            ));
+        }
+
+        if (!$trid) {
+            return new WP_Error('no_trid', 'Could not register term #' . $original_term_id . ' in WPML');
+        }
+
+        // Check if translation already exists
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT element_id FROM {$wpdb->prefix}icl_translations
+             WHERE trid = %d AND language_code = %s AND element_type = %s",
+            $trid, $language, $element_type
+        ));
+
+        if ($existing) {
+            // Update existing term
+            wp_update_term(absint($existing), $taxonomy, [
+                'name' => $name,
+                'slug' => $slug,
+            ]);
+            return true;
+        }
+
+        // Get original term's parent for hierarchy
+        $original_term = get_term($original_term_id, $taxonomy);
+        $parent = 0;
+        if ($original_term && $original_term->parent > 0) {
+            // Try to find translated parent
+            $parent_trid = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT trid FROM {$wpdb->prefix}icl_translations
+                 WHERE element_id = %d AND element_type = %s",
+                $original_term->parent, $element_type
+            ));
+            if ($parent_trid) {
+                $translated_parent = $wpdb->get_var($wpdb->prepare(
+                    "SELECT element_id FROM {$wpdb->prefix}icl_translations
+                     WHERE trid = %d AND language_code = %s AND element_type = %s",
+                    $parent_trid, $language, $element_type
+                ));
+                if ($translated_parent) {
+                    $parent = absint($translated_parent);
+                }
+            }
+        }
+
+        // Create new term
+        $new_term = wp_insert_term($name, $taxonomy, [
+            'slug'   => $slug,
+            'parent' => $parent,
+        ]);
+
+        if (is_wp_error($new_term)) {
+            // If slug conflict, try with language suffix
+            $new_term = wp_insert_term($name, $taxonomy, [
+                'slug'   => $slug . '-' . $language,
+                'parent' => $parent,
+            ]);
+            if (is_wp_error($new_term)) {
+                return $new_term;
+            }
+        }
+
+        $new_term_id = $new_term['term_id'];
+
+        // Link to WPML translation group — try action first, SQL fallback
+        do_action('wpml_set_element_language_details', [
+            'element_id'           => $new_term_id,
+            'element_type'         => $element_type,
+            'trid'                 => $trid,
+            'language_code'        => $language,
+            'source_language_code' => $default_lang,
+        ]);
+
+        // Verify link was created
+        $linked = $wpdb->get_var($wpdb->prepare(
+            "SELECT trid FROM {$wpdb->prefix}icl_translations WHERE element_id = %d AND element_type = %s",
+            $new_term_id, $element_type
+        ));
+
+        if (!$linked) {
+            // SQL fallback for REST context
+            $wpdb->insert(
+                $wpdb->prefix . 'icl_translations',
+                [
+                    'element_type'         => $element_type,
+                    'element_id'           => $new_term_id,
+                    'trid'                 => $trid,
+                    'language_code'        => $language,
+                    'source_language_code' => $default_lang,
+                ],
+                ['%s', '%d', '%d', '%s', '%s']
+            );
+        }
+
+        return true;
     }
 
     /**
@@ -839,5 +1679,95 @@ class N8nPress_Translation {
         ]);
 
         return is_wp_error($response) ? $response : true;
+    }
+
+    /**
+     * AJAX: Clean orphan WPML translation records.
+     *
+     * Removes icl_translations rows where:
+     * - Taxonomy terms: trid has no matching original (source_language_code IS NULL) row
+     * - Posts: element_id does not exist in wp_posts
+     * - Terms: element_id does not exist in wp_term_taxonomy
+     *
+     * Also deletes the actual orphan WP posts/terms if they have no original.
+     */
+    public function ajax_clean_orphan_translations() {
+        check_ajax_referer( 'n8npress_clean_orphans', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            wp_send_json_error( 'WPML not active' );
+        }
+
+        global $wpdb;
+        $icl = $wpdb->prefix . 'icl_translations';
+        $terms_removed = 0;
+        $posts_removed = 0;
+
+        // ── 1. Orphan taxonomy translations: trid has no original ──
+        $orphan_terms = $wpdb->get_results(
+            "SELECT t.translation_id, t.element_id, t.element_type, t.trid, t.language_code
+             FROM {$icl} t
+             WHERE t.element_type LIKE 'tax_%'
+               AND t.source_language_code IS NOT NULL
+               AND t.trid NOT IN (
+                   SELECT trid FROM {$icl}
+                   WHERE element_type = t.element_type
+                     AND source_language_code IS NULL
+               )"
+        );
+
+        foreach ( $orphan_terms as $row ) {
+            // Delete the orphan term itself (if it exists)
+            $taxonomy = str_replace( 'tax_', '', $row->element_type );
+            if ( term_exists( (int) $row->element_id, $taxonomy ) ) {
+                wp_delete_term( (int) $row->element_id, $taxonomy );
+            }
+
+            // Remove the icl_translations record
+            $wpdb->delete( $icl, array( 'translation_id' => $row->translation_id ), array( '%d' ) );
+            $terms_removed++;
+        }
+
+        // ── 2. Orphan post translations: element_id not in wp_posts ──
+        $orphan_posts = $wpdb->get_results(
+            "SELECT t.translation_id, t.element_id, t.element_type
+             FROM {$icl} t
+             WHERE t.element_type LIKE 'post_%'
+               AND t.element_id NOT IN (SELECT ID FROM {$wpdb->posts})"
+        );
+
+        foreach ( $orphan_posts as $row ) {
+            $wpdb->delete( $icl, array( 'translation_id' => $row->translation_id ), array( '%d' ) );
+            $posts_removed++;
+        }
+
+        // ── 3. Orphan term translations: element_id not in wp_term_taxonomy ──
+        $orphan_term_records = $wpdb->get_results(
+            "SELECT t.translation_id, t.element_id
+             FROM {$icl} t
+             WHERE t.element_type LIKE 'tax_%'
+               AND t.element_id NOT IN (SELECT term_id FROM {$wpdb->term_taxonomy})"
+        );
+
+        foreach ( $orphan_term_records as $row ) {
+            $wpdb->delete( $icl, array( 'translation_id' => $row->translation_id ), array( '%d' ) );
+            $terms_removed++;
+        }
+
+        $total = $terms_removed + $posts_removed;
+
+        N8nPress_Logger::log(
+            sprintf( 'Orphan cleanup: %d terms, %d posts removed from icl_translations', $terms_removed, $posts_removed ),
+            $total > 0 ? 'info' : 'debug',
+            array( 'terms_removed' => $terms_removed, 'posts_removed' => $posts_removed )
+        );
+
+        wp_send_json_success( array(
+            'terms_removed' => $terms_removed,
+            'posts_removed' => $posts_removed,
+        ) );
     }
 }

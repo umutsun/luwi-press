@@ -206,6 +206,9 @@ class N8nPress_AEO {
         update_post_meta($product_id, '_n8npress_aeo_faq_status', 'completed');
         update_post_meta($product_id, '_n8npress_aeo_faq_updated', current_time('c'));
 
+        delete_transient( 'n8npress_aeo_coverage' );
+        N8nPress_Plugin_Detector::get_instance()->purge_post_cache($product_id);
+
         return rest_ensure_response([
             'status'     => 'saved',
             'product_id' => $product_id,
@@ -248,6 +251,9 @@ class N8nPress_AEO {
         update_post_meta($product_id, '_n8npress_aeo_howto_status', 'completed');
         update_post_meta($product_id, '_n8npress_aeo_howto_updated', current_time('c'));
 
+        delete_transient( 'n8npress_aeo_coverage' );
+        N8nPress_Plugin_Detector::get_instance()->purge_post_cache($product_id);
+
         return rest_ensure_response([
             'status'     => 'saved',
             'product_id' => $product_id,
@@ -273,6 +279,9 @@ class N8nPress_AEO {
         update_post_meta($product_id, '_n8npress_speakable', $speakable);
         update_post_meta($product_id, '_n8npress_aeo_speakable_updated', current_time('c'));
 
+        delete_transient( 'n8npress_aeo_coverage' );
+        N8nPress_Plugin_Detector::get_instance()->purge_post_cache($product_id);
+
         return rest_ensure_response([
             'status'     => 'saved',
             'product_id' => $product_id,
@@ -283,6 +292,12 @@ class N8nPress_AEO {
      * GET /aeo/coverage — AEO coverage statistics
      */
     public function get_aeo_coverage($request) {
+        // Return cached result if available (1 hour TTL)
+        $cached = get_transient( 'n8npress_aeo_coverage' );
+        if ( false !== $cached ) {
+            return rest_ensure_response( $cached );
+        }
+
         global $wpdb;
 
         $total_products = intval($wpdb->get_var(
@@ -291,38 +306,36 @@ class N8nPress_AEO {
         ));
 
         if (0 === $total_products) {
-            return rest_ensure_response([
+            $result = [
                 'total_products' => 0,
                 'faq_coverage'   => 0,
                 'howto_coverage' => 0,
                 'schema_coverage' => 0,
                 'speakable_coverage' => 0,
-            ]);
+            ];
+            set_transient( 'n8npress_aeo_coverage', $result, HOUR_IN_SECONDS );
+            return rest_ensure_response( $result );
         }
 
-        $with_faq = intval($wpdb->get_var(
-            "SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
-             WHERE meta_key = '_n8npress_faq' AND meta_value != '' AND meta_value != 'a:0:{}'"
-        ));
+        // Consolidate 4 separate COUNT queries into 1
+        $counts = $wpdb->get_row(
+            "SELECT
+                COUNT(DISTINCT CASE WHEN meta_key = '_n8npress_faq' AND meta_value != '' AND meta_value != 'a:0:{}' THEN post_id END) AS with_faq,
+                COUNT(DISTINCT CASE WHEN meta_key = '_n8npress_howto' AND meta_value != '' THEN post_id END) AS with_howto,
+                COUNT(DISTINCT CASE WHEN meta_key = '_n8npress_schema' AND meta_value != '' THEN post_id END) AS with_schema,
+                COUNT(DISTINCT CASE WHEN meta_key = '_n8npress_speakable' AND meta_value != '' THEN post_id END) AS with_speakable
+             FROM {$wpdb->postmeta}
+             WHERE meta_key IN ('_n8npress_faq', '_n8npress_howto', '_n8npress_schema', '_n8npress_speakable')"
+        );
 
-        $with_howto = intval($wpdb->get_var(
-            "SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
-             WHERE meta_key = '_n8npress_howto' AND meta_value != ''"
-        ));
+        $with_faq       = intval( $counts->with_faq );
+        $with_howto     = intval( $counts->with_howto );
+        $with_schema    = intval( $counts->with_schema );
+        $with_speakable = intval( $counts->with_speakable );
 
-        $with_schema = intval($wpdb->get_var(
-            "SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
-             WHERE meta_key = '_n8npress_schema' AND meta_value != ''"
-        ));
-
-        $with_speakable = intval($wpdb->get_var(
-            "SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
-             WHERE meta_key = '_n8npress_speakable' AND meta_value != ''"
-        ));
-
-        // Get products that have NONE of the AEO elements
+        // Get products that have NONE of the AEO elements — use sample_permalink for batch
         $products_without_any = $wpdb->get_results(
-            "SELECT p.ID, p.post_title
+            "SELECT p.ID, p.post_title, p.post_name, p.post_type
              FROM {$wpdb->posts} p
              WHERE p.post_type = 'product' AND p.post_status = 'publish'
                AND p.ID NOT IN (
@@ -334,6 +347,9 @@ class N8nPress_AEO {
              LIMIT 50"
         );
 
+        // Prime post cache so get_permalink() uses cached objects
+        update_post_caches( $products_without_any );
+
         $uncovered = [];
         foreach ($products_without_any as $p) {
             $uncovered[] = [
@@ -343,7 +359,7 @@ class N8nPress_AEO {
             ];
         }
 
-        return rest_ensure_response([
+        $result = [
             'total_products'     => $total_products,
             'with_faq'           => $with_faq,
             'with_howto'         => $with_howto,
@@ -354,7 +370,10 @@ class N8nPress_AEO {
             'schema_coverage'    => round(($with_schema / $total_products) * 100, 1),
             'speakable_coverage' => round(($with_speakable / $total_products) * 100, 1),
             'uncovered_products' => $uncovered,
-        ]);
+        ];
+
+        set_transient( 'n8npress_aeo_coverage', $result, HOUR_IN_SECONDS );
+        return rest_ensure_response( $result );
     }
 
     /**
@@ -367,6 +386,32 @@ class N8nPress_AEO {
 
         global $post;
         $product_id = $post->ID;
+
+        // Output FAQPage schema
+        $faq = get_post_meta($product_id, '_n8npress_faq', true);
+        if (!empty($faq) && is_array($faq)) {
+            $faq_entities = [];
+            foreach ($faq as $item) {
+                if (!empty($item['question']) && !empty($item['answer'])) {
+                    $faq_entities[] = [
+                        '@type'          => 'Question',
+                        'name'           => $item['question'],
+                        'acceptedAnswer' => [
+                            '@type' => 'Answer',
+                            'text'  => $item['answer'],
+                        ],
+                    ];
+                }
+            }
+            if (!empty($faq_entities)) {
+                $faq_schema = [
+                    '@context'   => 'https://schema.org',
+                    '@type'      => 'FAQPage',
+                    'mainEntity' => $faq_entities,
+                ];
+                echo '<script type="application/ld+json">' . wp_json_encode($faq_schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>' . "\n";
+            }
+        }
 
         // Output HowTo schema
         $howto = get_post_meta($product_id, '_n8npress_howto', true);

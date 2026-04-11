@@ -202,7 +202,7 @@ class N8nPress_HMAC {
      * @return string Random secret key
      */
     public static function generate_secret($length = 64) {
-        return wp_generate_password($length, true, true);
+        return base64_encode(random_bytes((int) ceil($length / 1.33)));
     }
 
     /**

@@ -77,6 +77,11 @@ class N8nPress_Site_Config {
 			return true;
 		}
 
+		// Allow logged-in admins (cookie + nonce auth, used by WebMCP)
+		if ( current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+
 		return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
 	}
 

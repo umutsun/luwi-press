@@ -23,9 +23,9 @@ class N8nPress_API {
     }
     
     public function register_endpoints() {
-        // Webhook endpoint
+        // Webhook endpoint (POST only — tokens must never appear in URLs)
         register_rest_route('n8npress/v1', '/webhook', array(
-            'methods' => array('POST', 'GET'),
+            'methods' => 'POST',
             'callback' => array($this, 'handle_webhook'),
             'permission_callback' => array($this, 'check_webhook_permission'),
             'args' => $this->get_webhook_args()
@@ -79,13 +79,54 @@ class N8nPress_API {
             'callback' => array($this, 'get_status'),
             'permission_callback' => '__return_true'
         ));
-        
+
         // Health check endpoint
         register_rest_route('n8npress/v1', '/health', array(
             'methods' => 'GET',
             'callback' => array($this, 'health_check'),
             'permission_callback' => '__return_true'
         ));
+
+        // Diagnostic: Rank Math meta for a given post
+        register_rest_route('n8npress/v1', '/test/rank-math', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'test_rank_math_meta'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+            'args'                => array(
+                'post_id' => array('required' => true, 'sanitize_callback' => 'absint'),
+            ),
+        ));
+
+        // Diagnostic: AEO coverage summary (alias for /aeo/coverage)
+        register_rest_route('n8npress/v1', '/test/aeo-coverage', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'test_aeo_coverage'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+        ));
+
+        // Diagnostic: Recent log entries
+        register_rest_route('n8npress/v1', '/logs', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_recent_logs'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+            'args'                => array(
+                'limit' => array('default' => 50, 'sanitize_callback' => 'absint'),
+                'level' => array('default' => '', 'sanitize_callback' => 'sanitize_text_field'),
+            ),
+        ));
+
+        // SEO meta write endpoint (used by WebMCP and admin tools)
+        register_rest_route( 'n8npress/v1', '/seo/meta', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'handle_set_seo_meta' ),
+            'permission_callback' => array( $this, 'check_admin_permission' ),
+            'args'                => array(
+                'post_id'       => array( 'required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint' ),
+                'title'         => array( 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ),
+                'description'   => array( 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ),
+                'focus_keyword' => array( 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ),
+            ),
+        ) );
     }
     
     private function get_webhook_args() {
@@ -235,7 +276,7 @@ class N8nPress_API {
             
             return new WP_Error(
                 'webhook_error',
-                $e->getMessage(),
+                'An internal error occurred while processing the webhook.',
                 array(
                     'status' => 500,
                     'request_id' => $data['request_id'] ?? 'unknown'
@@ -466,7 +507,17 @@ class N8nPress_API {
         // Execute query
         $query = new WP_Query($args);
         $posts = array();
-        
+
+        // Pre-fetch all unique author display names in one query
+        $author_ids = array_unique( wp_list_pluck( $query->posts, 'post_author' ) );
+        $author_map = array();
+        if ( ! empty( $author_ids ) ) {
+            $users = get_users( array( 'include' => $author_ids, 'fields' => array( 'ID', 'display_name' ) ) );
+            foreach ( $users as $u ) {
+                $author_map[ $u->ID ] = $u->display_name;
+            }
+        }
+
         foreach ($query->posts as $post) {
             $posts[] = array(
                 'id' => $post->ID,
@@ -477,7 +528,7 @@ class N8nPress_API {
                 'date' => $post->post_date,
                 'url' => get_permalink($post->ID),
                 'edit_url' => get_edit_post_link($post->ID, 'raw'),
-                'author' => get_the_author_meta('display_name', $post->post_author)
+                'author' => $author_map[ $post->post_author ] ?? '',
             );
         }
         
@@ -493,44 +544,50 @@ class N8nPress_API {
     }
     
     public function get_status() {
-        global $wpdb;
-        
-        return array(
-            'plugin' => 'n8nPress',
-            'version' => N8NPRESS_VERSION,
-            'status' => 'active',
-            'endpoints' => array(
-                'webhook' => rest_url('n8npress/v1/webhook'),
-                'status' => rest_url('n8npress/v1/status'),
-                'health' => rest_url('n8npress/v1/health')
-            ),
-            'wordpress' => array(
-                'version' => get_bloginfo('version'),
-                'multisite' => is_multisite(),
-                'debug' => defined('WP_DEBUG') && WP_DEBUG
-            ),
-            'server' => array(
-                'php_version' => PHP_VERSION,
-                'mysql_version' => $wpdb->db_version(),
-                'max_execution_time' => ini_get('max_execution_time'),
-                'memory_limit' => ini_get('memory_limit')
-            ),
-            'features' => array(
-                'rest_api' => true,
-                'jwt_enabled' => function_exists('firebase\jwt\JWT::decode'),
-                'logging_enabled' => n8npress_get_option('enable_logging', 1),
-                'rate_limiting' => n8npress_get_option('rate_limit', 1000) > 0
-            ),
-            'timestamp' => current_time('mysql')
+        $response = array(
+            'plugin'    => 'n8nPress',
+            'version'   => N8NPRESS_VERSION,
+            'status'    => 'active',
+            'timestamp' => current_time('mysql'),
         );
+
+        // Expose detailed info only to authenticated admins
+        if ( current_user_can( 'manage_options' ) ) {
+            global $wpdb;
+
+            $response['endpoints'] = array(
+                'webhook' => rest_url('n8npress/v1/webhook'),
+                'status'  => rest_url('n8npress/v1/status'),
+                'health'  => rest_url('n8npress/v1/health'),
+            );
+            $response['wordpress'] = array(
+                'version'   => get_bloginfo('version'),
+                'multisite' => is_multisite(),
+                'debug'     => defined('WP_DEBUG') && WP_DEBUG,
+            );
+            $response['server'] = array(
+                'php_version'        => PHP_VERSION,
+                'mysql_version'      => $wpdb->db_version(),
+                'max_execution_time' => ini_get('max_execution_time'),
+                'memory_limit'       => ini_get('memory_limit'),
+            );
+            $response['features'] = array(
+                'rest_api'        => true,
+                'jwt_enabled'     => function_exists('firebase\jwt\JWT::decode'),
+                'logging_enabled' => n8npress_get_option('enable_logging', 1),
+                'rate_limiting'   => n8npress_get_option('rate_limit', 1000) > 0,
+            );
+        }
+
+        return $response;
     }
     
     public function health_check() {
         $health = array(
             'status' => 'healthy',
-            'checks' => array()
+            'checks' => array(),
         );
-        
+
         // Check database connection
         try {
             global $wpdb;
@@ -540,7 +597,7 @@ class N8nPress_API {
             $health['checks']['database'] = 'error';
             $health['status'] = 'unhealthy';
         }
-        
+
         // Check file system
         $upload_dir = wp_upload_dir();
         if (wp_is_writable($upload_dir['basedir'])) {
@@ -548,12 +605,12 @@ class N8nPress_API {
         } else {
             $health['checks']['filesystem'] = 'warning';
         }
-        
-        // Check memory usage
-        $memory_limit = wp_convert_hr_to_bytes(ini_get('memory_limit'));
-        $memory_usage = memory_get_usage(true);
+
+        // Memory details only for admins — public callers get pass/fail only
+        $memory_limit   = wp_convert_hr_to_bytes(ini_get('memory_limit'));
+        $memory_usage   = memory_get_usage(true);
         $memory_percent = ($memory_usage / $memory_limit) * 100;
-        
+
         if ($memory_percent < 80) {
             $health['checks']['memory'] = 'ok';
         } elseif ($memory_percent < 95) {
@@ -562,13 +619,15 @@ class N8nPress_API {
             $health['checks']['memory'] = 'critical';
             $health['status'] = 'unhealthy';
         }
-        
-        $health['memory_usage'] = array(
-            'used' => size_format($memory_usage),
-            'limit' => size_format($memory_limit),
-            'percent' => round($memory_percent, 2)
-        );
-        
+
+        if ( current_user_can( 'manage_options' ) ) {
+            $health['memory_usage'] = array(
+                'used'    => size_format($memory_usage),
+                'limit'   => size_format($memory_limit),
+                'percent' => round($memory_percent, 2),
+            );
+        }
+
         return $health;
     }
 
@@ -707,8 +766,8 @@ class N8nPress_API {
         $data = $request->get_json_params();
         $cost = N8nPress_Token_Tracker::record( array(
             'workflow'      => sanitize_text_field( $data['workflow'] ?? 'unknown' ),
-            'provider'      => sanitize_text_field( $data['provider'] ?? 'openai' ),
-            'model'         => sanitize_text_field( $data['model'] ?? 'gpt-4o-mini' ),
+            'provider'      => sanitize_text_field( $data['provider'] ?? 'anthropic' ),
+            'model'         => sanitize_text_field( $data['model'] ?? 'claude-sonnet-4-20250514' ),
             'input_tokens'  => absint( $data['input_tokens'] ?? 0 ),
             'output_tokens' => absint( $data['output_tokens'] ?? 0 ),
             'execution_id'  => sanitize_text_field( $data['execution_id'] ?? '' ),
@@ -742,5 +801,124 @@ class N8nPress_API {
      */
     public function check_admin_permission() {
         return current_user_can( 'manage_options' );
+    }
+
+    /**
+     * GET /test/rank-math?post_id=X
+     * Returns all Rank Math meta fields stored for the given post.
+     */
+    public function test_rank_math_meta( $request ) {
+        $post_id = $request->get_param( 'post_id' );
+        $post    = get_post( $post_id );
+
+        if ( ! $post ) {
+            return new WP_Error( 'not_found', 'Post not found', array( 'status' => 404 ) );
+        }
+
+        $rank_math_keys = array(
+            'rank_math_title',
+            'rank_math_description',
+            'rank_math_focus_keyword',
+            'rank_math_robots',
+            'rank_math_canonical_url',
+            '_yoast_wpseo_title',
+            '_yoast_wpseo_metadesc',
+        );
+
+        $meta = array();
+        foreach ( $rank_math_keys as $key ) {
+            $val = get_post_meta( $post_id, $key, true );
+            if ( '' !== $val ) {
+                $meta[ $key ] = $val;
+            }
+        }
+
+        return rest_ensure_response( array(
+            'post_id'          => $post_id,
+            'post_title'       => $post->post_title,
+            'rank_math_active' => class_exists( 'RankMath' ) || class_exists( 'RankMath\RankMath' ),
+            'meta'             => $meta,
+            'n8npress_schema'  => (bool) get_post_meta( $post_id, '_n8npress_schema', true ),
+            'n8npress_faq'     => count( (array) get_post_meta( $post_id, '_n8npress_faq', true ) ),
+            'n8npress_howto'   => (bool) get_post_meta( $post_id, '_n8npress_howto', true ),
+        ) );
+    }
+
+    /**
+     * GET /test/aeo-coverage
+     * Delegates to N8nPress_AEO::get_aeo_coverage().
+     */
+    public function test_aeo_coverage( $request ) {
+        if ( ! class_exists( 'N8nPress_AEO' ) ) {
+            return new WP_Error( 'not_available', 'AEO module not loaded', array( 'status' => 500 ) );
+        }
+        return N8nPress_AEO::get_instance()->get_aeo_coverage( $request );
+    }
+
+    /**
+     * GET /logs?limit=50&level=
+     * Returns recent log entries from the n8nPress log table.
+     */
+    public function get_recent_logs( $request ) {
+        $limit = min( absint( $request->get_param( 'limit' ) ?: 50 ), 200 );
+        $level = sanitize_text_field( $request->get_param( 'level' ) ?: '' );
+
+        if ( ! class_exists( 'N8nPress_Logger' ) ) {
+            return new WP_Error( 'not_available', 'Logger not loaded', array( 'status' => 500 ) );
+        }
+
+        $logs = N8nPress_Logger::get_logs( $limit, $level );
+
+        return rest_ensure_response( array(
+            'count' => count( $logs ),
+            'logs'  => $logs,
+        ) );
+    }
+
+    /**
+     * POST /seo/meta
+     * Write SEO meta (title, description, focus keyword) via Plugin Detector.
+     * Used by WebMCP tools and admin interfaces.
+     */
+    public function handle_set_seo_meta( $request ) {
+        $post_id = $request->get_param( 'post_id' );
+        $post    = get_post( $post_id );
+
+        if ( ! $post ) {
+            return new WP_Error( 'not_found', 'Post not found', array( 'status' => 404 ) );
+        }
+
+        $data = array();
+        if ( null !== $request->get_param( 'title' ) ) {
+            $data['title'] = $request->get_param( 'title' );
+        }
+        if ( null !== $request->get_param( 'description' ) ) {
+            $data['description'] = $request->get_param( 'description' );
+        }
+        if ( null !== $request->get_param( 'focus_keyword' ) ) {
+            $data['focus_keyword'] = $request->get_param( 'focus_keyword' );
+        }
+
+        if ( empty( $data ) ) {
+            return new WP_Error( 'no_data', 'At least one of title, description, or focus_keyword is required', array( 'status' => 400 ) );
+        }
+
+        $detector = N8nPress_Plugin_Detector::get_instance();
+        $result   = $detector->set_seo_meta( $post_id, $data );
+
+        if ( ! $result ) {
+            return new WP_Error( 'no_seo_plugin', 'No supported SEO plugin detected', array( 'status' => 400 ) );
+        }
+
+        N8nPress_Logger::log( 'SEO meta updated via API', 'info', array(
+            'post_id' => $post_id,
+            'fields'  => array_keys( $data ),
+        ) );
+
+        return rest_ensure_response( array(
+            'success' => true,
+            'post_id' => $post_id,
+            'updated' => array_keys( $data ),
+        ) );
     }
 }

@@ -178,11 +178,12 @@ class N8nPress_AI_Content {
 
         $product_id = $product->get_id();
 
-        // Dedup: skip if already processing
-        $current_status = get_post_meta( $product_id, '_n8npress_enrich_status', true );
-        if ( 'processing' === $current_status ) {
+        // Atomic lock: prevent concurrent enrichment of same product
+        $lock_key = 'n8npress_enrich_lock_' . $product_id;
+        if ( get_transient( $lock_key ) ) {
             return new WP_Error( 'already_processing', 'Product #' . $product_id . ' is already being enriched.' );
         }
+        set_transient( $lock_key, true, 300 ); // 5-minute lock
         $image_url  = wp_get_attachment_url($product->get_image_id());
         $gallery    = array_map('wp_get_attachment_url', $product->get_gallery_image_ids());
 
@@ -220,6 +221,8 @@ class N8nPress_AI_Content {
                 'generate_faq'               => true,
                 'generate_schema'            => true,
                 'generate_alt_text'          => true,
+                'generate_image'             => (bool) get_option( 'n8npress_enrich_generate_image', false ),
+                'image_provider'             => get_option( 'n8npress_image_provider', 'dall-e-3' ),
                 'target_language'            => get_option('n8npress_target_language', 'tr'),
             )),
         );
@@ -293,17 +296,23 @@ class N8nPress_AI_Content {
 
         $product->save();
 
-        // Meta title & description (Yoast/RankMath compatible)
-        if (!empty($data['meta_title'])) {
-            update_post_meta($product_id, '_yoast_wpseo_title', sanitize_text_field($data['meta_title']));
-            update_post_meta($product_id, 'rank_math_title', sanitize_text_field($data['meta_title']));
-            $updated_fields[] = 'meta_title';
-        }
-
-        if (!empty($data['meta_description'])) {
-            update_post_meta($product_id, '_yoast_wpseo_metadesc', sanitize_text_field($data['meta_description']));
-            update_post_meta($product_id, 'rank_math_description', sanitize_text_field($data['meta_description']));
-            $updated_fields[] = 'meta_description';
+        // Meta title & description via Plugin Detector (writes to active SEO plugin's keys)
+        if (!empty($data['meta_title']) || !empty($data['meta_description'])) {
+            $detector = N8nPress_Plugin_Detector::get_instance();
+            $seo_data = array();
+            if (!empty($data['meta_title'])) {
+                $seo_data['title'] = $data['meta_title'];
+                $updated_fields[] = 'meta_title';
+            }
+            if (!empty($data['meta_description'])) {
+                $seo_data['description'] = $data['meta_description'];
+                $updated_fields[] = 'meta_description';
+            }
+            if (!empty($data['focus_keyword'])) {
+                $seo_data['focus_keyword'] = $data['focus_keyword'];
+                $updated_fields[] = 'focus_keyword';
+            }
+            $detector->set_seo_meta($product_id, $seo_data);
         }
 
         // FAQ data
@@ -324,10 +333,25 @@ class N8nPress_AI_Content {
             $updated_fields[] = 'alt_texts';
         }
 
+        // AI-generated image (from DALL-E, Gemini Imagen, etc.)
+        if (!empty($data['generated_image_url'])) {
+            $image_id = $this->sideload_image($data['generated_image_url'], $product_id, $product->get_name());
+            if ($image_id && !is_wp_error($image_id)) {
+                set_post_thumbnail($product_id, $image_id);
+                update_post_meta($product_id, '_n8npress_generated_image_id', $image_id);
+                $updated_fields[] = 'generated_image';
+            }
+        }
+
         // Mark enrichment complete
         update_post_meta($product_id, '_n8npress_enrich_status', 'completed');
+        delete_transient( 'n8npress_enrich_lock_' . $product_id );
         update_post_meta($product_id, '_n8npress_enrich_completed', current_time('mysql'));
         update_post_meta($product_id, '_n8npress_enrich_fields', $updated_fields);
+
+        // Purge cache so enriched content is visible immediately
+        $detector = N8nPress_Plugin_Detector::get_instance();
+        $detector->purge_post_cache($product_id);
 
         N8nPress_Logger::log('Product enrichment completed', 'info', array(
             'product_id'     => $product_id,
@@ -405,19 +429,19 @@ class N8nPress_AI_Content {
             ),
             'orderby'        => 'modified',
             'order'          => 'ASC',
-            'fields'         => 'ids',
         );
 
         $query = new WP_Query($args);
         $items = array();
 
-        foreach ($query->posts as $pid) {
+        foreach ($query->posts as $post) {
+            $modified = $post->post_modified;
             $items[] = array(
-                'id'            => $pid,
-                'title'         => get_the_title($pid),
-                'url'           => get_permalink($pid),
-                'last_modified' => get_post_field('post_modified', $pid),
-                'days_stale'    => (int) ((time() - strtotime(get_post_field('post_modified', $pid))) / DAY_IN_SECONDS),
+                'id'            => $post->ID,
+                'title'         => $post->post_title,
+                'url'           => get_permalink($post->ID),
+                'last_modified' => $modified,
+                'days_stale'    => (int) ((time() - strtotime($modified)) / DAY_IN_SECONDS),
             );
         }
 
@@ -935,6 +959,60 @@ class N8nPress_AI_Content {
             $this->send_to_n8n_for_enrichment($product);
             update_post_meta($product_id, '_n8npress_enrich_status', 'processing');
         }
+    }
+
+    /**
+     * Download an external image and add it to the WordPress media library.
+     *
+     * @param string $url       Image URL.
+     * @param int    $post_id   Post to attach the image to.
+     * @param string $desc      Image description / title.
+     * @return int|WP_Error     Attachment ID or error.
+     */
+    private function sideload_image( $url, $post_id, $desc = '' ) {
+        if ( ! function_exists( 'media_sideload_image' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+        }
+
+        // Download to temp file
+        $tmp = download_url( $url );
+        if ( is_wp_error( $tmp ) ) {
+            return $tmp;
+        }
+
+        // Validate file size (max 5 MB)
+        $max_size = 5 * MB_IN_BYTES;
+        $file_size = filesize( $tmp );
+        if ( $file_size > $max_size ) {
+            unlink( $tmp );
+            return new WP_Error( 'file_too_large', 'Downloaded image exceeds 5 MB limit.' );
+        }
+
+        // Validate MIME type — only allow safe image formats
+        $allowed_mimes = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp' );
+        $filetype = wp_check_filetype_and_ext( $tmp, basename( wp_parse_url( $url, PHP_URL_PATH ) ) ?: 'ai-generated.png' );
+        $mime = $filetype['type'] ?: mime_content_type( $tmp );
+
+        if ( ! in_array( $mime, $allowed_mimes, true ) ) {
+            unlink( $tmp );
+            return new WP_Error( 'invalid_mime', 'File type not allowed: ' . $mime );
+        }
+
+        $file_array = array(
+            'name'     => sanitize_file_name( basename( wp_parse_url( $url, PHP_URL_PATH ) ) ) ?: 'ai-generated.png',
+            'tmp_name' => $tmp,
+        );
+
+        $attachment_id = media_handle_sideload( $file_array, $post_id, sanitize_text_field( $desc ) );
+
+        // Clean up temp file on error
+        if ( is_wp_error( $attachment_id ) && file_exists( $file_array['tmp_name'] ) ) {
+            unlink( $file_array['tmp_name'] );
+        }
+
+        return $attachment_id;
     }
 
     // ─── PERMISSION CALLBACKS ───────────────────────────────────────────

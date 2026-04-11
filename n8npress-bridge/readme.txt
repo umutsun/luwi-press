@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, n8n, product enrichment
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.8.0
+Stable tag: 1.10.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,6 +35,7 @@ n8nPress is a **middleware plugin** that connects your WordPress/WooCommerce sto
 * **AI Review Responder** — Auto-respond to WooCommerce product reviews
 * **Open Claw AI Assistant** — Chat interface for managing your store with natural language
 * **CRM Lifecycle** — Customer segmentation (VIP, at-risk, dormant) + win-back campaigns
+* **WebMCP Server** — MCP Streamable HTTP server exposing 40+ tools to AI agents (Claude Desktop, Claude Code, any MCP client)
 * **Plugin Auto-Detection** — Automatically detects Rank Math, WPML, Polylang, WP Mail SMTP, FluentCRM, Chatwoot
 * **Cost Protection** — Daily budget limits, token tracking, per-workflow cost breakdown
 * **Multi-Provider AI** — OpenAI (GPT-4o Mini), Anthropic (Claude), Google (Gemini)
@@ -131,6 +132,66 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 1.10.0 — WebMCP: MCP Server for AI Agents =
+* NEW: MCP Streamable HTTP server at /n8npress/v1/mcp (spec 2025-03-26)
+* NEW: 40+ MCP tools across 14 categories (content, SEO, AEO, translation, CRM, email, etc.)
+* NEW: MCP resources — site-config, health, AEO coverage + parameterized templates (post, seo-meta, translation-status)
+* NEW: MCP tool annotations — readOnlyHint, destructiveHint, idempotentHint, openWorldHint
+* NEW: MCP session management with UUID sessions and 1-hour TTL
+* NEW: Origin validation (DNS rebinding protection per MCP spec)
+* NEW: Cursor-based pagination for tools/list
+* NEW: Argument autocompletion for resource templates (completion/complete)
+* NEW: Knowledge Graph endpoint — AI-consumable entity graph with WPML-aware translation status
+* NEW: WebMCP admin page with tool catalog, connection tester, and usage examples
+* NEW: Browser-side MCP client class (webmcp-client.js)
+* NEW: Extensibility hook — n8npress_webmcp_register_tools for third-party tools
+* NEW: WEBMCP-INTEGRATION.md documentation for AI agent tool discovery
+* IMPROVED: Site config permission now accepts logged-in admins (cookie + nonce auth)
+
+= 1.9.0 — Security & Code Quality =
+* SECURITY: JWT secret now uses random_bytes(32) instead of wp_generate_password (C2)
+* SECURITY: Token revocation mechanism — revoke compromised JWT tokens by jti (C3)
+* SECURITY: Image sideload validates MIME type (jpeg/png/webp/gif) and max size 10MB (C4)
+* SECURITY: Admin pages check current_user_can('manage_options') on direct access (H4)
+* SECURITY: Enrichment uses transient lock to prevent race conditions (H6)
+* SECURITY: HMAC secret uses cryptographically secure random_bytes (C2)
+* FIX: Meta copy uses whitelist (WC product fields only) instead of blacklist (H2)
+* FIX: Daily auto-cleanup cron for logs, tokens, workflow stats (H3)
+* FIX: Translation Manager taxonomy count excludes orphan WPML records
+* FIX: Knowledge Graph default language uses get_locale() instead of hardcoded 'tr' (M5)
+
+= 1.8.4 =
+* FIX: Knowledge Graph now uses WPML icl_translations for translation status (was using meta only)
+* FIX: Taxonomy translation WPML registration uses SQL fallback for REST context
+* FIX: Taxonomy callback validates term existence before saving
+* FIX: Removed orphan term fallback that caused false positives in taxonomy counts
+* NEW: Test suite for translation system (tests/test-translation-system.php)
+
+= 1.8.3 =
+* NEW: AI image generation for products and posts (DALL-E 3, DALL-E 2, Gemini Imagen 3)
+* NEW: Image provider setting in AI Content tab (with per-image pricing display)
+* NEW: Gemini 2.5 Flash and Gemini 2.5 Pro model options
+* NEW: Image provider and AI provider sent in _meta block to n8n workflows
+* IMPROVED: Enrich callback auto-sideloads generated images as featured image
+* IMPROVED: Token tracker includes image generation pricing
+
+= 1.8.2 =
+* FIX: Post Categories and Post Tags now appear in Translation Manager (WPML fallback for unregistered taxonomies)
+* FIX: Taxonomy term count excludes WPML translation copies (was double-counting)
+* FIX: Auto-register unregistered taxonomy terms in WPML before translation
+* FIX: Knowledge Graph plugins section loads product data for SEO coverage calculation
+* IMPROVED: AIOSEO and SEOPress focus keyword meta key support added
+* IMPROVED: Translation Manager Bulk Translation section removed (redundant with per-language buttons)
+* NEW: Fix Category Assignments maintenance button (re-assigns translated products to correct categories)
+
+= 1.8.1 =
+* NEW: Knowledge Graph endpoint (GET /knowledge-graph) — AI-consumable graph of products, categories, languages, SEO/AEO coverage, and opportunity scores
+* FIX: SEO meta writing now uses Plugin Detector (was hardcoded Yoast+RankMath — AIOSEO/SEOPress now work)
+* FIX: Polylang translation create — new posts are now created with full WC meta, images, taxonomies, SEO meta (was update-only)
+* FIX: FAQPage JSON-LD schema now output in wp_head (was missing — Google can now see FAQ data)
+* FIX: Cache invalidation added to all callbacks (WP Rocket, LiteSpeed, W3 Total Cache)
+* FIX: Translation SEO meta reading now uses Plugin Detector (was hardcoded keys)
 
 = 1.8.0 =
 * Merged Logs + Token Usage into unified "Usage & Logs" page with tabs

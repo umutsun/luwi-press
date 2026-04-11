@@ -10,6 +10,31 @@ if (!defined('ABSPATH')) {
 class N8nPress_Logger {
 
     /**
+     * Create the logs database table.
+     */
+    public static function create_table() {
+        global $wpdb;
+        $table   = $wpdb->prefix . 'n8npress_logs';
+        $charset = $wpdb->get_charset_collate();
+
+        $sql = "CREATE TABLE {$table} (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            timestamp datetime NOT NULL,
+            level varchar(10) NOT NULL DEFAULT 'info',
+            message text NOT NULL,
+            context longtext DEFAULT NULL,
+            ip_address varchar(45) DEFAULT NULL,
+            user_agent varchar(255) DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY level_idx (level),
+            KEY timestamp_idx (timestamp)
+        ) {$charset};";
+
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        dbDelta( $sql );
+    }
+
+    /**
      * Log a message to the wp_n8npress_logs table
      *
      * @param string $message

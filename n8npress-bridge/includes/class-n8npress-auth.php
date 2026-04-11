@@ -233,6 +233,12 @@ class N8nPress_Auth {
                 );
             }
             
+            // Check if token has been revoked
+            $jti = $decoded->jti ?? '';
+            if ( $jti && self::is_token_revoked( $jti ) ) {
+                return new WP_Error( 'token_revoked', 'Token has been revoked', array( 'status' => 401 ) );
+            }
+
             // Check if user is still active
             if (!user_can($user, 'publish_posts')) {
                 return new WP_Error(
@@ -249,7 +255,7 @@ class N8nPress_Auth {
             
             return new WP_Error(
                 'token_invalid',
-                'Invalid JWT token: ' . $e->getMessage(),
+                'Invalid or expired JWT token.',
                 array('status' => 401)
             );
         }
@@ -267,6 +273,7 @@ class N8nPress_Auth {
             'iat' => $issued_at,
             'nbf' => $issued_at,
             'exp' => $expires_at,
+            'jti' => bin2hex(random_bytes(16)),
             'data' => array(
                 'user' => array(
                     'id' => $user->ID,
@@ -308,7 +315,7 @@ class N8nPress_Auth {
         
         if (!$secret) {
             // Generate a secret if none exists
-            $secret = wp_generate_password(64, true, true);
+            $secret = base64_encode(random_bytes(32));
             update_option('n8npress_jwt_secret', $secret);
         }
         
@@ -376,11 +383,31 @@ class N8nPress_Auth {
     }
     
     public static function verify_application_password($user, $username, $password) {
-        // This function integrates with WordPress application password system
         if (!function_exists('wp_authenticate_application_password')) {
             return false;
         }
-        
         return wp_authenticate_application_password($user, $username, $password);
+    }
+
+    /**
+     * Revoke a JWT token by its jti claim.
+     */
+    public static function revoke_token( $jti ) {
+        $revoked = get_option( 'n8npress_revoked_tokens', array() );
+        $revoked[ $jti ] = time();
+        // Clean expired entries (older than 7 days — max token lifetime)
+        $cutoff = time() - WEEK_IN_SECONDS;
+        $revoked = array_filter( $revoked, function ( $ts ) use ( $cutoff ) {
+            return $ts > $cutoff;
+        } );
+        update_option( 'n8npress_revoked_tokens', $revoked );
+    }
+
+    /**
+     * Check if a token jti is revoked.
+     */
+    public static function is_token_revoked( $jti ) {
+        $revoked = get_option( 'n8npress_revoked_tokens', array() );
+        return isset( $revoked[ $jti ] );
     }
 }
