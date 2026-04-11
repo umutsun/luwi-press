@@ -336,7 +336,7 @@ class N8nPress_WebMCP {
             array(
                 'client'     => $client_info,
                 'created_at' => current_time( 'mysql' ),
-                'ip'         => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+                'ip'         => sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ) ),
             ),
             HOUR_IN_SECONDS
         );

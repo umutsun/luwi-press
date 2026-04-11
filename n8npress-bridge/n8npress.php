@@ -71,7 +71,6 @@ class N8nPress {
         add_action('wp_ajax_n8npress_scan_opportunities', array($this, 'ajax_scan_opportunities'));
         add_action('wp_ajax_n8npress_get_thin_products', array($this, 'ajax_get_thin_products'));
         add_action('wp_ajax_n8npress_emergency_stop', array($this, 'ajax_emergency_stop'));
-        add_action('admin_init', array($this, 'maybe_create_tables'));
     }
     
     /**
@@ -117,16 +116,13 @@ class N8nPress {
      * Plugin activation
      */
     public function activate() {
-        // Create database tables
-        $this->create_tables();
-
         // Set default options
         $this->set_default_options();
 
-        // Create all database tables
+        // Create all database tables (single source of truth per class)
         N8nPress_Logger::create_table();
-        N8nPress_Workflow_Tracker::create_table();
         N8nPress_Token_Tracker::create_table();
+        N8nPress_Workflow_Tracker::create_table();
 
         // Generate HMAC secret if not set
         N8nPress_HMAC::ensure_secret();
@@ -207,216 +203,6 @@ class N8nPress {
     public function register_rest_routes() {
         // Routes delegated to N8nPress_API to avoid duplicate registration conflicts.
         do_action( 'n8npress_register_rest_routes' );
-    }
-    
-    /**
-     * Handle webhook requests
-     */
-    public function handle_webhook($request) {
-        $start_time = microtime(true);
-        
-        try {
-            // Get request data
-            $data = $request->get_json_params();
-            if (empty($data)) {
-                $data = $request->get_params();
-            }
-            
-            // Log request
-            N8nPress_Logger::log('Webhook request received', 'info', array(
-                'action' => $data['action'] ?? 'unknown',
-                'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
-                'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
-            ));
-            
-            // Validate JWT token
-            $auth_result = N8nPress_Auth::validate_token($data['auth_token']);
-            if (is_wp_error($auth_result)) {
-                return new WP_Error('auth_failed', $auth_result->get_error_message(), array('status' => 401));
-            }
-            
-            // Process action
-            $result = $this->process_action($data, $auth_result);
-            
-            // Calculate execution time
-            $execution_time = round((microtime(true) - $start_time) * 1000, 2);
-            
-            // Return success response
-            return array(
-                'success' => true,
-                'data' => $result,
-                'timestamp' => current_time('mysql'),
-                'execution_time_ms' => $execution_time,
-                'request_id' => $data['request_id'] ?? uniqid('req_')
-            );
-            
-        } catch (Exception $e) {
-            N8nPress_Logger::log('Webhook error: ' . $e->getMessage(), 'error');
-            
-            return new WP_Error(
-                'webhook_error',
-                $e->getMessage(),
-                array('status' => 500)
-            );
-        }
-    }
-    
-    /**
-     * Process webhook action
-     */
-    private function process_action($data, $user) {
-        switch ($data['action']) {
-            case 'create_post':
-                return $this->create_post($data, $user);
-            
-            case 'update_post':
-                return $this->update_post($data, $user);
-            
-            case 'delete_post':
-                return $this->delete_post($data, $user);
-            
-            case 'get_posts':
-                return $this->get_posts($data, $user);
-            
-            default:
-                throw new Exception('Unknown action: ' . $data['action']);
-        }
-    }
-    
-    /**
-     * Create WordPress post
-     */
-    private function create_post($data, $user) {
-        // Validate required fields
-        if (empty($data['title'])) {
-            throw new Exception('Title is required');
-        }
-        
-        // Prepare post data
-        $post_data = array(
-            'post_title' => sanitize_text_field($data['title']),
-            'post_content' => wp_kses_post($data['content'] ?? ''),
-            'post_excerpt' => sanitize_text_field($data['excerpt'] ?? ''),
-            'post_status' => sanitize_text_field($data['status'] ?? 'draft'),
-            'post_type' => sanitize_text_field($data['post_type'] ?? 'post'),
-            'post_author' => $user->ID,
-            'meta_input' => array()
-        );
-        
-        // Add categories
-        if (!empty($data['categories'])) {
-            $post_data['post_category'] = array_map('intval', (array) $data['categories']);
-        }
-        
-        // Add custom meta
-        if (!empty($data['meta']) && is_array($data['meta'])) {
-            foreach ($data['meta'] as $key => $value) {
-                $post_data['meta_input'][sanitize_key($key)] = sanitize_text_field($value);
-            }
-        }
-        
-        // Insert post
-        $post_id = wp_insert_post($post_data, true);
-        
-        if (is_wp_error($post_id)) {
-            throw new Exception('Failed to create post: ' . $post_id->get_error_message());
-        }
-        
-        // Add tags
-        if (!empty($data['tags'])) {
-            wp_set_post_tags($post_id, $data['tags']);
-        }
-        
-        // Set featured image
-        if (!empty($data['featured_media'])) {
-            set_post_thumbnail($post_id, intval($data['featured_media']));
-        }
-        
-        // Get created post
-        $post = get_post($post_id);
-        
-        return array(
-            'id' => $post_id,
-            'title' => $post->post_title,
-            'url' => get_permalink($post_id),
-            'status' => $post->post_status,
-            'date' => $post->post_date
-        );
-    }
-    
-    /**
-     * Update WordPress post
-     */
-    private function update_post($data, $user) {
-        if (empty($data['id'])) {
-            throw new Exception('Post ID is required');
-        }
-        
-        $post_id = intval($data['id']);
-        
-        // Check if post exists
-        if (!get_post($post_id)) {
-            throw new Exception('Post not found');
-        }
-        
-        // Prepare update data
-        $post_data = array(
-            'ID' => $post_id
-        );
-        
-        // Update fields if provided
-        if (isset($data['title'])) {
-            $post_data['post_title'] = sanitize_text_field($data['title']);
-        }
-        
-        if (isset($data['content'])) {
-            $post_data['post_content'] = wp_kses_post($data['content']);
-        }
-        
-        if (isset($data['status'])) {
-            $post_data['post_status'] = sanitize_text_field($data['status']);
-        }
-        
-        // Update post
-        $result = wp_update_post($post_data, true);
-        
-        if (is_wp_error($result)) {
-            throw new Exception('Failed to update post: ' . $result->get_error_message());
-        }
-        
-        return array(
-            'id' => $post_id,
-            'updated' => true,
-            'url' => get_permalink($post_id)
-        );
-    }
-    
-    /**
-     * Verify webhook permission
-     */
-    public function verify_webhook_permission($request) {
-        // Allow if JWT token is present (will be validated in handler)
-        $data = $request->get_json_params();
-        if (empty($data)) {
-            $data = $request->get_params();
-        }
-        
-        return !empty($data['auth_token']);
-    }
-    
-    /**
-     * Get plugin status
-     */
-    public function get_status() {
-        return array(
-            'plugin' => 'n8nPress',
-            'version' => N8NPRESS_VERSION,
-            'status' => 'active',
-            'wordpress_version' => get_bloginfo('version'),
-            'rest_api_enabled' => true,
-            'jwt_enabled' => class_exists('JWT'),
-            'timestamp' => current_time('mysql')
-        );
     }
     
     /**
@@ -553,12 +339,12 @@ class N8nPress {
     public function admin_init() {
         N8nPress_Settings::get_instance();
 
-        // Auto-upgrade: ensure tables exist on version change
+        // Auto-upgrade: ensure all tables exist on version change
         $db_version = get_option( 'n8npress_db_version', '0' );
         if ( version_compare( $db_version, N8NPRESS_VERSION, '<' ) ) {
-            $this->create_tables();
-            N8nPress_Workflow_Tracker::create_table();
+            N8nPress_Logger::create_table();
             N8nPress_Token_Tracker::create_table();
+            N8nPress_Workflow_Tracker::create_table();
             update_option( 'n8npress_db_version', N8NPRESS_VERSION );
         }
     }
@@ -706,34 +492,6 @@ class N8nPress {
     }
 
     /**
-     * Create database tables
-     */
-    private function create_tables() {
-        global $wpdb;
-        
-        $charset_collate = $wpdb->get_charset_collate();
-        
-        // Logs table
-        $table_name = $wpdb->prefix . 'n8npress_logs';
-        
-        $sql = "CREATE TABLE $table_name (
-            id bigint(20) NOT NULL AUTO_INCREMENT,
-            timestamp datetime DEFAULT CURRENT_TIMESTAMP,
-            level varchar(20) NOT NULL,
-            message text NOT NULL,
-            context text,
-            ip_address varchar(45),
-            user_agent text,
-            PRIMARY KEY (id),
-            KEY timestamp (timestamp),
-            KEY level (level)
-        ) $charset_collate;";
-        
-        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-        dbDelta($sql);
-    }
-    
-    /**
      * Set default options
      */
     private function set_default_options() {
@@ -753,18 +511,6 @@ class N8nPress {
             if (get_option($option) === false) {
                 add_option($option, $value);
             }
-        }
-    }
-    /**
-     * Ensure all DB tables exist; runs on every admin_init after a version bump.
-     */
-    public function maybe_create_tables() {
-        $db_version = get_option('n8npress_db_version', '0');
-        if ( version_compare($db_version, N8NPRESS_VERSION, '<') ) {
-            N8nPress_Logger::create_table();
-            N8nPress_Token_Tracker::create_table();
-            N8nPress_Workflow_Tracker::create_table();
-            update_option('n8npress_db_version', N8NPRESS_VERSION);
         }
     }
 }

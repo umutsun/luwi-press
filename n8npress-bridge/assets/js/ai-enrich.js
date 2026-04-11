@@ -19,7 +19,7 @@
       generate_alt_text: $('input[name="n8npress_gen_alt"]').is(':checked'),
     };
 
-    $btn.prop('disabled', true).text('⏳ AI işliyor...');
+    $btn.prop('disabled', true).text('AI processing...');
     $result.html('');
 
     $.ajax({
@@ -30,15 +30,15 @@
       data: JSON.stringify({ product_id: parseInt(productId, 10), options: options }),
     })
       .done(function (res) {
-        $btn.prop('disabled', false).text('⚡ AI ile Zenginleştir');
+        $btn.prop('disabled', false).text('AI Enrich');
         $result.html(
-          '<p style="color:#46b450;">✓ ' + (res.message || 'Gönderildi') + '</p>'
+          '<p style="color:#46b450;">' + (res.message || 'Sent to n8n') + '</p>'
         );
       })
       .fail(function (xhr) {
-        $btn.prop('disabled', false).text('⚡ AI ile Zenginleştir');
-        var msg = xhr.responseJSON ? xhr.responseJSON.message : 'Bağlantı hatası';
-        $result.html('<p style="color:#dc3232;">✗ ' + msg + '</p>');
+        $btn.prop('disabled', false).text('AI Enrich');
+        var msg = xhr.responseJSON ? xhr.responseJSON.message : 'Connection error';
+        $result.html('<p style="color:#dc3232;">' + msg + '</p>');
       });
   });
 })(jQuery);

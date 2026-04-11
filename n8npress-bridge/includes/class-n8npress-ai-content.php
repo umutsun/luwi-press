@@ -747,7 +747,7 @@ class N8nPress_AI_Content {
         ));
     }
 
-    // ─── ADMIN UI: "AI ile Zenginleştir" button on product page ─────────
+    // ─── ADMIN UI: "AI Enrich" button on product page ─────────
 
     public function add_product_meta_box() {
         if (!class_exists('WooCommerce')) {
@@ -783,7 +783,7 @@ class N8nPress_AI_Content {
             <?php endif; ?>
 
             <button type="button" id="n8npress-enrich-btn" class="button button-primary" style="width:100%;margin-top:8px;">
-                &#9889; AI ile Zenginleştir
+                &#9889; AI Enrich
             </button>
 
             <div style="margin-top:8px;">

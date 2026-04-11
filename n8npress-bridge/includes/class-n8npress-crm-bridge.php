@@ -198,7 +198,7 @@ class N8nPress_CRM_Bridge {
 		if ( isset( $events[ $event_id ] ) ) {
 			$events[ $event_id ]['status']       = $status;
 			$events[ $event_id ]['processed_at'] = current_time( 'mysql' );
-			update_option( 'n8npress_crm_lifecycle_events', $events );
+			update_option( 'n8npress_crm_lifecycle_events', $events, 'no' );
 		}
 
 		return array( 'success' => true, 'event_id' => $event_id );
@@ -455,7 +455,7 @@ class N8nPress_CRM_Bridge {
 			}
 		}
 
-		update_option( 'n8npress_crm_lifecycle_events', $events );
+		update_option( 'n8npress_crm_lifecycle_events', $events, 'no' );
 	}
 
 	// ─── HELPERS ───────────────────────────────────────────────────────

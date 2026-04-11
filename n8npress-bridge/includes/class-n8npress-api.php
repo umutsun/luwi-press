@@ -179,7 +179,7 @@ class N8nPress_API {
     }
     
     private function check_rate_limit() {
-        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ) );
         $limit = n8npress_get_option('rate_limit', 1000);
         
         $transient_key = 'n8npress_rate_limit_' . md5($ip);
@@ -206,7 +206,7 @@ class N8nPress_API {
             return true; // No whitelist configured
         }
         
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
         $allowed_ips = array_map('trim', explode(',', $whitelist));
         
         return in_array($ip, $allowed_ips);
@@ -225,8 +225,8 @@ class N8nPress_API {
             // Add request metadata
             $data['request_id'] = uniqid('req_');
             $data['timestamp'] = current_time('mysql');
-            $data['ip'] = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-            $data['user_agent'] = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+            $data['ip'] = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ) );
+            $data['user_agent'] = sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ?? 'unknown' ) );
             
             // Log request
             N8nPress_Logger::log('Webhook request received', 'info', array(

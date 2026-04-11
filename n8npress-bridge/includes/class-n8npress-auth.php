@@ -400,7 +400,7 @@ class N8nPress_Auth {
         $revoked = array_filter( $revoked, function ( $ts ) use ( $cutoff ) {
             return $ts > $cutoff;
         } );
-        update_option( 'n8npress_revoked_tokens', $revoked );
+        update_option( 'n8npress_revoked_tokens', $revoked, 'no' );
     }
 
     /**

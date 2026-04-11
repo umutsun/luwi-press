@@ -545,7 +545,7 @@ class N8nPress_Open_Claw {
 		);
 
 		$messages = array_slice( $messages, -50 );
-		update_option( 'n8npress_claw_' . $conversation_id, $messages, false );
+		update_option( 'n8npress_claw_' . $conversation_id, $messages, 'no' );
 	}
 
 	// ─── LOCAL RESOLUTION: Handle common queries without AI ────────────
@@ -1486,7 +1486,7 @@ class N8nPress_Open_Claw {
 		// Keep last 50 messages per conversation
 		$messages = array_slice( $messages, -50 );
 
-		update_option( 'n8npress_claw_' . $conversation_id, $messages, false );
+		update_option( 'n8npress_claw_' . $conversation_id, $messages, 'no' );
 
 		// Track active conversation ID for the user
 		$user_id = get_current_user_id();

@@ -422,11 +422,11 @@ $wc_currency = $wc_active ? get_woocommerce_currency() : '—';
 			$module_health = array(
 				'ai_content' => array(
 					'status' => (!empty($webhook_url) && !empty($ai_key)) ? 'green' : (!empty($webhook_url) ? 'yellow' : 'red'),
-					'link' => admin_url('admin.php?page=n8npress-settings&tab=ai-content'),
+					'link' => admin_url('admin.php?page=n8npress-settings&tab=ai'),
 				),
 				'aeo' => array(
 					'status' => !empty($webhook_url) ? 'green' : 'red',
-					'link' => admin_url('admin.php?page=n8npress-settings&tab=ai-content'),
+					'link' => admin_url('admin.php?page=n8npress-settings&tab=ai'),
 				),
 				'translation' => array(
 					'status' => ($translation['plugin'] !== 'none' && !empty($webhook_url)) ? 'green' : ($translation['plugin'] !== 'none' ? 'yellow' : 'red'),
@@ -561,7 +561,7 @@ $wc_currency = $wc_active ? get_woocommerce_currency() : '—';
 					'label' => __( 'Enrich Products', 'n8npress' ),
 					'desc'  => __( 'AI descriptions, meta, FAQ', 'n8npress' ),
 					'icon'  => 'dashicons-edit-large',
-					'url'   => admin_url( 'admin.php?page=n8npress-settings&tab=ai-content' ),
+					'url'   => admin_url( 'admin.php?page=n8npress-settings&tab=ai' ),
 					'color' => '#6366f1',
 				),
 				array(

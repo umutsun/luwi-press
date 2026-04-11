@@ -50,7 +50,7 @@ class N8nPress_Security {
         }
 
         if (null === $ip) {
-            $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+            $ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
         }
 
         $allowed = array_map('trim', explode(',', $whitelist_raw));
@@ -73,7 +73,7 @@ class N8nPress_Security {
         }
 
         if (null === $ip) {
-            $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : 'unknown';
+            $ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ) );
         }
 
         $transient_key = 'n8npress_rl_' . md5($ip);
