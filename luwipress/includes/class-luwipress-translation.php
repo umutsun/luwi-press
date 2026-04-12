@@ -319,12 +319,41 @@ class LuwiPress_Translation {
                 update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_requested', current_time( 'c' ) );
 
                 $target_name = $lang_names[ $lang ] ?? ucfirst( $lang );
+
+                // Calculate max_tokens based on content length
+                $content_length = strlen( $payload['content']['description'] ?? '' );
+                $estimated_tokens = max( 4096, intval( $content_length / 3 ) );
+                $max_tokens = min( $estimated_tokens, 16000 ); // GPT-4o-mini limit
+
                 $prompt   = LuwiPress_Prompts::translation( $payload['content'], $source_name, $target_name, $product_id );
                 $messages = LuwiPress_AI_Engine::build_messages( $prompt );
                 $ai_result = LuwiPress_AI_Engine::dispatch_json( 'translation-pipeline', $messages, array(
-                    'max_tokens' => 4096,
-                    'timeout'    => 120,
+                    'max_tokens' => $max_tokens,
+                    'timeout'    => 180,
                 ) );
+
+                // If JSON parse failed, try raw text extraction as fallback
+                if ( is_wp_error( $ai_result ) && strpos( $ai_result->get_error_message(), 'parse JSON' ) !== false ) {
+                    // Retry with dispatch (non-JSON) and manually extract
+                    $raw_result = LuwiPress_AI_Engine::dispatch( 'translation-pipeline', $messages, array(
+                        'max_tokens' => $max_tokens,
+                        'timeout'    => 180,
+                    ) );
+                    if ( ! is_wp_error( $raw_result ) && ! empty( $raw_result['content'] ) ) {
+                        $raw_text = $raw_result['content'];
+                        // Try to extract JSON from the response
+                        $ai_result = LuwiPress_AI_Engine::extract_json( $raw_text );
+                        if ( ! $ai_result ) {
+                            // Last resort: use raw text as description
+                            $ai_result = array(
+                                'title'             => '',
+                                'description'       => $raw_text,
+                                'short_description' => '',
+                            );
+                            LuwiPress_Logger::log( 'Translation JSON fallback: using raw AI text for ' . $lang, 'warning' );
+                        }
+                    }
+                }
 
                 if ( is_wp_error( $ai_result ) ) {
                     update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'failed' );
