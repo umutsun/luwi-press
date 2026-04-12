@@ -290,32 +290,34 @@ class N8nPress_Translation {
             'permalink'  => get_permalink($product_id),
         ];
 
-        $result = $this->send_to_n8n('translation_request', $payload, rest_url('n8npress/v1/translation/callback'));
-        if (is_wp_error($result)) {
-            N8nPress_Logger::log('Translation request failed for product #' . $product_id, 'error', array(
-                'product_id' => $product_id,
-                'languages'  => $target_languages,
-                'error'      => $result->get_error_message(),
-            ));
-            return $result;
+        $budget = N8nPress_Token_Tracker::check_budget( 'translation-pipeline' );
+        if ( is_wp_error( $budget ) ) {
+            return $budget;
         }
 
-        N8nPress_Logger::log('Translation requested for product: ' . $product->get_name(), 'info', array(
+        // Queue one job per target language
+        $job_ids = array();
+        foreach ( $target_languages as $lang ) {
+            $job_ids[] = N8nPress_Job_Queue::add( 'translate_product', array(
+                'product_id'      => $product_id,
+                'target_language' => sanitize_text_field( $lang ),
+            ) );
+            update_post_meta( $product_id, '_n8npress_translation_' . $lang . '_status', 'processing' );
+            update_post_meta( $product_id, '_n8npress_translation_' . $lang . '_requested', current_time( 'c' ) );
+        }
+
+        N8nPress_Logger::log( 'Translation queued for product: ' . $product->get_name(), 'info', array(
             'product_id' => $product_id,
             'languages'  => $target_languages,
-        ));
+            'jobs'       => $job_ids,
+        ) );
 
-        // Track translation status
-        foreach ($target_languages as $lang) {
-            update_post_meta($product_id, '_n8npress_translation_' . $lang . '_status', 'processing');
-            update_post_meta($product_id, '_n8npress_translation_' . $lang . '_requested', current_time('c'));
-        }
-
-        return rest_ensure_response([
-            'status'           => 'processing',
+        return rest_ensure_response( array(
+            'status'           => 'queued',
             'product_id'       => $product_id,
             'target_languages' => $target_languages,
-        ]);
+            'job_ids'          => $job_ids,
+        ) );
     }
 
     /**
@@ -465,12 +467,34 @@ class N8nPress_Translation {
             'type' => 'quality_check',
         ];
 
-        $result = $this->send_to_n8n('translation_quality_check', $payload, rest_url('n8npress/v1/translation/callback'));
-        if (is_wp_error($result)) {
+        // Quality check via built-in AI Engine (synchronous — small payload)
+        $budget = N8nPress_Token_Tracker::check_budget( 'translation-pipeline' );
+        if ( is_wp_error( $budget ) ) {
+            return $budget;
+        }
+
+        $system = 'You are a translation quality auditor. Compare the source and translated content. Return JSON with: {"score": 0-100, "issues": ["issue1", ...], "suggestions": ["fix1", ...]}';
+        $user   = sprintf(
+            "Source (%s):\nTitle: %s\nDescription: %s\n\nTranslated (%s):\nTitle: %s\nDescription: %s",
+            get_option( 'n8npress_target_language', 'tr' ),
+            $payload['source_content']['name'],
+            wp_trim_words( $payload['source_content']['description'], 200 ),
+            $language,
+            $payload['translated_content']['name'] ?? '',
+            wp_trim_words( $payload['translated_content']['description'] ?? '', 200 )
+        );
+
+        $result = N8nPress_AI_Engine::call_json( $system, $user, array( 'workflow' => 'translation-pipeline', 'max_tokens' => 500 ) );
+        if ( is_wp_error( $result ) ) {
             return $result;
         }
 
-        return rest_ensure_response(['status' => 'quality_check_triggered']);
+        return rest_ensure_response( array(
+            'status'     => 'completed',
+            'product_id' => $product_id,
+            'language'   => $language,
+            'quality'    => $result,
+        ) );
     }
 
     /**
@@ -1320,24 +1344,34 @@ class N8nPress_Translation {
             'terms'            => $missing_terms,
         ];
 
-        $result = $this->send_to_n8n('taxonomy_translation_request', $payload, rest_url('n8npress/v1/translation/taxonomy-callback'));
-
-        if (is_wp_error($result)) {
-            return $result;
+        $budget = N8nPress_Token_Tracker::check_budget( 'translation-pipeline' );
+        if ( is_wp_error( $budget ) ) {
+            return $budget;
         }
 
-        N8nPress_Logger::log('Taxonomy translation requested: ' . $taxonomy, 'info', [
+        // Queue one job per target language
+        $job_ids = array();
+        foreach ( $target_languages as $lang ) {
+            $job_ids[] = N8nPress_Job_Queue::add( 'translate_taxonomy', array(
+                'taxonomy'        => $taxonomy,
+                'target_language' => sanitize_text_field( $lang ),
+                'terms'           => $missing_terms,
+            ) );
+        }
+
+        N8nPress_Logger::log( 'Taxonomy translation queued: ' . $taxonomy, 'info', array(
             'taxonomy'  => $taxonomy,
             'languages' => $target_languages,
-            'count'     => count($missing_terms),
-        ]);
+            'count'     => count( $missing_terms ),
+        ) );
 
-        return rest_ensure_response([
-            'status'           => 'processing',
+        return rest_ensure_response( array(
+            'status'           => 'queued',
             'taxonomy'         => $taxonomy,
             'target_languages' => $target_languages,
-            'terms_sent'       => count($missing_terms),
-        ]);
+            'terms_sent'       => count( $missing_terms ),
+            'job_ids'          => $job_ids,
+        ) );
     }
 
     /**
@@ -1630,47 +1664,6 @@ class N8nPress_Translation {
         }
 
         return true;
-    }
-
-    /**
-     * Send payload to n8n
-     */
-    private function send_to_n8n($event, $payload, $callback_url = '') {
-        $budget = N8nPress_Token_Tracker::check_budget( 'translation-pipeline' );
-        if ( is_wp_error( $budget ) ) {
-            return $budget;
-        }
-
-        $url = get_option('n8npress_seo_webhook_url', '');
-        if (empty($url)) {
-            return new WP_Error('no_webhook_url', 'n8n webhook URL not configured', ['status' => 500]);
-        }
-
-        $body = wp_json_encode(array_merge(
-            ['event' => $event, '_meta' => n8npress_build_meta_block($callback_url)],
-            $payload
-        ));
-        $headers = [
-            'Content-Type'     => 'application/json',
-            'X-n8nPress-Event' => $event,
-        ];
-
-        $token = get_option('n8npress_seo_api_token', '');
-        if (!empty($token)) {
-            $headers['Authorization'] = 'Bearer ' . $token;
-        }
-
-        if (class_exists('N8nPress_HMAC')) {
-            N8nPress_HMAC::add_signature_headers($headers, $body);
-        }
-
-        $response = wp_remote_post($url, [
-            'headers' => $headers,
-            'body'    => $body,
-            'timeout' => 10,
-        ]);
-
-        return is_wp_error($response) ? $response : true;
     }
 
     /**

@@ -1,12 +1,13 @@
 <?php
 /**
- * n8nPress AI Engine
+ * AI Engine — Central dispatcher for all AI operations.
  *
- * Direct AI API caller — replaces n8n workflow dependency.
- * Supports OpenAI, Anthropic (Claude), and Google (Gemini).
+ * Replaces per-class send_to_n8n() methods with a unified dispatch()
+ * call that routes to either local AI providers or the n8n webhook
+ * based on the configured processing mode.
  *
- * @package n8nPress
- * @since 1.10.0
+ * @package N8nPress
+ * @since   2.0.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -15,394 +16,524 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class N8nPress_AI_Engine {
 
-	/**
-	 * Make an AI API call with the configured provider.
-	 *
-	 * @param string $system_prompt System instructions.
-	 * @param string $user_prompt   User message / task.
-	 * @param array  $options       Optional overrides: provider, model, max_tokens, temperature.
-	 * @return array|WP_Error       Parsed JSON response or error.
-	 */
-	public static function call( $system_prompt, $user_prompt, $options = array() ) {
-		$provider   = $options['provider']   ?? get_option( 'n8npress_ai_provider', 'openai' );
-		$model      = $options['model']      ?? get_option( 'n8npress_ai_model', 'gpt-4o-mini' );
-		$max_tokens = $options['max_tokens'] ?? absint( get_option( 'n8npress_max_output_tokens', 1024 ) );
-		$temperature = $options['temperature'] ?? 0.7;
+	const MODE_LOCAL = 'local';
+	const MODE_N8N   = 'n8n';
 
-		// Budget check
+	/**
+	 * Provider instances cache.
+	 *
+	 * @var array
+	 */
+	private static $providers = array();
+
+	/**
+	 * Default provider per workflow (extracted from n8n workflow configs).
+	 *
+	 * @var array
+	 */
+	private static $workflow_providers = array(
+		'product-enricher'       => 'anthropic',
+		'product-enricher-batch' => 'anthropic',
+		'aeo-generator'          => 'anthropic',
+		'review-responder'       => 'anthropic',
+		'content-scheduler'      => 'anthropic',
+		'translation-pipeline'   => 'openai',
+		'internal-linker'        => 'anthropic',
+		'open-claw'              => 'openai',
+	);
+
+	/**
+	 * Default max_tokens per workflow.
+	 *
+	 * @var array
+	 */
+	private static $workflow_max_tokens = array(
+		'product-enricher'       => 1024,
+		'product-enricher-batch' => 2000,
+		'aeo-generator'          => 2000,
+		'review-responder'       => 500,
+		'content-scheduler'      => 4096,
+		'translation-pipeline'   => 4000,
+		'internal-linker'        => 1000,
+		'open-claw'              => 1000,
+	);
+
+	// ─── PUBLIC API ───────────────────────────────────────────────
+
+	/**
+	 * Get the current processing mode.
+	 *
+	 * @return string 'local' or 'n8n'
+	 */
+	public static function get_mode() {
+		return get_option( 'n8npress_processing_mode', self::MODE_N8N );
+	}
+
+	/**
+	 * Main dispatch — replaces every send_to_n8n() call.
+	 *
+	 * In local mode:  calls AI provider directly, parses response, returns structured result.
+	 * In n8n mode:    forwards to webhook exactly as before (backward compat).
+	 *
+	 * @param string $workflow     Workflow identifier (e.g. 'product-enricher').
+	 * @param array  $messages     Messages array: [['role' => 'system|user', 'content' => '...'], ...]
+	 * @param array  $options      Options: provider, model, max_tokens, temperature, timeout, event, n8n_payload, callback_url.
+	 * @return array|WP_Error      Normalized AI response or WP_Error.
+	 */
+	public static function dispatch( $workflow, array $messages, array $options = array() ) {
+		// Budget check.
 		if ( class_exists( 'N8nPress_Token_Tracker' ) ) {
-			$budget = N8nPress_Token_Tracker::check_budget( $options['workflow'] ?? 'ai-engine' );
+			$budget = N8nPress_Token_Tracker::check_budget( $workflow );
 			if ( is_wp_error( $budget ) ) {
 				return $budget;
 			}
 		}
 
-		// Route to provider
-		switch ( $provider ) {
-			case 'anthropic':
-				$result = self::call_anthropic( $system_prompt, $user_prompt, $model, $max_tokens, $temperature );
-				break;
-			case 'google':
-				$result = self::call_google( $system_prompt, $user_prompt, $model, $max_tokens, $temperature );
-				break;
-			case 'openai':
-			default:
-				$result = self::call_openai( $system_prompt, $user_prompt, $model, $max_tokens, $temperature );
-				break;
+		$mode = self::get_mode();
+
+		if ( self::MODE_N8N === $mode ) {
+			return self::forward_to_n8n(
+				$options['event'] ?? $workflow,
+				$options['n8n_payload'] ?? array(),
+				$options['callback_url'] ?? ''
+			);
 		}
 
+		// Local mode: call AI provider directly.
+		return self::call_ai( $workflow, $messages, $options );
+	}
+
+	/**
+	 * Call AI provider directly (local mode).
+	 *
+	 * @param string $workflow Workflow identifier.
+	 * @param array  $messages Messages array.
+	 * @param array  $options  Options.
+	 * @return array|WP_Error  Normalized response with 'content', 'input_tokens', 'output_tokens', etc.
+	 */
+	public static function call_ai( $workflow, array $messages, array $options = array() ) {
+		$provider_name = $options['provider'] ?? self::get_workflow_provider( $workflow );
+		$provider      = self::get_provider( $provider_name );
+
+		if ( is_wp_error( $provider ) ) {
+			return $provider;
+		}
+
+		$call_options = array(
+			'model'       => $options['model'] ?? $provider->get_default_model(),
+			'max_tokens'  => $options['max_tokens'] ?? self::get_workflow_max_tokens( $workflow ),
+			'temperature' => $options['temperature'] ?? 0.7,
+			'timeout'     => $options['timeout'] ?? 60,
+		);
+
+		if ( ! empty( $options['json_mode'] ) ) {
+			$call_options['json_mode'] = true;
+		}
+
+		$result = $provider->chat( $messages, $call_options );
+
 		if ( is_wp_error( $result ) ) {
-			N8nPress_Logger::log( 'AI Engine error: ' . $result->get_error_message(), 'error', array(
-				'provider' => $provider,
-				'model'    => $model,
-			) );
+			self::log_error( $workflow, $result );
 			return $result;
 		}
 
-		// Track token usage
+		// Record token usage.
 		if ( class_exists( 'N8nPress_Token_Tracker' ) ) {
 			N8nPress_Token_Tracker::record( array(
-				'workflow'      => $options['workflow'] ?? 'ai-engine',
-				'provider'      => $provider,
-				'model'         => $model,
-				'input_tokens'  => $result['usage']['input_tokens'] ?? 0,
-				'output_tokens' => $result['usage']['output_tokens'] ?? 0,
+				'workflow'      => $workflow,
+				'provider'      => $result['provider'],
+				'model'         => $result['model'],
+				'input_tokens'  => $result['input_tokens'],
+				'output_tokens' => $result['output_tokens'],
+				'execution_id'  => 'local-' . wp_generate_uuid4(),
 			) );
 		}
+
+		self::log_success( $workflow, $result );
 
 		return $result;
 	}
 
 	/**
-	 * Call and parse JSON response — convenience wrapper.
+	 * Dispatch and parse JSON response from AI.
+	 *
+	 * Convenience method: calls dispatch(), then extracts JSON from the response.
+	 * Most workflows expect JSON output, so this is the primary method to use.
+	 *
+	 * @param string $workflow Workflow identifier.
+	 * @param array  $messages Messages array.
+	 * @param array  $options  Options.
+	 * @return array|WP_Error  Parsed JSON data or WP_Error.
 	 */
-	public static function call_json( $system_prompt, $user_prompt, $options = array() ) {
-		$result = self::call( $system_prompt, $user_prompt, $options );
+	public static function dispatch_json( $workflow, array $messages, array $options = array() ) {
+		$result = self::dispatch( $workflow, $messages, $options );
+
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 
-		$text = $result['content'] ?? '';
-
-		// Extract JSON from response (AI sometimes wraps in markdown code blocks)
-		if ( preg_match( '/```(?:json)?\s*([\s\S]*?)```/', $text, $m ) ) {
-			$text = trim( $m[1] );
+		// In n8n mode, dispatch returns the webhook response, not parsed JSON.
+		if ( ! empty( $result['n8n_forwarded'] ) ) {
+			return $result;
 		}
 
-		$parsed = json_decode( $text, true );
-		if ( json_last_error() !== JSON_ERROR_NONE ) {
-			// Try to find JSON object/array in the text
-			if ( preg_match( '/(\{[\s\S]*\}|\[[\s\S]*\])/', $text, $m2 ) ) {
-				$parsed = json_decode( $m2[1], true );
-			}
-			if ( json_last_error() !== JSON_ERROR_NONE ) {
-				return new WP_Error( 'json_parse', 'Failed to parse AI response as JSON', array(
-					'raw' => substr( $text, 0, 500 ),
-				) );
-			}
+		$parsed = self::extract_json( $result['content'] );
+
+		if ( null === $parsed ) {
+			return new WP_Error(
+				'n8npress_json_parse_error',
+				__( 'Failed to parse JSON from AI response.', 'n8npress' ),
+				array(
+					'raw_content' => mb_substr( $result['content'], 0, 500 ),
+					'workflow'    => $workflow,
+				)
+			);
 		}
 
-		$parsed['_usage'] = $result['usage'] ?? array();
+		// Attach token metadata to parsed result.
+		$parsed['_ai_meta'] = array(
+			'input_tokens'  => $result['input_tokens'],
+			'output_tokens' => $result['output_tokens'],
+			'model'         => $result['model'],
+			'provider'      => $result['provider'],
+		);
+
 		return $parsed;
 	}
 
-	// ─── OpenAI ─────────────────────────────────────────────────────────
-
-	private static function call_openai( $system, $user, $model, $max_tokens, $temperature ) {
-		$api_key = get_option( 'n8npress_openai_api_key', '' );
-		if ( empty( $api_key ) ) {
-			return new WP_Error( 'no_api_key', 'OpenAI API key not configured.' );
-		}
-
-		$body = array(
-			'model'       => $model,
-			'messages'    => array(
-				array( 'role' => 'system', 'content' => $system ),
-				array( 'role' => 'user', 'content' => $user ),
-			),
-			'max_tokens'  => $max_tokens,
-			'temperature' => $temperature,
-		);
-
-		$response = wp_remote_post( 'https://api.openai.com/v1/chat/completions', array(
-			'timeout' => 90,
-			'headers' => array(
-				'Content-Type'  => 'application/json',
-				'Authorization' => 'Bearer ' . $api_key,
-			),
-			'body' => wp_json_encode( $body ),
-		) );
-
-		if ( is_wp_error( $response ) ) {
-			return $response;
-		}
-
-		$code = wp_remote_retrieve_response_code( $response );
-		$data = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		if ( $code < 200 || $code >= 300 ) {
-			return new WP_Error( 'openai_error', $data['error']['message'] ?? "HTTP $code", array( 'status' => $code ) );
-		}
-
-		return array(
-			'content' => $data['choices'][0]['message']['content'] ?? '',
-			'usage'   => array(
-				'input_tokens'  => $data['usage']['prompt_tokens'] ?? 0,
-				'output_tokens' => $data['usage']['completion_tokens'] ?? 0,
-			),
-		);
-	}
-
-	// ─── Anthropic (Claude) ─────────────────────────────────────────────
-
-	private static function call_anthropic( $system, $user, $model, $max_tokens, $temperature ) {
-		$api_key = get_option( 'n8npress_anthropic_api_key', '' );
-		if ( empty( $api_key ) ) {
-			return new WP_Error( 'no_api_key', 'Anthropic API key not configured.' );
-		}
-
-		$body = array(
-			'model'      => $model,
-			'max_tokens' => $max_tokens,
-			'system'     => $system,
-			'messages'   => array(
-				array( 'role' => 'user', 'content' => $user ),
-			),
-		);
-
-		if ( $temperature !== null ) {
-			$body['temperature'] = $temperature;
-		}
-
-		$response = wp_remote_post( 'https://api.anthropic.com/v1/messages', array(
-			'timeout' => 90,
-			'headers' => array(
-				'Content-Type'      => 'application/json',
-				'x-api-key'         => $api_key,
-				'anthropic-version' => '2023-06-01',
-			),
-			'body' => wp_json_encode( $body ),
-		) );
-
-		if ( is_wp_error( $response ) ) {
-			return $response;
-		}
-
-		$code = wp_remote_retrieve_response_code( $response );
-		$data = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		if ( $code < 200 || $code >= 300 ) {
-			return new WP_Error( 'anthropic_error', $data['error']['message'] ?? "HTTP $code", array( 'status' => $code ) );
-		}
-
-		return array(
-			'content' => $data['content'][0]['text'] ?? '',
-			'usage'   => array(
-				'input_tokens'  => $data['usage']['input_tokens'] ?? 0,
-				'output_tokens' => $data['usage']['output_tokens'] ?? 0,
-			),
-		);
-	}
-
-	// ─── Google (Gemini) ────────────────────────────────────────────────
-
-	private static function call_google( $system, $user, $model, $max_tokens, $temperature ) {
-		$api_key = get_option( 'n8npress_google_ai_api_key', '' );
-		if ( empty( $api_key ) ) {
-			return new WP_Error( 'no_api_key', 'Google AI API key not configured.' );
-		}
-
-		$url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model . ':generateContent?key=' . $api_key;
-
-		$body = array(
-			'systemInstruction' => array(
-				'parts' => array( array( 'text' => $system ) ),
-			),
-			'contents' => array(
-				array(
-					'parts' => array( array( 'text' => $user ) ),
-				),
-			),
-			'generationConfig' => array(
-				'maxOutputTokens' => $max_tokens,
-				'temperature'     => $temperature,
-			),
-		);
-
-		$response = wp_remote_post( $url, array(
-			'timeout' => 90,
-			'headers' => array( 'Content-Type' => 'application/json' ),
-			'body'    => wp_json_encode( $body ),
-		) );
-
-		if ( is_wp_error( $response ) ) {
-			return $response;
-		}
-
-		$code = wp_remote_retrieve_response_code( $response );
-		$data = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		if ( $code < 200 || $code >= 300 ) {
-			$err_msg = $data['error']['message'] ?? "HTTP $code";
-			return new WP_Error( 'google_error', $err_msg, array( 'status' => $code ) );
-		}
-
-		$text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
-		$usage = $data['usageMetadata'] ?? array();
-
-		return array(
-			'content' => $text,
-			'usage'   => array(
-				'input_tokens'  => $usage['promptTokenCount'] ?? 0,
-				'output_tokens' => $usage['candidatesTokenCount'] ?? 0,
-			),
-		);
-	}
-
-	// ─── Prompt Templates ───────────────────────────────────────────────
+	// ─── N8N FORWARDING (backward compat) ─────────────────────────
 
 	/**
-	 * Get a prompt template for a specific task.
+	 * Forward request to n8n webhook (extracted from duplicate send_to_n8n methods).
 	 *
-	 * @param string $task    Task type: enrich_product, translate_product, translate_taxonomy, generate_aeo.
-	 * @param array  $context Data to fill into the template.
-	 * @return array          ['system' => '...', 'user' => '...']
+	 * @param string $event        Event type (e.g. 'product_enrich').
+	 * @param array  $payload      Full payload to send.
+	 * @param string $callback_url Callback URL for n8n to POST results back.
+	 * @return array|WP_Error      Response with n8n_forwarded flag.
 	 */
-	public static function get_prompt( $task, $context = array() ) {
-		switch ( $task ) {
+	public static function forward_to_n8n( $event, array $payload, $callback_url = '' ) {
+		$webhook_url = get_option( 'n8npress_seo_webhook_url', '' );
+		if ( empty( $webhook_url ) ) {
+			return new WP_Error(
+				'n8npress_no_webhook',
+				__( 'n8n webhook URL is not configured. Set it in Settings or switch to Local AI mode.', 'n8npress' )
+			);
+		}
 
-			case 'enrich_product':
-				return array(
-					'system' => 'You are an e-commerce SEO expert. Generate SEO-optimized content for the given product. Respond ONLY in valid JSON format, no extra text.',
-					'user'   => self::build_enrich_prompt( $context ),
-				);
+		$body = wp_json_encode( array_merge(
+			array(
+				'event' => $event,
+				'_meta' => n8npress_build_meta_block( $callback_url ),
+			),
+			$payload
+		) );
 
-			case 'translate_product':
-				return array(
-					'system' => 'You are an expert SEO-aware translator for e-commerce. Translate content preserving HTML structure, brand names, and SEO intent. Respond ONLY with valid JSON.',
-					'user'   => self::build_translate_product_prompt( $context ),
-				);
+		$headers = array(
+			'Content-Type'      => 'application/json',
+			'X-n8nPress-Event'  => $event,
+			'X-n8nPress-Source' => get_site_url(),
+		);
 
-			case 'translate_taxonomy':
-				return array(
-					'system' => 'You are a professional translator. Translate taxonomy terms accurately. Keep brand names as-is. Create SEO-friendly slugs. Respond ONLY with valid JSON array.',
-					'user'   => self::build_translate_taxonomy_prompt( $context ),
-				);
+		$api_token = get_option( 'n8npress_seo_api_token', '' );
+		if ( ! empty( $api_token ) ) {
+			$headers['Authorization'] = 'Bearer ' . $api_token;
+		}
 
-			case 'generate_aeo':
-				return array(
-					'system' => 'You are an SEO and AEO (Answer Engine Optimization) expert. Generate structured data content optimized for search engines and voice assistants. Respond ONLY with valid JSON.',
-					'user'   => self::build_aeo_prompt( $context ),
-				);
+		// HMAC signing if available.
+		if ( class_exists( 'N8nPress_HMAC' ) ) {
+			N8nPress_HMAC::add_signature_headers( $headers, $body );
+		}
 
+		$response = wp_remote_post( $webhook_url, array(
+			'headers' => $headers,
+			'body'    => $body,
+			'timeout' => absint( get_option( 'n8npress_webhook_timeout', 30 ) ),
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error(
+				'n8npress_webhook_error',
+				sprintf( __( 'n8n webhook call failed: %s', 'n8npress' ), $response->get_error_message() )
+			);
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( $status_code >= 400 ) {
+			return new WP_Error(
+				'n8npress_webhook_error',
+				sprintf( __( 'n8n webhook returned HTTP %d.', 'n8npress' ), $status_code )
+			);
+		}
+
+		return array(
+			'n8n_forwarded' => true,
+			'status_code'   => $status_code,
+			'event'         => $event,
+		);
+	}
+
+	// ─── PROVIDER MANAGEMENT ──────────────────────────────────────
+
+	/**
+	 * Get a provider instance.
+	 *
+	 * @param string $name Provider name: 'anthropic', 'openai', 'google'.
+	 * @return N8nPress_AI_Provider|WP_Error
+	 */
+	public static function get_provider( $name ) {
+		if ( isset( self::$providers[ $name ] ) ) {
+			return self::$providers[ $name ];
+		}
+
+		switch ( $name ) {
+			case 'anthropic':
+				$provider = new N8nPress_Provider_Anthropic();
+				break;
+			case 'openai':
+				$provider = new N8nPress_Provider_OpenAI();
+				break;
+			case 'google':
+				$provider = new N8nPress_Provider_Google();
+				break;
 			default:
-				return array(
-					'system' => 'You are a helpful assistant. Respond in valid JSON format.',
-					'user'   => $context['prompt'] ?? '',
+				return new WP_Error(
+					'n8npress_unknown_provider',
+					sprintf( __( 'Unknown AI provider: %s', 'n8npress' ), $name )
 				);
 		}
-	}
 
-	private static function build_enrich_prompt( $c ) {
-		$lang = $c['language'] ?? 'English';
-		$p = "Generate SEO-optimized content for the following product in {$lang}:\n\n";
-		$p .= "Product Name: " . ( $c['name'] ?? '' ) . "\n";
-		$p .= "Category: " . ( is_array( $c['categories'] ?? null ) ? implode( ', ', $c['categories'] ) : ( $c['categories'] ?? '' ) ) . "\n";
-		$p .= "Price: " . ( $c['price'] ?? '' ) . " " . ( $c['currency'] ?? 'USD' ) . "\n";
-		$p .= "SKU: " . ( $c['sku'] ?? '' ) . "\n";
-		$p .= "Current Description: " . ( $c['description'] ?? 'None' ) . "\n";
-		$p .= "Short Description: " . ( $c['short_description'] ?? 'None' ) . "\n";
-
-		if ( ! empty( $c['attributes'] ) ) {
-			$p .= "Attributes: " . ( is_string( $c['attributes'] ) ? $c['attributes'] : wp_json_encode( $c['attributes'] ) ) . "\n";
+		if ( ! $provider->is_configured() ) {
+			return new WP_Error(
+				'n8npress_provider_not_configured',
+				sprintf(
+					/* translators: %s: provider display name */
+					__( '%s API key is not configured. Go to n8nPress Settings > AI Providers to add your API key.', 'n8npress' ),
+					ucfirst( $name )
+				)
+			);
 		}
 
-		$p .= "\nRespond in JSON:\n";
-		$p .= '{"description":"Detailed HTML product description (min 200 words, use <h3>, <p>, <ul>)",';
-		$p .= '"short_description":"Short description (1-2 sentences with keyword)",';
-		$p .= '"meta_title":"SEO title (max 60 chars)",';
-		$p .= '"meta_description":"SEO meta description (max 155 chars)",';
-		$p .= '"faq":[{"question":"Q1","answer":"A1"},{"question":"Q2","answer":"A2"},{"question":"Q3","answer":"A3"}],';
-		$p .= '"alt_text_main":"Main image alt text",';
-		$p .= '"tags":["suggested","tags"]}';
-
-		return $p;
+		self::$providers[ $name ] = $provider;
+		return $provider;
 	}
 
-	private static function build_translate_product_prompt( $c ) {
-		$source = $c['source_language'] ?? 'English';
-		$target = $c['target_language'] ?? 'French';
-
-		$p = "Translate the following product from {$source} to {$target}.\n\n";
-		$p .= "RULES: Preserve brand names as-is. Meta title <60 chars. Meta description <160 chars. Natural language. Preserve HTML.\n\n";
-		$p .= "Product ID: " . ( $c['product_id'] ?? '' ) . "\n";
-		$p .= "Title: " . ( $c['name'] ?? '' ) . "\n";
-		$p .= "Description: " . ( $c['description'] ?? '' ) . "\n";
-		$p .= "Short Description: " . ( $c['short_description'] ?? '' ) . "\n";
-		$p .= "Meta Title: " . ( $c['meta_title'] ?? '' ) . "\n";
-		$p .= "Meta Description: " . ( $c['meta_description'] ?? '' ) . "\n";
-		$p .= "Focus Keyword: " . ( $c['focus_keyword'] ?? '' ) . "\n\n";
-		$p .= 'Respond ONLY with valid JSON: {"product_id":' . ( $c['product_id'] ?? 0 ) . ',"target_language":"' . esc_attr( $target ) . '",';
-		$p .= '"name":"","description":"","short_description":"","meta_title":"","meta_description":"","focus_keyword":"","slug":""}';
-
-		return $p;
+	/**
+	 * Get all configured providers.
+	 *
+	 * @return array Associative array of name => N8nPress_AI_Provider.
+	 */
+	public static function get_configured_providers() {
+		$configured = array();
+		foreach ( array( 'anthropic', 'openai', 'google' ) as $name ) {
+			$provider = self::get_provider( $name );
+			if ( ! is_wp_error( $provider ) ) {
+				$configured[ $name ] = $provider;
+			}
+		}
+		return $configured;
 	}
 
-	private static function build_translate_taxonomy_prompt( $c ) {
-		$source = $c['source_language'] ?? 'English';
-		$target = $c['target_language'] ?? 'French';
-		$taxonomy = $c['taxonomy'] ?? 'product_cat';
-
-		$p = "Translate the following {$taxonomy} names from {$source} to {$target}.\n\nTerms:\n";
-
-		foreach ( $c['terms'] ?? array() as $term ) {
-			$p .= "- term_id: " . $term['term_id'] . ", name: \"" . $term['name'] . "\", slug: \"" . $term['slug'] . "\"\n";
+	/**
+	 * Get the preferred provider for a workflow.
+	 *
+	 * @param string $workflow Workflow identifier.
+	 * @return string Provider name.
+	 */
+	public static function get_workflow_provider( $workflow ) {
+		// Allow per-workflow override via option.
+		$override = get_option( 'n8npress_workflow_provider_' . $workflow, '' );
+		if ( ! empty( $override ) ) {
+			return $override;
 		}
 
-		$p .= "\nRULES:\n- Keep brand names as-is\n- Create SEO-friendly slugs (lowercase, hyphens, no special chars)\n- Return ONLY valid JSON array\n\n";
-		$p .= 'Respond with: [{"term_id":123,"name":"translated name","slug":"translated-slug","language":"' . esc_attr( $target ) . '"}]';
+		// Fall back to global default, then workflow default.
+		$global = get_option( 'n8npress_default_provider', '' );
+		if ( ! empty( $global ) ) {
+			return $global;
+		}
 
-		return $p;
+		return self::$workflow_providers[ $workflow ] ?? 'anthropic';
 	}
 
-	private static function build_aeo_prompt( $c ) {
-		$lang = $c['language'] ?? 'English';
-
-		$p = "For the following product, generate AEO content in {$lang}:\n\n";
-		$p .= "Product: " . ( $c['name'] ?? '' ) . "\n";
-		$p .= "Description: " . ( $c['description'] ?? '' ) . "\n";
-		$p .= "Categories: " . ( is_array( $c['categories'] ?? null ) ? implode( ', ', $c['categories'] ) : ( $c['categories'] ?? '' ) ) . "\n\n";
-		$p .= "Generate:\n";
-		$p .= "1. \"faqs\": Array of 5 FAQ pairs optimized for People Also Ask. Each with \"question\" and \"answer\" keys.\n";
-		$p .= "2. \"howto\": If applicable, a HowTo schema with \"name\", \"description\", and \"steps\" array (each step has \"name\" and \"text\"). Set to null if not applicable.\n";
-		$p .= "3. \"speakable\": A 2-3 sentence summary optimized for voice search.\n\n";
-		$p .= 'Respond ONLY with valid JSON: {"faqs":[{"question":"","answer":""}],"howto":null,"speakable":""}';
-
-		return $p;
+	/**
+	 * Get max tokens for a workflow.
+	 *
+	 * @param string $workflow Workflow identifier.
+	 * @return int
+	 */
+	public static function get_workflow_max_tokens( $workflow ) {
+		return self::$workflow_max_tokens[ $workflow ] ?? absint( get_option( 'n8npress_max_output_tokens', 1024 ) );
 	}
 
-	// ─── High-Level Task Methods ────────────────────────────────────────
+	// ─── JSON PARSING ─────────────────────────────────────────────
+
+	/**
+	 * Extract JSON from AI response text.
+	 *
+	 * AI models often wrap JSON in markdown code blocks or add extra text.
+	 * This method handles all common patterns.
+	 *
+	 * @param string $text Raw AI response text.
+	 * @return array|null  Parsed JSON or null on failure.
+	 */
+	public static function extract_json( $text ) {
+		$text = trim( $text );
+
+		// 1. Try direct decode.
+		$decoded = json_decode( $text, true );
+		if ( null !== $decoded ) {
+			return $decoded;
+		}
+
+		// 2. Strip markdown code fences: ```json ... ``` or ``` ... ```
+		if ( preg_match( '/```(?:json)?\s*\n?(.*?)\n?\s*```/s', $text, $matches ) ) {
+			$decoded = json_decode( trim( $matches[1] ), true );
+			if ( null !== $decoded ) {
+				return $decoded;
+			}
+		}
+
+		// 3. Find first { to last } (object).
+		$first_brace = strpos( $text, '{' );
+		$last_brace  = strrpos( $text, '}' );
+		if ( false !== $first_brace && false !== $last_brace && $last_brace > $first_brace ) {
+			$candidate = substr( $text, $first_brace, $last_brace - $first_brace + 1 );
+			$decoded   = json_decode( $candidate, true );
+			if ( null !== $decoded ) {
+				return $decoded;
+			}
+		}
+
+		// 4. Find first [ to last ] (array).
+		$first_bracket = strpos( $text, '[' );
+		$last_bracket  = strrpos( $text, ']' );
+		if ( false !== $first_bracket && false !== $last_bracket && $last_bracket > $first_bracket ) {
+			$candidate = substr( $text, $first_bracket, $last_bracket - $first_bracket + 1 );
+			$decoded   = json_decode( $candidate, true );
+			if ( null !== $decoded ) {
+				return $decoded;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Build messages array from a prompt pair.
+	 *
+	 * @param array $prompt ['system' => string, 'user' => string] from N8nPress_Prompts.
+	 * @return array Messages array suitable for provider chat().
+	 */
+	public static function build_messages( array $prompt ) {
+		$messages = array();
+
+		if ( ! empty( $prompt['system'] ) ) {
+			$messages[] = array( 'role' => 'system', 'content' => $prompt['system'] );
+		}
+
+		if ( ! empty( $prompt['user'] ) ) {
+			$messages[] = array( 'role' => 'user', 'content' => $prompt['user'] );
+		}
+
+		return $messages;
+	}
+
+	// ─── TEST CONNECTION ──────────────────────────────────────────
+
+	/**
+	 * Test an AI provider connection with a minimal request.
+	 *
+	 * @param string $provider_name Provider name.
+	 * @return array|WP_Error       ['success' => bool, 'model' => string, 'latency_ms' => int]
+	 */
+	public static function test_connection( $provider_name ) {
+		$provider = self::get_provider( $provider_name );
+		if ( is_wp_error( $provider ) ) {
+			return $provider;
+		}
+
+		$start = microtime( true );
+
+		$result = $provider->chat(
+			array(
+				array( 'role' => 'user', 'content' => 'Say "OK" and nothing else.' ),
+			),
+			array(
+				'max_tokens'  => 10,
+				'temperature' => 0,
+				'timeout'     => 15,
+			)
+		);
+
+		$latency = round( ( microtime( true ) - $start ) * 1000 );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return array(
+			'success'    => true,
+			'model'      => $result['model'],
+			'provider'   => $provider_name,
+			'latency_ms' => $latency,
+			'response'   => mb_substr( $result['content'], 0, 50 ),
+		);
+	}
+
+	// ─── LOGGING ──────────────────────────────────────────────────
+
+	/**
+	 * Log a successful AI call.
+	 *
+	 * @param string $workflow Workflow name.
+	 * @param array  $result   AI response.
+	 */
+	private static function log_success( $workflow, array $result ) {
+		if ( class_exists( 'N8nPress_Logger' ) ) {
+			N8nPress_Logger::log(
+				sprintf(
+					'AI call success: %s via %s/%s (%d+%d tokens)',
+					$workflow,
+					$result['provider'],
+					$result['model'],
+					$result['input_tokens'],
+					$result['output_tokens']
+				),
+				'debug',
+				array( 'workflow' => $workflow )
+			);
+		}
+	}
+
+	/**
+	 * Log a failed AI call.
+	 *
+	 * @param string   $workflow Workflow name.
+	 * @param WP_Error $error    Error object.
+	 */
+	private static function log_error( $workflow, WP_Error $error ) {
+		if ( class_exists( 'N8nPress_Logger' ) ) {
+			N8nPress_Logger::log(
+				sprintf( 'AI call failed: %s — %s', $workflow, $error->get_error_message() ),
+				'error',
+				array( 'workflow' => $workflow, 'code' => $error->get_error_code() )
+			);
+		}
+	}
+
+	// ─── HIGH-LEVEL TASK METHODS ──────────────────────────────────
 
 	/**
 	 * Enrich a WooCommerce product with AI-generated content.
-	 *
-	 * @param int   $product_id WooCommerce product ID.
-	 * @param array $options    Optional overrides.
-	 * @return array|WP_Error   Enrichment result.
 	 */
 	public static function enrich_product( $product_id, $options = array() ) {
 		if ( ! function_exists( 'wc_get_product' ) ) {
 			return new WP_Error( 'wc_required', 'WooCommerce is required.' );
 		}
-
 		$product = wc_get_product( $product_id );
 		if ( ! $product ) {
 			return new WP_Error( 'not_found', 'Product not found.' );
 		}
-
-		$language = get_option( 'n8npress_target_language', 'en' );
-		$lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian' );
-		$lang_name = $lang_names[ $language ] ?? ucfirst( $language );
 
 		$context = array(
 			'name'              => $product->get_name(),
@@ -411,16 +542,23 @@ class N8nPress_AI_Engine {
 			'price'             => $product->get_price(),
 			'sku'               => $product->get_sku(),
 			'categories'        => wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'names' ) ),
+			'tags'              => wp_get_post_terms( $product_id, 'product_tag', array( 'fields' => 'names' ) ),
 			'attributes'        => $product->get_attributes(),
+			'weight'            => $product->get_weight(),
+			'dimensions'        => array(
+				'length' => $product->get_length(),
+				'width'  => $product->get_width(),
+				'height' => $product->get_height(),
+			),
 			'currency'          => function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'USD',
-			'language'          => $lang_name,
 		);
 
-		$prompt = self::get_prompt( 'enrich_product', $context );
-		$options['workflow'] = 'product-enricher';
-		$options['max_tokens'] = $options['max_tokens'] ?? 2048;
+		$prompt   = N8nPress_Prompts::product_enrichment( $context, $options );
+		$messages = self::build_messages( $prompt );
 
-		return self::call_json( $prompt['system'], $prompt['user'], $options );
+		return self::dispatch_json( 'product-enricher', $messages, array_merge( $options, array(
+			'max_tokens' => 2048,
+		) ) );
 	}
 
 	/**
@@ -430,44 +568,36 @@ class N8nPress_AI_Engine {
 		if ( ! function_exists( 'wc_get_product' ) ) {
 			return new WP_Error( 'wc_required', 'WooCommerce is required.' );
 		}
-
 		$product = wc_get_product( $product_id );
 		if ( ! $product ) {
 			return new WP_Error( 'not_found', 'Product not found.' );
 		}
 
-		$source = get_option( 'n8npress_target_language', 'en' );
+		$detector  = N8nPress_Plugin_Detector::get_instance();
+		$seo       = $detector->detect_seo();
+		$meta_keys = $seo['meta_keys'] ?? array();
+
 		$lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese', 'pt-pt' => 'Portuguese', 'ko' => 'Korean' );
+		$source_code = get_option( 'n8npress_target_language', 'en' );
 
-		// Get SEO meta
-		$detector = N8nPress_Plugin_Detector::get_instance();
-		$seo = $detector->detect_seo();
-		$meta_title = '';
-		$meta_desc = '';
-		$focus_kw = '';
-		if ( ! empty( $seo['meta_keys'] ) ) {
-			$meta_title = get_post_meta( $product_id, $seo['meta_keys']['title'] ?? '', true );
-			$meta_desc  = get_post_meta( $product_id, $seo['meta_keys']['description'] ?? '', true );
-			$focus_kw   = get_post_meta( $product_id, $seo['meta_keys']['focus_kw'] ?? $seo['meta_keys']['focus_keyword'] ?? '', true );
-		}
-
-		$context = array(
-			'product_id'       => $product_id,
+		$content = array(
 			'name'             => $product->get_name(),
 			'description'      => $product->get_description(),
 			'short_description' => $product->get_short_description(),
-			'meta_title'       => $meta_title,
-			'meta_description' => $meta_desc,
-			'focus_keyword'    => $focus_kw,
-			'source_language'  => $lang_names[ $source ] ?? ucfirst( $source ),
-			'target_language'  => $lang_names[ $target_language ] ?? ucfirst( $target_language ),
+			'meta_title'       => get_post_meta( $product_id, $meta_keys['title'] ?? '', true ),
+			'meta_description' => get_post_meta( $product_id, $meta_keys['description'] ?? '', true ),
+			'focus_keyword'    => get_post_meta( $product_id, $meta_keys['focus_kw'] ?? $meta_keys['focus_keyword'] ?? '', true ),
 		);
 
-		$prompt = self::get_prompt( 'translate_product', $context );
-		$options['workflow'] = 'translation-pipeline';
-		$options['max_tokens'] = $options['max_tokens'] ?? 4096;
+		$source_lang = $lang_names[ $source_code ] ?? ucfirst( $source_code );
+		$target_lang = $lang_names[ $target_language ] ?? ucfirst( $target_language );
 
-		return self::call_json( $prompt['system'], $prompt['user'], $options );
+		$prompt   = N8nPress_Prompts::translation( $content, $source_lang, $target_lang, $product_id );
+		$messages = self::build_messages( $prompt );
+
+		return self::dispatch_json( 'translation-pipeline', $messages, array_merge( $options, array(
+			'max_tokens' => 4096,
+		) ) );
 	}
 
 	/**
@@ -477,26 +607,140 @@ class N8nPress_AI_Engine {
 		if ( ! function_exists( 'wc_get_product' ) ) {
 			return new WP_Error( 'wc_required', 'WooCommerce is required.' );
 		}
-
 		$product = wc_get_product( $product_id );
 		if ( ! $product ) {
 			return new WP_Error( 'not_found', 'Product not found.' );
 		}
 
-		$language = get_option( 'n8npress_target_language', 'en' );
-		$lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian' );
-
 		$context = array(
 			'name'        => $product->get_name(),
 			'description' => wp_strip_all_tags( $product->get_description() ),
 			'categories'  => wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'names' ) ),
-			'language'    => $lang_names[ $language ] ?? ucfirst( $language ),
 		);
 
-		$prompt = self::get_prompt( 'generate_aeo', $context );
-		$options['workflow'] = 'aeo-generator';
-		$options['max_tokens'] = $options['max_tokens'] ?? 2000;
+		$prompt   = N8nPress_Prompts::aeo_faq( $context, $options );
+		$messages = self::build_messages( $prompt );
 
-		return self::call_json( $prompt['system'], $prompt['user'], $options );
+		return self::dispatch_json( 'aeo-generator', $messages, array_merge( $options, array(
+			'max_tokens' => 2000,
+		) ) );
+	}
+
+	/**
+	 * Translate taxonomy terms.
+	 */
+	public static function translate_taxonomy( $terms, $target_language, $taxonomy = 'product_cat', $options = array() ) {
+		$lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch' );
+		$source_code = get_option( 'n8npress_target_language', 'en' );
+		$source_lang = $lang_names[ $source_code ] ?? ucfirst( $source_code );
+		$target_lang = $lang_names[ $target_language ] ?? ucfirst( $target_language );
+
+		$prompt   = N8nPress_Prompts::taxonomy_translation( $terms, $taxonomy, $source_lang, $target_lang );
+		$messages = self::build_messages( $prompt );
+
+		return self::dispatch_json( 'translation-pipeline', $messages, array_merge( $options, array(
+			'max_tokens' => 2000,
+		) ) );
+	}
+
+	/**
+	 * Generate AI response to a product review.
+	 */
+	public static function respond_to_review( $comment_id, $options = array() ) {
+		$comment = get_comment( $comment_id );
+		if ( ! $comment ) {
+			return new WP_Error( 'not_found', 'Comment not found.' );
+		}
+		$product_name = get_the_title( $comment->comment_post_ID );
+		$rating       = get_comment_meta( $comment_id, 'rating', true );
+
+		$context = array(
+			'product_name'  => $product_name,
+			'review_author' => $comment->comment_author,
+			'review_text'   => $comment->comment_content,
+			'rating'        => intval( $rating ),
+		);
+
+		$store_name = get_bloginfo( 'name' );
+		$prompt   = N8nPress_Prompts::review_response( $context, $store_name );
+		$messages = self::build_messages( $prompt );
+
+		return self::dispatch_json( 'review-responder', $messages, array_merge( $options, array(
+			'max_tokens' => 500,
+		) ) );
+	}
+
+	/**
+	 * Generate a blog post on a given topic.
+	 */
+	public static function generate_blog_post( $topic, $language = 'en', $options = array() ) {
+		$context = array(
+			'topic'    => $topic,
+			'language' => $language,
+			'store'    => get_bloginfo( 'name' ),
+		);
+
+		$prompt   = N8nPress_Prompts::content_generation( $context );
+		$messages = self::build_messages( $prompt );
+
+		return self::dispatch_json( 'content-scheduler', $messages, array_merge( $options, array(
+			'max_tokens' => 4096,
+		) ) );
+	}
+
+	/**
+	 * Generate an AI image (DALL-E / Gemini Imagen).
+	 */
+	public static function generate_image( $prompt_text, $options = array() ) {
+		$provider = get_option( 'n8npress_image_provider', 'dall-e-3' );
+		$api_key  = get_option( 'n8npress_openai_api_key', '' );
+
+		if ( strpos( $provider, 'dall-e' ) !== false ) {
+			if ( empty( $api_key ) ) {
+				return new WP_Error( 'no_key', 'OpenAI API key required for DALL-E.' );
+			}
+			$response = wp_remote_post( 'https://api.openai.com/v1/images/generations', array(
+				'timeout' => 60,
+				'headers' => array(
+					'Content-Type'  => 'application/json',
+					'Authorization' => 'Bearer ' . $api_key,
+				),
+				'body' => wp_json_encode( array(
+					'model'  => $provider,
+					'prompt' => $prompt_text,
+					'n'      => 1,
+					'size'   => '1024x1024',
+				) ),
+			) );
+
+			if ( is_wp_error( $response ) ) return $response;
+			$data = json_decode( wp_remote_retrieve_body( $response ), true );
+			$url  = $data['data'][0]['url'] ?? '';
+
+			if ( empty( $url ) ) {
+				return new WP_Error( 'no_image', $data['error']['message'] ?? 'Image generation failed.' );
+			}
+			return array( 'url' => $url, 'provider' => $provider );
+		}
+
+		return new WP_Error( 'unsupported', 'Image provider not supported: ' . $provider );
+	}
+
+	/**
+	 * Resolve internal link markers in a post.
+	 */
+	public static function resolve_internal_links( $post_id, $markers, $candidates, $options = array() ) {
+		$post = get_post( $post_id );
+		$post_data = array(
+			'title'   => $post ? $post->post_title : '',
+			'content' => $post ? wp_strip_all_tags( substr( $post->post_content, 0, 500 ) ) : '',
+		);
+
+		$prompt   = N8nPress_Prompts::internal_linking( $post_data, $markers, get_bloginfo( 'name' ), get_site_url() );
+		$messages = self::build_messages( $prompt );
+
+		return self::dispatch_json( 'internal-linker', $messages, array_merge( $options, array(
+			'max_tokens' => 1000,
+		) ) );
 	}
 }

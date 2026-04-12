@@ -164,24 +164,12 @@ class N8nPress_AI_Content {
     }
 
     /**
-     * Send product for AI enrichment — native (Job Queue) or n8n (legacy webhook).
+     * Queue product for AI enrichment via Job Queue + AI Engine.
      */
-    private function send_to_n8n_for_enrichment($product, $options = array()) {
+    private function send_to_n8n_for_enrichment( $product, $options = array() ) {
         $budget = N8nPress_Token_Tracker::check_budget( 'product-enricher' );
         if ( is_wp_error( $budget ) ) {
             return $budget;
-        }
-
-        // Native mode: if no webhook URL configured, use Job Queue + AI Engine
-        if ( empty( $this->n8n_webhook_url ) ) {
-            $job_id = N8nPress_Job_Queue::add( 'enrich_product', array(
-                'product_id' => $product->get_id(),
-                'options'    => $options ?: array(),
-            ) );
-            if ( ! $job_id ) {
-                return new WP_Error( 'queue_failed', 'Failed to queue enrichment job.' );
-            }
-            return array( 'mode' => 'native', 'job_id' => $job_id );
         }
 
         $product_id = $product->get_id();
@@ -192,82 +180,18 @@ class N8nPress_AI_Content {
             return new WP_Error( 'already_processing', 'Product #' . $product_id . ' is already being enriched.' );
         }
         set_transient( $lock_key, true, 300 ); // 5-minute lock
-        $image_url  = wp_get_attachment_url($product->get_image_id());
-        $gallery    = array_map('wp_get_attachment_url', $product->get_gallery_image_ids());
 
-        $payload = array(
-            'event'   => 'product_enrich',
-            '_meta'   => n8npress_build_meta_block( rest_url( 'n8npress/v1/product/enrich-callback' ) ),
-            'product' => array(
-                'id'                => $product_id,
-                'name'              => $product->get_name(),
-                'short_description' => $product->get_short_description(),
-                'description'       => $product->get_description(),
-                'sku'               => $product->get_sku(),
-                'price'             => $product->get_price(),
-                'regular_price'     => $product->get_regular_price(),
-                'sale_price'        => $product->get_sale_price(),
-                'categories'        => wp_get_post_terms($product_id, 'product_cat', array('fields' => 'names')),
-                'tags'              => wp_get_post_terms($product_id, 'product_tag', array('fields' => 'names')),
-                'attributes'        => $this->get_product_attributes($product),
-                'image_url'         => $image_url ?: '',
-                'gallery_urls'      => array_filter($gallery),
-                'weight'            => $product->get_weight(),
-                'dimensions'        => array(
-                    'length' => $product->get_length(),
-                    'width'  => $product->get_width(),
-                    'height' => $product->get_height(),
-                ),
-                'stock_status'      => $product->get_stock_status(),
-                'permalink'         => get_permalink($product_id),
-            ),
-            'options' => wp_parse_args($options, array(
-                'generate_description'       => true,
-                'generate_short_description' => true,
-                'generate_meta_title'        => true,
-                'generate_meta_description'  => true,
-                'generate_faq'               => true,
-                'generate_schema'            => true,
-                'generate_alt_text'          => true,
-                'generate_image'             => (bool) get_option( 'n8npress_enrich_generate_image', false ),
-                'image_provider'             => get_option( 'n8npress_image_provider', 'dall-e-3' ),
-                'target_language'            => get_option('n8npress_target_language', 'tr'),
-            )),
-        );
+        $job_id = N8nPress_Job_Queue::add( 'enrich_product', array(
+            'product_id' => $product_id,
+            'options'    => $options ?: array(),
+        ) );
 
-        $headers = array(
-            'Content-Type'      => 'application/json',
-            'X-n8nPress-Event'  => 'product_enrich',
-            'X-n8nPress-Source' => get_site_url(),
-        );
-
-        if (!empty($this->n8n_api_token)) {
-            $headers['Authorization'] = 'Bearer ' . $this->n8n_api_token;
+        if ( ! $job_id ) {
+            delete_transient( $lock_key );
+            return new WP_Error( 'queue_failed', 'Failed to queue enrichment job.' );
         }
 
-        // n8n webhook URL + path for product enricher
-        $url = trailingslashit($this->n8n_webhook_url) . 'product-enrich';
-
-        $response = wp_remote_post($url, array(
-            'headers' => $headers,
-            'body'    => wp_json_encode($payload),
-            'timeout' => 15,
-        ));
-
-        if (is_wp_error($response)) {
-            N8nPress_Logger::log('Failed to send product to n8n', 'error', array(
-                'product_id' => $product->get_id(),
-                'error'      => $response->get_error_message(),
-            ));
-            return $response;
-        }
-
-        $code = wp_remote_retrieve_response_code($response);
-        if ($code < 200 || $code >= 300) {
-            return new WP_Error('n8n_error', 'n8n returned HTTP ' . $code, array('status' => 502));
-        }
-
-        return true;
+        return array( 'job_id' => $job_id );
     }
 
     // ─── CALLBACK: Receive enriched data from n8n ───────────────────────

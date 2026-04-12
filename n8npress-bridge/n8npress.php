@@ -93,9 +93,14 @@ class N8nPress {
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-site-config.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-email-proxy.php';
 
-        // Native AI engine & job queue (n8n-independent)
+        // AI Engine: provider interface, providers, prompts, dispatcher, image handler
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-ai-provider.php';
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/providers/class-n8npress-provider-anthropic.php';
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/providers/class-n8npress-provider-openai.php';
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/providers/class-n8npress-provider-google.php';
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-prompts.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-ai-engine.php';
-        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-job-queue.php';
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-image-handler.php';
 
         // Content & automation modules
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-ai-content.php';
@@ -672,20 +677,36 @@ class N8nPress {
      */
     private function set_default_options() {
         $defaults = array(
-            'n8npress_enable_logging' => 1,
-            'n8npress_log_level' => 'info',
-            'n8npress_rate_limit' => 1000,
-            'n8npress_security_headers' => 1,
-            'n8npress_webhook_timeout' => 30,
-            'n8npress_ai_provider' => 'openai',
-            'n8npress_ai_model' => 'gpt-4o-mini',
+            'n8npress_enable_logging'    => 1,
+            'n8npress_log_level'         => 'info',
+            'n8npress_rate_limit'        => 1000,
+            'n8npress_security_headers'  => 1,
+            'n8npress_webhook_timeout'   => 30,
+            'n8npress_ai_provider'       => 'openai',
+            'n8npress_ai_model'          => 'gpt-4o-mini',
             'n8npress_daily_token_limit' => 1.00,
-            'n8npress_webmcp_enabled'   => 1,
+            'n8npress_webmcp_enabled'    => 1,
+            // AI Engine defaults (v2.0)
+            'n8npress_processing_mode'   => 'local',
+            'n8npress_default_provider'  => 'anthropic',
+            'n8npress_anthropic_model'   => 'claude-haiku-4-5-20241022',
+            'n8npress_openai_model'      => 'gpt-4o-mini',
+            'n8npress_google_model'      => 'gemini-2.0-flash',
         );
         
         foreach ($defaults as $option => $value) {
             if (get_option($option) === false) {
                 add_option($option, $value);
+            }
+        }
+
+        // Migration: if webhook URL is already set, keep n8n mode for existing installs.
+        $webhook_url = get_option( 'n8npress_seo_webhook_url', '' );
+        if ( ! empty( $webhook_url ) && get_option( 'n8npress_processing_mode' ) === 'local' ) {
+            // Only override if this is the first time setting defaults (fresh activation with existing config).
+            if ( get_option( 'n8npress_ai_engine_migrated' ) === false ) {
+                update_option( 'n8npress_processing_mode', 'n8n' );
+                add_option( 'n8npress_ai_engine_migrated', '1' );
             }
         }
     }

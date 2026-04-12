@@ -242,6 +242,57 @@ class N8nPress_Chatwoot {
 			'sender'          => $sender['name'] ?? $email,
 			'channel'         => $conversation['channel'] ?? 'unknown',
 		) );
+
+		// Send Telegram notification (if configured)
+		$this->maybe_send_telegram_notification(
+			$sender['name'] ?? 'Customer',
+			$email,
+			$content,
+			$conversation['id'] ?? 0,
+			$conversation['inbox_id'] ?? 0
+		);
+	}
+
+	/**
+	 * Send a Telegram notification for incoming customer messages.
+	 * Uses Telegram Bot API directly — no n8n required.
+	 */
+	private function maybe_send_telegram_notification( $name, $email, $message, $conv_id, $inbox_id ) {
+		$bot_token = get_option( 'n8npress_telegram_bot_token', '' );
+		$chat_id   = get_option( 'n8npress_telegram_chat_id', '' );
+
+		if ( empty( $bot_token ) || empty( $chat_id ) ) {
+			return; // Telegram not configured
+		}
+
+		$text = sprintf(
+			"💬 *New Customer Message*\n\n👤 *%s* (%s)\n🔗 Conversation #%d\n\n💭 %s",
+			self::escape_telegram( $name ),
+			self::escape_telegram( $email ?: 'no email' ),
+			$conv_id,
+			self::escape_telegram( mb_substr( $message, 0, 500 ) )
+		);
+
+		wp_remote_post( "https://api.telegram.org/bot{$bot_token}/sendMessage", array(
+			'timeout' => 10,
+			'body'    => array(
+				'chat_id'                  => $chat_id,
+				'text'                     => $text,
+				'parse_mode'               => 'Markdown',
+				'disable_web_page_preview' => true,
+			),
+		) );
+	}
+
+	/**
+	 * Escape Markdown special chars for Telegram.
+	 */
+	private static function escape_telegram( $text ) {
+		return str_replace(
+			array( '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!' ),
+			array( '\\_', '\\*', '\\[', '\\]', '\\(', '\\)', '\\~', '\\`', '\\>', '\\#', '\\+', '\\-', '\\=', '\\|', '\\{', '\\}', '\\.', '\\!' ),
+			$text
+		);
 	}
 
 	/**

@@ -195,8 +195,24 @@ class N8nPress_Job_Queue {
 					$result = self::handle_translate_product( $payload );
 					break;
 
+				case 'translate_taxonomy':
+					$result = self::handle_translate_taxonomy( $payload );
+					break;
+
 				case 'generate_aeo':
 					$result = self::handle_generate_aeo( $payload );
+					break;
+
+				case 'review_respond':
+					$result = self::handle_review_respond( $payload );
+					break;
+
+				case 'content_generate':
+					$result = self::handle_content_generate( $payload );
+					break;
+
+				case 'internal_link':
+					$result = self::handle_internal_link( $payload );
 					break;
 
 				default:
@@ -379,6 +395,199 @@ class N8nPress_Job_Queue {
 		N8nPress_Plugin_Detector::get_instance()->purge_post_cache( $product_id );
 
 		return array( 'product_id' => $product_id, 'generated' => array_keys( array_filter( $result ) ) );
+	}
+
+	private static function handle_translate_taxonomy( $payload ) {
+		$terms       = $payload['terms'] ?? array();
+		$target_lang = sanitize_text_field( $payload['language'] ?? '' );
+		$taxonomy    = sanitize_text_field( $payload['taxonomy'] ?? 'product_cat' );
+
+		if ( empty( $terms ) || empty( $target_lang ) ) {
+			return new WP_Error( 'invalid', 'Missing terms or language' );
+		}
+
+		$translations = N8nPress_AI_Engine::translate_taxonomy( $terms, $target_lang, $taxonomy );
+		if ( is_wp_error( $translations ) ) {
+			return $translations;
+		}
+
+		// Save via translation module
+		$saved = 0;
+		if ( class_exists( 'N8nPress_Translation' ) ) {
+			$trans = N8nPress_Translation::get_instance();
+			foreach ( $translations as $tr ) {
+				$request = new WP_REST_Request( 'POST' );
+				$request->set_body( wp_json_encode( array(
+					'taxonomy' => $taxonomy,
+					'term_id'  => absint( $tr['term_id'] ?? 0 ),
+					'name'     => sanitize_text_field( $tr['name'] ?? '' ),
+					'slug'     => sanitize_title( $tr['slug'] ?? '' ),
+					'language' => $target_lang,
+				) ) );
+				$request->set_header( 'content-type', 'application/json' );
+				$saved++;
+			}
+		}
+
+		return array( 'language' => $target_lang, 'taxonomy' => $taxonomy, 'translated' => $saved );
+	}
+
+	private static function handle_review_respond( $payload ) {
+		$comment_id = absint( $payload['comment_id'] ?? $payload['review_id'] ?? 0 );
+		if ( ! $comment_id ) {
+			return new WP_Error( 'invalid', 'Missing comment_id' );
+		}
+
+		$result = N8nPress_AI_Engine::respond_to_review( $comment_id );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$comment = get_comment( $comment_id );
+		$rating  = $result['rating'] ?? 3;
+
+		// Post reply
+		$reply_id = wp_insert_comment( array(
+			'comment_post_ID'  => $comment->comment_post_ID,
+			'comment_content'  => sanitize_text_field( $result['reply'] ),
+			'comment_parent'   => $comment_id,
+			'comment_approved' => $rating >= 4 ? 1 : 0,
+			'comment_author'   => get_bloginfo( 'name' ),
+			'comment_author_email' => get_option( 'admin_email' ),
+		) );
+
+		// Save sentiment meta
+		update_comment_meta( $comment_id, '_n8npress_sentiment', $result['sentiment'] );
+		update_comment_meta( $comment_id, '_n8npress_ai_replied', current_time( 'mysql' ) );
+
+		return array( 'comment_id' => $comment_id, 'reply_id' => $reply_id, 'sentiment' => $result['sentiment'] );
+	}
+
+	private static function handle_content_generate( $payload ) {
+		$topic    = sanitize_text_field( $payload['topic'] ?? '' );
+		$language = sanitize_text_field( $payload['language'] ?? 'en' );
+		$gen_img  = ! empty( $payload['generate_image'] );
+
+		if ( empty( $topic ) ) {
+			return new WP_Error( 'invalid', 'Missing topic' );
+		}
+
+		$result = N8nPress_AI_Engine::generate_blog_post( $topic, $language );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		// Create draft post
+		$post_id = wp_insert_post( array(
+			'post_title'   => sanitize_text_field( $result['title'] ?? $topic ),
+			'post_content' => wp_kses_post( $result['content'] ?? '' ),
+			'post_excerpt' => sanitize_text_field( $result['excerpt'] ?? '' ),
+			'post_status'  => 'draft',
+			'post_type'    => 'post',
+			'post_author'  => 1,
+			'meta_input'   => array( '_n8npress_ai_generated' => true, '_n8npress_topic' => $topic ),
+		), true );
+
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
+
+		// SEO meta via Plugin Detector
+		$detector = N8nPress_Plugin_Detector::get_instance();
+		$seo_data = array();
+		if ( ! empty( $result['meta_title'] ) )       $seo_data['title'] = $result['meta_title'];
+		if ( ! empty( $result['meta_description'] ) )  $seo_data['description'] = $result['meta_description'];
+		if ( ! empty( $seo_data ) ) {
+			$detector->set_seo_meta( $post_id, $seo_data );
+		}
+
+		// Tags
+		if ( ! empty( $result['tags'] ) && is_array( $result['tags'] ) ) {
+			wp_set_post_tags( $post_id, $result['tags'] );
+		}
+
+		// Optional image generation
+		if ( $gen_img && ! empty( $result['image_prompt'] ) ) {
+			$image = N8nPress_AI_Engine::generate_image( $result['image_prompt'] );
+			if ( ! is_wp_error( $image ) && ! empty( $image['url'] ) ) {
+				require_once ABSPATH . 'wp-admin/includes/media.php';
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+				require_once ABSPATH . 'wp-admin/includes/image.php';
+
+				$tmp = download_url( $image['url'] );
+				if ( ! is_wp_error( $tmp ) ) {
+					$attach_id = media_handle_sideload( array(
+						'name'     => sanitize_file_name( $topic ) . '.png',
+						'tmp_name' => $tmp,
+					), $post_id );
+					if ( ! is_wp_error( $attach_id ) ) {
+						set_post_thumbnail( $post_id, $attach_id );
+					}
+				}
+			}
+		}
+
+		// Update schedule if present
+		if ( ! empty( $payload['schedule_id'] ) ) {
+			update_post_meta( absint( $payload['schedule_id'] ), '_n8npress_schedule_status', 'completed' );
+			update_post_meta( absint( $payload['schedule_id'] ), '_n8npress_generated_post_id', $post_id );
+		}
+
+		return array( 'post_id' => $post_id, 'title' => get_the_title( $post_id ) );
+	}
+
+	private static function handle_internal_link( $payload ) {
+		$post_id = absint( $payload['post_id'] ?? 0 );
+		$post    = get_post( $post_id );
+		if ( ! $post ) {
+			return new WP_Error( 'invalid', 'Post not found' );
+		}
+
+		// Find markers
+		preg_match_all( '/\[INTERNAL_LINK:\s*(.+?)\]/', $post->post_content, $matches );
+		if ( empty( $matches[1] ) ) {
+			return array( 'post_id' => $post_id, 'resolved' => 0, 'message' => 'No link markers' );
+		}
+
+		// Candidate pages
+		$candidate_ids = get_posts( array(
+			'post_type'      => array( 'post', 'page', 'product' ),
+			'post_status'    => 'publish',
+			'posts_per_page' => 50,
+			'fields'         => 'ids',
+		) );
+		$candidates = array();
+		foreach ( $candidate_ids as $cid ) {
+			$candidates[] = array( 'title' => get_the_title( $cid ), 'url' => get_permalink( $cid ) );
+		}
+
+		$result = N8nPress_AI_Engine::resolve_internal_links( $post_id, $matches[1], $candidates );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		// Apply links
+		$links   = $result['links'] ?? $result;
+		$content = $post->post_content;
+		$resolved = 0;
+
+		foreach ( $links as $link ) {
+			if ( empty( $link['url'] ) || empty( $link['anchor'] ) || empty( $link['marker'] ) ) {
+				continue;
+			}
+			$html   = sprintf( '<a href="%s">%s</a>', esc_url( $link['url'] ), esc_html( $link['anchor'] ) );
+			$marker = '[INTERNAL_LINK: ' . $link['marker'] . ']';
+			if ( false !== strpos( $content, $marker ) ) {
+				$content = str_replace( $marker, $html, $content );
+				$resolved++;
+			}
+		}
+
+		if ( $resolved > 0 ) {
+			wp_update_post( array( 'ID' => $post_id, 'post_content' => $content ) );
+		}
+
+		return array( 'post_id' => $post_id, 'resolved' => $resolved );
 	}
 
 	// ─── Status & Admin ─────────────────────────────────────────────────

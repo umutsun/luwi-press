@@ -181,45 +181,25 @@ class N8nPress_Content_Scheduler {
             wp_send_json_error( $budget->get_error_message() );
         }
 
-        // Trigger n8n workflow
-        $webhook_url = get_option('n8npress_seo_webhook_url', '');
-        if (!empty($webhook_url)) {
-            $payload = array(
-                'action'         => 'generate_content',
-                '_meta'          => n8npress_build_meta_block( rest_url( 'n8npress/v1/schedule/callback' ) ),
-                'schedule_id'    => $schedule_id,
-                'topic'          => $topic,
-                'keywords'       => $keywords,
-                'target_type'    => $post_type,
-                'publish_date'   => $publish_date . ' ' . $publish_time,
-                'generate_image' => (bool) $generate_image,
-                'language'       => $language,
-                'tone'           => $tone,
-                'word_count'     => $word_count,
-            );
+        // Queue content generation via built-in AI Engine
+        N8nPress_Job_Queue::add( 'generate_content', array(
+            'schedule_id'    => $schedule_id,
+            'topic'          => $topic,
+            'keywords'       => $keywords,
+            'target_type'    => $post_type,
+            'publish_date'   => $publish_date . ' ' . $publish_time,
+            'generate_image' => (bool) $generate_image,
+            'language'       => $language,
+            'tone'           => $tone,
+            'word_count'     => $word_count,
+        ) );
 
-            $headers = array('Content-Type' => 'application/json');
-            $api_token = get_option('n8npress_seo_api_token', '');
-            if (!empty($api_token)) {
-                $headers['Authorization'] = 'Bearer ' . $api_token;
-            }
-            N8nPress_HMAC::add_signature_headers($headers, wp_json_encode($payload));
+        update_post_meta( $schedule_id, '_n8npress_schedule_status', self::STATUS_GENERATING );
 
-            $response = wp_remote_post($webhook_url, array(
-                'timeout' => 15,
-                'headers' => $headers,
-                'body'    => wp_json_encode($payload),
-            ));
-
-            if (!is_wp_error($response)) {
-                update_post_meta($schedule_id, '_n8npress_schedule_status', self::STATUS_GENERATING);
-            }
-
-            N8nPress_Logger::log('Content generation triggered', 'info', array(
-                'schedule_id' => $schedule_id,
-                'topic'       => $topic,
-            ));
-        }
+        N8nPress_Logger::log( 'Content generation queued', 'info', array(
+            'schedule_id' => $schedule_id,
+            'topic'       => $topic,
+        ) );
 
         wp_send_json_success(array(
             'schedule_id' => $schedule_id,

@@ -1396,68 +1396,68 @@ class N8nPress_Open_Claw {
 		}
 	}
 
-	// ─── SEND TO N8N: For complex queries that need AI ─────────────────
+	// ─── DIRECT AI CALL (built-in engine, no n8n) ─────────────────────
+
+	private function call_ai_directly( $message, $conversation_id, $context ) {
+		$store = $context['store'] ?? array();
+		$store_name = $store['name'] ?? get_bloginfo( 'name' );
+		$products   = $store['product_count'] ?? 0;
+		$seo        = $store['seo_plugin'] ?? 'none';
+		$trans      = $store['translation_plugin'] ?? 'none';
+		$languages  = $store['languages'] ?? array();
+
+		$system_prompt = "You are the AI assistant for {$store_name}, a WooCommerce store. "
+			. "Store has {$products} products. SEO: {$seo}. Translation: {$trans}. "
+			. ( ! empty( $languages ) ? 'Languages: ' . implode( ', ', $languages ) . '. ' : '' )
+			. "Be concise and helpful. To execute actions, include JSON: {\"action\": \"type\", \"params\": {...}}";
+
+		// Build conversation messages with history
+		$history  = get_option( 'n8npress_claw_' . $conversation_id, array() );
+		$messages = array( array( 'role' => 'system', 'content' => $system_prompt ) );
+		foreach ( array_slice( $history, -10 ) as $msg ) {
+			if ( in_array( $msg['role'] ?? '', array( 'user', 'assistant' ), true ) ) {
+				$messages[] = array( 'role' => $msg['role'], 'content' => $msg['content'] ?? '' );
+			}
+		}
+		$messages[] = array( 'role' => 'user', 'content' => $message );
+
+		$result = N8nPress_AI_Engine::dispatch( 'open-claw', $messages, array( 'timeout' => 45 ) );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$response_text = $result['content'] ?? '';
+		$actions       = array();
+
+		// Extract action JSON if present
+		if ( preg_match( '/\{"action".*?\}/s', $response_text, $match ) ) {
+			$action_json = json_decode( $match[0], true );
+			if ( $action_json && ! empty( $action_json['action'] ) ) {
+				$actions[] = $action_json;
+				$response_text = trim( str_replace( $match[0], '', $response_text ) );
+			}
+		}
+
+		$this->save_message( $conversation_id, 'assistant', sanitize_textarea_field( $response_text ), $actions );
+
+		N8nPress_Logger::log( 'Open Claw (direct): "' . mb_substr( $message, 0, 60 ) . '"', 'info' );
+
+		return array(
+			'response'        => $response_text,
+			'actions'         => $actions,
+			'conversation_id' => $conversation_id,
+			'success'         => true,
+		);
+	}
+
+	// ─── AI DISPATCH ────────────────────────────────────────────────────
 
 	private function send_to_n8n( $message, $conversation_id, $context ) {
-		// Always use n8n webhook for chat messages (OpenClaw URL is for gateway connection only)
-		$webhook_url = get_option( 'n8npress_seo_webhook_url', '' );
-		if ( empty( $webhook_url ) ) {
-			return new WP_Error( 'no_webhook', 'n8n Webhook URL is not configured. Go to Settings → Connection to set it up.' );
+		if ( ! class_exists( 'N8nPress_AI_Engine' ) ) {
+			return new WP_Error( 'no_ai', 'No AI provider configured. Set an API key in Settings → AI API Keys.' );
 		}
-		$url = trailingslashit( $webhook_url ) . 'open-claw';
-
-		$payload = array(
-			'event'           => 'open_claw_message',
-			'conversation_id' => $conversation_id,
-			'message'         => $message,
-			'callback_url'    => rest_url( 'n8npress/v1/claw/callback' ),
-			'site_context'    => $context,
-			'user'            => array(
-				'name'  => wp_get_current_user()->display_name,
-				'email' => wp_get_current_user()->user_email,
-			),
-		);
-
-		$response = wp_remote_post( $url, array(
-			'headers' => array(
-				'Content-Type'     => 'application/json',
-				'Authorization'    => 'Bearer ' . get_option( 'n8npress_seo_api_token', '' ),
-				'X-n8nPress-Event' => 'open_claw',
-			),
-			'body'    => wp_json_encode( $payload ),
-			'timeout' => 45,
-		) );
-
-		if ( is_wp_error( $response ) ) {
-			N8nPress_Logger::log( 'Open Claw n8n request failed', 'error', array(
-				'error' => $response->get_error_message(),
-				'url'   => $url,
-			) );
-			return $response;
-		}
-
-		$code = wp_remote_retrieve_response_code( $response );
-		if ( $code < 200 || $code >= 300 ) {
-			N8nPress_Logger::log( 'Open Claw n8n returned HTTP ' . $code, 'error', array(
-				'url'     => $url,
-				'code'    => $code,
-				'message' => mb_substr( $message, 0, 100 ),
-			) );
-			return new WP_Error( 'n8n_error', 'n8n returned HTTP ' . $code );
-		}
-
-		// n8n may return an immediate response
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
-		if ( ! empty( $body['response'] ) ) {
-			$this->save_message( $conversation_id, 'assistant', sanitize_textarea_field( $body['response'] ), $body['actions'] ?? array() );
-			N8nPress_Logger::log( 'Open Claw: "' . mb_substr( $message, 0, 60 ) . '" → AI response received', 'info', array(
-				'query' => mb_substr( $message, 0, 100 ),
-				'response_preview' => mb_substr( $body['response'], 0, 150 ),
-			) );
-			return $body;
-		}
-
-		return true;
+		return $this->call_ai_directly( $message, $conversation_id, $context );
 	}
 
 	// ─── CONTEXT: Build site snapshot for AI ───────────────────────────

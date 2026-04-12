@@ -101,78 +101,67 @@ class N8nPress_AEO {
     }
 
     /**
-     * POST /aeo/generate-faq — Trigger FAQ generation via n8n
+     * POST /aeo/generate-faq — Trigger FAQ generation
      */
-    public function trigger_faq_generation($request) {
+    public function trigger_faq_generation( $request ) {
         $wc_check = $this->require_woocommerce();
         if ( is_wp_error( $wc_check ) ) return $wc_check;
 
-        $product_id = $request->get_param('product_id');
-        $product = wc_get_product($product_id);
-
-        if (!$product) {
-            return new WP_Error('not_found', 'Product not found', ['status' => 404]);
+        $product_id = $request->get_param( 'product_id' );
+        $product    = wc_get_product( $product_id );
+        if ( ! $product ) {
+            return new WP_Error( 'not_found', 'Product not found', array( 'status' => 404 ) );
         }
 
-        $payload = [
-            'product_id'    => $product_id,
-            'name'          => $product->get_name(),
-            'description'   => wp_strip_all_tags($product->get_description()),
-            'categories'    => wp_list_pluck(get_the_terms($product_id, 'product_cat') ?: [], 'name'),
-            'price'         => $product->get_price(),
-            'type'          => 'faq',
-            'target_language' => get_option('n8npress_target_language', 'tr'),
-        ];
-
-        $result = $this->send_to_n8n('aeo_generate_faq', $payload, rest_url('n8npress/v1/aeo/save-faq'));
-
-        if (is_wp_error($result)) {
-            return $result;
+        $budget = N8nPress_Token_Tracker::check_budget( 'aeo-generator' );
+        if ( is_wp_error( $budget ) ) {
+            return $budget;
         }
 
-        update_post_meta($product_id, '_n8npress_aeo_faq_status', 'processing');
-
-        return rest_ensure_response([
-            'status'     => 'processing',
+        $job_id = N8nPress_Job_Queue::add( 'generate_aeo', array(
             'product_id' => $product_id,
-        ]);
+            'options'    => array( 'types' => array( 'faq' ) ),
+        ) );
+
+        update_post_meta( $product_id, '_n8npress_aeo_faq_status', 'processing' );
+
+        return rest_ensure_response( array(
+            'status'     => 'queued',
+            'product_id' => $product_id,
+            'job_id'     => $job_id,
+        ) );
     }
 
     /**
-     * POST /aeo/generate-howto — Trigger HowTo generation via n8n
+     * POST /aeo/generate-howto — Trigger HowTo generation
      */
-    public function trigger_howto_generation($request) {
+    public function trigger_howto_generation( $request ) {
         $wc_check = $this->require_woocommerce();
         if ( is_wp_error( $wc_check ) ) return $wc_check;
 
-        $product_id = $request->get_param('product_id');
-        $product = wc_get_product($product_id);
-
-        if (!$product) {
-            return new WP_Error('not_found', 'Product not found', ['status' => 404]);
+        $product_id = $request->get_param( 'product_id' );
+        $product    = wc_get_product( $product_id );
+        if ( ! $product ) {
+            return new WP_Error( 'not_found', 'Product not found', array( 'status' => 404 ) );
         }
 
-        $payload = [
-            'product_id'    => $product_id,
-            'name'          => $product->get_name(),
-            'description'   => wp_strip_all_tags($product->get_description()),
-            'categories'    => wp_list_pluck(get_the_terms($product_id, 'product_cat') ?: [], 'name'),
-            'type'          => 'howto',
-            'target_language' => get_option('n8npress_target_language', 'tr'),
-        ];
-
-        $result = $this->send_to_n8n('aeo_generate_howto', $payload, rest_url('n8npress/v1/aeo/save-howto'));
-
-        if (is_wp_error($result)) {
-            return $result;
+        $budget = N8nPress_Token_Tracker::check_budget( 'aeo-generator' );
+        if ( is_wp_error( $budget ) ) {
+            return $budget;
         }
 
-        update_post_meta($product_id, '_n8npress_aeo_howto_status', 'processing');
-
-        return rest_ensure_response([
-            'status'     => 'processing',
+        $job_id = N8nPress_Job_Queue::add( 'generate_aeo', array(
             'product_id' => $product_id,
-        ]);
+            'options'    => array( 'types' => array( 'howto' ) ),
+        ) );
+
+        update_post_meta( $product_id, '_n8npress_aeo_howto_status', 'processing' );
+
+        return rest_ensure_response( array(
+            'status'     => 'queued',
+            'product_id' => $product_id,
+            'job_id'     => $job_id,
+        ) );
     }
 
     /**
@@ -459,49 +448,4 @@ class N8nPress_AEO {
         }
     }
 
-    /**
-     * Send payload to n8n webhook
-     */
-    private function send_to_n8n($event, $payload, $callback_url = '') {
-        $budget = N8nPress_Token_Tracker::check_budget( 'aeo-generator' );
-        if ( is_wp_error( $budget ) ) {
-            return $budget;
-        }
-
-        $url = get_option('n8npress_seo_webhook_url', '');
-        if (empty($url)) {
-            return new WP_Error('no_webhook_url', 'n8n webhook URL not configured', ['status' => 500]);
-        }
-
-        $body = wp_json_encode(array_merge(
-            ['event' => $event, '_meta' => n8npress_build_meta_block($callback_url)],
-            $payload
-        ));
-
-        $headers = [
-            'Content-Type'     => 'application/json',
-            'X-n8nPress-Event' => $event,
-        ];
-
-        $token = get_option('n8npress_seo_api_token', '');
-        if (!empty($token)) {
-            $headers['Authorization'] = 'Bearer ' . $token;
-        }
-
-        if (class_exists('N8nPress_HMAC')) {
-            N8nPress_HMAC::add_signature_headers($headers, $body);
-        }
-
-        $response = wp_remote_post($url, [
-            'headers' => $headers,
-            'body'    => $body,
-            'timeout' => 10,
-        ]);
-
-        if (is_wp_error($response)) {
-            return $response;
-        }
-
-        return true;
-    }
 }
