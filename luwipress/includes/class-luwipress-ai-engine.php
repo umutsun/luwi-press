@@ -272,16 +272,16 @@ class LuwiPress_AI_Engine {
 			return $override;
 		}
 
-		// Fall back to global default from settings.
+		// Settings UI provider (user's primary choice)
+		$main = get_option( 'luwipress_ai_provider', '' );
+		if ( ! empty( $main ) ) {
+			return $main;
+		}
+
+		// Legacy default_provider option
 		$global = get_option( 'luwipress_default_provider', '' );
 		if ( ! empty( $global ) ) {
 			return $global;
-		}
-
-		// Then try the main AI provider setting.
-		$main = get_option( 'luwipress_ai_provider', 'openai' );
-		if ( ! empty( $main ) ) {
-			return $main;
 		}
 
 		return self::$workflow_providers[ $workflow ] ?? 'openai';
