@@ -1063,10 +1063,10 @@ class LuwiPress_WebMCP {
             ),
         ), function ( $args ) {
             return $this->proxy_rest_post( 'LuwiPress_API', 'handle_set_seo_meta', array(
-                'post_id'          => intval( $args['post_id'] ),
-                'meta_title'       => $args['meta_title'] ?? '',
-                'meta_description' => $args['meta_description'] ?? '',
-                'focus_keyword'    => $args['focus_keyword'] ?? '',
+                'post_id'       => intval( $args['post_id'] ),
+                'title'         => $args['meta_title'] ?? '',
+                'description'   => $args['meta_description'] ?? '',
+                'focus_keyword' => $args['focus_keyword'] ?? '',
             ) );
         } );
     }
