@@ -365,7 +365,11 @@ class LuwiPress_Translation {
      * POST /translation/callback — Receive translated content from n8n
      */
     public function handle_translation_callback($request) {
+        // Support both JSON body (external REST) and body_params (internal call)
         $data = $request->get_json_params();
+        if ( empty( $data ) ) {
+            $data = $request->get_params();
+        }
 
         $product_id = isset($data['product_id']) ? absint($data['product_id']) : 0;
         $language   = isset($data['language']) ? sanitize_text_field($data['language']) : '';
