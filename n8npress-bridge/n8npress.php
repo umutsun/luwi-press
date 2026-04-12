@@ -101,6 +101,7 @@ class N8nPress {
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-prompts.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-ai-engine.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-image-handler.php';
+        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-job-queue.php';
 
         // Content & automation modules
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-ai-content.php';

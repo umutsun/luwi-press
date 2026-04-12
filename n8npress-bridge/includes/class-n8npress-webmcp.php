@@ -1055,7 +1055,7 @@ class N8nPress_WebMCP {
                 'openWorldHint'    => false,
             ),
         ), function ( $args ) {
-            return $this->proxy_rest_post( 'N8nPress_API', 'handle_save_seo_meta', array(
+            return $this->proxy_rest_post( 'N8nPress_API', 'handle_set_seo_meta', array(
                 'post_id'          => intval( $args['post_id'] ),
                 'meta_title'       => $args['meta_title'] ?? '',
                 'meta_description' => $args['meta_description'] ?? '',

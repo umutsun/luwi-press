@@ -290,33 +290,70 @@ class N8nPress_Translation {
             'permalink'  => get_permalink($product_id),
         ];
 
-        $budget = N8nPress_Token_Tracker::check_budget( 'translation-pipeline' );
-        if ( is_wp_error( $budget ) ) {
-            return $budget;
+        $mode = N8nPress_AI_Engine::get_mode();
+
+        if ( N8nPress_AI_Engine::MODE_N8N === $mode ) {
+            // n8n mode: forward to webhook
+            $result = N8nPress_AI_Engine::forward_to_n8n( 'translation_request', $payload, rest_url( 'n8npress/v1/translation/callback' ) );
+            if ( is_wp_error( $result ) ) {
+                return $result;
+            }
+            foreach ( $target_languages as $lang ) {
+                update_post_meta( $product_id, '_n8npress_translation_' . $lang . '_status', 'processing' );
+                update_post_meta( $product_id, '_n8npress_translation_' . $lang . '_requested', current_time( 'c' ) );
+            }
+        } else {
+            // Local mode: translate directly via AI Engine for each language
+            $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese', 'pt-pt' => 'Portuguese', 'ko' => 'Korean' );
+            $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
+
+            foreach ( $target_languages as $lang ) {
+                update_post_meta( $product_id, '_n8npress_translation_' . $lang . '_status', 'processing' );
+                update_post_meta( $product_id, '_n8npress_translation_' . $lang . '_requested', current_time( 'c' ) );
+
+                $target_name = $lang_names[ $lang ] ?? ucfirst( $lang );
+                $prompt   = N8nPress_Prompts::translation( $payload['content'], $source_name, $target_name, $product_id );
+                $messages = N8nPress_AI_Engine::build_messages( $prompt );
+                $ai_result = N8nPress_AI_Engine::dispatch_json( 'translation-pipeline', $messages, array(
+                    'max_tokens' => 4096,
+                ) );
+
+                if ( is_wp_error( $ai_result ) ) {
+                    update_post_meta( $product_id, '_n8npress_translation_' . $lang . '_status', 'failed' );
+                    N8nPress_Logger::log( 'Translation failed for ' . $lang . ': ' . $ai_result->get_error_message(), 'error', array( 'product_id' => $product_id ) );
+                    continue;
+                }
+
+                // Feed into existing callback handler
+                $callback_request = new WP_REST_Request( 'POST', '/n8npress/v1/translation/callback' );
+                $callback_request->set_body_params( array(
+                    'product_id' => $product_id,
+                    'language'   => $lang,
+                    'content'    => array(
+                        'name'             => $ai_result['title'] ?? '',
+                        'description'      => $ai_result['description'] ?? '',
+                        'short_description' => $ai_result['short_description'] ?? '',
+                        'meta_title'       => $ai_result['meta_title'] ?? '',
+                        'meta_description' => $ai_result['meta_description'] ?? '',
+                        'focus_keyword'    => $ai_result['focus_keyword'] ?? '',
+                        'slug'             => $ai_result['slug'] ?? '',
+                    ),
+                    'status' => 'completed',
+                ) );
+                $this->handle_translation_callback( $callback_request );
+            }
         }
 
-        // Queue one job per target language
-        $job_ids = array();
-        foreach ( $target_languages as $lang ) {
-            $job_ids[] = N8nPress_Job_Queue::add( 'translate_product', array(
-                'product_id'      => $product_id,
-                'target_language' => sanitize_text_field( $lang ),
-            ) );
-            update_post_meta( $product_id, '_n8npress_translation_' . $lang . '_status', 'processing' );
-            update_post_meta( $product_id, '_n8npress_translation_' . $lang . '_requested', current_time( 'c' ) );
-        }
-
-        N8nPress_Logger::log( 'Translation queued for product: ' . $product->get_name(), 'info', array(
+        N8nPress_Logger::log( 'Translation requested for product: ' . $product->get_name(), 'info', array(
             'product_id' => $product_id,
             'languages'  => $target_languages,
-            'jobs'       => $job_ids,
+            'mode'       => $mode,
         ) );
 
         return rest_ensure_response( array(
-            'status'           => 'queued',
+            'status'           => N8nPress_AI_Engine::MODE_N8N === $mode ? 'queued' : 'completed',
             'product_id'       => $product_id,
             'target_languages' => $target_languages,
-            'job_ids'          => $job_ids,
         ) );
     }
 
@@ -484,7 +521,8 @@ class N8nPress_Translation {
             wp_trim_words( $payload['translated_content']['description'] ?? '', 200 )
         );
 
-        $result = N8nPress_AI_Engine::call_json( $system, $user, array( 'workflow' => 'translation-pipeline', 'max_tokens' => 500 ) );
+        $messages = N8nPress_AI_Engine::build_messages( array( 'system' => $system, 'user' => $user ) );
+        $result = N8nPress_AI_Engine::dispatch_json( 'translation-quality', $messages, array( 'max_tokens' => 500 ) );
         if ( is_wp_error( $result ) ) {
             return $result;
         }
@@ -1344,33 +1382,72 @@ class N8nPress_Translation {
             'terms'            => $missing_terms,
         ];
 
-        $budget = N8nPress_Token_Tracker::check_budget( 'translation-pipeline' );
-        if ( is_wp_error( $budget ) ) {
-            return $budget;
+        $mode = N8nPress_AI_Engine::get_mode();
+
+        if ( N8nPress_AI_Engine::MODE_N8N === $mode ) {
+            // n8n mode: forward to webhook
+            $result = N8nPress_AI_Engine::forward_to_n8n( 'taxonomy_translation_request', $payload, rest_url( 'n8npress/v1/translation/taxonomy-callback' ) );
+            if ( is_wp_error( $result ) ) {
+                return $result;
+            }
+        } else {
+            // Local mode: translate directly via AI Engine for each language
+            $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian' );
+            $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
+
+            $all_translations = array();
+            foreach ( $target_languages as $lang ) {
+                $target_name = $lang_names[ $lang ] ?? ucfirst( $lang );
+
+                // Build terms array for prompt
+                $terms_for_prompt = array();
+                foreach ( $missing_terms as $term ) {
+                    $terms_for_prompt[] = array(
+                        'term_id' => $term['term_id'] ?? 0,
+                        'name'    => $term['name'] ?? '',
+                        'slug'    => $term['slug'] ?? '',
+                    );
+                }
+
+                $prompt   = N8nPress_Prompts::taxonomy_translation( $terms_for_prompt, $taxonomy, $source_name, $target_name );
+                $messages = N8nPress_AI_Engine::build_messages( $prompt );
+                $ai_result = N8nPress_AI_Engine::dispatch_json( 'translation-pipeline', $messages, array(
+                    'max_tokens' => 2000,
+                ) );
+
+                if ( is_wp_error( $ai_result ) ) {
+                    N8nPress_Logger::log( 'Taxonomy translation failed for ' . $lang, 'error', array( 'taxonomy' => $taxonomy ) );
+                    continue;
+                }
+
+                // Ensure result is an array of translations
+                $translated = is_array( $ai_result ) && isset( $ai_result[0] ) ? $ai_result : ( $ai_result['translations'] ?? array() );
+                $all_translations = array_merge( $all_translations, $translated );
+            }
+
+            // Feed into existing callback handler
+            if ( ! empty( $all_translations ) ) {
+                $callback_request = new WP_REST_Request( 'POST', '/n8npress/v1/translation/taxonomy-callback' );
+                $callback_request->set_body_params( array(
+                    'taxonomy'     => $taxonomy,
+                    'translations' => $all_translations,
+                ) );
+                $this->handle_taxonomy_callback( $callback_request );
+            }
         }
 
-        // Queue one job per target language
-        $job_ids = array();
-        foreach ( $target_languages as $lang ) {
-            $job_ids[] = N8nPress_Job_Queue::add( 'translate_taxonomy', array(
-                'taxonomy'        => $taxonomy,
-                'target_language' => sanitize_text_field( $lang ),
-                'terms'           => $missing_terms,
-            ) );
-        }
-
-        N8nPress_Logger::log( 'Taxonomy translation queued: ' . $taxonomy, 'info', array(
+        N8nPress_Logger::log( 'Taxonomy translation requested: ' . $taxonomy, 'info', array(
             'taxonomy'  => $taxonomy,
             'languages' => $target_languages,
             'count'     => count( $missing_terms ),
+            'mode'      => $mode,
         ) );
 
         return rest_ensure_response( array(
-            'status'           => 'queued',
+            'status'           => N8nPress_AI_Engine::MODE_N8N === $mode ? 'queued' : 'completed',
             'taxonomy'         => $taxonomy,
             'target_languages' => $target_languages,
             'terms_sent'       => count( $missing_terms ),
-            'job_ids'          => $job_ids,
         ) );
     }
 
