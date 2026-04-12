@@ -376,8 +376,9 @@ class LuwiPress_Translation {
         }
 
         $product = wc_get_product($product_id);
-        if (!$product) {
-            return new WP_Error('not_found', 'Product not found', ['status' => 404]);
+        $post    = get_post($product_id);
+        if ( ! $post ) {
+            return new WP_Error('not_found', 'Post not found', ['status' => 404]);
         }
 
         // Store translated content
@@ -718,14 +719,18 @@ class LuwiPress_Translation {
             return;
         }
 
-        $trid = apply_filters( 'wpml_element_trid', null, $product_id, 'post_product' );
+        $post_obj     = get_post( $product_id );
+        $post_type    = $post_obj ? $post_obj->post_type : 'product';
+        $element_type = 'post_' . $post_type;
+
+        $trid = apply_filters( 'wpml_element_trid', null, $product_id, $element_type );
         if ( ! $trid ) {
-            LuwiPress_Logger::log( 'No WPML trid for product #' . $product_id, 'warning' );
+            LuwiPress_Logger::log( 'No WPML trid for ' . $post_type . ' #' . $product_id, 'warning' );
             return;
         }
 
         $default_lang  = apply_filters( 'wpml_default_language', 'tr' );
-        $translated_id = apply_filters( 'wpml_object_id', $product_id, 'product', false, $language );
+        $translated_id = apply_filters( 'wpml_object_id', $product_id, $post_type, false, $language );
 
         if ( $translated_id && $translated_id !== $product_id ) {
             // ── Update existing translation ──
@@ -753,7 +758,7 @@ class LuwiPress_Translation {
                 'post_title'   => $translated['name'],
                 'post_content' => $translated['description'],
                 'post_excerpt' => $translated['short_description'] ?? '',
-                'post_type'    => 'product',
+                'post_type'    => $post_type,
                 'post_status'  => $original->post_status,
                 'post_author'  => $original->post_author,
             ) );
@@ -766,7 +771,7 @@ class LuwiPress_Translation {
             // Link to WPML translation group (with SQL fallback)
             do_action( 'wpml_set_element_language_details', array(
                 'element_id'           => $new_id,
-                'element_type'         => 'post_product',
+                'element_type'         => $element_type,
                 'trid'                 => $trid,
                 'language_code'        => $language,
                 'source_language_code' => $default_lang,
@@ -784,7 +789,7 @@ class LuwiPress_Translation {
                 $wpdb->insert(
                     $wpdb->prefix . 'icl_translations',
                     array(
-                        'element_type'         => 'post_product',
+                        'element_type'         => $element_type,
                         'element_id'           => $new_id,
                         'trid'                 => $trid,
                         'language_code'        => $language,
