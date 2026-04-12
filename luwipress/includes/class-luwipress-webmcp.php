@@ -33,8 +33,8 @@ class LuwiPress_WebMCP {
     /* ──────────────────────────── Constants ──────────────────────────── */
 
     const MCP_PROTOCOL_VERSION = '2025-03-26';
-    const SERVER_NAME          = 'n8npress-webmcp';
-    const SERVER_VERSION       = '1.10.0';
+    const SERVER_NAME          = 'luwipress-webmcp';
+    const SERVER_VERSION       = '2.0.1';
     const ENDPOINT_PATH        = '/luwipress/v1/mcp';
 
     /* ──────────────────────────── Properties ────────────────────────── */
@@ -358,11 +358,11 @@ class LuwiPress_WebMCP {
      */
     private function get_server_instructions() {
         $site_name = get_bloginfo( 'name' );
-        return "You are connected to {$site_name} via n8nPress WebMCP. "
-             . 'n8nPress is AI-powered middleware for WooCommerce that provides: '
+        return "You are connected to {$site_name} via LuwiPress WebMCP. "
+             . 'LuwiPress is AI-powered automation for WooCommerce that provides: '
              . 'content enrichment, SEO optimization (Rank Math/Yoast), AEO (FAQ/HowTo/Speakable schema), '
              . 'translation management (WPML/Polylang), CRM analytics, email sending, '
-             . 'and workflow orchestration via n8n. '
+             . 'and AI-powered content generation. '
              . 'Use tools/list to discover available operations, then tools/call to execute them.';
     }
 
