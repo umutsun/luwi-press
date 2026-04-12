@@ -17,6 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class LuwiPress_AI_Engine {
 
 	const MODE_LOCAL = 'local';
+	const MODE_N8N   = 'n8n';
 
 	/**
 	 * Provider instances cache.
