@@ -272,13 +272,19 @@ class LuwiPress_AI_Engine {
 			return $override;
 		}
 
-		// Fall back to global default, then workflow default.
+		// Fall back to global default from settings.
 		$global = get_option( 'luwipress_default_provider', '' );
 		if ( ! empty( $global ) ) {
 			return $global;
 		}
 
-		return self::$workflow_providers[ $workflow ] ?? 'anthropic';
+		// Then try the main AI provider setting.
+		$main = get_option( 'luwipress_ai_provider', 'openai' );
+		if ( ! empty( $main ) ) {
+			return $main;
+		}
+
+		return self::$workflow_providers[ $workflow ] ?? 'openai';
 	}
 
 	/**
