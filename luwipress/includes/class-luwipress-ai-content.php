@@ -133,7 +133,7 @@ class LuwiPress_AI_Content {
      */
     public function handle_enrich_request($request) {
         $product_id = $request->get_param('product_id');
-        $options    = $request->get_param('options');
+        $options    = $request->get_param('options') ?? array();
 
         $product = wc_get_product($product_id);
         if (!$product) {
