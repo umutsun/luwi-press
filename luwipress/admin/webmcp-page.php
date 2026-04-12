@@ -1,25 +1,24 @@
 <?php
 /**
- * luwipress WebMCP Admin Page
+ * LuwiPress WebMCP Admin Page
  *
- * Shows MCP server status, endpoint URL, tool catalog, connection tester,
- * and configuration options.
+ * MCP server status, endpoint URL, tool catalog, connection tester, settings.
  *
  * @since 1.10.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+	exit;
 }
 if ( ! current_user_can( 'manage_options' ) ) {
-    wp_die( __( 'You do not have permission to access this page.', 'n8npress' ) );
+	wp_die( esc_html__( 'You do not have permission to access this page.', 'luwipress' ) );
 }
 
 // Handle settings save
 if ( isset( $_POST['luwipress_webmcp_save'] ) && check_admin_referer( 'luwipress_webmcp_settings' ) ) {
-    update_option( 'luwipress_webmcp_enabled', ! empty( $_POST['webmcp_enabled'] ) );
-    update_option( 'luwipress_webmcp_allowed_origins', sanitize_textarea_field( $_POST['webmcp_allowed_origins'] ?? '' ) );
-    echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'WebMCP settings saved.', 'n8npress' ) . '</p></div>';
+	update_option( 'luwipress_webmcp_enabled', ! empty( $_POST['webmcp_enabled'] ) );
+	update_option( 'luwipress_webmcp_allowed_origins', sanitize_textarea_field( $_POST['webmcp_allowed_origins'] ?? '' ) );
+	echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'WebMCP settings saved.', 'luwipress' ) . '</p></div>';
 }
 
 $enabled      = LuwiPress_WebMCP::is_enabled();
@@ -31,161 +30,165 @@ $origins      = get_option( 'luwipress_webmcp_allowed_origins', '' );
 $tool_count = 0;
 $catalog    = array();
 if ( $enabled && class_exists( 'LuwiPress_WebMCP' ) ) {
-    $webmcp     = LuwiPress_WebMCP::get_instance();
-    $tool_count = $webmcp->get_tool_count();
-    $catalog    = $webmcp->get_tool_catalog();
+	$webmcp     = LuwiPress_WebMCP::get_instance();
+	$tool_count = $webmcp->get_tool_count();
+	$catalog    = $webmcp->get_tool_catalog();
 }
+
+$category_labels = array(
+	'system'      => array( 'System & Monitoring', 'dashicons-dashboard', '#16a34a' ),
+	'site'        => array( 'Site Configuration', 'dashicons-admin-site', '#2563eb' ),
+	'content'     => array( 'Content Management', 'dashicons-edit', '#8b5cf6' ),
+	'seo'         => array( 'SEO & Enrichment', 'dashicons-chart-line', '#ec4899' ),
+	'aeo'         => array( 'AEO (Schema)', 'dashicons-editor-code', '#f59e0b' ),
+	'translation' => array( 'Translation', 'dashicons-translation', '#0ea5e9' ),
+	'crm'         => array( 'CRM & Analytics', 'dashicons-groups', '#14b8a6' ),
+	'send'        => array( 'Email', 'dashicons-email', '#f97316' ),
+	'claw'        => array( 'Open Claw (AI)', 'dashicons-superhero', '#6366f1' ),
+	'token'       => array( 'Token Usage', 'dashicons-chart-pie', '#a855f7' ),
+	'review'      => array( 'Review Analytics', 'dashicons-star-filled', '#eab308' ),
+	'linker'      => array( 'Internal Linking', 'dashicons-admin-links', '#06b6d4' ),
+	'knowledge'   => array( 'Knowledge Graph', 'dashicons-networking', '#10b981' ),
+);
 ?>
 
 <div class="wrap n8npress-dashboard">
-    <h1 class="n8npress-title">
-        <span class="dashicons dashicons-rest-api"></span>
-        WebMCP Server
-        <span class="n8npress-version">MCP 2025-03-26</span>
-    </h1>
 
-    <p class="description" style="font-size: 14px; margin-bottom: 20px;">
-        <?php esc_html_e( 'Model Context Protocol server — lets AI agents discover and use all luwipress capabilities over a single HTTP endpoint.', 'n8npress' ); ?>
-    </p>
+	<!-- Header -->
+	<div class="mcp-header">
+		<div class="mcp-header-left">
+			<h1 class="mcp-title">
+				<svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+					<rect width="28" height="28" rx="8" fill="var(--n8n-primary)"/>
+					<path d="M8 14h12M14 8v12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+					<circle cx="8" cy="14" r="2" fill="#fff"/><circle cx="20" cy="14" r="2" fill="#fff"/>
+					<circle cx="14" cy="8" r="2" fill="#fff"/><circle cx="14" cy="20" r="2" fill="#fff"/>
+				</svg>
+				WebMCP Server
+			</h1>
+			<span class="mcp-protocol-badge">MCP 2025-03-26</span>
+		</div>
+		<div class="mcp-header-right">
+			<span class="mcp-status-dot <?php echo $enabled ? 'dot-active' : 'dot-inactive'; ?>"></span>
+			<span class="mcp-status-text"><?php echo $enabled ? esc_html__( 'Active', 'luwipress' ) : esc_html__( 'Disabled', 'luwipress' ); ?></span>
+		</div>
+	</div>
 
-    <!-- Status Cards -->
-    <div class="n8npress-cards">
-        <div class="n8npress-card">
-            <div class="card-icon" style="background: <?php echo $enabled ? '#22c55e' : '#ef4444'; ?>;">
-                <span class="dashicons dashicons-<?php echo $enabled ? 'yes-alt' : 'dismiss'; ?>"></span>
-            </div>
-            <div class="card-content">
-                <div class="card-value"><?php echo $enabled ? 'Active' : 'Disabled'; ?></div>
-                <div class="card-label"><?php esc_html_e( 'Server Status', 'n8npress' ); ?></div>
-            </div>
-        </div>
+	<!-- Stats -->
+	<div class="mcp-stats">
+		<div class="mcp-stat" style="--accent: <?php echo $enabled ? 'var(--n8n-success)' : 'var(--n8n-error)'; ?>;">
+			<span class="dashicons dashicons-<?php echo $enabled ? 'yes-alt' : 'dismiss'; ?>" style="color: var(--accent);"></span>
+			<div>
+				<strong><?php echo $enabled ? esc_html__( 'Active', 'luwipress' ) : esc_html__( 'Disabled', 'luwipress' ); ?></strong>
+				<span><?php esc_html_e( 'Server Status', 'luwipress' ); ?></span>
+			</div>
+		</div>
+		<div class="mcp-stat" style="--accent: var(--n8n-primary);">
+			<span class="dashicons dashicons-admin-tools" style="color: var(--accent);"></span>
+			<div>
+				<strong><?php echo esc_html( $tool_count ); ?></strong>
+				<span><?php esc_html_e( 'MCP Tools', 'luwipress' ); ?></span>
+			</div>
+		</div>
+		<div class="mcp-stat" style="--accent: var(--n8n-blue);">
+			<span class="dashicons dashicons-database" style="color: var(--accent);"></span>
+			<div>
+				<strong>3 + Templates</strong>
+				<span><?php esc_html_e( 'MCP Resources', 'luwipress' ); ?></span>
+			</div>
+		</div>
+		<div class="mcp-stat" style="--accent: <?php echo ! empty( $api_token ) ? 'var(--n8n-success)' : 'var(--n8n-warning)'; ?>;">
+			<span class="dashicons dashicons-shield" style="color: var(--accent);"></span>
+			<div>
+				<strong><?php echo ! empty( $api_token ) ? esc_html__( 'Configured', 'luwipress' ) : esc_html__( 'Missing', 'luwipress' ); ?></strong>
+				<span><?php esc_html_e( 'Auth Token', 'luwipress' ); ?></span>
+			</div>
+		</div>
+	</div>
 
-        <div class="n8npress-card">
-            <div class="card-icon" style="background: #3b82f6;">
-                <span class="dashicons dashicons-admin-tools"></span>
-            </div>
-            <div class="card-content">
-                <div class="card-value"><?php echo esc_html( $tool_count ); ?></div>
-                <div class="card-label"><?php esc_html_e( 'MCP Tools', 'n8npress' ); ?></div>
-            </div>
-        </div>
+	<!-- Endpoint -->
+	<div class="n8npress-card">
+		<h2>
+			<span class="dashicons dashicons-admin-links" style="color:var(--n8n-primary);"></span>
+			<?php esc_html_e( 'MCP Endpoint', 'luwipress' ); ?>
+		</h2>
+		<div class="mcp-endpoint-box">
+			<div class="mcp-endpoint-row">
+				<label><?php esc_html_e( 'URL', 'luwipress' ); ?></label>
+				<div class="mcp-endpoint-url">
+					<code id="mcp-endpoint-url"><?php echo esc_html( $endpoint_url ); ?></code>
+					<button type="button" class="mcp-copy-btn" onclick="navigator.clipboard.writeText('<?php echo esc_js( $endpoint_url ); ?>');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+				</div>
+			</div>
+			<div class="mcp-endpoint-row">
+				<label><?php esc_html_e( 'Protocol', 'luwipress' ); ?></label>
+				<code class="mcp-code-inline">Streamable HTTP Transport</code>
+			</div>
+			<div class="mcp-endpoint-row">
+				<label><?php esc_html_e( 'Auth', 'luwipress' ); ?></label>
+				<div>
+					<code class="mcp-code-inline">Authorization: Bearer &lt;token&gt;</code>
+					<span class="mcp-or"><?php esc_html_e( 'or', 'luwipress' ); ?></span>
+					<code class="mcp-code-inline">X-Luwipress-Token: &lt;token&gt;</code>
+				</div>
+			</div>
+		</div>
 
-        <div class="n8npress-card">
-            <div class="card-icon" style="background: #8b5cf6;">
-                <span class="dashicons dashicons-database"></span>
-            </div>
-            <div class="card-content">
-                <div class="card-value">3 + Templates</div>
-                <div class="card-label"><?php esc_html_e( 'MCP Resources', 'n8npress' ); ?></div>
-            </div>
-        </div>
+		<div class="mcp-test-section">
+			<button type="button" class="tm-btn tm-btn-primary" id="webmcp-test-btn" <?php disabled( ! $enabled ); ?>>
+				<span class="dashicons dashicons-controls-play"></span>
+				<?php esc_html_e( 'Test MCP Connection', 'luwipress' ); ?>
+			</button>
+			<div id="webmcp-test-result" class="mcp-test-result" style="display:none;">
+				<pre></pre>
+			</div>
+		</div>
+	</div>
 
-        <div class="n8npress-card">
-            <div class="card-icon" style="background: #f59e0b;">
-                <span class="dashicons dashicons-shield"></span>
-            </div>
-            <div class="card-content">
-                <div class="card-value"><?php echo ! empty( $api_token ) ? 'Configured' : 'Missing'; ?></div>
-                <div class="card-label"><?php esc_html_e( 'Auth Token', 'n8npress' ); ?></div>
-            </div>
-        </div>
-    </div>
+	<!-- Tool Catalog -->
+	<?php if ( ! empty( $catalog ) ) : ?>
+	<div class="n8npress-card">
+		<h2>
+			<span class="dashicons dashicons-admin-tools" style="color:var(--n8n-primary);"></span>
+			<?php esc_html_e( 'Tool Catalog', 'luwipress' ); ?>
+			<span class="mcp-tool-count"><?php echo esc_html( $tool_count ); ?> <?php esc_html_e( 'tools', 'luwipress' ); ?></span>
+		</h2>
+		<div class="mcp-catalog-grid">
+			<?php foreach ( $catalog as $category => $tools ) :
+				$label = $category_labels[ $category ] ?? array( ucfirst( $category ), 'dashicons-admin-generic', 'var(--n8n-gray)' );
+			?>
+			<div class="mcp-tool-group">
+				<div class="mcp-group-header">
+					<span class="dashicons <?php echo esc_attr( $label[1] ); ?>" style="color:<?php echo esc_attr( $label[2] ); ?>;"></span>
+					<strong><?php echo esc_html( $label[0] ); ?></strong>
+					<span class="mcp-group-count"><?php echo count( $tools ); ?></span>
+				</div>
+				<ul class="mcp-tool-list">
+					<?php foreach ( $tools as $tool ) : ?>
+					<li>
+						<code><?php echo esc_html( $tool['name'] ); ?></code>
+						<span><?php echo esc_html( $tool['description'] ); ?></span>
+					</li>
+					<?php endforeach; ?>
+				</ul>
+			</div>
+			<?php endforeach; ?>
+		</div>
+	</div>
+	<?php endif; ?>
 
-    <!-- Endpoint & Connection -->
-    <div class="n8npress-section">
-        <h2><span class="dashicons dashicons-admin-links"></span> <?php esc_html_e( 'MCP Endpoint', 'n8npress' ); ?></h2>
+	<!-- Usage Examples -->
+	<div class="n8npress-card">
+		<h2>
+			<span class="dashicons dashicons-editor-code" style="color:var(--n8n-primary);"></span>
+			<?php esc_html_e( 'Usage Examples', 'luwipress' ); ?>
+		</h2>
 
-        <table class="form-table">
-            <tr>
-                <th><?php esc_html_e( 'Endpoint URL', 'n8npress' ); ?></th>
-                <td>
-                    <code id="mcp-endpoint-url" style="font-size: 14px; padding: 8px 12px; background: #1e293b; color: #22d3ee; border-radius: 6px; display: inline-block;"><?php echo esc_html( $endpoint_url ); ?></code>
-                    <button type="button" class="button button-small" onclick="navigator.clipboard.writeText('<?php echo esc_js( $endpoint_url ); ?>');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-                </td>
-            </tr>
-            <tr>
-                <th><?php esc_html_e( 'Protocol', 'n8npress' ); ?></th>
-                <td><code>MCP 2025-03-26 — Streamable HTTP Transport</code></td>
-            </tr>
-            <tr>
-                <th><?php esc_html_e( 'Authentication', 'n8npress' ); ?></th>
-                <td>
-                    <code>Authorization: Bearer &lt;token&gt;</code> or <code>X-luwipress-Token: &lt;token&gt;</code><br>
-                    <span class="description"><?php esc_html_e( 'Use the API token from Settings page. WordPress admin cookie also works for browser clients.', 'n8npress' ); ?></span>
-                </td>
-            </tr>
-        </table>
-
-        <!-- Connection Test -->
-        <h3 style="margin-top: 20px;"><?php esc_html_e( 'Quick Test', 'n8npress' ); ?></h3>
-        <p class="description"><?php esc_html_e( 'Send an MCP initialize request to verify the server is responding:', 'n8npress' ); ?></p>
-        <button type="button" class="button button-primary" id="webmcp-test-btn" <?php disabled( ! $enabled ); ?>>
-            <span class="dashicons dashicons-controls-play" style="margin-top: 4px;"></span>
-            <?php esc_html_e( 'Test MCP Connection', 'n8npress' ); ?>
-        </button>
-        <div id="webmcp-test-result" style="margin-top: 12px; display: none;">
-            <pre style="background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; font-size: 13px; overflow-x: auto; max-height: 300px;"></pre>
-        </div>
-    </div>
-
-    <!-- Tool Catalog -->
-    <div class="n8npress-section">
-        <h2><span class="dashicons dashicons-admin-tools"></span> <?php esc_html_e( 'Tool Catalog', 'n8npress' ); ?></h2>
-        <p class="description"><?php esc_html_e( 'All luwipress capabilities exposed as MCP tools, grouped by domain:', 'n8npress' ); ?></p>
-
-        <?php if ( ! empty( $catalog ) ) : ?>
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-top: 16px;">
-            <?php
-            $category_labels = array(
-                'system'      => array( 'System & Monitoring', 'dashicons-dashboard' ),
-                'site'        => array( 'Site Configuration', 'dashicons-admin-site' ),
-                'content'     => array( 'Content Management', 'dashicons-edit' ),
-                'seo'         => array( 'SEO & Enrichment', 'dashicons-chart-line' ),
-                'aeo'         => array( 'AEO (Schema)', 'dashicons-editor-code' ),
-                'translation' => array( 'Translation', 'dashicons-translation' ),
-                'crm'         => array( 'CRM & Analytics', 'dashicons-groups' ),
-                'send'        => array( 'Email', 'dashicons-email' ),
-                'claw'        => array( 'Open Claw (AI Agent)', 'dashicons-superhero' ),
-                'chatwoot'    => array( 'Chatwoot', 'dashicons-format-chat' ),
-                'workflow'    => array( 'Workflows', 'dashicons-randomize' ),
-                'token'       => array( 'Token Usage', 'dashicons-chart-pie' ),
-                'review'      => array( 'Review Analytics', 'dashicons-star-filled' ),
-                'linker'      => array( 'Internal Linking', 'dashicons-admin-links' ),
-                'knowledge'   => array( 'Knowledge Graph', 'dashicons-networking' ),
-            );
-            foreach ( $catalog as $category => $tools ) :
-                $label = $category_labels[ $category ] ?? array( ucfirst( $category ), 'dashicons-admin-generic' );
-            ?>
-            <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
-                <h3 style="margin: 0 0 10px; font-size: 14px;">
-                    <span class="dashicons <?php echo esc_attr( $label[1] ); ?>" style="color: #6366f1;"></span>
-                    <?php echo esc_html( $label[0] ); ?>
-                    <span style="float: right; color: #94a3b8; font-weight: normal; font-size: 12px;"><?php echo count( $tools ); ?> tools</span>
-                </h3>
-                <ul style="margin: 0; padding: 0; list-style: none;">
-                    <?php foreach ( $tools as $tool ) : ?>
-                    <li style="padding: 4px 0; font-size: 13px; border-bottom: 1px solid #f1f5f9;">
-                        <code style="font-size: 12px; color: #3b82f6;"><?php echo esc_html( $tool['name'] ); ?></code>
-                        <br><span style="color: #64748b; font-size: 12px;"><?php echo esc_html( $tool['description'] ); ?></span>
-                    </li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-            <?php endforeach; ?>
-        </div>
-        <?php else : ?>
-        <p><em><?php esc_html_e( 'WebMCP is disabled. Enable it to see available tools.', 'n8npress' ); ?></em></p>
-        <?php endif; ?>
-    </div>
-
-    <!-- Usage Examples -->
-    <div class="n8npress-section">
-        <h2><span class="dashicons dashicons-editor-code"></span> <?php esc_html_e( 'Usage Examples', 'n8npress' ); ?></h2>
-
-        <h3>Claude Desktop / claude_desktop_config.json</h3>
-        <pre style="background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; font-size: 13px; overflow-x: auto;">{
+		<div class="mcp-example">
+			<h3>Claude Desktop / claude_desktop_config.json</h3>
+			<pre class="mcp-code-block">{
   "mcpServers": {
-    "n8npress": {
+    "luwipress": {
       "url": "<?php echo esc_html( $endpoint_url ); ?>",
       "headers": {
         "Authorization": "Bearer <?php echo esc_html( $api_token ? substr( $api_token, 0, 8 ) . '...' : 'YOUR_TOKEN' ); ?>"
@@ -193,9 +196,11 @@ if ( $enabled && class_exists( 'LuwiPress_WebMCP' ) ) {
     }
   }
 }</pre>
+		</div>
 
-        <h3 style="margin-top: 16px;">cURL — Initialize + List Tools</h3>
-        <pre style="background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; font-size: 13px; overflow-x: auto;"># Initialize session
+		<div class="mcp-example">
+			<h3>cURL</h3>
+			<pre class="mcp-code-block"># Initialize session
 curl -X POST <?php echo esc_html( $endpoint_url ); ?> \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
@@ -206,91 +211,88 @@ curl -X POST <?php echo esc_html( $endpoint_url ); ?> \
 curl -X POST <?php echo esc_html( $endpoint_url ); ?> \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -H "Mcp-Session-Id: SESSION_ID_FROM_ABOVE" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+  -H "Mcp-Session-Id: SESSION_ID" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'</pre>
+		</div>
+	</div>
 
-# Call a tool
-curl -X POST <?php echo esc_html( $endpoint_url ); ?> \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -H "Mcp-Session-Id: SESSION_ID_FROM_ABOVE" \
-  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"system_health","arguments":{}}}'</pre>
-    </div>
-
-    <!-- Settings -->
-    <div class="n8npress-section">
-        <h2><span class="dashicons dashicons-admin-settings"></span> <?php esc_html_e( 'Settings', 'n8npress' ); ?></h2>
-
-        <form method="post">
-            <?php wp_nonce_field( 'luwipress_webmcp_settings' ); ?>
-
-            <table class="form-table">
-                <tr>
-                    <th><?php esc_html_e( 'Enable WebMCP Server', 'n8npress' ); ?></th>
-                    <td>
-                        <label>
-                            <input type="checkbox" name="webmcp_enabled" value="1" <?php checked( $enabled ); ?>>
-                            <?php esc_html_e( 'Expose MCP endpoint at /luwipress/v1/mcp', 'n8npress' ); ?>
-                        </label>
-                        <p class="description"><?php esc_html_e( 'When disabled, the MCP endpoint returns 404.', 'n8npress' ); ?></p>
-                    </td>
-                </tr>
-                <tr>
-                    <th><?php esc_html_e( 'Allowed Origins', 'n8npress' ); ?></th>
-                    <td>
-                        <textarea name="webmcp_allowed_origins" rows="4" cols="60" class="large-text code"><?php echo esc_textarea( $origins ); ?></textarea>
-                        <p class="description"><?php esc_html_e( 'Additional allowed origins for CORS/DNS rebinding protection (one per line). Your site URL is always allowed.', 'n8npress' ); ?></p>
-                    </td>
-                </tr>
-            </table>
-
-            <p class="submit">
-                <input type="submit" name="luwipress_webmcp_save" class="button button-primary" value="<?php esc_attr_e( 'Save Settings', 'n8npress' ); ?>">
-            </p>
-        </form>
-    </div>
+	<!-- Settings -->
+	<div class="n8npress-card">
+		<h2>
+			<span class="dashicons dashicons-admin-settings" style="color:var(--n8n-primary);"></span>
+			<?php esc_html_e( 'Settings', 'luwipress' ); ?>
+		</h2>
+		<form method="post">
+			<?php wp_nonce_field( 'luwipress_webmcp_settings' ); ?>
+			<table class="form-table">
+				<tr>
+					<th><?php esc_html_e( 'Enable WebMCP', 'luwipress' ); ?></th>
+					<td>
+						<label>
+							<input type="checkbox" name="webmcp_enabled" value="1" <?php checked( $enabled ); ?>>
+							<?php esc_html_e( 'Expose MCP endpoint at /luwipress/v1/mcp', 'luwipress' ); ?>
+						</label>
+					</td>
+				</tr>
+				<tr>
+					<th><?php esc_html_e( 'Allowed Origins', 'luwipress' ); ?></th>
+					<td>
+						<textarea name="webmcp_allowed_origins" rows="3" cols="50" class="large-text code"><?php echo esc_textarea( $origins ); ?></textarea>
+						<p class="description"><?php esc_html_e( 'Additional CORS origins (one per line). Your site URL is always allowed.', 'luwipress' ); ?></p>
+					</td>
+				</tr>
+			</table>
+			<p class="submit">
+				<button type="submit" name="luwipress_webmcp_save" class="tm-btn tm-btn-primary">
+					<span class="dashicons dashicons-saved"></span>
+					<?php esc_html_e( 'Save Settings', 'luwipress' ); ?>
+				</button>
+			</p>
+		</form>
+	</div>
 </div>
 
 <script>
 document.getElementById('webmcp-test-btn')?.addEventListener('click', async function() {
-    const btn = this;
-    const result = document.getElementById('webmcp-test-result');
-    const pre = result.querySelector('pre');
+	const btn = this;
+	const result = document.getElementById('webmcp-test-result');
+	const pre = result.querySelector('pre');
 
-    btn.disabled = true;
-    btn.textContent = 'Testing...';
-    result.style.display = 'block';
-    pre.textContent = 'Sending MCP initialize request...';
+	btn.disabled = true;
+	btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Testing...';
+	result.style.display = 'block';
+	pre.textContent = 'Sending MCP initialize request...';
+	pre.style.color = '';
 
-    try {
-        const res = await fetch('<?php echo esc_js( $endpoint_url ); ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json, text/event-stream',
-                'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>'
-            },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'initialize',
-                params: {
-                    protocolVersion: '2025-03-26',
-                    capabilities: {},
-                    clientInfo: { name: 'n8npress-admin', version: '1.0' }
-                }
-            })
-        });
+	try {
+		const res = await fetch('<?php echo esc_js( $endpoint_url ); ?>', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Accept': 'application/json, text/event-stream',
+				'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>'
+			},
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 1,
+				method: 'initialize',
+				params: {
+					protocolVersion: '2025-03-26',
+					capabilities: {},
+					clientInfo: { name: 'luwipress-admin', version: '1.0' }
+				}
+			})
+		});
 
-        const data = await res.json();
-        pre.textContent = JSON.stringify(data, null, 2);
-        pre.style.color = data.result ? '#22c55e' : '#ef4444';
-    } catch (err) {
-        pre.textContent = 'Error: ' + err.message;
-        pre.style.color = '#ef4444';
-    }
+		const data = await res.json();
+		pre.textContent = JSON.stringify(data, null, 2);
+		pre.style.color = data.result ? '#22c55e' : '#ef4444';
+	} catch (err) {
+		pre.textContent = 'Error: ' + err.message;
+		pre.style.color = '#ef4444';
+	}
 
-    btn.disabled = false;
-    btn.innerHTML = '<span class="dashicons dashicons-controls-play" style="margin-top:4px;"></span> Test MCP Connection';
+	btn.disabled = false;
+	btn.innerHTML = '<span class="dashicons dashicons-controls-play"></span> <?php echo esc_js( __( 'Test MCP Connection', 'luwipress' ) ); ?>';
 });
 </script>

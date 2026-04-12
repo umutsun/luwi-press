@@ -17,7 +17,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 class LuwiPress_AI_Engine {
 
 	const MODE_LOCAL = 'local';
-	const MODE_N8N   = 'n8n';
 
 	/**
 	 * Provider instances cache.
@@ -61,23 +60,19 @@ class LuwiPress_AI_Engine {
 	// ─── PUBLIC API ───────────────────────────────────────────────
 
 	/**
-	 * Get the current processing mode.
-	 *
-	 * @return string 'local' or 'n8n'
+	 * Always returns 'local' — n8n mode removed in v2.0.
+	 * Kept for backward compatibility with modules that still check mode.
 	 */
 	public static function get_mode() {
-		return get_option( 'luwipress_processing_mode', self::MODE_N8N );
+		return self::MODE_LOCAL;
 	}
 
 	/**
-	 * Main dispatch — replaces every send_to_n8n() call.
-	 *
-	 * In local mode:  calls AI provider directly, parses response, returns structured result.
-	 * In n8n mode:    forwards to webhook exactly as before (backward compat).
+	 * Main dispatch — calls AI provider directly, parses response, returns structured result.
 	 *
 	 * @param string $workflow     Workflow identifier (e.g. 'product-enricher').
 	 * @param array  $messages     Messages array: [['role' => 'system|user', 'content' => '...'], ...]
-	 * @param array  $options      Options: provider, model, max_tokens, temperature, timeout, event, n8n_payload, callback_url.
+	 * @param array  $options      Options: provider, model, max_tokens, temperature, timeout.
 	 * @return array|WP_Error      Normalized AI response or WP_Error.
 	 */
 	public static function dispatch( $workflow, array $messages, array $options = array() ) {
@@ -89,17 +84,6 @@ class LuwiPress_AI_Engine {
 			}
 		}
 
-		$mode = self::get_mode();
-
-		if ( self::MODE_N8N === $mode ) {
-			return self::forward_to_n8n(
-				$options['event'] ?? $workflow,
-				$options['n8n_payload'] ?? array(),
-				$options['callback_url'] ?? ''
-			);
-		}
-
-		// Local mode: call AI provider directly.
 		return self::call_ai( $workflow, $messages, $options );
 	}
 
@@ -201,75 +185,11 @@ class LuwiPress_AI_Engine {
 		return $parsed;
 	}
 
-	// ─── N8N FORWARDING (backward compat) ─────────────────────────
-
 	/**
-	 * Forward request to n8n webhook (extracted from duplicate send_to_n8n methods).
-	 *
-	 * @param string $event        Event type (e.g. 'product_enrich').
-	 * @param array  $payload      Full payload to send.
-	 * @param string $callback_url Callback URL for n8n to POST results back.
-	 * @return array|WP_Error      Response with n8n_forwarded flag.
+	 * Stub — n8n forwarding removed in v2.0. Returns error if called.
 	 */
-	public static function forward_to_n8n( $event, array $payload, $callback_url = '' ) {
-		$webhook_url = get_option( 'luwipress_seo_webhook_url', '' );
-		if ( empty( $webhook_url ) ) {
-			return new WP_Error(
-				'luwipress_no_webhook',
-				__( 'n8n webhook URL is not configured. Set it in Settings or switch to Local AI mode.', 'luwipress' )
-			);
-		}
-
-		$body = wp_json_encode( array_merge(
-			array(
-				'event' => $event,
-				'_meta' => luwipress_build_meta_block( $callback_url ),
-			),
-			$payload
-		) );
-
-		$headers = array(
-			'Content-Type'      => 'application/json',
-			'X-LuwiPress-Event'  => $event,
-			'X-LuwiPress-Source' => get_site_url(),
-		);
-
-		$api_token = get_option( 'luwipress_seo_api_token', '' );
-		if ( ! empty( $api_token ) ) {
-			$headers['Authorization'] = 'Bearer ' . $api_token;
-		}
-
-		// HMAC signing if available.
-		if ( class_exists( 'LuwiPress_HMAC' ) ) {
-			LuwiPress_HMAC::add_signature_headers( $headers, $body );
-		}
-
-		$response = wp_remote_post( $webhook_url, array(
-			'headers' => $headers,
-			'body'    => $body,
-			'timeout' => absint( get_option( 'luwipress_webhook_timeout', 30 ) ),
-		) );
-
-		if ( is_wp_error( $response ) ) {
-			return new WP_Error(
-				'luwipress_webhook_error',
-				sprintf( __( 'n8n webhook call failed: %s', 'luwipress' ), $response->get_error_message() )
-			);
-		}
-
-		$status_code = wp_remote_retrieve_response_code( $response );
-		if ( $status_code >= 400 ) {
-			return new WP_Error(
-				'luwipress_webhook_error',
-				sprintf( __( 'n8n webhook returned HTTP %d.', 'luwipress' ), $status_code )
-			);
-		}
-
-		return array(
-			'n8n_forwarded' => true,
-			'status_code'   => $status_code,
-			'event'         => $event,
-		);
+	public static function forward_to_n8n( $event, array $payload = array(), $callback_url = '' ) {
+		return new WP_Error( 'luwipress_no_n8n', __( 'n8n integration has been removed. All AI processing is handled natively.', 'luwipress' ) );
 	}
 
 	// ─── PROVIDER MANAGEMENT ──────────────────────────────────────

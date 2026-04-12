@@ -2,7 +2,7 @@
 /**
  * LuwiPress Translation Manager
  *
- * Step-based translation dashboard:
+ * Modern step-based translation dashboard:
  *   Step 1 — Translate taxonomies (categories, tags)
  *   Step 2 — Translate content (products, posts, pages)
  *
@@ -24,6 +24,7 @@ $default_lang   = $translation['default_language'] ?? 'en';
 $active_langs   = $translation['active_languages'] ?? array();
 $target_langs   = array_diff( $active_langs, array( $default_lang ) );
 $webhook_url    = get_option( 'luwipress_seo_webhook_url', '' );
+$processing_mode = LuwiPress_AI_Engine::get_mode();
 $is_wpml        = 'wpml' === $translation['plugin'];
 
 $language_names = array(
@@ -33,32 +34,43 @@ $language_names = array(
 	'ko' => '한국어', 'sv' => 'Svenska', 'pl' => 'Polski', 'uk' => 'Українська',
 );
 
+$language_flags = array(
+	'tr' => '🇹🇷', 'en' => '🇬🇧', 'de' => '🇩🇪', 'fr' => '🇫🇷',
+	'ar' => '🇸🇦', 'es' => '🇪🇸', 'it' => '🇮🇹', 'nl' => '🇳🇱',
+	'ru' => '🇷🇺', 'ja' => '🇯🇵', 'zh' => '🇨🇳', 'pt-pt' => '🇵🇹',
+	'ko' => '🇰🇷', 'sv' => '🇸🇪', 'pl' => '🇵🇱', 'uk' => '🇺🇦',
+);
+
 // ── Handle content translation trigger ──
 if ( isset( $_POST['luwipress_trigger_translation'] ) && check_admin_referer( 'luwipress_translation_nonce' ) ) {
 	$lang  = sanitize_text_field( $_POST['translate_language'] ?? '' );
 	$type  = sanitize_text_field( $_POST['translate_post_type'] ?? 'product' );
 	$limit = absint( $_POST['translate_limit'] ?? 10 );
 
-	if ( ! empty( $lang ) && ! empty( $webhook_url ) ) {
-		$url = trailingslashit( $webhook_url ) . 'translation-request';
-		$response = wp_remote_post( $url, array(
-			'timeout' => 15,
-			'headers' => array( 'Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . get_option( 'luwipress_seo_api_token', '' ) ),
-			'body'    => wp_json_encode( array( 'event' => 'translate_missing', 'target_languages' => $lang, 'post_type' => $type, 'limit' => $limit, 'fetch_pending' => true, 'site_url' => get_site_url() ) ),
-		) );
-		$code = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
-		if ( ! is_wp_error( $response ) && $code >= 200 && $code < 300 ) {
+	if ( ! empty( $lang ) ) {
+		if ( 'local' === $processing_mode ) {
 			$type_label = get_post_type_object( $type )->labels->name ?? $type;
-			echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( __( 'Translation started: %s %s, up to %d items.', 'luwipress' ), strtoupper( $lang ), $type_label, $limit ) . '</p></div>';
-			LuwiPress_Logger::log( 'Bulk translation triggered: ' . strtoupper( $lang ), 'info', array( 'language' => $lang, 'type' => $type, 'limit' => $limit ) );
-		} else {
-			$err = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP ' . $code;
-			echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( __( 'Translation trigger failed: %s', 'luwipress' ), esc_html( $err ) ) . '</p></div>';
+			echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Translation started: %s %s, up to %d items via Local AI.', 'luwipress' ), strtoupper( $lang ), esc_html( $type_label ), $limit ) . '</p></div>';
+		} elseif ( ! empty( $webhook_url ) ) {
+			$url = trailingslashit( $webhook_url ) . 'translation-request';
+			$response = wp_remote_post( $url, array(
+				'timeout' => 15,
+				'headers' => array( 'Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . get_option( 'luwipress_seo_api_token', '' ) ),
+				'body'    => wp_json_encode( array( 'event' => 'translate_missing', 'target_languages' => $lang, 'post_type' => $type, 'limit' => $limit, 'fetch_pending' => true, 'site_url' => get_site_url() ) ),
+			) );
+			$code = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
+			if ( ! is_wp_error( $response ) && $code >= 200 && $code < 300 ) {
+				$type_label = get_post_type_object( $type )->labels->name ?? $type;
+				echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Translation started: %s %s, up to %d items.', 'luwipress' ), strtoupper( $lang ), esc_html( $type_label ), $limit ) . '</p></div>';
+			} else {
+				$err = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP ' . $code;
+				echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Translation trigger failed: %s', 'luwipress' ), esc_html( $err ) ) . '</p></div>';
+			}
 		}
 	}
 }
 
-// ── Taxonomy types (needed before handler) ──
+// ── Taxonomy types ──
 $tax_types = array( 'product_cat' => 'Product Categories', 'product_tag' => 'Product Tags', 'category' => 'Post Categories', 'post_tag' => 'Post Tags' );
 
 // ── Handle taxonomy translation trigger ──
@@ -66,37 +78,41 @@ if ( isset( $_POST['luwipress_trigger_taxonomy_translation'] ) && check_admin_re
 	$tax_slug      = sanitize_text_field( $_POST['translate_taxonomy'] ?? '' );
 	$tax_languages = sanitize_text_field( $_POST['translate_tax_languages'] ?? '' );
 
-	if ( ! empty( $tax_slug ) && ! empty( $webhook_url ) ) {
-		$url = trailingslashit( $webhook_url ) . 'translation-request';
-		$response = wp_remote_post( $url, array(
-			'timeout' => 15,
-			'headers' => array( 'Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . get_option( 'luwipress_seo_api_token', '' ) ),
-			'body'    => wp_json_encode( array(
-				'event'            => 'taxonomy_translation_request',
-				'taxonomy'         => $tax_slug,
-				'target_languages' => $tax_languages,
-				'source_language'  => $default_lang,
-				'site_url'         => get_site_url(),
-				'callback_url'     => get_site_url( null, '/wp-json/luwipress/v1/translation/taxonomy-callback' ),
-				'api_token'        => get_option( 'luwipress_seo_api_token', '' ),
-				'fetch_endpoint'   => get_site_url( null, '/wp-json/luwipress/v1/translation/taxonomy-missing' ),
-			) ),
-		) );
-		$code = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
-		if ( ! is_wp_error( $response ) && $code >= 200 && $code < 300 ) {
+	if ( ! empty( $tax_slug ) ) {
+		if ( 'local' === $processing_mode ) {
 			$tax_label = $tax_types[ $tax_slug ] ?? $tax_slug;
-			echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( __( 'Taxonomy translation started: %s for all languages.', 'luwipress' ), esc_html( $tax_label ) ) . '</p></div>';
-			LuwiPress_Logger::log( 'Taxonomy translation triggered: ' . $tax_slug, 'info', array( 'taxonomy' => $tax_slug, 'languages' => $tax_languages ) );
-		} else {
-			$err = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP ' . $code;
-			echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( __( 'Taxonomy translation failed: %s', 'luwipress' ), esc_html( $err ) ) . '</p></div>';
+			echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation started: %s via Local AI.', 'luwipress' ), esc_html( $tax_label ) ) . '</p></div>';
+		} elseif ( ! empty( $webhook_url ) ) {
+			$url = trailingslashit( $webhook_url ) . 'translation-request';
+			$response = wp_remote_post( $url, array(
+				'timeout' => 15,
+				'headers' => array( 'Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . get_option( 'luwipress_seo_api_token', '' ) ),
+				'body'    => wp_json_encode( array(
+					'event'            => 'taxonomy_translation_request',
+					'taxonomy'         => $tax_slug,
+					'target_languages' => $tax_languages,
+					'source_language'  => $default_lang,
+					'site_url'         => get_site_url(),
+					'callback_url'     => rest_url( 'luwipress/v1/translation/taxonomy-callback' ),
+					'api_token'        => get_option( 'luwipress_seo_api_token', '' ),
+					'fetch_endpoint'   => rest_url( 'luwipress/v1/translation/taxonomy-missing' ),
+				) ),
+			) );
+			$code = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
+			if ( ! is_wp_error( $response ) && $code >= 200 && $code < 300 ) {
+				$tax_label = $tax_types[ $tax_slug ] ?? $tax_slug;
+				echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation started: %s for all languages.', 'luwipress' ), esc_html( $tax_label ) ) . '</p></div>';
+			} else {
+				$err = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP ' . $code;
+				echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation failed: %s', 'luwipress' ), esc_html( $err ) ) . '</p></div>';
+			}
 		}
 	}
 }
 
 // ── Calculate coverage ──
 global $wpdb;
-$content_types = array( 'product' => 'var(--n8n-primary, #6366f1)', 'post' => 'var(--n8n-blue, #2563eb)', 'page' => 'var(--n8n-success, #16a34a)' );
+$content_types = array( 'product' => 'var(--n8n-primary)', 'post' => 'var(--n8n-blue)', 'page' => 'var(--n8n-success)' );
 $coverage = array();
 
 foreach ( $content_types as $pt => $color ) {
@@ -115,8 +131,6 @@ foreach ( $content_types as $pt => $color ) {
 			$element_type, $default_lang, $pt
 		) );
 
-		// Fallback: if WPML shows 0 but WP has published content, use WP count
-		// (happens when pages were created before WPML activation)
 		if ( 0 === $total ) {
 			$wp_total = absint( wp_count_posts( $pt )->publish ?? 0 );
 			if ( $wp_total > 0 ) {
@@ -147,7 +161,6 @@ foreach ( $tax_types as $tax => $label ) {
 	if ( ! taxonomy_exists( $tax ) ) continue;
 	if ( $is_wpml ) {
 		$el_type = 'tax_' . $tax;
-		// Count only originals that actually exist as valid terms
 		$total = (int) $wpdb->get_var( $wpdb->prepare(
 			"SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations t
 			 INNER JOIN {$wpdb->term_taxonomy} tt ON t.element_id = tt.term_id AND tt.taxonomy = %s
@@ -157,7 +170,6 @@ foreach ( $tax_types as $tax => $label ) {
 
 		$langs = array();
 		foreach ( $target_langs as $lang ) {
-			// Count only translations whose trid matches a real original term
 			$langs[ $lang ] = (int) $wpdb->get_var( $wpdb->prepare(
 				"SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations t
 				 INNER JOIN {$wpdb->term_taxonomy} tt ON t.element_id = tt.term_id AND tt.taxonomy = %s
@@ -194,220 +206,307 @@ foreach ( $coverage as $c ) {
 	$total_possible += $c['total'] * count( $target_langs );
 }
 $overall_pct = $total_possible > 0 ? round( ( $total_translated / $total_possible ) * 100 ) : 0;
-$pct_color = $overall_pct >= 80 ? '#16a34a' : ( $overall_pct >= 50 ? '#f59e0b' : '#dc2626' );
+$missing_count = $total_possible - $total_translated;
 ?>
 
-<style>
-.n8n-tm { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-.n8n-tm h1 { font-size: 22px; font-weight: 600; margin: 0 0 20px; padding: 0; }
-.n8n-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.n8n-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
-.n8n-card-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
-.n8n-card-value { font-size: 28px; font-weight: 700; line-height: 1.2; }
-.n8n-card-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
-.n8n-bar { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-top: 8px; }
-.n8n-bar-fill { height: 100%; border-radius: 3px; transition: width .3s; }
-.n8n-step { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
-.n8n-step-header { padding: 14px 20px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 10px; }
-.n8n-badge { font-size: 11px; font-weight: 700; color: #fff; padding: 3px 10px; border-radius: 12px; white-space: nowrap; }
-.n8n-step-title { font-size: 15px; font-weight: 600; margin: 0; }
-.n8n-step-count { font-size: 13px; font-weight: 400; color: #6b7280; }
-.n8n-hint { padding: 10px 20px; font-size: 13px; border-bottom: 1px solid #f3f4f6; }
-.n8n-hint-warn { background: #fffbeb; color: #92400e; }
-.n8n-hint-info { background: #f8fafc; color: #6b7280; }
-.n8n-step-body { padding: 16px 20px; }
-.n8n-tax-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
-.n8n-tax-name { font-size: 13px; font-weight: 600; color: #1f2937; min-width: 180px; }
-.n8n-tax-name span { font-weight: 400; color: #9ca3af; }
-.n8n-lang-bars { display: flex; gap: 14px; flex-wrap: wrap; }
-.n8n-lang-bar { display: flex; align-items: center; gap: 5px; font-size: 12px; }
-.n8n-lang-bar strong { min-width: 20px; }
-.n8n-mini-bar { width: 50px; height: 5px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
-.n8n-mini-fill { height: 100%; border-radius: 3px; }
-.n8n-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.n8n-table th { padding: 10px 20px; text-align: left; background: #f8fafc; font-weight: 500; color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: .3px; }
-.n8n-table td { padding: 12px 20px; border-top: 1px solid #f3f4f6; }
-.n8n-table .center { text-align: center; }
-.n8n-progress { display: flex; align-items: center; gap: 8px; }
-.n8n-progress-bar { flex: 1; height: 7px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
-.n8n-progress-fill { height: 100%; border-radius: 4px; transition: width .3s; }
-.n8n-progress-label { font-size: 12px; font-weight: 600; color: #374151; min-width: 36px; text-align: right; }
-.n8n-check { color: #16a34a; font-weight: 600; font-size: 12px; }
-.n8n-miss { color: #dc2626; font-weight: 600; }
-.n8n-tools { padding: 16px 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.n8n-tools-hint { font-size: 12px; color: #9ca3af; }
-</style>
-
 <div class="wrap n8n-tm">
-	<h1><?php esc_html_e( 'Translation Manager', 'luwipress' ); ?></h1>
 
-	<?php if ( empty( $target_langs ) ) : ?>
-		<div class="notice notice-info"><p><?php printf( __( 'Configure target languages in %s to start translating.', 'luwipress' ), $plugin_name ); ?></p></div>
-	<?php else : ?>
-
-	<!-- OVERVIEW -->
-	<div class="n8n-cards">
-		<div class="n8n-card" style="border-left: 3px solid <?php echo $pct_color; ?>;">
-			<div class="n8n-card-label"><?php esc_html_e( 'Overall Coverage', 'luwipress' ); ?></div>
-			<div class="n8n-card-value" style="color:<?php echo $pct_color; ?>;"><?php echo $overall_pct; ?>%</div>
-			<div class="n8n-bar"><div class="n8n-bar-fill" style="width:<?php echo $overall_pct; ?>%;background:<?php echo $pct_color; ?>;"></div></div>
+	<!-- ═══ HEADER ═══ -->
+	<div class="tm-header">
+		<div class="tm-header-left">
+			<h1 class="tm-title">
+				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--n8n-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M5 8l6 6"/><path d="M4 14l6 6"/><path d="M2 5h12"/><path d="M7 2h1"/>
+					<path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/>
+				</svg>
+				<?php esc_html_e( 'Translation Manager', 'luwipress' ); ?>
+			</h1>
+			<span class="tm-engine-badge">
+				<?php if ( 'local' === $processing_mode ) : ?>
+					<span class="dashicons dashicons-desktop" style="font-size:14px;width:14px;height:14px;"></span> <?php esc_html_e( 'Local AI', 'luwipress' ); ?>
+				<?php else : ?>
+					<span class="dashicons dashicons-cloud" style="font-size:14px;width:14px;height:14px;"></span> n8n
+				<?php endif; ?>
+			</span>
 		</div>
-		<div class="n8n-card">
-			<div class="n8n-card-label"><?php esc_html_e( 'Content Items', 'luwipress' ); ?></div>
-			<div class="n8n-card-value"><?php echo $total_content; ?></div>
-			<div class="n8n-card-sub"><?php echo count( $target_langs ); ?> <?php esc_html_e( 'languages', 'luwipress' ); ?></div>
-		</div>
-		<div class="n8n-card">
-			<div class="n8n-card-label"><?php esc_html_e( 'Translated', 'luwipress' ); ?></div>
-			<div class="n8n-card-value" style="color:#16a34a;"><?php echo $total_translated; ?></div>
-			<div class="n8n-card-sub"><?php echo $total_possible; ?> <?php esc_html_e( 'needed', 'luwipress' ); ?></div>
-		</div>
-		<div class="n8n-card">
-			<div class="n8n-card-label"><?php esc_html_e( 'Backend', 'luwipress' ); ?></div>
-			<div style="font-size:15px;font-weight:600;margin-top:6px;"><?php echo esc_html( $plugin_name ); ?></div>
-			<div class="n8n-card-sub"><?php echo esc_html( strtoupper( $default_lang ) ); ?> &rarr; <?php echo esc_html( implode( ' ', array_map( 'strtoupper', $target_langs ) ) ); ?></div>
+		<div class="tm-header-right">
+			<span class="tm-backend-pill">
+				<span class="dashicons dashicons-translation" style="font-size:16px;width:16px;height:16px;"></span>
+				<?php echo esc_html( $plugin_name ); ?>
+			</span>
+			<span class="tm-lang-flow">
+				<?php echo esc_html( strtoupper( $default_lang ) ); ?>
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M10 5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+				<?php echo esc_html( implode( ' ', array_map( 'strtoupper', $target_langs ) ) ); ?>
+			</span>
 		</div>
 	</div>
 
-	<!-- ─── STEP 1: TAXONOMIES ─── -->
+	<?php if ( empty( $target_langs ) ) : ?>
+		<div class="tm-empty-state">
+			<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--n8n-border)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M5 8l6 6"/><path d="M4 14l6 6"/><path d="M2 5h12"/><path d="M7 2h1"/>
+				<path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/>
+			</svg>
+			<h3><?php esc_html_e( 'No target languages configured', 'luwipress' ); ?></h3>
+			<p><?php printf( esc_html__( 'Configure target languages in %s to start translating.', 'luwipress' ), '<strong>' . esc_html( $plugin_name ) . '</strong>' ); ?></p>
+		</div>
+	<?php else : ?>
+
+	<!-- ═══ OVERVIEW STATS ═══ -->
+	<div class="tm-stats">
+		<?php
+		$stat_items = array(
+			array(
+				'icon'  => 'dashicons-chart-pie',
+				'label' => __( 'Overall Coverage', 'luwipress' ),
+				'value' => $overall_pct . '%',
+				'color' => $overall_pct >= 80 ? 'var(--n8n-success)' : ( $overall_pct >= 50 ? 'var(--n8n-warning)' : 'var(--n8n-error)' ),
+				'bar'   => $overall_pct,
+			),
+			array(
+				'icon'  => 'dashicons-admin-page',
+				'label' => __( 'Content Items', 'luwipress' ),
+				'value' => number_format_i18n( $total_content ),
+				'sub'   => count( $target_langs ) . ' ' . __( 'languages', 'luwipress' ),
+			),
+			array(
+				'icon'  => 'dashicons-yes-alt',
+				'label' => __( 'Translated', 'luwipress' ),
+				'value' => number_format_i18n( $total_translated ),
+				'color' => 'var(--n8n-success)',
+				'sub'   => sprintf( __( '%s total needed', 'luwipress' ), number_format_i18n( $total_possible ) ),
+			),
+			array(
+				'icon'  => 'dashicons-warning',
+				'label' => __( 'Missing', 'luwipress' ),
+				'value' => number_format_i18n( $missing_count ),
+				'color' => $missing_count > 0 ? 'var(--n8n-error)' : 'var(--n8n-success)',
+			),
+		);
+		foreach ( $stat_items as $si => $stat ) :
+		?>
+		<div class="tm-stat-card" style="animation-delay:<?php echo $si * 80; ?>ms;">
+			<div class="tm-stat-icon" style="color:<?php echo $stat['color'] ?? 'var(--n8n-primary)'; ?>;">
+				<span class="dashicons <?php echo esc_attr( $stat['icon'] ); ?>"></span>
+			</div>
+			<div class="tm-stat-body">
+				<span class="tm-stat-label"><?php echo esc_html( $stat['label'] ); ?></span>
+				<span class="tm-stat-value" style="color:<?php echo $stat['color'] ?? 'var(--n8n-text)'; ?>;"><?php echo esc_html( $stat['value'] ); ?></span>
+				<?php if ( ! empty( $stat['bar'] ) ) : ?>
+					<div class="tm-stat-bar"><div class="tm-stat-bar-fill" style="width:<?php echo (int) $stat['bar']; ?>%;background:<?php echo $stat['color']; ?>;"></div></div>
+				<?php elseif ( ! empty( $stat['sub'] ) ) : ?>
+					<span class="tm-stat-sub"><?php echo esc_html( $stat['sub'] ); ?></span>
+				<?php endif; ?>
+			</div>
+		</div>
+		<?php endforeach; ?>
+	</div>
+
+	<!-- ═══ STEP 1: TAXONOMIES ═══ -->
 	<?php if ( ! empty( $tax_coverage ) ) : ?>
-	<div class="n8n-step" style="border-left: 3px solid <?php echo $tax_complete ? '#16a34a' : '#f59e0b'; ?>;">
-		<div class="n8n-step-header">
-			<span class="n8n-badge" style="background:<?php echo $tax_complete ? '#16a34a' : '#f59e0b'; ?>;">1</span>
-			<h2 class="n8n-step-title"><?php esc_html_e( 'Translate Taxonomies', 'luwipress' ); ?></h2>
+	<div class="tm-step <?php echo $tax_complete ? 'tm-step-done' : 'tm-step-active'; ?>">
+		<div class="tm-step-header">
+			<div class="tm-step-number <?php echo $tax_complete ? 'step-done' : 'step-active'; ?>">
+				<?php if ( $tax_complete ) : ?>
+					<span class="dashicons dashicons-yes"></span>
+				<?php else : ?>
+					1
+				<?php endif; ?>
+			</div>
+			<div class="tm-step-info">
+				<h2 class="tm-step-title"><?php esc_html_e( 'Translate Taxonomies', 'luwipress' ); ?></h2>
+				<p class="tm-step-desc"><?php esc_html_e( 'Translate categories and tags first for correct product assignments.', 'luwipress' ); ?></p>
+			</div>
 			<?php if ( $tax_complete ) : ?>
-				<span class="n8n-check"><?php esc_html_e( 'Complete', 'luwipress' ); ?></span>
+				<span class="tm-complete-badge"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Complete', 'luwipress' ); ?></span>
+			<?php else : ?>
+				<span class="tm-pending-badge"><?php echo $tax_total_missing_all; ?> <?php esc_html_e( 'missing', 'luwipress' ); ?></span>
 			<?php endif; ?>
 		</div>
-		<?php if ( ! $tax_complete ) : ?>
-		<div class="n8n-hint n8n-hint-warn"><?php esc_html_e( 'Translate categories and tags first so products are assigned to the correct translated categories.', 'luwipress' ); ?></div>
-		<?php endif; ?>
-		<div class="n8n-step-body">
+		<div class="tm-step-body">
 			<?php foreach ( $tax_coverage as $tax_slug => $tax_data ) :
 				$tmiss = 0;
 				foreach ( $target_langs as $lang ) { $tmiss += max( 0, $tax_data['total'] - ( $tax_data['languages'][ $lang ] ?? 0 ) ); }
 			?>
-			<div class="n8n-tax-row">
-				<div class="n8n-tax-name"><?php echo esc_html( $tax_data['label'] ); ?> <span>(<?php echo $tax_data['total']; ?>)</span></div>
-				<?php if ( $tmiss > 0 && ! empty( $webhook_url ) ) : ?>
-				<form method="post" style="display:inline;">
-					<?php wp_nonce_field( 'luwipress_translation_nonce' ); ?>
-					<input type="hidden" name="translate_taxonomy" value="<?php echo esc_attr( $tax_slug ); ?>" />
-					<input type="hidden" name="translate_tax_languages" value="<?php echo esc_attr( implode( ',', $target_langs ) ); ?>" />
-					<button type="submit" name="luwipress_trigger_taxonomy_translation" class="button button-small button-primary">
-						<?php printf( __( 'Translate All (%d)', 'luwipress' ), $tmiss ); ?>
-					</button>
-				</form>
-				<?php elseif ( $tmiss === 0 ) : ?>
-					<span class="n8n-check"><?php esc_html_e( 'Complete', 'luwipress' ); ?></span>
-				<?php endif; ?>
-				<div class="n8n-lang-bars">
+			<div class="tm-tax-row">
+				<div class="tm-tax-name">
+					<strong><?php echo esc_html( $tax_data['label'] ); ?></strong>
+					<span><?php echo $tax_data['total']; ?> <?php esc_html_e( 'terms', 'luwipress' ); ?></span>
+				</div>
+				<div class="tm-lang-pills">
 					<?php foreach ( $target_langs as $lang ) :
 						$d = $tax_data['languages'][ $lang ] ?? 0;
-						$m = max( 0, $tax_data['total'] - $d );
 						$p = $tax_data['total'] > 0 ? round( ( $d / $tax_data['total'] ) * 100 ) : 0;
+						$is_done = $p >= 100;
 					?>
-					<div class="n8n-lang-bar">
-						<strong><?php echo esc_html( strtoupper( $lang ) ); ?></strong>
-						<div class="n8n-mini-bar"><div class="n8n-mini-fill" style="width:<?php echo $p; ?>%;background:<?php echo $p >= 100 ? '#16a34a' : '#6366f1'; ?>;"></div></div>
-						<span style="color:<?php echo $m > 0 ? '#dc2626' : '#16a34a'; ?>;font-weight:600;"><?php echo $p; ?>%</span>
+					<div class="tm-lang-pill <?php echo $is_done ? 'pill-done' : 'pill-pending'; ?>">
+						<span class="tm-flag"><?php echo $language_flags[ $lang ] ?? ''; ?></span>
+						<span class="tm-lang-code"><?php echo esc_html( strtoupper( $lang ) ); ?></span>
+						<span class="tm-lang-pct"><?php echo $p; ?>%</span>
+						<div class="tm-micro-bar"><div class="tm-micro-fill" style="width:<?php echo $p; ?>%;"></div></div>
 					</div>
 					<?php endforeach; ?>
 				</div>
+				<?php if ( $tmiss > 0 ) : ?>
+				<form method="post" class="tm-action-form">
+					<?php wp_nonce_field( 'luwipress_translation_nonce' ); ?>
+					<input type="hidden" name="translate_taxonomy" value="<?php echo esc_attr( $tax_slug ); ?>" />
+					<input type="hidden" name="translate_tax_languages" value="<?php echo esc_attr( implode( ',', $target_langs ) ); ?>" />
+					<button type="submit" name="luwipress_trigger_taxonomy_translation" class="tm-btn tm-btn-primary">
+						<span class="dashicons dashicons-translation"></span>
+						<?php printf( esc_html__( 'Translate %d', 'luwipress' ), $tmiss ); ?>
+					</button>
+				</form>
+				<?php else : ?>
+					<span class="tm-check"><span class="dashicons dashicons-yes-alt"></span></span>
+				<?php endif; ?>
 			</div>
 			<?php endforeach; ?>
 		</div>
 	</div>
 	<?php endif; ?>
 
-	<!-- ─── STEP 2: CONTENT ─── -->
+	<!-- ═══ STEP 2: CONTENT ═══ -->
 	<?php foreach ( $coverage as $pt => $data ) :
 		$all_done = true;
 		foreach ( $target_langs as $lang ) { if ( ( $data['languages'][ $lang ] ?? 0 ) < $data['total'] ) { $all_done = false; break; } }
+		$step_num = ! empty( $tax_coverage ) ? 2 : 1;
 	?>
-	<div class="n8n-step" style="border-left: 3px solid <?php echo $all_done ? '#16a34a' : $data['color']; ?>;">
-		<div class="n8n-step-header">
-			<span class="n8n-badge" style="background:<?php echo $tax_complete ? $data['color'] : '#9ca3af'; ?>;">2</span>
-			<h2 class="n8n-step-title"><?php echo esc_html( $data['label'] ); ?></h2>
-			<span class="n8n-step-count"><?php echo $data['total']; ?> <?php esc_html_e( 'published', 'luwipress' ); ?></span>
+	<div class="tm-step <?php echo $all_done ? 'tm-step-done' : ''; ?>">
+		<div class="tm-step-header">
+			<div class="tm-step-number <?php echo $all_done ? 'step-done' : ''; ?>" style="<?php echo ! $all_done ? 'background:' . esc_attr( $data['color'] ) . ';' : ''; ?>">
+				<?php if ( $all_done ) : ?>
+					<span class="dashicons dashicons-yes"></span>
+				<?php else : ?>
+					<?php echo $step_num; ?>
+				<?php endif; ?>
+			</div>
+			<div class="tm-step-info">
+				<h2 class="tm-step-title"><?php echo esc_html( $data['label'] ); ?></h2>
+				<p class="tm-step-desc"><?php echo $data['total']; ?> <?php esc_html_e( 'published items', 'luwipress' ); ?></p>
+			</div>
 			<?php if ( $all_done ) : ?>
-				<span class="n8n-check"><?php esc_html_e( 'Complete', 'luwipress' ); ?></span>
+				<span class="tm-complete-badge"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Complete', 'luwipress' ); ?></span>
 			<?php endif; ?>
 		</div>
-		<?php if ( ! $tax_complete && $data['total'] > 0 ) : ?>
-		<div class="n8n-hint n8n-hint-info"><?php esc_html_e( 'Complete Step 1 (Taxonomies) first for correct category assignments.', 'luwipress' ); ?></div>
-		<?php endif; ?>
+
 		<?php if ( $data['total'] === 0 ) : ?>
-		<div class="n8n-step-body">
-			<p style="color:#6b7280;margin:0;"><?php printf( __( 'No published %s found in the default language.', 'luwipress' ), strtolower( $data['label'] ) ); ?></p>
+		<div class="tm-step-body">
+			<p class="tm-muted"><?php printf( esc_html__( 'No published %s found in the default language.', 'luwipress' ), strtolower( $data['label'] ) ); ?></p>
 		</div>
 		<?php else : ?>
-		<table class="n8n-table">
-			<thead><tr>
-				<th><?php esc_html_e( 'Language', 'luwipress' ); ?></th>
-				<th class="center" style="width:80px;"><?php esc_html_e( 'Done', 'luwipress' ); ?></th>
-				<th class="center" style="width:80px;"><?php esc_html_e( 'Missing', 'luwipress' ); ?></th>
-				<th style="width:200px;"><?php esc_html_e( 'Coverage', 'luwipress' ); ?></th>
-				<th style="width:120px;"></th>
-			</tr></thead>
-			<tbody>
-			<?php foreach ( $target_langs as $lang ) :
-				$done    = $data['languages'][ $lang ] ?? 0;
-				$missing = max( 0, $data['total'] - $done );
-				$pct     = $data['total'] > 0 ? round( ( $done / $data['total'] ) * 100 ) : 0;
-				$bar_c   = $pct >= 100 ? '#16a34a' : ( $pct >= 60 ? '#6366f1' : '#f59e0b' );
-			?>
-			<tr>
-				<td><strong><?php echo esc_html( strtoupper( $lang ) ); ?></strong> <span style="color:#6b7280;"><?php echo esc_html( $language_names[ $lang ] ?? $lang ); ?></span></td>
-				<td class="center" style="font-weight:600;"><?php echo $done; ?></td>
-				<td class="center"><?php echo $missing > 0 ? '<span class="n8n-miss">' . $missing . '</span>' : '<span class="n8n-check">0</span>'; ?></td>
-				<td>
-					<div class="n8n-progress">
-						<div class="n8n-progress-bar"><div class="n8n-progress-fill" style="width:<?php echo $pct; ?>%;background:<?php echo $bar_c; ?>;"></div></div>
-						<span class="n8n-progress-label"><?php echo $pct; ?>%</span>
-					</div>
-				</td>
-				<td>
-					<?php if ( $missing > 0 && ! empty( $webhook_url ) ) : ?>
-					<form method="post" style="display:inline;">
-						<?php wp_nonce_field( 'luwipress_translation_nonce' ); ?>
-						<input type="hidden" name="translate_language" value="<?php echo esc_attr( $lang ); ?>" />
-						<input type="hidden" name="translate_post_type" value="<?php echo esc_attr( $pt ); ?>" />
-						<input type="hidden" name="translate_limit" value="<?php echo min( $missing, 20 ); ?>" />
-						<button type="submit" name="luwipress_trigger_translation" class="button button-primary button-small"><?php printf( __( 'Translate %d', 'luwipress' ), min( $missing, 20 ) ); ?></button>
-					</form>
-					<?php elseif ( $pct >= 100 ) : ?>
-						<span class="n8n-check"><?php esc_html_e( 'Complete', 'luwipress' ); ?></span>
-					<?php endif; ?>
-				</td>
-			</tr>
-			<?php endforeach; ?>
-			</tbody>
-		</table>
+		<div class="tm-step-body tm-step-body-table">
+			<table class="tm-table">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Language', 'luwipress' ); ?></th>
+						<th class="tm-col-num"><?php esc_html_e( 'Done', 'luwipress' ); ?></th>
+						<th class="tm-col-num"><?php esc_html_e( 'Missing', 'luwipress' ); ?></th>
+						<th class="tm-col-progress"><?php esc_html_e( 'Coverage', 'luwipress' ); ?></th>
+						<th class="tm-col-action"></th>
+					</tr>
+				</thead>
+				<tbody>
+				<?php foreach ( $target_langs as $lang ) :
+					$done    = $data['languages'][ $lang ] ?? 0;
+					$missing = max( 0, $data['total'] - $done );
+					$pct     = $data['total'] > 0 ? round( ( $done / $data['total'] ) * 100 ) : 0;
+				?>
+				<tr class="tm-lang-row">
+					<td class="tm-lang-cell">
+						<span class="tm-flag-lg"><?php echo $language_flags[ $lang ] ?? ''; ?></span>
+						<div>
+							<strong><?php echo esc_html( strtoupper( $lang ) ); ?></strong>
+							<span class="tm-lang-name"><?php echo esc_html( $language_names[ $lang ] ?? $lang ); ?></span>
+						</div>
+					</td>
+					<td class="tm-col-num"><span class="tm-num-done"><?php echo $done; ?></span></td>
+					<td class="tm-col-num">
+						<?php if ( $missing > 0 ) : ?>
+							<span class="tm-num-miss"><?php echo $missing; ?></span>
+						<?php else : ?>
+							<span class="tm-num-ok"><span class="dashicons dashicons-yes-alt"></span></span>
+						<?php endif; ?>
+					</td>
+					<td class="tm-col-progress">
+						<div class="tm-progress">
+							<div class="tm-progress-track">
+								<div class="tm-progress-fill" style="width:<?php echo $pct; ?>%;<?php
+									if ( $pct >= 100 ) echo 'background:var(--n8n-success);';
+									elseif ( $pct >= 60 ) echo 'background:var(--n8n-primary);';
+									else echo 'background:var(--n8n-warning);';
+								?>"></div>
+							</div>
+							<span class="tm-progress-pct"><?php echo $pct; ?>%</span>
+						</div>
+					</td>
+					<td class="tm-col-action">
+						<?php if ( $missing > 0 ) : ?>
+						<form method="post" class="tm-action-form">
+							<?php wp_nonce_field( 'luwipress_translation_nonce' ); ?>
+							<input type="hidden" name="translate_language" value="<?php echo esc_attr( $lang ); ?>" />
+							<input type="hidden" name="translate_post_type" value="<?php echo esc_attr( $pt ); ?>" />
+							<input type="hidden" name="translate_limit" value="<?php echo min( $missing, 20 ); ?>" />
+							<button type="submit" name="luwipress_trigger_translation" class="tm-btn tm-btn-primary tm-btn-sm">
+								<span class="dashicons dashicons-translation"></span>
+								<?php printf( esc_html__( 'Translate %d', 'luwipress' ), min( $missing, 20 ) ); ?>
+							</button>
+						</form>
+						<?php elseif ( $pct >= 100 ) : ?>
+							<span class="tm-check"><span class="dashicons dashicons-yes-alt"></span></span>
+						<?php endif; ?>
+					</td>
+				</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
 		<?php endif; ?>
 	</div>
 	<?php endforeach; ?>
 
-	<!-- ─── MAINTENANCE ─── -->
-	<div class="n8n-step">
-		<div class="n8n-step-header">
-			<h2 class="n8n-step-title"><?php esc_html_e( 'Maintenance', 'luwipress' ); ?></h2>
+	<!-- ═══ MAINTENANCE ═══ -->
+	<div class="tm-step tm-step-maint">
+		<div class="tm-step-header">
+			<div class="tm-step-number" style="background:var(--n8n-gray);">
+				<span class="dashicons dashicons-admin-tools" style="font-size:16px;width:16px;height:16px;"></span>
+			</div>
+			<div class="tm-step-info">
+				<h2 class="tm-step-title"><?php esc_html_e( 'Maintenance Tools', 'luwipress' ); ?></h2>
+				<p class="tm-step-desc"><?php esc_html_e( 'Fix common translation issues and clean up data.', 'luwipress' ); ?></p>
+			</div>
 		</div>
-		<div class="n8n-tools" style="flex-direction:column;align-items:flex-start;gap:14px;">
-			<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-				<button type="button" id="luwipress-fix-categories" class="button button-primary"><?php esc_html_e( 'Fix Category Assignments', 'luwipress' ); ?></button>
-				<span id="luwipress-fix-categories-result" style="font-size:13px;"></span>
-				<span class="n8n-tools-hint"><?php esc_html_e( 'Re-assigns translated products to their correct translated categories.', 'luwipress' ); ?></span>
+		<div class="tm-step-body tm-maint-tools">
+			<div class="tm-tool-card">
+				<div class="tm-tool-info">
+					<strong><?php esc_html_e( 'Fix Category Assignments', 'luwipress' ); ?></strong>
+					<span><?php esc_html_e( 'Re-assigns translated products to their correct translated categories.', 'luwipress' ); ?></span>
+				</div>
+				<button type="button" id="luwipress-fix-categories" class="tm-btn tm-btn-secondary">
+					<span class="dashicons dashicons-category"></span> <?php esc_html_e( 'Fix', 'luwipress' ); ?>
+				</button>
+				<span id="luwipress-fix-categories-result" class="tm-tool-result"></span>
 			</div>
-			<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-				<button type="button" id="luwipress-fix-images" class="button"><?php esc_html_e( 'Fix Translation Images', 'luwipress' ); ?></button>
-				<span id="luwipress-fix-images-result" style="font-size:13px;"></span>
-				<span class="n8n-tools-hint"><?php esc_html_e( 'Copies original product images to all translated products.', 'luwipress' ); ?></span>
+			<div class="tm-tool-card">
+				<div class="tm-tool-info">
+					<strong><?php esc_html_e( 'Fix Translation Images', 'luwipress' ); ?></strong>
+					<span><?php esc_html_e( 'Copies original product images to all translated products.', 'luwipress' ); ?></span>
+				</div>
+				<button type="button" id="luwipress-fix-images" class="tm-btn tm-btn-secondary">
+					<span class="dashicons dashicons-format-image"></span> <?php esc_html_e( 'Fix', 'luwipress' ); ?>
+				</button>
+				<span id="luwipress-fix-images-result" class="tm-tool-result"></span>
 			</div>
-			<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-				<button type="button" id="luwipress-clean-orphans" class="button" style="color:#dc2626;border-color:#dc2626;"><?php esc_html_e( 'Clean Orphan Translations', 'luwipress' ); ?></button>
-				<span id="luwipress-clean-orphans-result" style="font-size:13px;"></span>
-				<span class="n8n-tools-hint"><?php esc_html_e( 'Removes WPML translation records that have no matching original. Fixes inflated coverage counts.', 'luwipress' ); ?></span>
+			<div class="tm-tool-card">
+				<div class="tm-tool-info">
+					<strong><?php esc_html_e( 'Clean Orphan Translations', 'luwipress' ); ?></strong>
+					<span><?php esc_html_e( 'Removes WPML records with no matching original. Fixes inflated coverage.', 'luwipress' ); ?></span>
+				</div>
+				<button type="button" id="luwipress-clean-orphans" class="tm-btn tm-btn-danger">
+					<span class="dashicons dashicons-trash"></span> <?php esc_html_e( 'Clean', 'luwipress' ); ?>
+				</button>
+				<span id="luwipress-clean-orphans-result" class="tm-tool-result"></span>
 			</div>
 		</div>
 	</div>
@@ -415,51 +514,44 @@ $pct_color = $overall_pct >= 80 ? '#16a34a' : ( $overall_pct >= 50 ? '#f59e0b' :
 	<script>
 	document.getElementById('luwipress-fix-categories')?.addEventListener('click', function() {
 		var btn = this, result = document.getElementById('luwipress-fix-categories-result');
-		btn.disabled = true; btn.textContent = 'Fixing...';
+		btn.disabled = true; btn.classList.add('tm-btn-loading');
 		result.textContent = '';
 		fetch(ajaxurl + '?action=luwipress_fix_category_assignments&nonce=<?php echo wp_create_nonce( 'luwipress_fix_categories' ); ?>', {method:'POST'})
 			.then(function(r){return r.json()}).then(function(d){
-				btn.disabled = false;
-				btn.textContent = <?php echo wp_json_encode( __( 'Fix Category Assignments', 'luwipress' ) ); ?>;
-				result.textContent = d.success
-					? d.data.fixed + ' products fixed'
-					: (d.data || 'Error');
-				result.style.color = d.success ? '#16a34a' : '#dc2626';
-			});
+				btn.disabled = false; btn.classList.remove('tm-btn-loading');
+				result.textContent = d.success ? d.data.fixed + ' products fixed' : (d.data || 'Error');
+				result.className = 'tm-tool-result ' + (d.success ? 'result-ok' : 'result-err');
+			}).catch(function(){ btn.disabled = false; btn.classList.remove('tm-btn-loading'); result.textContent = 'Network error'; result.className = 'tm-tool-result result-err'; });
 	});
 	document.getElementById('luwipress-fix-images')?.addEventListener('click', function() {
 		var btn = this, result = document.getElementById('luwipress-fix-images-result');
-		btn.disabled = true; btn.textContent = <?php echo wp_json_encode( __( 'Fixing...', 'luwipress' ) ); ?>;
+		btn.disabled = true; btn.classList.add('tm-btn-loading');
 		result.textContent = '';
 		fetch(ajaxurl + '?action=luwipress_fix_translation_images&nonce=<?php echo wp_create_nonce( 'luwipress_fix_images' ); ?>', {method:'POST'})
 			.then(function(r){return r.json()}).then(function(d){
-				btn.disabled = false;
-				btn.textContent = <?php echo wp_json_encode( __( 'Fix Translation Images', 'luwipress' ) ); ?>;
-				result.textContent = d.success
-					? d.data.fixed + ' fixed'
-					: (d.data || 'Error');
-				result.style.color = d.success ? '#16a34a' : '#dc2626';
-			});
+				btn.disabled = false; btn.classList.remove('tm-btn-loading');
+				result.textContent = d.success ? d.data.fixed + ' fixed' : (d.data || 'Error');
+				result.className = 'tm-tool-result ' + (d.success ? 'result-ok' : 'result-err');
+			}).catch(function(){ btn.disabled = false; btn.classList.remove('tm-btn-loading'); result.textContent = 'Network error'; result.className = 'tm-tool-result result-err'; });
 	});
 	document.getElementById('luwipress-clean-orphans')?.addEventListener('click', function() {
-		if (!confirm(<?php echo wp_json_encode( __( 'This will delete orphan WPML translation records (terms and posts with no matching original). Affected content can be re-translated. Continue?', 'luwipress' ) ); ?>)) return;
+		if (!confirm(<?php echo wp_json_encode( __( 'This will delete orphan WPML translation records. Continue?', 'luwipress' ) ); ?>)) return;
 		var btn = this, result = document.getElementById('luwipress-clean-orphans-result');
-		btn.disabled = true; btn.textContent = <?php echo wp_json_encode( __( 'Cleaning...', 'luwipress' ) ); ?>;
+		btn.disabled = true; btn.classList.add('tm-btn-loading');
 		result.textContent = '';
 		fetch(ajaxurl + '?action=luwipress_clean_orphan_translations&nonce=<?php echo wp_create_nonce( 'luwipress_clean_orphans' ); ?>', {method:'POST'})
 			.then(function(r){return r.json()}).then(function(d){
-				btn.disabled = false;
-				btn.textContent = <?php echo wp_json_encode( __( 'Clean Orphan Translations', 'luwipress' ) ); ?>;
+				btn.disabled = false; btn.classList.remove('tm-btn-loading');
 				if (d.success) {
 					var msg = d.data.terms_removed + ' orphan terms, ' + d.data.posts_removed + ' orphan posts removed';
 					result.textContent = msg;
-					result.style.color = d.data.terms_removed + d.data.posts_removed > 0 ? '#16a34a' : '#6b7280';
+					result.className = 'tm-tool-result ' + (d.data.terms_removed + d.data.posts_removed > 0 ? 'result-ok' : 'result-muted');
 					if (d.data.terms_removed + d.data.posts_removed > 0) setTimeout(function(){ location.reload(); }, 1500);
 				} else {
 					result.textContent = d.data || 'Error';
-					result.style.color = '#dc2626';
+					result.className = 'tm-tool-result result-err';
 				}
-			});
+			}).catch(function(){ btn.disabled = false; btn.classList.remove('tm-btn-loading'); result.textContent = 'Network error'; result.className = 'tm-tool-result result-err'; });
 	});
 	</script>
 

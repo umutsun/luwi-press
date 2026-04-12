@@ -18,7 +18,6 @@ if ( ! current_user_can( 'manage_options' ) ) {
 $detector    = LuwiPress_Plugin_Detector::get_instance();
 $environment = $detector->get_environment();
 $wc_active   = class_exists( 'WooCommerce' );
-$webhook_url = get_option( 'luwipress_seo_webhook_url', '' );
 $ai_provider = get_option( 'luwipress_ai_provider', 'openai' );
 $ai_model    = get_option( 'luwipress_ai_model', 'gpt-4o-mini' );
 $ai_key      = get_option( 'luwipress_openai_api_key', '' )
@@ -27,7 +26,6 @@ $ai_key      = get_option( 'luwipress_openai_api_key', '' )
 
 $provider_labels = array( 'openai' => 'OpenAI', 'anthropic' => 'Anthropic', 'google' => 'Google AI' );
 $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
-$engine_mode     = ! empty( $webhook_url ) ? 'n8n' : 'built-in';
 ?>
 
 <div class="wrap luwipress-dashboard">
@@ -63,12 +61,8 @@ $engine_mode     = ! empty( $webhook_url ) ? 'n8n' : 'built-in';
 			$pills[] = array( 'err', 'dashicons-warning', __( 'No AI key', 'luwipress' ) );
 		}
 
-		// Processing
-		if ( ! empty( $webhook_url ) ) {
-			$pills[] = array( 'ok', 'dashicons-randomize', __( 'n8n Connected', 'luwipress' ) );
-		} else {
-			$pills[] = array( 'neutral', 'dashicons-laptop', __( 'Built-in Engine', 'luwipress' ) );
-		}
+		// AI Engine
+		$pills[] = array( 'ok', 'dashicons-laptop', __( 'Local AI Engine', 'luwipress' ) );
 
 		// WooCommerce
 		if ( $wc_active ) {
@@ -320,7 +314,7 @@ $engine_mode     = ! empty( $webhook_url ) ? 'n8n' : 'built-in';
 		WordPress <?php echo esc_html( get_bloginfo( 'version' ) ); ?>
 		&middot; PHP <?php echo esc_html( phpversion() ); ?>
 		<?php if ( $wc_active ) : ?>&middot; WooCommerce <?php echo esc_html( WC_VERSION ); ?><?php endif; ?>
-		&middot; <?php echo esc_html( $engine_mode === 'n8n' ? 'n8n Processing' : 'Built-in Engine' ); ?>
+		&middot; LuwiPress AI Engine
 	</div>
 
 </div>

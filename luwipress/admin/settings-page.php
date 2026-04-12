@@ -186,12 +186,6 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			<?php
 			$processing_mode  = get_option( 'luwipress_processing_mode', 'local' );
 			$default_provider = get_option( 'luwipress_default_provider', 'anthropic' );
-			$anthropic_key    = get_option( 'luwipress_anthropic_api_key', '' );
-			$openai_key       = get_option( 'luwipress_openai_api_key', '' );
-			$google_key       = get_option( 'luwipress_google_ai_api_key', '' );
-			$anthropic_model  = get_option( 'luwipress_anthropic_model', 'claude-haiku-4-5-20241022' );
-			$openai_model_sel = get_option( 'luwipress_openai_model', 'gpt-4o-mini' );
-			$google_model     = get_option( 'luwipress_google_model', 'gemini-2.0-flash' );
 			?>
 
 			<!-- Processing Mode -->
@@ -228,77 +222,6 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				</table>
 			</div>
 
-			<!-- AI Provider API Keys -->
-			<div class="luwipress-card">
-				<h2><?php esc_html_e( 'AI Provider API Keys', 'luwipress' ); ?></h2>
-				<p class="description" style="margin-bottom:12px;"><?php esc_html_e( 'Enter API keys for the AI providers you want to use. At least one key is required for Local AI mode.', 'luwipress' ); ?></p>
-				<table class="form-table">
-					<tr>
-						<th><label for="luwipress_anthropic_api_key"><?php esc_html_e( 'Anthropic API Key', 'luwipress' ); ?></label></th>
-						<td>
-							<input type="password" id="luwipress_anthropic_api_key" name="luwipress_anthropic_api_key"
-							       value="<?php echo esc_attr( $anthropic_key ); ?>" class="regular-text" autocomplete="off"
-							       placeholder="sk-ant-..." />
-							<button type="button" class="button button-small luwipress-toggle-password" data-target="luwipress_anthropic_api_key">
-								<span class="dashicons dashicons-visibility"></span>
-							</button>
-							<?php if ( ! empty( $anthropic_key ) ) : ?>
-								<span class="dashicons dashicons-yes-alt" style="color:#46b450;margin-left:4px;line-height:30px;" title="<?php esc_attr_e( 'Configured', 'luwipress' ); ?>"></span>
-							<?php endif; ?>
-							<div style="margin-top:6px;">
-								<select name="luwipress_anthropic_model" style="width:300px;">
-									<option value="claude-haiku-4-5-20241022" <?php selected( $anthropic_model, 'claude-haiku-4-5-20241022' ); ?>>Claude Haiku 4.5 (fast, cheap)</option>
-									<option value="claude-sonnet-4-20250514" <?php selected( $anthropic_model, 'claude-sonnet-4-20250514' ); ?>>Claude Sonnet 4 (balanced)</option>
-									<option value="claude-opus-4-20250514" <?php selected( $anthropic_model, 'claude-opus-4-20250514' ); ?>>Claude Opus 4 (powerful)</option>
-								</select>
-							</div>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="luwipress_openai_api_key"><?php esc_html_e( 'OpenAI API Key', 'luwipress' ); ?></label></th>
-						<td>
-							<input type="password" id="luwipress_openai_api_key" name="luwipress_openai_api_key"
-							       value="<?php echo esc_attr( $openai_key ); ?>" class="regular-text" autocomplete="off"
-							       placeholder="sk-..." />
-							<button type="button" class="button button-small luwipress-toggle-password" data-target="luwipress_openai_api_key">
-								<span class="dashicons dashicons-visibility"></span>
-							</button>
-							<?php if ( ! empty( $openai_key ) ) : ?>
-								<span class="dashicons dashicons-yes-alt" style="color:#46b450;margin-left:4px;line-height:30px;" title="<?php esc_attr_e( 'Configured', 'luwipress' ); ?>"></span>
-							<?php endif; ?>
-							<div style="margin-top:6px;">
-								<select name="luwipress_openai_model" style="width:300px;">
-									<option value="gpt-4o-mini" <?php selected( $openai_model_sel, 'gpt-4o-mini' ); ?>>GPT-4o Mini (fast, cheap)</option>
-									<option value="gpt-4o" <?php selected( $openai_model_sel, 'gpt-4o' ); ?>>GPT-4o (balanced)</option>
-									<option value="gpt-4-turbo" <?php selected( $openai_model_sel, 'gpt-4-turbo' ); ?>>GPT-4 Turbo (powerful)</option>
-								</select>
-							</div>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="luwipress_google_ai_api_key"><?php esc_html_e( 'Google AI API Key', 'luwipress' ); ?></label></th>
-						<td>
-							<input type="password" id="luwipress_google_ai_api_key" name="luwipress_google_ai_api_key"
-							       value="<?php echo esc_attr( $google_key ); ?>" class="regular-text" autocomplete="off"
-							       placeholder="AIza..." />
-							<button type="button" class="button button-small luwipress-toggle-password" data-target="luwipress_google_ai_api_key">
-								<span class="dashicons dashicons-visibility"></span>
-							</button>
-							<?php if ( ! empty( $google_key ) ) : ?>
-								<span class="dashicons dashicons-yes-alt" style="color:#46b450;margin-left:4px;line-height:30px;" title="<?php esc_attr_e( 'Configured', 'luwipress' ); ?>"></span>
-							<?php endif; ?>
-							<div style="margin-top:6px;">
-								<select name="luwipress_google_model" style="width:300px;">
-									<option value="gemini-2.0-flash" <?php selected( $google_model, 'gemini-2.0-flash' ); ?>>Gemini 2.0 Flash (fast, cheap)</option>
-									<option value="gemini-2.5-flash" <?php selected( $google_model, 'gemini-2.5-flash' ); ?>>Gemini 2.5 Flash (balanced)</option>
-									<option value="gemini-2.5-pro" <?php selected( $google_model, 'gemini-2.5-pro' ); ?>>Gemini 2.5 Pro (powerful)</option>
-								</select>
-							</div>
-						</td>
-					</tr>
-				</table>
-			</div>
-
 			<!-- n8n Connection (for n8n mode) -->
 			<div class="luwipress-card">
 				<h2><?php esc_html_e( 'n8n Connection', 'luwipress' ); ?></h2>
@@ -321,6 +244,10 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 							<button type="button" class="button button-small luwipress-toggle-password" data-target="luwipress_api_token">
 								<span class="dashicons dashicons-visibility"></span>
 							</button>
+							<button type="button" class="button button-small" id="luwipress-generate-token" title="<?php esc_attr_e( 'Generate a secure random token', 'luwipress' ); ?>">
+								<span class="dashicons dashicons-randomize"></span> <?php esc_html_e( 'Generate', 'luwipress' ); ?>
+							</button>
+							<p class="description"><?php esc_html_e( 'Used for REST API & MCP Server authentication. Click Generate for a secure random token.', 'luwipress' ); ?></p>
 						</td>
 					</tr>
 					<tr>

@@ -281,6 +281,21 @@
         });
 
         // ========================================
+        // Generate random API token
+        // ========================================
+        $('#luwipress-generate-token').on('click', function() {
+            var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            var token = 'lp_';
+            var arr = new Uint8Array(40);
+            crypto.getRandomValues(arr);
+            for (var i = 0; i < 40; i++) {
+                token += chars.charAt(arr[i] % chars.length);
+            }
+            $('#luwipress_api_token').attr('type', 'text').val(token);
+            window.luwipress_toast && window.luwipress_toast('Token generated — save settings to apply.', 'info');
+        });
+
+        // ========================================
         // Connection test
         // ========================================
         $('#luwipress-test-connection').on('click', function() {

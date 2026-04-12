@@ -183,25 +183,8 @@ class LuwiPress_Content_Scheduler {
 
         update_post_meta( $schedule_id, '_luwipress_schedule_status', self::STATUS_GENERATING );
 
-        $mode = LuwiPress_AI_Engine::get_mode();
-
-        if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            // n8n mode: send to webhook, n8n will call back to /schedule/callback
-            LuwiPress_AI_Engine::forward_to_n8n( 'luwipress-content-scheduler', array(
-                'action'         => 'generate_content',
-                'schedule_id'    => $schedule_id,
-                'topic'          => $topic,
-                'keywords'       => $keywords,
-                'target_type'    => $post_type,
-                'publish_date'   => $publish_date . ' ' . $publish_time,
-                'generate_image' => (bool) $generate_image,
-                'language'       => $language,
-                'tone'           => $tone,
-                'word_count'     => $word_count,
-            ), rest_url( 'luwipress/v1/schedule/callback' ) );
-        } else {
-            // Local mode: generate content via AI Engine directly
-            $prompt   = LuwiPress_Prompts::content_generation( array(
+        // Generate content via AI Engine
+        $prompt   = LuwiPress_Prompts::content_generation( array(
                 'topic'     => $topic,
                 'keywords'  => $keywords,
                 'language'  => $language,
@@ -243,7 +226,6 @@ class LuwiPress_Content_Scheduler {
                 $request->set_body_params( $callback_data );
                 $this->handle_callback( $request );
             }
-        }
 
         LuwiPress_Logger::log( 'Content generation queued', 'info', array(
             'schedule_id' => $schedule_id,
