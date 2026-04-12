@@ -1224,8 +1224,8 @@ class LuwiPress_WebMCP {
             ),
         ), function ( $args ) {
             return $this->proxy_rest_post( 'LuwiPress_Translation', 'request_translation', array(
-                'post_id'         => intval( $args['post_id'] ),
-                'target_language' => sanitize_text_field( $args['target_language'] ),
+                'product_id'       => intval( $args['post_id'] ),
+                'target_languages' => sanitize_text_field( $args['target_language'] ),
             ) );
         } );
 
