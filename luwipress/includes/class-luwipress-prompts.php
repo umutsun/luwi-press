@@ -6,7 +6,7 @@
  * Every method returns ['system' => string, 'user' => string] and is
  * filterable via apply_filters('luwipress_prompt_{workflow}', ...).
  *
- * @package N8nPress
+ * @package LuwiPress
  * @since   2.0.0
  */
 

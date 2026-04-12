@@ -1,5 +1,5 @@
 /**
- * n8nPress Admin Styles — Premium Design System
+ * LuwiPress Admin Styles — Premium Design System
  */
 
 /* ========================================
@@ -106,31 +106,31 @@
     }
 
     /* WordPress admin dark overrides */
-    .n8npress-dashboard,
-    .n8npress-settings,
-    .n8npress-claw-wrap,
+    .luwipress-dashboard,
+    .luwipress-settings,
+    .luwipress-claw-wrap,
     .n8n-tm,
-    #n8npress-token-dashboard {
+    #luwipress-token-dashboard {
         color: var(--n8n-text);
     }
 
-    .n8npress-dashboard input,
-    .n8npress-dashboard select,
-    .n8npress-dashboard textarea,
-    .n8npress-settings input,
-    .n8npress-settings select,
-    .n8npress-settings textarea {
+    .luwipress-dashboard input,
+    .luwipress-dashboard select,
+    .luwipress-dashboard textarea,
+    .luwipress-settings input,
+    .luwipress-settings select,
+    .luwipress-settings textarea {
         background: var(--n8n-surface);
         color: var(--n8n-text);
         border-color: var(--n8n-border);
     }
 
-    .n8npress-settings .nav-tab {
+    .luwipress-settings .nav-tab {
         background: var(--n8n-surface);
         color: var(--n8n-text-secondary);
         border-color: var(--n8n-border);
     }
-    .n8npress-settings .nav-tab-active {
+    .luwipress-settings .nav-tab-active {
         background: var(--n8n-surface-secondary);
         color: var(--n8n-text);
         border-bottom-color: var(--n8n-surface-secondary);
@@ -206,25 +206,25 @@ a:focus-visible {
    Layout & General
    ======================================== */
 
-/* Full-width layout for all n8nPress admin pages */
-#wpbody-content > .wrap.n8npress-dashboard,
-#wpbody-content > .wrap.n8npress-settings,
-#wpbody-content > .wrap.n8npress-logs,
-#wpbody-content > .wrap.n8npress-claw-wrap,
+/* Full-width layout for all LuwiPress admin pages */
+#wpbody-content > .wrap.luwipress-dashboard,
+#wpbody-content > .wrap.luwipress-settings,
+#wpbody-content > .wrap.luwipress-logs,
+#wpbody-content > .wrap.luwipress-claw-wrap,
 #wpbody-content > .wrap.n8n-tm,
-#wpbody-content > .wrap#n8npress-token-dashboard,
-.n8npress-dashboard,
-.n8npress-settings,
-.n8npress-logs,
-.n8npress-claw-wrap,
+#wpbody-content > .wrap#luwipress-token-dashboard,
+.luwipress-dashboard,
+.luwipress-settings,
+.luwipress-logs,
+.luwipress-claw-wrap,
 .n8n-tm,
-#n8npress-token-dashboard {
+#luwipress-token-dashboard {
     max-width: none !important;
     width: auto !important;
     margin-right: 20px;
 }
 
-.n8npress-title {
+.luwipress-title {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -233,7 +233,7 @@ a:focus-visible {
     margin-bottom: 20px;
 }
 
-.n8npress-title .dashicons {
+.luwipress-title .dashicons {
     font-size: 28px;
     width: 28px;
     height: 28px;
@@ -244,7 +244,7 @@ a:focus-visible {
    Status Bar
    ======================================== */
 
-.n8npress-status-bar {
+.luwipress-status-bar {
     display: flex;
     gap: 16px;
     flex-wrap: wrap;
@@ -255,7 +255,7 @@ a:focus-visible {
     padding: 16px 20px;
 }
 
-.n8npress-status-item {
+.luwipress-status-item {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -264,15 +264,15 @@ a:focus-visible {
     border-right: 1px solid var(--n8n-border-light);
 }
 
-.n8npress-status-item:last-child {
+.luwipress-status-item:last-child {
     border-right: none;
 }
 
-.n8npress-status-item.status-ok .dashicons { color: var(--n8n-success); }
-.n8npress-status-item.status-error .dashicons { color: var(--n8n-error); }
-.n8npress-status-item.status-warning .dashicons { color: #eab308; }
+.luwipress-status-item.status-ok .dashicons { color: var(--n8n-success); }
+.luwipress-status-item.status-error .dashicons { color: var(--n8n-error); }
+.luwipress-status-item.status-warning .dashicons { color: #eab308; }
 
-.n8npress-url-preview {
+.luwipress-url-preview {
     font-size: 11px;
     color: #666;
     background: var(--n8n-border-light);
@@ -284,14 +284,14 @@ a:focus-visible {
    Stats Row
    ======================================== */
 
-.n8npress-stats-row {
+.luwipress-stats-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
     margin-bottom: 24px;
 }
 
-.n8npress-stat-card {
+.luwipress-stat-card {
     background: var(--n8n-surface);
     border: 1px solid var(--n8n-border);
     border-radius: var(--radius-md);
@@ -304,14 +304,14 @@ a:focus-visible {
     transition: transform var(--duration-normal) var(--ease-out),
                 box-shadow var(--duration-normal) var(--ease-out);
 }
-.n8npress-stat-card:hover {
+.luwipress-stat-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--n8n-shadow-md);
 }
 
-.n8npress-stat-card.stat-warning { border-left-color: #eab308; }
-.n8npress-stat-card.stat-error { border-left-color: var(--n8n-error); }
-.n8npress-stat-card.stat-translation { border-left-color: #0ea5e9; }
+.luwipress-stat-card.stat-warning { border-left-color: #eab308; }
+.luwipress-stat-card.stat-error { border-left-color: var(--n8n-error); }
+.luwipress-stat-card.stat-translation { border-left-color: #0ea5e9; }
 
 .stat-icon .dashicons {
     font-size: 28px;
@@ -339,7 +339,7 @@ a:focus-visible {
    Sections & Cards
    ======================================== */
 
-.n8npress-section {
+.luwipress-section {
     background: var(--n8n-surface);
     border: 1px solid var(--n8n-border);
     border-radius: var(--radius-md);
@@ -348,11 +348,11 @@ a:focus-visible {
     box-shadow: var(--n8n-shadow-sm);
     transition: box-shadow var(--duration-normal) var(--ease-out);
 }
-.n8npress-section:hover {
+.luwipress-section:hover {
     box-shadow: var(--n8n-shadow-md);
 }
 
-.n8npress-section h2 {
+.luwipress-section h2 {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -363,13 +363,13 @@ a:focus-visible {
     border-bottom: 1px solid var(--n8n-border-light);
 }
 
-.n8npress-link-small {
+.luwipress-link-small {
     font-size: 12px;
     font-weight: 400;
     text-decoration: none;
 }
 
-.n8npress-card {
+.luwipress-card {
     background: var(--n8n-surface);
     border: 1px solid var(--n8n-border);
     border-radius: var(--radius-md);
@@ -379,17 +379,17 @@ a:focus-visible {
     transition: transform var(--duration-normal) var(--ease-out),
                 box-shadow var(--duration-normal) var(--ease-out);
 }
-.n8npress-card:hover {
+.luwipress-card:hover {
     box-shadow: var(--n8n-shadow-md);
 }
 
-.n8npress-card h2 {
+.luwipress-card h2 {
     font-size: 16px;
     font-weight: 600;
     margin: 0 0 8px 0;
 }
 
-.n8npress-card h3 {
+.luwipress-card h3 {
     font-size: 14px;
     font-weight: 600;
     margin: 20px 0 8px 0;
@@ -399,13 +399,13 @@ a:focus-visible {
    Modules Grid
    ======================================== */
 
-.n8npress-modules-grid {
+.luwipress-modules-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 16px;
 }
 
-.n8npress-module-card {
+.luwipress-module-card {
     background: var(--n8n-surface-secondary);
     border: 1px solid var(--n8n-border);
     border-radius: var(--radius-sm);
@@ -413,12 +413,12 @@ a:focus-visible {
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.n8npress-module-card:hover {
+.luwipress-module-card:hover {
     border-color: var(--n8n-primary);
     box-shadow: 0 1px 3px rgba(99, 102, 241, 0.1);
 }
 
-.n8npress-module-card.module-inactive {
+.luwipress-module-card.module-inactive {
     opacity: 0.6;
 }
 
@@ -473,7 +473,7 @@ a:focus-visible {
    Two Column Layout
    ======================================== */
 
-.n8npress-two-col {
+.luwipress-two-col {
     display: grid;
     grid-template-columns: 1.5fr 1fr;
     gap: 20px;
@@ -481,7 +481,7 @@ a:focus-visible {
 }
 
 @media (max-width: 960px) {
-    .n8npress-two-col {
+    .luwipress-two-col {
         grid-template-columns: 1fr;
     }
 }
@@ -490,13 +490,13 @@ a:focus-visible {
    Tables
    ======================================== */
 
-.n8npress-table {
+.luwipress-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
 }
 
-.n8npress-table th {
+.luwipress-table th {
     text-align: left;
     font-weight: 600;
     padding: 10px 12px;
@@ -507,13 +507,13 @@ a:focus-visible {
     letter-spacing: 0.5px;
 }
 
-.n8npress-table td {
+.luwipress-table td {
     padding: 8px 12px;
     border-bottom: 1px solid var(--n8n-border-light);
     vertical-align: top;
 }
 
-.n8npress-table tbody tr:hover {
+.luwipress-table tbody tr:hover {
     background: #f9fafb;
 }
 
@@ -552,7 +552,7 @@ a:focus-visible {
    Logs Page Specific
    ======================================== */
 
-.n8npress-filter-bar {
+.luwipress-filter-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -565,13 +565,13 @@ a:focus-visible {
     border-radius: var(--radius-sm);
 }
 
-.n8npress-filter-levels {
+.luwipress-filter-levels {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
 }
 
-.n8npress-filter-badge {
+.luwipress-filter-badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -585,27 +585,27 @@ a:focus-visible {
     transition: background 0.2s;
 }
 
-.n8npress-filter-badge:hover {
+.luwipress-filter-badge:hover {
     background: var(--n8n-border);
     color: #111;
 }
 
-.n8npress-filter-badge.badge-active-filter {
+.luwipress-filter-badge.badge-active-filter {
     background: var(--n8n-primary);
     color: #fff;
 }
 
-.n8npress-filter-badge .count {
+.luwipress-filter-badge .count {
     font-size: 11px;
     opacity: 0.7;
 }
 
-.n8npress-search-form {
+.luwipress-search-form {
     display: flex;
     gap: 6px;
 }
 
-.n8npress-search-input {
+.luwipress-search-input {
     min-width: 200px;
     padding: 4px 10px;
     border: 1px solid var(--n8n-border);
@@ -613,24 +613,24 @@ a:focus-visible {
 }
 
 /* Logs table columns */
-.n8npress-logs-table .column-id { width: 50px; color: #9ca3af; }
-.n8npress-logs-table .column-time { width: 100px; }
-.n8npress-logs-table .column-level { width: 80px; }
-.n8npress-logs-table .column-context { width: 60px; text-align: center; }
-.n8npress-logs-table .column-ip { width: 120px; }
+.luwipress-logs-table .column-id { width: 50px; color: #9ca3af; }
+.luwipress-logs-table .column-time { width: 100px; }
+.luwipress-logs-table .column-level { width: 80px; }
+.luwipress-logs-table .column-context { width: 60px; text-align: center; }
+.luwipress-logs-table .column-ip { width: 120px; }
 
 .log-date { display: block; font-size: 12px; }
 .log-time-detail { display: block; font-size: 11px; color: #9ca3af; }
 
 /* Pagination */
-.n8npress-pagination {
+.luwipress-pagination {
     display: flex;
     gap: 4px;
     margin-top: 16px;
     justify-content: center;
 }
 
-.n8npress-pagination .page-number {
+.luwipress-pagination .page-number {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -643,38 +643,38 @@ a:focus-visible {
     color: #374151;
 }
 
-.n8npress-pagination .page-number.current {
+.luwipress-pagination .page-number.current {
     background: var(--n8n-primary);
     color: #fff;
 }
 
-.n8npress-pagination .page-number:hover:not(.current) {
+.luwipress-pagination .page-number:hover:not(.current) {
     background: var(--n8n-border);
 }
 
 /* Empty State */
-.n8npress-empty-state {
+.luwipress-empty-state {
     text-align: center;
     padding: 60px 20px;
     color: #9ca3af;
 }
 
-.n8npress-empty-state .dashicons {
+.luwipress-empty-state .dashicons {
     font-size: 48px;
     width: 48px;
     height: 48px;
     margin-bottom: 12px;
 }
 
-.n8npress-empty-state h3 {
+.luwipress-empty-state h3 {
     color: #374151;
     margin-bottom: 8px;
 }
 
-.n8npress-empty { color: #9ca3af; font-style: italic; }
+.luwipress-empty { color: #9ca3af; font-style: italic; }
 
 /* Maintenance */
-.n8npress-maintenance-actions {
+.luwipress-maintenance-actions {
     display: flex;
     gap: 20px;
     align-items: center;
@@ -688,7 +688,7 @@ a:focus-visible {
 }
 
 /* Modal */
-.n8npress-modal {
+.luwipress-modal {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.5);
@@ -698,7 +698,7 @@ a:focus-visible {
     justify-content: center;
 }
 
-.n8npress-modal-content {
+.luwipress-modal-content {
     background: var(--n8n-surface);
     border-radius: 8px;
     max-width: 600px;
@@ -708,7 +708,7 @@ a:focus-visible {
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
 }
 
-.n8npress-modal-header {
+.luwipress-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -716,9 +716,9 @@ a:focus-visible {
     border-bottom: 1px solid var(--n8n-border);
 }
 
-.n8npress-modal-header h3 { margin: 0; }
+.luwipress-modal-header h3 { margin: 0; }
 
-.n8npress-modal-close {
+.luwipress-modal-close {
     background: none;
     border: none;
     font-size: 24px;
@@ -728,7 +728,7 @@ a:focus-visible {
     line-height: 1;
 }
 
-.n8npress-json-view {
+.luwipress-json-view {
     padding: 20px;
     margin: 0;
     font-size: 12px;
@@ -745,36 +745,36 @@ a:focus-visible {
    Settings Page
    ======================================== */
 
-.n8npress-tabs {
+.luwipress-tabs {
     margin-bottom: 20px;
 }
 
-.n8npress-tabs .nav-tab {
+.luwipress-tabs .nav-tab {
     display: inline-flex;
     align-items: center;
     gap: 4px;
 }
 
-.n8npress-tabs .nav-tab .dashicons {
+.luwipress-tabs .nav-tab .dashicons {
     font-size: 16px;
     width: 16px;
     height: 16px;
 }
 
-.n8npress-tab-content {
+.luwipress-tab-content {
     display: none;
 }
 
-.n8npress-tab-content.tab-active {
+.luwipress-tab-content.tab-active {
     display: block;
 }
 
-.n8npress-settings .form-table th {
+.luwipress-settings .form-table th {
     width: 200px;
     font-weight: 500;
 }
 
-.n8npress-toggle-password {
+.luwipress-toggle-password {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -783,7 +783,7 @@ a:focus-visible {
     min-height: 30px;
 }
 
-.n8npress-toggle-password .dashicons {
+.luwipress-toggle-password .dashicons {
     font-size: 20px;
     width: 20px;
     height: 20px;
@@ -791,8 +791,8 @@ a:focus-visible {
 }
 
 /* Fix dashicon alignment in buttons */
-.n8npress-settings .button .dashicons,
-.n8npress-settings-form .button .dashicons {
+.luwipress-settings .button .dashicons,
+.luwipress-settings-form .button .dashicons {
     font-size: 16px;
     width: 16px;
     height: 16px;
@@ -800,7 +800,7 @@ a:focus-visible {
     margin-right: 2px;
 }
 
-.n8npress-info-box {
+.luwipress-info-box {
     background: #eff6ff;
     border: 1px solid #bfdbfe;
     border-radius: var(--radius-sm);
@@ -812,17 +812,17 @@ a:focus-visible {
     gap: 8px;
 }
 
-.n8npress-info-box .dashicons {
+.luwipress-info-box .dashicons {
     color: #3b82f6;
 }
 
-.n8npress-feature-list {
+.luwipress-feature-list {
     list-style: none;
     padding: 0;
     margin: 0;
 }
 
-.n8npress-feature-list li {
+.luwipress-feature-list li {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -830,11 +830,11 @@ a:focus-visible {
     font-size: 13px;
 }
 
-.n8npress-feature-list .dashicons-yes {
+.luwipress-feature-list .dashicons-yes {
     color: var(--n8n-success);
 }
 
-.n8npress-hmac-preview {
+.luwipress-hmac-preview {
     background: var(--n8n-border-light);
     padding: 4px 8px;
     border-radius: 3px;
@@ -855,7 +855,7 @@ a:focus-visible {
    Translation Info
    ======================================== */
 
-.n8npress-translation-info {
+.luwipress-translation-info {
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -887,19 +887,19 @@ a:focus-visible {
    Errors Section
    ======================================== */
 
-.n8npress-errors-section {
+.luwipress-errors-section {
     border-left: 4px solid var(--n8n-error);
 }
 
-.n8npress-errors-section h2 {
+.luwipress-errors-section h2 {
     color: var(--n8n-error);
 }
 
-.n8npress-errors-section h2 .dashicons {
+.luwipress-errors-section h2 .dashicons {
     margin-right: 4px;
 }
 
-.n8npress-table-errors .log-context code {
+.luwipress-table-errors .log-context code {
     font-size: 11px;
     max-width: 300px;
     display: block;
@@ -912,7 +912,7 @@ a:focus-visible {
    Endpoints Grid
    ======================================== */
 
-.n8npress-endpoints-grid {
+.luwipress-endpoints-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 16px;
@@ -951,7 +951,7 @@ a:focus-visible {
    Version Badge
    ======================================== */
 
-.n8npress-version {
+.luwipress-version {
     font-size: 12px;
     font-weight: 400;
     color: #9ca3af;
@@ -965,13 +965,13 @@ a:focus-visible {
    Detected Environment Grid
    ======================================== */
 
-.n8npress-detected-grid {
+.luwipress-detected-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 12px;
 }
 
-.n8npress-detected-card {
+.luwipress-detected-card {
     background: #f9fafb;
     border: 1px solid var(--n8n-border);
     border-radius: 8px;
@@ -979,17 +979,17 @@ a:focus-visible {
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.n8npress-detected-card.detected-active {
+.luwipress-detected-card.detected-active {
     background: var(--n8n-surface);
     border-color: #d1d5db;
 }
 
-.n8npress-detected-card.detected-active:hover {
+.luwipress-detected-card.detected-active:hover {
     border-color: var(--n8n-primary);
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
 }
 
-.n8npress-detected-card.detected-none {
+.luwipress-detected-card.detected-none {
     opacity: 0.5;
 }
 
@@ -1045,13 +1045,13 @@ a:focus-visible {
    Content Opportunities
    ======================================== */
 
-.n8npress-opportunities-grid {
+.luwipress-opportunities-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 12px;
 }
 
-.n8npress-opp-card {
+.luwipress-opp-card {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -1062,11 +1062,11 @@ a:focus-visible {
     border-left: 4px solid var(--n8n-border);
 }
 
-.n8npress-opp-card.opp-seo { border-left-color: var(--n8n-error); }
-.n8npress-opp-card.opp-translation { border-left-color: var(--n8n-blue); }
-.n8npress-opp-card.opp-stale { border-left-color: #eab308; }
-.n8npress-opp-card.opp-thin { border-left-color: #ea580c; }
-.n8npress-opp-card.opp-alt { border-left-color: #7c3aed; }
+.luwipress-opp-card.opp-seo { border-left-color: var(--n8n-error); }
+.luwipress-opp-card.opp-translation { border-left-color: var(--n8n-blue); }
+.luwipress-opp-card.opp-stale { border-left-color: #eab308; }
+.luwipress-opp-card.opp-thin { border-left-color: #ea580c; }
+.luwipress-opp-card.opp-alt { border-left-color: #7c3aed; }
 
 .opp-icon .dashicons {
     font-size: 24px;
@@ -1101,7 +1101,7 @@ a:focus-visible {
    Progress Bars (inline)
    ======================================== */
 
-.n8npress-progress-bar {
+.luwipress-progress-bar {
     display: inline-block;
     width: 80px;
     height: 6px;
@@ -1111,7 +1111,7 @@ a:focus-visible {
     vertical-align: middle;
 }
 
-.n8npress-progress-fill {
+.luwipress-progress-fill {
     height: 100%;
     border-radius: 3px;
     transition: width 0.3s;
@@ -1137,18 +1137,18 @@ a:focus-visible {
    AI Provider Selector
    ======================================== */
 
-.n8npress-provider-select {
+.luwipress-provider-select {
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
 }
 
-.n8npress-provider-option {
+.luwipress-provider-option {
     cursor: pointer;
     display: block;
 }
 
-.n8npress-provider-option input[type="radio"] {
+.luwipress-provider-option input[type="radio"] {
     display: none;
 }
 
@@ -1166,8 +1166,8 @@ a:focus-visible {
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
 }
 
-.n8npress-provider-option input[type="radio"]:checked + .provider-card,
-.n8npress-provider-option.provider-selected .provider-card {
+.luwipress-provider-option input[type="radio"]:checked + .provider-card,
+.luwipress-provider-option.provider-selected .provider-card {
     border-color: var(--n8n-primary);
     background: #eef2ff;
     box-shadow: 0 2px 12px rgba(99, 102, 241, 0.15);
@@ -1190,17 +1190,17 @@ a:focus-visible {
    AI Capabilities Grid
    ======================================== */
 
-.n8npress-ai-summary {
+.luwipress-ai-summary {
     border-top: 3px solid var(--n8n-primary);
 }
 
-.n8npress-ai-capabilities-grid {
+.luwipress-ai-capabilities-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: 14px;
 }
 
-.n8npress-capability-card {
+.luwipress-capability-card {
     background: var(--n8n-surface-secondary);
     border: 1px solid var(--n8n-border);
     border-radius: 8px;
@@ -1208,7 +1208,7 @@ a:focus-visible {
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.n8npress-capability-card:hover {
+.luwipress-capability-card:hover {
     border-color: var(--n8n-primary);
     box-shadow: 0 2px 12px rgba(99, 102, 241, 0.08);
 }
@@ -1248,7 +1248,7 @@ a:focus-visible {
     color: var(--n8n-gray);
 }
 
-.capability-row.capability-n8npress {
+.capability-row.capability-luwipress {
     background: #eef2ff;
     color: #4338ca;
 }
@@ -1270,7 +1270,7 @@ a:focus-visible {
     color: var(--n8n-gray);
 }
 
-.badge-n8npress {
+.badge-luwipress {
     background: var(--n8n-primary);
     color: #fff;
 }
@@ -1300,20 +1300,20 @@ a:focus-visible {
    Spin animation for refresh buttons
    ======================================== */
 
-@keyframes n8npress-spin {
+@keyframes luwipress-spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
 
 .dashicons.spin {
-    animation: n8npress-spin 1s linear infinite;
+    animation: luwipress-spin 1s linear infinite;
 }
 
 /* ========================================
    Footer
    ======================================== */
 
-.n8npress-footer {
+.luwipress-footer {
     text-align: center;
     padding: 16px;
     color: #9ca3af;
@@ -1324,7 +1324,7 @@ a:focus-visible {
    Open Claw — AI Chat Interface
    ======================================== */
 
-.n8npress-claw-wrap {
+.luwipress-claw-wrap {
     max-width: 1400px;
 }
 
@@ -1849,14 +1849,14 @@ a:focus-visible {
    Quick Actions Row (Dashboard)
    ======================================== */
 
-.n8npress-quick-actions {
+.luwipress-quick-actions {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     margin-bottom: 20px;
 }
 
-.n8npress-quick-btn {
+.luwipress-quick-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -1864,7 +1864,7 @@ a:focus-visible {
     padding: 6px 14px;
 }
 
-.n8npress-quick-btn .dashicons {
+.luwipress-quick-btn .dashicons {
     font-size: 16px;
     width: 16px;
     height: 16px;
@@ -1910,7 +1910,7 @@ a:focus-visible {
    Activity Feed
    ======================================== */
 
-.n8npress-activity-filters {
+.luwipress-activity-filters {
     display: flex;
     gap: 6px;
     margin-bottom: 12px;
@@ -1942,7 +1942,7 @@ a:focus-visible {
 .dot-warning { background: #eab308; }
 .dot-error { background: var(--n8n-error); }
 
-.n8npress-activity-feed {
+.luwipress-activity-feed {
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -2037,7 +2037,7 @@ a:focus-visible {
     font-style: italic;
 }
 
-.n8npress-view-all {
+.luwipress-view-all {
     font-size: 12px;
     font-weight: 400;
     text-decoration: none;
@@ -2047,7 +2047,7 @@ a:focus-visible {
    Toast Notifications
    ======================================== */
 
-#n8npress-toast-container {
+#luwipress-toast-container {
     position: fixed;
     top: 40px;
     right: 20px;
@@ -2058,7 +2058,7 @@ a:focus-visible {
     pointer-events: none;
 }
 
-.n8npress-toast {
+.luwipress-toast {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -2075,29 +2075,29 @@ a:focus-visible {
     max-width: 360px;
 }
 
-.n8npress-toast.toast-visible {
+.luwipress-toast.toast-visible {
     opacity: 1;
     transform: translateX(0);
 }
 
-.n8npress-toast .dashicons {
+.luwipress-toast .dashicons {
     font-size: 18px;
     width: 18px;
     height: 18px;
     flex-shrink: 0;
 }
 
-.n8npress-toast-success { border-left: 4px solid var(--n8n-success); }
-.n8npress-toast-success .dashicons { color: var(--n8n-success); }
+.luwipress-toast-success { border-left: 4px solid var(--n8n-success); }
+.luwipress-toast-success .dashicons { color: var(--n8n-success); }
 
-.n8npress-toast-error { border-left: 4px solid var(--n8n-error); }
-.n8npress-toast-error .dashicons { color: var(--n8n-error); }
+.luwipress-toast-error { border-left: 4px solid var(--n8n-error); }
+.luwipress-toast-error .dashicons { color: var(--n8n-error); }
 
-.n8npress-toast-warning { border-left: 4px solid #eab308; }
-.n8npress-toast-warning .dashicons { color: #eab308; }
+.luwipress-toast-warning { border-left: 4px solid #eab308; }
+.luwipress-toast-warning .dashicons { color: #eab308; }
 
-.n8npress-toast-info { border-left: 4px solid #3b82f6; }
-.n8npress-toast-info .dashicons { color: #3b82f6; }
+.luwipress-toast-info { border-left: 4px solid #3b82f6; }
+.luwipress-toast-info .dashicons { color: #3b82f6; }
 
 .toast-message {
     flex: 1;
@@ -2204,20 +2204,20 @@ a:focus-visible {
 }
 
 @media (max-width: 782px) {
-    .n8npress-ai-capabilities-grid {
+    .luwipress-ai-capabilities-grid {
         grid-template-columns: 1fr;
     }
 
-    .n8npress-detected-grid {
+    .luwipress-detected-grid {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     }
 
-    .n8npress-status-bar {
+    .luwipress-status-bar {
         flex-direction: column;
         gap: 8px;
     }
 
-    .n8npress-status-item {
+    .luwipress-status-item {
         border-right: none;
         padding-right: 0;
     }
@@ -2231,7 +2231,7 @@ a:focus-visible {
    Knowledge Graph Visualizer
    ======================================== */
 
-.n8npress-kg-wrap {
+.luwipress-kg-wrap {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     margin: 0 20px 20px 0;
 }
@@ -2693,32 +2693,32 @@ a:focus-visible {
    Global Animation Enhancements
    ======================================== */
 
-/* Smooth card hover for all n8npress cards */
-.n8npress-card,
+/* Smooth card hover for all luwipress cards */
+.luwipress-card,
 .n8n-card,
 .n8n-step {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.n8npress-card:hover,
+.luwipress-card:hover,
 .n8n-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 16px rgba(0,0,0,0.06);
 }
 
 /* Smooth button transitions everywhere */
-.n8npress-dashboard .button,
-.n8npress-settings .button,
+.luwipress-dashboard .button,
+.luwipress-settings .button,
 .n8n-tm .button {
     transition: all 0.2s ease;
 }
-.n8npress-dashboard .button:hover,
-.n8npress-settings .button:hover,
+.luwipress-dashboard .button:hover,
+.luwipress-settings .button:hover,
 .n8n-tm .button:hover {
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
-.n8npress-dashboard .button:active,
-.n8npress-settings .button:active,
+.luwipress-dashboard .button:active,
+.luwipress-settings .button:active,
 .n8n-tm .button:active {
     transform: translateY(0);
 }
@@ -2731,7 +2731,7 @@ a:focus-visible {
 }
 
 /* Tab transition */
-.n8npress-tab-content {
+.luwipress-tab-content {
     animation: n8n-slide-up 0.3s ease-out;
 }
 @keyframes n8n-slide-up {
@@ -2740,10 +2740,10 @@ a:focus-visible {
 }
 
 /* Toast notification animation enhancement */
-.n8npress-toast {
+.luwipress-toast {
     animation: n8n-toast-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.n8npress-toast.removing {
+.luwipress-toast.removing {
     animation: n8n-toast-out 0.3s ease-in forwards;
 }
 @keyframes n8n-toast-in {
@@ -2765,7 +2765,7 @@ a:focus-visible {
 
 /* Status badge transitions */
 .n8n-check, .n8n-miss,
-.log-level, .n8npress-filter-badge {
+.log-level, .luwipress-filter-badge {
     transition: all 0.2s ease;
 }
 
@@ -2778,7 +2778,7 @@ a:focus-visible {
 }
 
 /* ========================================
-   Dashboard v2 — n8nPress 1.10.x
+   Dashboard v2 — LuwiPress 1.10.x
    ======================================== */
 
 /* ─── Header ─── */
@@ -3147,7 +3147,7 @@ a:focus-visible {
 }
 
 /* ========================================
-   Content Scheduler — n8nPress 1.10.x
+   Content Scheduler — LuwiPress 1.10.x
    ======================================== */
 
 /* Status cards */
@@ -3250,3 +3250,147 @@ a:focus-visible {
     .sched-form-grid { grid-template-columns: 1fr; }
     .sched-row-3 { grid-template-columns: 1fr; }
 }
+
+/* ========================================
+   Premium Polish — Form UX
+   ======================================== */
+
+.n8npress-settings .form-table input[type="text"],
+.n8npress-settings .form-table input[type="url"],
+.n8npress-settings .form-table input[type="password"],
+.n8npress-settings .form-table input[type="number"],
+.n8npress-settings .form-table input[type="email"],
+.n8npress-settings .form-table select,
+.n8npress-settings .form-table textarea {
+    border: 1px solid var(--n8n-border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: var(--text-md);
+    transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+    background: var(--n8n-surface);
+    color: var(--n8n-text);
+}
+.n8npress-settings .form-table input:focus,
+.n8npress-settings .form-table select:focus,
+.n8npress-settings .form-table textarea:focus {
+    border-color: var(--n8n-primary);
+    box-shadow: 0 0 0 3px var(--n8n-primary-50);
+    outline: none;
+}
+
+.n8npress-settings .form-table .description {
+    color: var(--n8n-text-secondary);
+    font-size: var(--text-sm);
+    margin-top: var(--space-sm);
+    line-height: 1.5;
+}
+
+/* Settings tabs — modern underline style */
+.n8npress-settings .nav-tab-wrapper {
+    border-bottom: 2px solid var(--n8n-border);
+    margin-bottom: var(--space-xl);
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.n8npress-settings .nav-tab {
+    border: none;
+    border-bottom: 3px solid transparent;
+    background: none;
+    color: var(--n8n-text-secondary);
+    padding: var(--space-md) var(--space-lg);
+    font-weight: 500;
+    transition: color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast);
+    white-space: nowrap;
+    margin-bottom: -2px;
+}
+.n8npress-settings .nav-tab:hover {
+    color: var(--n8n-primary);
+    background: var(--n8n-primary-50);
+    border-bottom-color: var(--n8n-primary-light);
+}
+.n8npress-settings .nav-tab-active,
+.n8npress-settings .nav-tab-active:hover {
+    color: var(--n8n-primary);
+    border-bottom-color: var(--n8n-primary);
+    background: none;
+    font-weight: 600;
+}
+
+/* ========================================
+   Premium Polish — Animated Progress
+   ======================================== */
+
+.n8np-budget-fill,
+.lang-bar-fill {
+    animation: n8n-progress-fill 1s var(--ease-out) both;
+}
+
+/* ========================================
+   Premium Polish — Module Card Hover
+   ======================================== */
+
+.n8npress-module-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--n8n-shadow-sm);
+    transition: transform var(--duration-normal) var(--ease-out),
+                box-shadow var(--duration-normal) var(--ease-out),
+                border-color var(--duration-fast);
+}
+.n8npress-module-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--n8n-shadow-md);
+    border-color: var(--n8n-primary);
+}
+
+/* ========================================
+   Premium Polish — Custom Scrollbar
+   ======================================== */
+
+.n8npress-dashboard ::-webkit-scrollbar,
+.n8npress-settings ::-webkit-scrollbar,
+.n8npress-claw-wrap ::-webkit-scrollbar {
+    width: 6px; height: 6px;
+}
+.n8npress-dashboard ::-webkit-scrollbar-track,
+.n8npress-settings ::-webkit-scrollbar-track,
+.n8npress-claw-wrap ::-webkit-scrollbar-track {
+    background: transparent;
+}
+.n8npress-dashboard ::-webkit-scrollbar-thumb,
+.n8npress-settings ::-webkit-scrollbar-thumb,
+.n8npress-claw-wrap ::-webkit-scrollbar-thumb {
+    background: var(--n8n-border);
+    border-radius: var(--radius-full);
+}
+.n8npress-dashboard ::-webkit-scrollbar-thumb:hover,
+.n8npress-settings ::-webkit-scrollbar-thumb:hover,
+.n8npress-claw-wrap ::-webkit-scrollbar-thumb:hover {
+    background: var(--n8n-gray-light);
+}
+
+/* ========================================
+   Premium Polish — Tablet Responsive
+   ======================================== */
+
+@media (max-width: 768px) {
+    .n8np-hero { grid-template-columns: 1fr 1fr; }
+    .n8np-middle { grid-template-columns: 1fr; }
+    .n8np-bottom { grid-template-columns: 1fr; }
+    .n8npress-card { padding: var(--space-lg); }
+    .n8npress-settings .form-table th {
+        width: auto; display: block; padding-bottom: 4px;
+    }
+    .n8npress-settings .form-table td {
+        display: block; padding-left: 0;
+    }
+}
+
+/* ========================================
+   Premium Polish — Fluid Typography
+   ======================================== */
+
+.n8np-title { font-size: clamp(20px, 4vw, 28px) !important; }
+.n8np-hero-num { font-size: clamp(22px, 5vw, 32px) !important; }
+.stat-number { font-size: clamp(20px, 4vw, 26px); }

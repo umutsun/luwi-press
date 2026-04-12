@@ -1,6 +1,6 @@
 <?php
 /**
- * N8nPress Permission Manager
+ * LuwiPress Permission Manager
  *
  * Centralised authentication and authorisation for all REST API endpoints.
  * Replaces the duplicated check_admin_permission(), check_n8n_token(), and
@@ -11,7 +11,7 @@
  *  2. check_token()        — Bearer token or X-LuwiPress-Token header
  *  3. check_token_or_admin() — either of the above (most REST endpoints)
  *
- * @package    N8nPress
+ * @package    LuwiPress
  * @subpackage Permission
  * @since      1.10.1
  */

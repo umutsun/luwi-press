@@ -6,7 +6,7 @@
  * call that routes to either local AI providers or the n8n webhook
  * based on the configured processing mode.
  *
- * @package N8nPress
+ * @package LuwiPress
  * @since   2.0.0
  */
 

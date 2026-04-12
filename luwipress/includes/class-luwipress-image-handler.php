@@ -2,7 +2,7 @@
 /**
  * Image Handler — DALL-E generation + WordPress Media Library integration.
  *
- * @package N8nPress
+ * @package LuwiPress
  * @since   2.0.0
  */
 

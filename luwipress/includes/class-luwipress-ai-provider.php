@@ -5,7 +5,7 @@
  * All AI providers (Anthropic, OpenAI, Google) implement this interface
  * to provide a normalized API for the AI Engine dispatcher.
  *
- * @package N8nPress
+ * @package LuwiPress
  * @since   2.0.0
  */
 

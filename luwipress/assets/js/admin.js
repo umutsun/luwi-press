@@ -1,5 +1,5 @@
 /**
- * n8nPress Admin Scripts
+ * LuwiPress Admin Scripts
  */
 (function($) {
     'use strict';
@@ -16,9 +16,9 @@
         }
 
         function n8npLoadDashboard() {
-            $.post(n8npress.ajax_url, {
+            $.post(luwipress.ajax_url, {
                 action: 'luwipress_dashboard_data',
-                nonce: n8npress.nonce
+                nonce: luwipress.nonce
             }, function(res) {
                 if (!res.success) return;
                 var d = res.data;
@@ -161,9 +161,9 @@
         }
 
         function n8npRefreshActivity() {
-            $.post(n8npress.ajax_url, {
+            $.post(luwipress.ajax_url, {
                 action: 'luwipress_dashboard_data',
-                nonce: n8npress.nonce
+                nonce: luwipress.nonce
             }, function(res) {
                 if (res.success) n8npRenderActivity(res.data.logs);
             });
@@ -182,22 +182,22 @@
             if (!confirm('Start bulk AI enrichment for thin content products?')) return;
             var $btn = $(this);
             $btn.prop('disabled', true).text('Processing...');
-            $.post(n8npress.ajax_url, {
+            $.post(luwipress.ajax_url, {
                 action: 'luwipress_get_thin_products',
-                nonce: n8npress.nonce
+                nonce: luwipress.nonce
             }, function(res) {
                 if (res.success && res.data.product_ids && res.data.product_ids.length > 0) {
-                    $.post(n8npress.ajax_url, {
+                    $.post(luwipress.ajax_url, {
                         action: 'luwipress_batch_enrich',
-                        nonce: n8npress.nonce,
+                        nonce: luwipress.nonce,
                         product_ids: res.data.product_ids
                     }, function() {
                         $btn.prop('disabled', false).html('<span class="dashicons dashicons-edit-large"></span> Bulk Enrich');
-                        window.n8npressToast && window.n8npressToast('Bulk enrichment started for ' + res.data.product_ids.length + ' products', 'success');
+                        window.luwipressToast && window.luwipressToast('Bulk enrichment started for ' + res.data.product_ids.length + ' products', 'success');
                     });
                 } else {
                     $btn.prop('disabled', false).html('<span class="dashicons dashicons-edit-large"></span> Bulk Enrich');
-                    window.n8npressToast && window.n8npressToast('No thin content products found', 'info');
+                    window.luwipressToast && window.luwipressToast('No thin content products found', 'info');
                 }
             });
         });
@@ -217,7 +217,7 @@
                 $result.html('');
 
                 $.ajax({
-                    url: n8npress.ajax_url,
+                    url: luwipress.ajax_url,
                     type: 'POST',
                     data: $form.serialize() + '&action=luwipress_schedule_content',
                     success: function(res) {
@@ -242,7 +242,7 @@
                 if (!confirm('Delete this scheduled item?')) return;
                 var $item = $(this).closest('.sched-item');
                 var id = $(this).data('id');
-                $.post(n8npress.ajax_url, {
+                $.post(luwipress.ajax_url, {
                     action: 'luwipress_delete_schedule',
                     schedule_id: id,
                     _wpnonce: $('#sched-form input[name="_wpnonce"]').val()
@@ -266,7 +266,7 @@
         // ========================================
         // Password toggle
         // ========================================
-        $('.n8npress-toggle-password').on('click', function() {
+        $('.luwipress-toggle-password').on('click', function() {
             var targetId = $(this).data('target');
             var $input = $('#' + targetId);
             var $icon = $(this).find('.dashicons');
@@ -283,9 +283,9 @@
         // ========================================
         // Connection test
         // ========================================
-        $('#n8npress-test-connection').on('click', function() {
+        $('#luwipress-test-connection').on('click', function() {
             var $btn = $(this);
-            var $result = $('#n8npress-connection-result');
+            var $result = $('#luwipress-connection-result');
             var webhookUrl = $('#luwipress_webhook_url').val();
 
             if (!webhookUrl) {
@@ -323,9 +323,9 @@
         // ========================================
         // Open Claw test connection
         // ========================================
-        $('#n8npress-test-openclaw').on('click', function() {
+        $('#luwipress-test-openclaw').on('click', function() {
             var $btn = $(this);
-            var $status = $('#n8npress-openclaw-status');
+            var $status = $('#luwipress-openclaw-status');
             var clawUrl = $('#luwipress_openclaw_url').val();
 
             if (!clawUrl) {
@@ -341,7 +341,7 @@
                 type: 'POST',
                 data: {
                     action: 'luwipress_claw_test_connection',
-                    nonce: typeof n8npress !== 'undefined' && n8npress.claw_nonce ? n8npress.claw_nonce : $('input[name="_wpnonce"]').val()
+                    nonce: typeof luwipress !== 'undefined' && luwipress.claw_nonce ? luwipress.claw_nonce : $('input[name="_wpnonce"]').val()
                 },
                 success: function(response) {
                     if (response.success) {
@@ -362,7 +362,7 @@
         // ========================================
         // Log context modal
         // ========================================
-        $('.n8npress-toggle-context').on('click', function() {
+        $('.luwipress-toggle-context').on('click', function() {
             var contextData = $(this).data('context');
             var formatted;
 
@@ -375,19 +375,19 @@
                 formatted = String(contextData);
             }
 
-            $('#n8npress-context-data').text(formatted);
-            $('#n8npress-context-modal').show();
+            $('#luwipress-context-data').text(formatted);
+            $('#luwipress-context-modal').show();
         });
 
-        $('.n8npress-modal-close, .n8npress-modal').on('click', function(e) {
+        $('.luwipress-modal-close, .luwipress-modal').on('click', function(e) {
             if (e.target === this) {
-                $('#n8npress-context-modal').hide();
+                $('#luwipress-context-modal').hide();
             }
         });
 
         $(document).on('keydown', function(e) {
             if (e.key === 'Escape') {
-                $('#n8npress-context-modal').hide();
+                $('#luwipress-context-modal').hide();
             }
         });
 
@@ -401,11 +401,11 @@
             });
 
             $.ajax({
-                url: n8npress.ajax_url,
+                url: luwipress.ajax_url,
                 type: 'POST',
                 data: {
                     action: 'luwipress_scan_opportunities',
-                    nonce: n8npress.nonce
+                    nonce: luwipress.nonce
                 },
                 success: function(response) {
                     if (response.success) {
@@ -426,12 +426,12 @@
         }
 
         // Auto-scan on dashboard load
-        if ($('#n8npress-opportunities').length) {
+        if ($('#luwipress-opportunities').length) {
             scanOpportunities();
         }
 
         // Manual scan button
-        $('#n8npress-refresh-opportunities').on('click', function() {
+        $('#luwipress-refresh-opportunities').on('click', function() {
             var $btn = $(this);
             $btn.prop('disabled', true).find('.dashicons').addClass('spin');
             scanOpportunities();
@@ -443,7 +443,7 @@
         // ========================================
         // Bulk Enrich Thin Content
         // ========================================
-        $('#n8npress-bulk-enrich-thin').on('click', function() {
+        $('#luwipress-bulk-enrich-thin').on('click', function() {
             var $btn = $(this);
             var thinCount = parseInt($('#opp-thin-content').text(), 10);
 
@@ -460,11 +460,11 @@
 
             // First fetch thin product IDs, then send for enrichment
             $.ajax({
-                url: n8npress.ajax_url,
+                url: luwipress.ajax_url,
                 type: 'POST',
                 data: {
                     action: 'luwipress_get_thin_products',
-                    nonce: n8npress.nonce
+                    nonce: luwipress.nonce
                 },
                 success: function(idsResponse) {
                     if (!idsResponse.success || !idsResponse.data.product_ids.length) {
@@ -474,11 +474,11 @@
                     }
 
                     $.ajax({
-                        url: n8npress.ajax_url,
+                        url: luwipress.ajax_url,
                         type: 'POST',
                         data: {
                             action: 'luwipress_batch_enrich',
-                            nonce: n8npress.nonce,
+                            nonce: luwipress.nonce,
                             product_ids: idsResponse.data.product_ids
                         },
                         success: function(response) {
@@ -505,32 +505,32 @@
         // ========================================
         // Quick Actions (Dashboard)
         // ========================================
-        $('#n8npress-qa-scan').on('click', function() {
+        $('#luwipress-qa-scan').on('click', function() {
             $(this).prop('disabled', true).find('.dashicons').addClass('spin');
             scanOpportunities();
             var $btn = $(this);
             setTimeout(function() {
                 $btn.prop('disabled', false).find('.dashicons').removeClass('spin');
-                n8npressToast('Scan complete', 'success');
+                luwipressToast('Scan complete', 'success');
             }, 2000);
         });
 
-        $('#n8npress-qa-enrich').on('click', function() {
-            $('#n8npress-bulk-enrich-thin').trigger('click');
+        $('#luwipress-qa-enrich').on('click', function() {
+            $('#luwipress-bulk-enrich-thin').trigger('click');
         });
 
-        $('#n8npress-qa-content').on('click', function() {
-            window.location.href = (typeof ajaxurl !== 'undefined' ? ajaxurl.replace('/admin-ajax.php', '') : '') + '/admin.php?page=n8npress-scheduler';
+        $('#luwipress-qa-content').on('click', function() {
+            window.location.href = (typeof ajaxurl !== 'undefined' ? ajaxurl.replace('/admin-ajax.php', '') : '') + '/admin.php?page=luwipress-scheduler';
         });
 
-        $('#n8npress-qa-translate').on('click', function() {
-            window.location.href = (typeof ajaxurl !== 'undefined' ? ajaxurl.replace('/admin-ajax.php', '') : '') + '/admin.php?page=n8npress-translations';
+        $('#luwipress-qa-translate').on('click', function() {
+            window.location.href = (typeof ajaxurl !== 'undefined' ? ajaxurl.replace('/admin-ajax.php', '') : '') + '/admin.php?page=luwipress-translations';
         });
 
         // Opportunity card action links
         $('#opp-enrich-thin-link').on('click', function(e) {
             e.preventDefault();
-            $('#n8npress-bulk-enrich-thin').trigger('click');
+            $('#luwipress-bulk-enrich-thin').trigger('click');
         });
 
         $('#opp-enrich-stale-link').on('click', function(e) {
@@ -538,24 +538,24 @@
             if (!confirm('Refresh stale content via AI enrichment?')) return;
             var $link = $(this).text('Processing...');
             $.ajax({
-                url: n8npress.ajax_url,
+                url: luwipress.ajax_url,
                 type: 'POST',
                 data: {
                     action: 'luwipress_claw_execute',
-                    nonce: n8npress.claw_nonce || n8npress.nonce,
+                    nonce: luwipress.claw_nonce || luwipress.nonce,
                     execute_action: 'enrich_stale',
                     params: '{}',
                     conversation_id: ''
                 },
                 success: function(response) {
                     if (response.success) {
-                        n8npressToast(response.data.message || 'Stale content refresh started', 'success');
+                        luwipressToast(response.data.message || 'Stale content refresh started', 'success');
                     } else {
-                        n8npressToast('Error: ' + (response.data || 'Failed'), 'error');
+                        luwipressToast('Error: ' + (response.data || 'Failed'), 'error');
                     }
                 },
                 error: function() {
-                    n8npressToast('Request failed', 'error');
+                    luwipressToast('Request failed', 'error');
                 },
                 complete: function() {
                     $link.text('Refresh Now →');
@@ -591,14 +591,14 @@
             } catch (e) {
                 formatted = String(contextData);
             }
-            $('#n8npress-context-data').text(formatted);
-            $('#n8npress-context-modal').show();
+            $('#luwipress-context-data').text(formatted);
+            $('#luwipress-context-modal').show();
         });
 
         // ========================================
         // Toast Notification System
         // ========================================
-        function n8npressToast(message, type) {
+        function luwipressToast(message, type) {
             type = type || 'info';
             var iconMap = {
                 success: 'dashicons-yes-alt',
@@ -606,16 +606,16 @@
                 warning: 'dashicons-warning',
                 info: 'dashicons-info-outline'
             };
-            var $toast = $('<div class="n8npress-toast n8npress-toast-' + type + '">' +
+            var $toast = $('<div class="luwipress-toast luwipress-toast-' + type + '">' +
                 '<span class="dashicons ' + (iconMap[type] || iconMap.info) + '"></span>' +
                 '<span class="toast-message">' + message + '</span>' +
                 '<button type="button" class="toast-close">&times;</button>' +
                 '</div>');
 
-            if (!$('#n8npress-toast-container').length) {
-                $('body').append('<div id="n8npress-toast-container"></div>');
+            if (!$('#luwipress-toast-container').length) {
+                $('body').append('<div id="luwipress-toast-container"></div>');
             }
-            $('#n8npress-toast-container').append($toast);
+            $('#luwipress-toast-container').append($toast);
 
             setTimeout(function() { $toast.addClass('toast-visible'); }, 10);
 
@@ -632,7 +632,7 @@
         }
 
         // Make toast available globally
-        window.n8npressToast = n8npressToast;
+        window.luwipressToast = luwipressToast;
 
         // ========================================
         // Open Claw — AI Chat Interface
@@ -671,7 +671,7 @@
 
                 var avatarHtml;
                 if (role === 'user') {
-                    var initials = (n8npress.user_initial || 'U');
+                    var initials = (luwipress.user_initial || 'U');
                     avatarHtml = '<div class="claw-avatar">' + initials + '</div>';
                 } else {
                     avatarHtml = '<div class="claw-avatar"><span class="dashicons dashicons-superhero-alt"></span></div>';
@@ -767,11 +767,11 @@
                 clawAddTyping();
 
                 $.ajax({
-                    url: n8npress.ajax_url,
+                    url: luwipress.ajax_url,
                     type: 'POST',
                     data: {
                         action: 'luwipress_claw_send',
-                        nonce: n8npress.claw_nonce,
+                        nonce: luwipress.claw_nonce,
                         message: message,
                         conversation_id: clawConversationId
                     },
@@ -926,11 +926,11 @@
                 // Clear server-side conversation history
                 if (oldConvId) {
                     $.ajax({
-                        url: n8npress.ajax_url,
+                        url: luwipress.ajax_url,
                         type: 'POST',
                         data: {
                             action: 'luwipress_claw_clear_history',
-                            nonce: n8npress.claw_nonce,
+                            nonce: luwipress.claw_nonce,
                             conversation_id: oldConvId
                         }
                     });
@@ -946,11 +946,11 @@
                 $btns.html('<span style="color:#16a34a;font-size:12px;">Executing...</span>');
 
                 $.ajax({
-                    url: n8npress.ajax_url,
+                    url: luwipress.ajax_url,
                     type: 'POST',
                     data: {
                         action: 'luwipress_claw_execute',
-                        nonce: n8npress.claw_nonce,
+                        nonce: luwipress.claw_nonce,
                         execute_action: actionName,
                         params: JSON.stringify(params),
                         conversation_id: clawConversationId

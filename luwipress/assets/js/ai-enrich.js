@@ -1,8 +1,8 @@
 (function ($) {
   'use strict';
 
-  var $btn = $('#n8npress-enrich-btn');
-  var $result = $('#n8npress-enrich-result');
+  var $btn = $('#luwipress-enrich-btn');
+  var $result = $('#luwipress-enrich-result');
 
   if (!$btn.length) return;
 
@@ -23,9 +23,9 @@
     $result.html('');
 
     $.ajax({
-      url: n8npressAI.rest_url,
+      url: luwipressAI.rest_url,
       method: 'POST',
-      headers: { 'X-WP-Nonce': n8npressAI.nonce },
+      headers: { 'X-WP-Nonce': luwipressAI.nonce },
       contentType: 'application/json',
       data: JSON.stringify({ product_id: parseInt(productId, 10), options: options }),
     })

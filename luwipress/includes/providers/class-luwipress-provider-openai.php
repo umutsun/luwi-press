@@ -2,7 +2,7 @@
 /**
  * OpenAI AI Provider (GPT + DALL-E)
  *
- * @package N8nPress
+ * @package LuwiPress
  * @since   2.0.0
  */
 

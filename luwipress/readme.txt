@@ -1,4 +1,4 @@
-=== n8nPress — AI-Powered WooCommerce Automation ===
+=== LuwiPress — AI-Powered WooCommerce Automation ===
 Contributors: luwidev
 Tags: woocommerce, ai, seo, translation, automation, n8n, product enrichment
 Requires at least: 5.6
@@ -12,13 +12,13 @@ AI-powered content enrichment, SEO optimization, and translation automation for 
 
 == Description ==
 
-n8nPress is a **middleware plugin** that connects your WordPress/WooCommerce store to [n8n](https://n8n.io) workflows, adding AI-powered automation that your existing plugins can't do alone.
+LuwiPress is a **middleware plugin** that connects your WordPress/WooCommerce store to [n8n](https://n8n.io) workflows, adding AI-powered automation that your existing plugins can't do alone.
 
 **It doesn't replace your plugins — it makes them smarter.**
 
-= What n8nPress Adds =
+= What LuwiPress Adds =
 
-| Your Plugin Does | n8nPress Adds (via AI) |
+| Your Plugin Does | LuwiPress Adds (via AI) |
 |---|---|
 | Rank Math stores SEO meta | AI generates optimized titles, descriptions, FAQ schema |
 | WPML manages languages | AI translates with SEO keyword awareness |
@@ -42,7 +42,7 @@ n8nPress is a **middleware plugin** that connects your WordPress/WooCommerce sto
 
 = How It Works =
 
-1. Install n8nPress on your WordPress site
+1. Install LuwiPress on your WordPress site
 2. Connect to your self-hosted [n8n](https://n8n.io) instance
 3. Enter your AI API key (OpenAI recommended for best cost/quality ratio)
 4. Set a daily budget limit to control costs
@@ -64,7 +64,7 @@ Built-in chat interface with slash commands:
 
 = Cost Control =
 
-n8nPress includes built-in cost protection:
+LuwiPress includes built-in cost protection:
 
 * **Daily budget limit** — AI features auto-pause when reached ($1.00 default)
 * **Token usage tracking** — See exactly which workflows cost money
@@ -91,7 +91,7 @@ n8nPress includes built-in cost protection:
 
 1. Upload the `luwipress` folder to `/wp-content/plugins/`
 2. Activate the plugin through the 'Plugins' menu
-3. Go to **n8nPress → Settings → Connection** and enter your n8n webhook URL
+3. Go to **LuwiPress → Settings → Connection** and enter your n8n webhook URL
 4. Go to **Settings → AI API Keys** and enter your OpenAI API key
 5. Set your daily budget limit (recommended: $1.00/day)
 6. Import the n8n workflow templates from the `n8n-workflows/` folder into your n8n instance
@@ -100,7 +100,7 @@ n8nPress includes built-in cost protection:
 
 = Do I need an n8n instance? =
 
-Yes. n8nPress connects to [n8n](https://n8n.io), a free, open-source workflow automation tool. You can self-host it on any VPS for ~$5/month, or use n8n Cloud.
+Yes. LuwiPress connects to [n8n](https://n8n.io), a free, open-source workflow automation tool. You can self-host it on any VPS for ~$5/month, or use n8n Cloud.
 
 = Which AI provider should I use? =
 
@@ -108,11 +108,11 @@ We recommend **OpenAI GPT-4o Mini** for the best cost/quality ratio. At $0.15 pe
 
 = Will this increase my hosting costs? =
 
-No. n8nPress is lightweight middleware — it doesn't add significant load to your WordPress site. All AI processing happens on your n8n instance.
+No. LuwiPress is lightweight middleware — it doesn't add significant load to your WordPress site. All AI processing happens on your n8n instance.
 
 = Is my data sent to third parties? =
 
-Product data is sent to your n8n instance (which you control) and then to the AI provider you choose (OpenAI, Anthropic, or Google). No data is sent to n8nPress servers.
+Product data is sent to your n8n instance (which you control) and then to the AI provider you choose (OpenAI, Anthropic, or Google). No data is sent to LuwiPress servers.
 
 = Can I use this without WooCommerce? =
 
@@ -259,13 +259,13 @@ Critical cost protection update. Adds daily budget limits and switches to GPT-4o
 
 == Additional Information ==
 
-n8nPress is developed by **Luwi Developments LLC** — a boutique AI agency working with founders, startups, and creative teams. We specialize in custom AI workflows, process automation, and intelligent systems.
+LuwiPress is developed by **Luwi Developments LLC** — a boutique AI agency working with founders, startups, and creative teams. We specialize in custom AI workflows, process automation, and intelligent systems.
 
 *Dream. Design. Develop.*
 
 = Free Plugin, Professional Support =
 
-n8nPress is free and open-source. You bring your own n8n instance and AI API key — no subscription, no hidden fees, no vendor lock-in.
+LuwiPress is free and open-source. You bring your own n8n instance and AI API key — no subscription, no hidden fees, no vendor lock-in.
 
 Need help getting started? We offer:
 
@@ -277,8 +277,8 @@ Need help getting started? We offer:
 = Resources =
 
 * [Documentation & Guides](https://luwi.dev)
-* [GitHub Repository](https://github.com/umutsun/n8npress)
-* [n8n Workflow Templates](https://github.com/umutsun/n8npress/tree/main/n8n-workflows)
+* [GitHub Repository](https://github.com/umutsun/luwipress)
+* [n8n Workflow Templates](https://github.com/umutsun/luwipress/tree/main/n8n-workflows)
 
 = Contact =
 
