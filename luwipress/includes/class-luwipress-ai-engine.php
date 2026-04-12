@@ -32,14 +32,19 @@ class LuwiPress_AI_Engine {
 	 * @var array
 	 */
 	private static $workflow_providers = array(
-		'product-enricher'       => 'anthropic',
-		'product-enricher-batch' => 'anthropic',
-		'aeo-generator'          => 'anthropic',
-		'review-responder'       => 'anthropic',
-		'content-scheduler'      => 'anthropic',
+		'product-enricher'       => 'openai',
+		'product-enricher-batch' => 'openai',
+		'aeo-generator'          => 'openai',
+		'aeo-faq'                => 'openai',
+		'aeo-howto'              => 'openai',
+		'review-responder'       => 'openai',
+		'content-scheduler'      => 'openai',
 		'translation-pipeline'   => 'openai',
-		'internal-linker'        => 'anthropic',
+		'taxonomy-translation'   => 'openai',
+		'translation-quality'    => 'openai',
+		'internal-linker'        => 'openai',
 		'open-claw'              => 'openai',
+		'image-generation'       => 'openai',
 	);
 
 	/**
