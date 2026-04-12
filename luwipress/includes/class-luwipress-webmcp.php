@@ -308,7 +308,14 @@ class LuwiPress_WebMCP {
      * Handle `initialize` — first message from client.
      */
     private function handle_initialize( $id, $params, $request ) {
-        $client_info = $params['clientInfo'] ?? array();
+        $client_info    = $params['clientInfo'] ?? array();
+        $client_version = $params['protocolVersion'] ?? self::MCP_PROTOCOL_VERSION;
+
+        // Accept client's protocol version if we support it (backward compat)
+        $supported = array( '2025-03-26', '2025-11-25', '2024-11-05' );
+        $negotiated_version = in_array( $client_version, $supported, true )
+            ? $client_version
+            : self::MCP_PROTOCOL_VERSION;
 
         // Generate session ID
         $this->session_id = wp_generate_uuid4();
@@ -328,7 +335,7 @@ class LuwiPress_WebMCP {
         ) );
 
         $result = array(
-            'protocolVersion' => self::MCP_PROTOCOL_VERSION,
+            'protocolVersion' => $negotiated_version,
             'capabilities'    => array(
                 'tools'     => array(
                     'listChanged' => false,  // Static tool list — no runtime changes
