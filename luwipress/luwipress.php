@@ -84,7 +84,6 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-auth.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-logger.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-token-tracker.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-settings.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-security.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-hmac.php';
 
@@ -113,6 +112,9 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-open-claw.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-crm-bridge.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-knowledge-graph.php';
+
+        // WebMCP server (MCP Streamable HTTP transport)
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-webmcp.php';
     }
     
     /**
@@ -181,6 +183,11 @@ class LuwiPress {
         LuwiPress_Open_Claw::get_instance();
         LuwiPress_CRM_Bridge::get_instance();
         LuwiPress_Knowledge_Graph::get_instance();
+
+        // WebMCP server (load after all modules so tools can reference them)
+        if ( LuwiPress_WebMCP::is_enabled() ) {
+            LuwiPress_WebMCP::get_instance();
+        }
     }
     
     /**
@@ -244,6 +251,15 @@ class LuwiPress {
             array( $this, 'knowledge_graph_page' )
         );
 
+        add_submenu_page(
+            'luwipress',
+            __( 'WebMCP', 'luwipress' ),
+            __( 'WebMCP', 'luwipress' ),
+            'manage_options',
+            'luwipress-webmcp',
+            array( $this, 'webmcp_page' )
+        );
+
     }
     
     /**
@@ -279,6 +295,13 @@ class LuwiPress {
      */
     public function knowledge_graph_page() {
         include LUWIPRESS_PLUGIN_DIR . 'admin/knowledge-graph-page.php';
+    }
+
+    /**
+     * WebMCP admin page
+     */
+    public function webmcp_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/webmcp-page.php';
     }
 
     /**
@@ -368,6 +391,16 @@ class LuwiPress {
             ));
         }
 
+        // WebMCP client JS on WebMCP page
+        if ( strpos( $hook, 'luwipress-webmcp' ) !== false ) {
+            wp_enqueue_script(
+                'luwipress-webmcp-client',
+                LUWIPRESS_PLUGIN_URL . 'assets/js/webmcp-client.js',
+                array(),
+                LUWIPRESS_VERSION,
+                true
+            );
+        }
     }
     
     /**
@@ -632,6 +665,8 @@ class LuwiPress {
             'luwipress_anthropic_model'   => 'claude-haiku-4-5-20241022',
             'luwipress_openai_model'      => 'gpt-4o-mini',
             'luwipress_google_model'      => 'gemini-2.0-flash',
+            // WebMCP
+            'luwipress_webmcp_enabled'    => 1,
         );
         
         foreach ($defaults as $option => $value) {
