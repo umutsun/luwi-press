@@ -30,6 +30,9 @@ class LuwiPress_Translation {
         add_action('wp_ajax_luwipress_fix_translation_images', [$this, 'ajax_fix_translation_images']);
         add_action('wp_ajax_luwipress_fix_category_assignments', [$this, 'ajax_fix_category_assignments']);
         add_action('wp_ajax_luwipress_clean_orphan_translations', [$this, 'ajax_clean_orphan_translations']);
+        add_action('wp_ajax_luwipress_get_missing_items', [$this, 'ajax_get_missing_items']);
+        add_action('wp_ajax_luwipress_translate_single', [$this, 'ajax_translate_single']);
+        add_action('wp_ajax_luwipress_translate_taxonomy_batch', [$this, 'ajax_translate_taxonomy_batch']);
     }
 
     /**
@@ -179,7 +182,7 @@ class LuwiPress_Translation {
     public function get_missing_translations_all($request) {
         $langs_str   = $request->get_param('target_languages');
         $post_type   = $request->get_param('post_type');
-        $limit       = min($request->get_param('limit'), 100);
+        $limit       = min( absint( $request->get_param('limit') ), 500 );
         $target_langs = array_map('trim', explode(',', $langs_str));
 
         if (!defined('ICL_SITEPRESS_VERSION')) {
@@ -320,6 +323,7 @@ class LuwiPress_Translation {
                 $messages = LuwiPress_AI_Engine::build_messages( $prompt );
                 $ai_result = LuwiPress_AI_Engine::dispatch_json( 'translation-pipeline', $messages, array(
                     'max_tokens' => 4096,
+                    'timeout'    => 120,
                 ) );
 
                 if ( is_wp_error( $ai_result ) ) {
@@ -359,6 +363,60 @@ class LuwiPress_Translation {
             'product_id'       => $product_id,
             'target_languages' => $target_languages,
         ) );
+    }
+
+    /**
+     * Bulk translate missing content items for a post type + language.
+     * Called from the Translation Manager admin page in local AI mode.
+     *
+     * @param WP_REST_Request $request  Not used directly.
+     * @param string          $post_type Product, post, or page.
+     * @param array           $languages Target language codes.
+     * @param int             $limit     Max items to translate.
+     * @return array|WP_Error Result with 'translated' count.
+     */
+    public function handle_bulk_translation( $request, $post_type, $languages, $limit = 20 ) {
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            return new WP_Error( 'no_wpml', 'WPML is required for translation.', array( 'status' => 400 ) );
+        }
+
+        // Fetch missing items
+        $fetch_request = new WP_REST_Request( 'GET', '/luwipress/v1/translation/missing-all' );
+        $fetch_request->set_param( 'target_languages', implode( ',', $languages ) );
+        $fetch_request->set_param( 'post_type', $post_type );
+        $fetch_request->set_param( 'limit', $limit );
+
+        $missing_response = $this->get_missing_translations_all( $fetch_request );
+        $missing_data     = $missing_response->get_data();
+        $missing_items    = $missing_data['products'] ?? array();
+
+        if ( empty( $missing_items ) ) {
+            return array( 'translated' => 0, 'message' => 'Nothing to translate.' );
+        }
+
+        $translated = 0;
+
+        foreach ( $missing_items as $item ) {
+            $post_id        = $item['product_id'] ?? 0;
+            $missing_langs  = $item['missing_languages'] ?? $languages;
+
+            if ( ! $post_id ) {
+                continue;
+            }
+
+            // Call the existing request_translation for each item
+            $tr_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
+            $tr_request->set_param( 'product_id', $post_id );
+            $tr_request->set_param( 'target_languages', $missing_langs );
+
+            $result = $this->request_translation( $tr_request );
+
+            if ( ! is_wp_error( $result ) ) {
+                $translated++;
+            }
+        }
+
+        return array( 'translated' => $translated, 'total_found' => count( $missing_items ) );
     }
 
     /**
@@ -1845,6 +1903,120 @@ class LuwiPress_Translation {
         wp_send_json_success( array(
             'terms_removed' => $terms_removed,
             'posts_removed' => $posts_removed,
+        ) );
+    }
+
+    // ─── AJAX: Get missing items for a post type + language ──────────────
+
+    public function ajax_get_missing_items() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        $lang      = sanitize_text_field( $_POST['language'] ?? '' );
+        $post_type = sanitize_text_field( $_POST['post_type'] ?? 'product' );
+        $limit     = absint( $_POST['limit'] ?? 500 );
+
+        $request = new WP_REST_Request( 'GET', '/luwipress/v1/translation/missing-all' );
+        $request->set_param( 'target_languages', $lang );
+        $request->set_param( 'post_type', $post_type );
+        $request->set_param( 'limit', min( $limit, 500 ) );
+
+        $response = $this->get_missing_translations_all( $request );
+        $data     = $response->get_data();
+
+        $items = array();
+        foreach ( ( $data['products'] ?? array() ) as $item ) {
+            $items[] = array(
+                'id'    => $item['product_id'],
+                'title' => $item['name'],
+            );
+        }
+
+        wp_send_json_success( array(
+            'items' => $items,
+            'total' => count( $items ),
+        ) );
+    }
+
+    // ─── AJAX: Translate a single post ──────────────────────────────────
+
+    public function ajax_translate_single() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        $post_id = absint( $_POST['post_id'] ?? 0 );
+        $lang    = sanitize_text_field( $_POST['language'] ?? '' );
+
+        if ( ! $post_id || ! $lang ) {
+            wp_send_json_error( 'Missing post_id or language' );
+        }
+
+        // Verify post exists
+        $post = get_post( $post_id );
+        if ( ! $post ) {
+            wp_send_json_error( 'Post #' . $post_id . ' not found' );
+        }
+
+        $request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
+        $request->set_param( 'product_id', $post_id );
+        $request->set_param( 'target_languages', array( $lang ) );
+
+        $result = $this->request_translation( $request );
+
+        if ( is_wp_error( $result ) ) {
+            LuwiPress_Logger::log( 'AJAX translate_single failed: ' . $result->get_error_message(), 'error', array(
+                'post_id' => $post_id, 'lang' => $lang, 'code' => $result->get_error_code(),
+            ) );
+            wp_send_json_error( array(
+                'message' => $result->get_error_message(),
+                'code'    => $result->get_error_code(),
+                'post_id' => $post_id,
+            ) );
+        }
+
+        $result_data = is_object( $result ) && method_exists( $result, 'get_data' ) ? $result->get_data() : $result;
+
+        wp_send_json_success( array(
+            'post_id' => $post_id,
+            'title'   => $post->post_title,
+            'status'  => $result_data['status'] ?? 'completed',
+        ) );
+    }
+
+    // ─── AJAX: Translate taxonomy batch ─────────────────────────────────
+
+    public function ajax_translate_taxonomy_batch() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        $taxonomy  = sanitize_text_field( $_POST['taxonomy'] ?? '' );
+        $languages = sanitize_text_field( $_POST['languages'] ?? '' );
+
+        if ( ! $taxonomy || ! $languages ) {
+            wp_send_json_error( 'Missing taxonomy or languages' );
+        }
+
+        $request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/taxonomy' );
+        $request->set_param( 'taxonomy', $taxonomy );
+        $request->set_param( 'target_languages', $languages );
+        $request->set_param( 'limit', 200 );
+
+        $result      = $this->request_taxonomy_translation( $request );
+        $result_data = is_object( $result ) && method_exists( $result, 'get_data' ) ? $result->get_data() : $result;
+
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+
+        wp_send_json_success( array(
+            'status'     => $result_data['status'] ?? 'completed',
+            'terms_sent' => $result_data['terms_sent'] ?? 0,
         ) );
     }
 }

@@ -701,6 +701,7 @@ class LuwiPress_WebMCP {
         $this->register_review_tools();
         $this->register_linker_tools();
         $this->register_knowledge_graph_tools();
+        $this->register_elementor_tools();
 
         /**
          * Allow third-party extensions to register additional MCP tools.
@@ -1672,6 +1673,652 @@ class LuwiPress_WebMCP {
             $request = new WP_REST_Request( 'GET', '/luwipress/v1/knowledge-graph' );
             $data    = $kg->handle_knowledge_graph( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+    }
+
+    /* ───────────────────── Elementor Tools ──────────────────────────── */
+
+    private function register_elementor_tools() {
+        if ( ! class_exists( 'LuwiPress_Elementor' ) ) {
+            return;
+        }
+
+        $this->register_tool( 'elementor_read_page', array(
+            'description' => 'Read an Elementor page — returns full structure: sections, columns, and widgets with their text, styles, and element IDs. Use this first to discover element IDs before editing.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Read Elementor Page',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem     = LuwiPress_Elementor::get_instance();
+            $elements = $elem->get_widget_tree( intval( $args['post_id'] ) );
+            if ( is_wp_error( $elements ) ) {
+                return array( 'error' => $elements->get_error_message() );
+            }
+            $post = get_post( intval( $args['post_id'] ) );
+            return array(
+                'post_id'       => intval( $args['post_id'] ),
+                'title'         => $post ? $post->post_title : '',
+                'element_count' => count( $elements ),
+                'elements'      => $elements,
+            );
+        } );
+
+        $this->register_tool( 'elementor_page_outline', array(
+            'description' => 'Get a compact outline of an Elementor page — lightweight hierarchy with element IDs, types, and text previews. Use this for a quick overview before detailed reads.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Elementor Page Outline',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $outline = $elem->get_page_outline( intval( $args['post_id'] ) );
+            if ( is_wp_error( $outline ) ) {
+                return array( 'error' => $outline->get_error_message() );
+            }
+            $post = get_post( intval( $args['post_id'] ) );
+            return array(
+                'post_id'   => intval( $args['post_id'] ),
+                'title'     => $post ? $post->post_title : '',
+                'structure' => $outline,
+            );
+        } );
+
+        $this->register_tool( 'elementor_translate_page', array(
+            'description' => 'AI-translate all text in an Elementor page and create a WPML translation copy. Translates headings, text editors, buttons, tabs, accordions, etc.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'         => array( 'type' => 'integer', 'description' => 'Source post/page ID (required)' ),
+                    'target_language' => array( 'type' => 'string', 'description' => 'Target language code, e.g. fr, de, ar (required)' ),
+                ),
+                'required'   => array( 'post_id', 'target_language' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Translate Elementor Page (AI)',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => true,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->translate_page( intval( $args['post_id'] ), sanitize_text_field( $args['target_language'] ) );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return $result;
+        } );
+
+        $this->register_tool( 'elementor_get_widget', array(
+            'description' => 'Get a specific Elementor element (widget, section, or column) by its ID — returns full settings, text content, and style info',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                    'element_id' => array( 'type' => 'string', 'description' => 'Elementor element ID — get this from elementor_read_page or elementor_page_outline (required)' ),
+                ),
+                'required'   => array( 'post_id', 'element_id' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Get Elementor Element',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem     = LuwiPress_Elementor::get_instance();
+            $elements = $elem->get_widget_tree( intval( $args['post_id'] ) );
+            if ( is_wp_error( $elements ) ) {
+                return array( 'error' => $elements->get_error_message() );
+            }
+            $target_id = sanitize_text_field( $args['element_id'] );
+            foreach ( $elements as $el ) {
+                if ( $el['id'] === $target_id ) {
+                    return $el;
+                }
+            }
+            return array( 'error' => 'Element not found: ' . $target_id );
+        } );
+
+        $this->register_tool( 'elementor_set_widget_text', array(
+            'description' => 'Update text content of an Elementor widget. Works with heading (title), text-editor (editor), button (text), image-box (title_text, description_text), tabs/accordion (tabs:0:tab_title), etc.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                    'element_id' => array( 'type' => 'string', 'description' => 'Elementor element ID (required)' ),
+                    'texts'      => array(
+                        'type'        => 'object',
+                        'description' => 'Text fields to update. Examples: {"title": "New Title"}, {"editor": "<p>New content</p>"}, {"text": "Click Me"}',
+                    ),
+                ),
+                'required'   => array( 'post_id', 'element_id', 'texts' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Set Element Text',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->set_widget_text(
+                intval( $args['post_id'] ),
+                sanitize_text_field( $args['element_id'] ),
+                $args['texts']
+            );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return array( 'status' => 'updated', 'post_id' => intval( $args['post_id'] ), 'element_id' => $args['element_id'] );
+        } );
+
+        $this->register_tool( 'elementor_set_style', array(
+            'description' => 'Update CSS styles on any Elementor element (widget, section, or column). Accepts standard CSS property names which are auto-converted to Elementor format. Examples: {"color": "#ff0000", "font-size": "18px", "background-color": "#000", "padding": "10px 20px", "font-weight": "700", "text-transform": "uppercase", "border-radius": "8px", "margin": "0 0 20px 0"}',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                    'element_id' => array( 'type' => 'string', 'description' => 'Elementor element ID — widget, section, or column (required)' ),
+                    'styles'     => array(
+                        'type'        => 'object',
+                        'description' => 'CSS or Elementor style properties. CSS names auto-convert: "color" → title_color, "font-size" → typography_font_size, "padding" → _padding, etc.',
+                    ),
+                ),
+                'required'   => array( 'post_id', 'element_id', 'styles' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Set Element Style',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->set_widget_style(
+                intval( $args['post_id'] ),
+                sanitize_text_field( $args['element_id'] ),
+                $args['styles']
+            );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return array( 'status' => 'updated', 'post_id' => intval( $args['post_id'] ), 'element_id' => $args['element_id'] );
+        } );
+
+        $this->register_tool( 'elementor_bulk_update', array(
+            'description' => 'Batch update multiple Elementor elements in one save. Each change can modify text and/or styles. Styles accept CSS names. Example: [{"widget_id": "abc", "texts": {"title": "New"}, "styles": {"color": "#fff", "font-size": "24px"}}]',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                    'changes' => array(
+                        'type'        => 'array',
+                        'description' => 'Array of element changes with CSS-friendly styles',
+                        'items'       => array(
+                            'type'       => 'object',
+                            'properties' => array(
+                                'widget_id' => array( 'type' => 'string', 'description' => 'Element ID' ),
+                                'texts'     => array( 'type' => 'object', 'description' => 'Text fields to update' ),
+                                'styles'    => array( 'type' => 'object', 'description' => 'CSS style properties' ),
+                            ),
+                            'required'   => array( 'widget_id' ),
+                        ),
+                    ),
+                ),
+                'required'   => array( 'post_id', 'changes' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Bulk Update Elements',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->bulk_update( intval( $args['post_id'] ), $args['changes'] );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return array( 'status' => 'completed', 'post_id' => intval( $args['post_id'] ), 'results' => $result );
+        } );
+
+        // ── Structural tools ──
+
+        $this->register_tool( 'elementor_add_widget', array(
+            'description' => 'Add a new widget inside an Elementor container (section/column). Widget types: heading, text-editor, button, image, image-box, icon-box, video, spacer, divider, google_maps, icon, counter, progress, testimonial, tabs, accordion, toggle, alert, html, shortcode, menu-anchor, sidebar, call-to-action, price-table.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'      => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                    'container_id' => array( 'type' => 'string', 'description' => 'Parent element ID (section/column/container) — get from elementor_page_outline (required)' ),
+                    'widget_type'  => array( 'type' => 'string', 'description' => 'Widget type, e.g. "heading", "button", "text-editor" (required)' ),
+                    'settings'     => array( 'type' => 'object', 'description' => 'Widget settings: {"title": "Hello World", "title_color": "#000"}' ),
+                    'position'     => array( 'type' => 'integer', 'description' => 'Insert position (0-based, -1 = append at end, default: -1)' ),
+                ),
+                'required'   => array( 'post_id', 'container_id', 'widget_type' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Add Widget',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => false,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->add_widget(
+                intval( $args['post_id'] ),
+                sanitize_text_field( $args['container_id'] ),
+                sanitize_text_field( $args['widget_type'] ),
+                $args['settings'] ?? array(),
+                intval( $args['position'] ?? -1 )
+            );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return $result;
+        } );
+
+        $this->register_tool( 'elementor_add_section', array(
+            'description' => 'Add a new section (with one column) to an Elementor page. Returns section_id and column_id for adding widgets into.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'  => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                    'position' => array( 'type' => 'integer', 'description' => 'Insert position among root sections (0-based, -1 = end, default: -1)' ),
+                    'settings' => array( 'type' => 'object', 'description' => 'Section settings (background, padding, etc.)' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Add Section',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => false,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->add_section(
+                intval( $args['post_id'] ),
+                intval( $args['position'] ?? -1 ),
+                $args['settings'] ?? array()
+            );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return $result;
+        } );
+
+        $this->register_tool( 'elementor_delete_element', array(
+            'description' => 'Delete an Elementor element (widget, section, or column) by its ID. Warning: deleting a section removes all its columns and widgets.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                    'element_id' => array( 'type' => 'string', 'description' => 'Element ID to delete (required)' ),
+                ),
+                'required'   => array( 'post_id', 'element_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Delete Element',
+                'readOnlyHint'    => false,
+                'destructiveHint' => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->delete_element( intval( $args['post_id'] ), sanitize_text_field( $args['element_id'] ) );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return array( 'status' => 'deleted', 'element_id' => $args['element_id'] );
+        } );
+
+        $this->register_tool( 'elementor_move_element', array(
+            'description' => 'Move an Elementor element to a new position. Can move within the same parent (reorder) or to a different container.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'       => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                    'element_id'    => array( 'type' => 'string', 'description' => 'Element ID to move (required)' ),
+                    'target_parent' => array( 'type' => 'string', 'description' => 'New parent container ID (empty = root level for sections)' ),
+                    'position'      => array( 'type' => 'integer', 'description' => 'New position index (0-based, -1 = end)' ),
+                ),
+                'required'   => array( 'post_id', 'element_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Move Element',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => false,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->move_element(
+                intval( $args['post_id'] ),
+                sanitize_text_field( $args['element_id'] ),
+                sanitize_text_field( $args['target_parent'] ?? '' ),
+                intval( $args['position'] ?? -1 )
+            );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return array( 'status' => 'moved', 'element_id' => $args['element_id'] );
+        } );
+
+        $this->register_tool( 'elementor_clone_element', array(
+            'description' => 'Duplicate an Elementor element (widget, section, column) with all its children. The clone is inserted right after the original with new unique IDs.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                    'element_id' => array( 'type' => 'string', 'description' => 'Element ID to clone (required)' ),
+                ),
+                'required'   => array( 'post_id', 'element_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Clone Element',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => false,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->clone_element( intval( $args['post_id'] ), sanitize_text_field( $args['element_id'] ) );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return $result;
+        } );
+
+        // ── CSS & Responsive tools ──
+
+        $this->register_tool( 'elementor_custom_css', array(
+            'description' => 'Inject custom CSS on a specific element or the entire page. Use "selector" as the CSS selector for the element\'s wrapper. Example: "selector .elementor-heading-title { text-shadow: 2px 2px #000; }" — omit element_id to apply page-level CSS.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                    'element_id' => array( 'type' => 'string', 'description' => 'Element ID (optional — omit for page-level CSS)' ),
+                    'css'        => array( 'type' => 'string', 'description' => 'CSS code. Use "selector" for element wrapper. Example: "selector { box-shadow: 0 4px 8px rgba(0,0,0,0.1); }" (required)' ),
+                ),
+                'required'   => array( 'post_id', 'css' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Custom CSS',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem       = LuwiPress_Elementor::get_instance();
+            $element_id = sanitize_text_field( $args['element_id'] ?? '' );
+            $css        = $args['css'];
+
+            if ( empty( $element_id ) ) {
+                $result = $elem->set_page_css( intval( $args['post_id'] ), $css );
+            } else {
+                $result = $elem->set_custom_css( intval( $args['post_id'] ), $element_id, $css );
+            }
+
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return array( 'status' => 'updated', 'target' => $element_id ?: 'page' );
+        } );
+
+        $this->register_tool( 'elementor_responsive_style', array(
+            'description' => 'Set device-specific style overrides (mobile or tablet). CSS property names accepted. Example: set font-size to 14px on mobile only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                    'element_id' => array( 'type' => 'string', 'description' => 'Element ID (required)' ),
+                    'device'     => array( 'type' => 'string', 'description' => '"mobile" or "tablet" (required)', 'enum' => array( 'mobile', 'tablet' ) ),
+                    'styles'     => array( 'type' => 'object', 'description' => 'CSS styles for that device. Example: {"font-size": "14px", "padding": "5px 10px"}' ),
+                ),
+                'required'   => array( 'post_id', 'element_id', 'device', 'styles' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Responsive Style',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->set_responsive_style(
+                intval( $args['post_id'] ),
+                sanitize_text_field( $args['element_id'] ),
+                sanitize_text_field( $args['device'] ),
+                $args['styles']
+            );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return array( 'status' => 'updated', 'element_id' => $args['element_id'], 'device' => $args['device'] );
+        } );
+
+        $this->register_tool( 'elementor_global_style', array(
+            'description' => 'Apply a style to ALL widgets of a given type on a page. Example: make all headings blue, all buttons larger, etc. CSS property names accepted.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'     => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                    'widget_type' => array( 'type' => 'string', 'description' => 'Widget type: heading, button, text-editor, image, etc. (required)' ),
+                    'styles'      => array( 'type' => 'object', 'description' => 'CSS styles to apply. Example: {"color": "#0000ff", "font-weight": "700"}' ),
+                ),
+                'required'   => array( 'post_id', 'widget_type', 'styles' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Global Widget Style',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->apply_global_style(
+                intval( $args['post_id'] ),
+                sanitize_text_field( $args['widget_type'] ),
+                $args['styles']
+            );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return $result;
+        } );
+
+        // ── Sync, Audit, Revision tools ──
+
+        $this->register_tool( 'elementor_sync_styles', array(
+            'description' => 'Copy styles from a source Elementor page to its translation pages (WPML auto-detected). Only syncs visual styles — text content is untouched. Creates a backup snapshot before syncing. Omit target_ids to auto-sync to all WPML translations.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'source_id'  => array( 'type' => 'integer', 'description' => 'Source page ID with the correct styles (required)' ),
+                    'target_ids' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Target page IDs to sync to (optional — auto-discovers WPML translations if omitted)' ),
+                    'include'    => array( 'type' => 'string', 'description' => 'What to sync: "all", "colors", "typography", "spacing", or comma-separated combo (default: "all")' ),
+                ),
+                'required'   => array( 'source_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Sync Styles to Translations',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->sync_styles(
+                intval( $args['source_id'] ),
+                $args['target_ids'] ?? array(),
+                array( 'include' => $args['include'] ?? 'all' )
+            );
+            if ( is_wp_error( $result ) ) {
+                return array( 'error' => $result->get_error_message() );
+            }
+            return $result;
+        } );
+
+        $this->register_tool( 'elementor_audit_spacing', array(
+            'description' => 'Audit an Elementor page for spacing/padding issues — detects excessive values, asymmetric padding, inconsistent patterns, and missing mobile overrides. Returns actionable issue list.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Page/post ID to audit (required)' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Audit Spacing',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            return $elem->audit_spacing( intval( $args['post_id'] ) );
+        } );
+
+        $this->register_tool( 'elementor_audit_responsive', array(
+            'description' => 'Audit an Elementor page for responsive design issues — large fonts without mobile overrides, oversized padding, narrow columns, fixed line-heights. Returns issues with fix suggestions.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Page/post ID to audit (required)' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Audit Responsive',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            return $elem->audit_responsive( intval( $args['post_id'] ) );
+        } );
+
+        $this->register_tool( 'elementor_auto_fix', array(
+            'description' => 'Auto-fix common spacing/responsive issues on an Elementor page. Creates a backup snapshot before fixing. Caps excessive padding/margin, adds mobile overrides for large values. Safe — always backs up first, and you can rollback.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Page/post ID to fix (required)' ),
+                    'options' => array(
+                        'type'       => 'object',
+                        'description' => 'Fix options: fix_excessive (bool), fix_mobile (bool), max_padding (int, default 80), mobile_ratio (float, default 0.5)',
+                    ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Auto-Fix Spacing',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            return $elem->auto_fix_spacing( intval( $args['post_id'] ), $args['options'] ?? array() );
+        } );
+
+        $this->register_tool( 'elementor_snapshot', array(
+            'description' => 'Create a snapshot/backup of an Elementor page before editing. Max 10 snapshots per page. Use this before any risky changes — you can rollback anytime.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                    'label'   => array( 'type' => 'string', 'description' => 'Snapshot label/description (optional)' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Create Snapshot',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => false,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            return $elem->create_snapshot( intval( $args['post_id'] ), sanitize_text_field( $args['label'] ?? '' ) );
+        } );
+
+        $this->register_tool( 'elementor_rollback', array(
+            'description' => 'Rollback an Elementor page to a previous snapshot. Creates a backup of current state before rolling back. Omit snapshot_id to rollback to the most recent snapshot.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'     => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                    'snapshot_id' => array( 'type' => 'string', 'description' => 'Snapshot ID to restore (optional — omit for most recent)' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Rollback to Snapshot',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            return $elem->rollback_snapshot( intval( $args['post_id'] ), sanitize_text_field( $args['snapshot_id'] ?? '' ) );
+        } );
+
+        $this->register_tool( 'elementor_snapshots', array(
+            'description' => 'List all available snapshots for an Elementor page — shows IDs, labels, timestamps.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Page/post ID (required)' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'          => 'List Snapshots',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            return $elem->list_snapshots( intval( $args['post_id'] ) );
         } );
     }
 

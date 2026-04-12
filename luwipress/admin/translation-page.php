@@ -49,8 +49,23 @@ if ( isset( $_POST['luwipress_trigger_translation'] ) && check_admin_referer( 'l
 
 	if ( ! empty( $lang ) ) {
 		if ( 'local' === $processing_mode ) {
+			// Local AI mode: call the REST endpoint internally
+			$request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
+			$request->set_param( 'product_id', 0 ); // 0 = bulk mode
+			$request->set_param( 'target_languages', array( $lang ) );
+			$request->set_param( 'post_type', $type );
+			$request->set_param( 'limit', $limit );
+
+			$translation_instance = LuwiPress_Translation::get_instance();
+			$result = $translation_instance->handle_bulk_translation( $request, $type, array( $lang ), $limit );
+
 			$type_label = get_post_type_object( $type )->labels->name ?? $type;
-			echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Translation started: %s %s, up to %d items via Local AI.', 'luwipress' ), strtoupper( $lang ), esc_html( $type_label ), $limit ) . '</p></div>';
+			if ( is_wp_error( $result ) ) {
+				echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Translation failed: %s', 'luwipress' ), esc_html( $result->get_error_message() ) ) . '</p></div>';
+			} else {
+				$count = is_array( $result ) ? ( $result['translated'] ?? 0 ) : 0;
+				echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Translation completed: %s %s — %d items translated via Local AI.', 'luwipress' ), strtoupper( $lang ), esc_html( $type_label ), $count ) . '</p></div>';
+			}
 		} elseif ( ! empty( $webhook_url ) ) {
 			$url = trailingslashit( $webhook_url ) . 'translation-request';
 			$response = wp_remote_post( $url, array(
@@ -80,8 +95,23 @@ if ( isset( $_POST['luwipress_trigger_taxonomy_translation'] ) && check_admin_re
 
 	if ( ! empty( $tax_slug ) ) {
 		if ( 'local' === $processing_mode ) {
+			// Local AI mode: call taxonomy translation via REST endpoint internally
+			$tax_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/taxonomy' );
+			$tax_request->set_param( 'taxonomy', $tax_slug );
+			$tax_request->set_param( 'target_languages', $tax_languages );
+			$tax_request->set_param( 'limit', 200 );
+
+			$translation_instance = LuwiPress_Translation::get_instance();
+			$result = $translation_instance->request_taxonomy_translation( $tax_request );
+			$result_data = is_object( $result ) && method_exists( $result, 'get_data' ) ? $result->get_data() : $result;
+
 			$tax_label = $tax_types[ $tax_slug ] ?? $tax_slug;
-			echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation started: %s via Local AI.', 'luwipress' ), esc_html( $tax_label ) ) . '</p></div>';
+			if ( is_wp_error( $result ) ) {
+				echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation failed: %s', 'luwipress' ), esc_html( $result->get_error_message() ) ) . '</p></div>';
+			} else {
+				$terms_sent = $result_data['terms_sent'] ?? 0;
+				echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation completed: %s — %d terms translated via Local AI.', 'luwipress' ), esc_html( $tax_label ), $terms_sent ) . '</p></div>';
+			}
 		} elseif ( ! empty( $webhook_url ) ) {
 			$url = trailingslashit( $webhook_url ) . 'translation-request';
 			$response = wp_remote_post( $url, array(
@@ -349,15 +379,15 @@ $missing_count = $total_possible - $total_translated;
 					<?php endforeach; ?>
 				</div>
 				<?php if ( $tmiss > 0 ) : ?>
-				<form method="post" class="tm-action-form">
-					<?php wp_nonce_field( 'luwipress_translation_nonce' ); ?>
-					<input type="hidden" name="translate_taxonomy" value="<?php echo esc_attr( $tax_slug ); ?>" />
-					<input type="hidden" name="translate_tax_languages" value="<?php echo esc_attr( implode( ',', $target_langs ) ); ?>" />
-					<button type="submit" name="luwipress_trigger_taxonomy_translation" class="tm-btn tm-btn-primary">
-						<span class="dashicons dashicons-translation"></span>
-						<?php printf( esc_html__( 'Translate %d', 'luwipress' ), $tmiss ); ?>
-					</button>
-				</form>
+				<button type="button"
+					class="tm-btn tm-btn-primary tm-translate-tax-btn"
+					data-taxonomy="<?php echo esc_attr( $tax_slug ); ?>"
+					data-languages="<?php echo esc_attr( implode( ',', $target_langs ) ); ?>"
+					data-missing="<?php echo $tmiss; ?>">
+					<span class="dashicons dashicons-translation"></span>
+					<?php printf( esc_html__( 'Translate %d', 'luwipress' ), $tmiss ); ?>
+				</button>
+				<span class="tm-tax-result" id="tax-result-<?php echo esc_attr( $tax_slug ); ?>"></span>
 				<?php else : ?>
 					<span class="tm-check"><span class="dashicons dashicons-yes-alt"></span></span>
 				<?php endif; ?>
@@ -413,51 +443,65 @@ $missing_count = $total_possible - $total_translated;
 					$missing = max( 0, $data['total'] - $done );
 					$pct     = $data['total'] > 0 ? round( ( $done / $data['total'] ) * 100 ) : 0;
 				?>
-				<tr class="tm-lang-row">
+				<tr class="tm-lang-row" id="row-<?php echo esc_attr( $pt . '-' . $lang ); ?>" data-total="<?php echo $data['total']; ?>" data-done="<?php echo $done; ?>">
 					<td class="tm-lang-cell">
-						<span class="tm-flag-lg"><?php echo $language_flags[ $lang ] ?? ''; ?></span>
+						<span class="tm-flag-lg"><?php echo $language_flags[ $lang ] ?? strtoupper( $lang ); ?></span>
 						<div>
-							<strong><?php echo esc_html( strtoupper( $lang ) ); ?></strong>
-							<span class="tm-lang-name"><?php echo esc_html( $language_names[ $lang ] ?? $lang ); ?></span>
+							<strong><?php echo esc_html( $language_names[ $lang ] ?? strtoupper( $lang ) ); ?></strong>
 						</div>
 					</td>
-					<td class="tm-col-num"><span class="tm-num-done"><?php echo $done; ?></span></td>
+					<td class="tm-col-num"><span class="tm-num-done" id="done-<?php echo esc_attr( $pt . '-' . $lang ); ?>"><?php echo $done; ?></span></td>
 					<td class="tm-col-num">
+						<span class="tm-num-miss-wrap" id="miss-<?php echo esc_attr( $pt . '-' . $lang ); ?>">
 						<?php if ( $missing > 0 ) : ?>
 							<span class="tm-num-miss"><?php echo $missing; ?></span>
 						<?php else : ?>
 							<span class="tm-num-ok"><span class="dashicons dashicons-yes-alt"></span></span>
 						<?php endif; ?>
+						</span>
 					</td>
 					<td class="tm-col-progress">
 						<div class="tm-progress">
 							<div class="tm-progress-track">
-								<div class="tm-progress-fill" style="width:<?php echo $pct; ?>%;<?php
+								<div class="tm-progress-fill" id="fill-<?php echo esc_attr( $pt . '-' . $lang ); ?>" style="width:<?php echo $pct; ?>%;<?php
 									if ( $pct >= 100 ) echo 'background:var(--n8n-success);';
 									elseif ( $pct >= 60 ) echo 'background:var(--n8n-primary);';
 									else echo 'background:var(--n8n-warning);';
 								?>"></div>
 							</div>
-							<span class="tm-progress-pct"><?php echo $pct; ?>%</span>
+							<span class="tm-progress-pct" id="pct-<?php echo esc_attr( $pt . '-' . $lang ); ?>"><?php echo $pct; ?>%</span>
 						</div>
 					</td>
 					<td class="tm-col-action">
 						<?php if ( $missing > 0 ) : ?>
-						<form method="post" class="tm-action-form">
-							<?php wp_nonce_field( 'luwipress_translation_nonce' ); ?>
-							<input type="hidden" name="translate_language" value="<?php echo esc_attr( $lang ); ?>" />
-							<input type="hidden" name="translate_post_type" value="<?php echo esc_attr( $pt ); ?>" />
-							<input type="hidden" name="translate_limit" value="<?php echo min( $missing, 20 ); ?>" />
-							<button type="submit" name="luwipress_trigger_translation" class="tm-btn tm-btn-primary tm-btn-sm">
-								<span class="dashicons dashicons-translation"></span>
-								<?php printf( esc_html__( 'Translate %d', 'luwipress' ), min( $missing, 20 ) ); ?>
-							</button>
-						</form>
+						<button type="button"
+							class="tm-btn tm-btn-primary tm-btn-sm tm-translate-btn"
+							data-lang="<?php echo esc_attr( $lang ); ?>"
+							data-post-type="<?php echo esc_attr( $pt ); ?>"
+							data-missing="<?php echo $missing; ?>"
+							data-progress-id="progress-<?php echo esc_attr( $pt . '-' . $lang ); ?>">
+							<span class="dashicons dashicons-translation"></span>
+							<?php printf( esc_html__( 'Translate All (%d)', 'luwipress' ), $missing ); ?>
+						</button>
 						<?php elseif ( $pct >= 100 ) : ?>
 							<span class="tm-check"><span class="dashicons dashicons-yes-alt"></span></span>
 						<?php endif; ?>
 					</td>
 				</tr>
+				<?php if ( $missing > 0 ) : ?>
+				<tr class="tm-progress-row" id="progress-<?php echo esc_attr( $pt . '-' . $lang ); ?>" style="display:none;">
+					<td colspan="5" class="tm-progress-cell">
+						<div class="tm-live-wrapper">
+							<div class="tm-live-header">
+								<span class="tm-live-counter">0 / <?php echo $missing; ?></span>
+								<span class="tm-live-status"><?php esc_html_e( 'Preparing...', 'luwipress' ); ?></span>
+							</div>
+							<div class="tm-live-bar-full"><div class="tm-live-fill-full"></div></div>
+							<div class="tm-live-item"></div>
+						</div>
+					</td>
+				</tr>
+				<?php endif; ?>
 				<?php endforeach; ?>
 				</tbody>
 			</table>
@@ -512,47 +556,237 @@ $missing_count = $total_possible - $total_translated;
 	</div>
 
 	<script>
-	document.getElementById('luwipress-fix-categories')?.addEventListener('click', function() {
-		var btn = this, result = document.getElementById('luwipress-fix-categories-result');
-		btn.disabled = true; btn.classList.add('tm-btn-loading');
-		result.textContent = '';
-		fetch(ajaxurl + '?action=luwipress_fix_category_assignments&nonce=<?php echo wp_create_nonce( 'luwipress_fix_categories' ); ?>', {method:'POST'})
-			.then(function(r){return r.json()}).then(function(d){
-				btn.disabled = false; btn.classList.remove('tm-btn-loading');
-				result.textContent = d.success ? d.data.fixed + ' products fixed' : (d.data || 'Error');
-				result.className = 'tm-tool-result ' + (d.success ? 'result-ok' : 'result-err');
-			}).catch(function(){ btn.disabled = false; btn.classList.remove('tm-btn-loading'); result.textContent = 'Network error'; result.className = 'tm-tool-result result-err'; });
-	});
-	document.getElementById('luwipress-fix-images')?.addEventListener('click', function() {
-		var btn = this, result = document.getElementById('luwipress-fix-images-result');
-		btn.disabled = true; btn.classList.add('tm-btn-loading');
-		result.textContent = '';
-		fetch(ajaxurl + '?action=luwipress_fix_translation_images&nonce=<?php echo wp_create_nonce( 'luwipress_fix_images' ); ?>', {method:'POST'})
-			.then(function(r){return r.json()}).then(function(d){
-				btn.disabled = false; btn.classList.remove('tm-btn-loading');
-				result.textContent = d.success ? d.data.fixed + ' fixed' : (d.data || 'Error');
-				result.className = 'tm-tool-result ' + (d.success ? 'result-ok' : 'result-err');
-			}).catch(function(){ btn.disabled = false; btn.classList.remove('tm-btn-loading'); result.textContent = 'Network error'; result.className = 'tm-tool-result result-err'; });
-	});
-	document.getElementById('luwipress-clean-orphans')?.addEventListener('click', function() {
-		if (!confirm(<?php echo wp_json_encode( __( 'This will delete orphan WPML translation records. Continue?', 'luwipress' ) ); ?>)) return;
-		var btn = this, result = document.getElementById('luwipress-clean-orphans-result');
-		btn.disabled = true; btn.classList.add('tm-btn-loading');
-		result.textContent = '';
-		fetch(ajaxurl + '?action=luwipress_clean_orphan_translations&nonce=<?php echo wp_create_nonce( 'luwipress_clean_orphans' ); ?>', {method:'POST'})
-			.then(function(r){return r.json()}).then(function(d){
-				btn.disabled = false; btn.classList.remove('tm-btn-loading');
-				if (d.success) {
-					var msg = d.data.terms_removed + ' orphan terms, ' + d.data.posts_removed + ' orphan posts removed';
-					result.textContent = msg;
-					result.className = 'tm-tool-result ' + (d.data.terms_removed + d.data.posts_removed > 0 ? 'result-ok' : 'result-muted');
-					if (d.data.terms_removed + d.data.posts_removed > 0) setTimeout(function(){ location.reload(); }, 1500);
+	(function() {
+		var nonce = <?php echo wp_json_encode( wp_create_nonce( 'luwipress_translation_nonce' ) ); ?>;
+
+		// ─── Helper: Update row stats (Done, Missing, Coverage bar) live ───
+		function updateRowStats(postType, lang, newDone, total) {
+			var key = postType + '-' + lang;
+			var rowEl   = document.getElementById('row-' + key);
+			var origDone = rowEl ? parseInt(rowEl.dataset.done) : 0;
+			var rowTotal = rowEl ? parseInt(rowEl.dataset.total) : total;
+			var currentDone = origDone + newDone;
+			var currentMissing = Math.max(0, rowTotal - currentDone);
+			var currentPct = rowTotal > 0 ? Math.round((currentDone / rowTotal) * 100) : 0;
+
+			// Update Done number
+			var doneEl = document.getElementById('done-' + key);
+			if (doneEl) doneEl.textContent = currentDone;
+
+			// Update Missing number
+			var missEl = document.getElementById('miss-' + key);
+			if (missEl) {
+				if (currentMissing > 0) {
+					missEl.innerHTML = '<span class="tm-num-miss">' + currentMissing + '</span>';
 				} else {
-					result.textContent = d.data || 'Error';
-					result.className = 'tm-tool-result result-err';
+					missEl.innerHTML = '<span class="tm-num-ok"><span class="dashicons dashicons-yes-alt"></span></span>';
 				}
-			}).catch(function(){ btn.disabled = false; btn.classList.remove('tm-btn-loading'); result.textContent = 'Network error'; result.className = 'tm-tool-result result-err'; });
-	});
+			}
+
+			// Update Coverage bar + percentage
+			var fillBarEl = document.getElementById('fill-' + key);
+			var pctEl     = document.getElementById('pct-' + key);
+			if (fillBarEl) {
+				fillBarEl.style.width = currentPct + '%';
+				fillBarEl.style.transition = 'width 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+				if (currentPct >= 100) fillBarEl.style.background = 'var(--n8n-success)';
+				else if (currentPct >= 60) fillBarEl.style.background = 'var(--n8n-primary)';
+				else fillBarEl.style.background = 'var(--n8n-warning)';
+			}
+			if (pctEl) pctEl.textContent = currentPct + '%';
+		}
+
+		// ─── Content Translation: AJAX with live progress row ───
+		document.querySelectorAll('.tm-translate-btn').forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				var lang       = btn.dataset.lang;
+				var postType   = btn.dataset.postType;
+				var missing    = parseInt(btn.dataset.missing);
+				var progressId = btn.dataset.progressId || ('progress-' + postType + '-' + lang);
+				var rowEl      = document.getElementById(progressId);
+				if (!rowEl) return;
+
+				var counterEl = rowEl.querySelector('.tm-live-counter');
+				var statusEl  = rowEl.querySelector('.tm-live-status');
+				var fillEl    = rowEl.querySelector('.tm-live-fill-full');
+				var itemEl    = rowEl.querySelector('.tm-live-item');
+
+				btn.disabled = true;
+				btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Fetching...';
+				rowEl.style.display = 'table-row';
+				if (statusEl) statusEl.textContent = 'Loading items...';
+				if (fillEl) fillEl.style.width = '0%';
+
+				// Step 1: Fetch missing items
+				var formData = new FormData();
+				formData.append('action', 'luwipress_get_missing_items');
+				formData.append('nonce', nonce);
+				formData.append('language', lang);
+				formData.append('post_type', postType);
+				formData.append('limit', missing);
+
+				fetch(ajaxurl, { method: 'POST', body: formData })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					if (!d.success || !d.data.items.length) {
+						btn.disabled = false;
+						btn.innerHTML = '<span class="dashicons dashicons-translation"></span> Nothing to translate';
+						if (statusEl) statusEl.textContent = 'No items found.';
+						return;
+					}
+
+					var items = d.data.items;
+					var total = items.length;
+					var done  = 0;
+					var failed = 0;
+
+					if (counterEl) counterEl.textContent = '0 / ' + total;
+					if (statusEl) statusEl.textContent = 'Translating...';
+					btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> 0/' + total;
+
+					// Step 2: Translate one by one
+					function translateNext() {
+						if (done + failed >= total) {
+							// All done
+							btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> ' + done + ' done';
+							btn.classList.add('tm-btn-done');
+							if (counterEl) counterEl.textContent = done + ' / ' + total;
+							if (statusEl) {
+								statusEl.textContent = done + ' translated' + (failed > 0 ? ', ' + failed + ' failed' : '') + '. Reloading...';
+								statusEl.style.color = 'var(--n8n-success)';
+							}
+							if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-success)'; }
+							if (itemEl) itemEl.textContent = '';
+							setTimeout(function() { location.reload(); }, 2500);
+							return;
+						}
+
+						var idx  = done + failed;
+						var item = items[idx];
+						var pct  = Math.round((idx / total) * 100);
+
+						if (counterEl) counterEl.textContent = (idx + 1) + ' / ' + total;
+						if (statusEl) { statusEl.textContent = 'Translating...'; statusEl.style.color = ''; }
+						if (fillEl) fillEl.style.width = pct + '%';
+						if (itemEl) itemEl.textContent = item.title;
+						btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + (idx + 1) + '/' + total;
+
+						var fd = new FormData();
+						fd.append('action', 'luwipress_translate_single');
+						fd.append('nonce', nonce);
+						fd.append('post_id', item.id);
+						fd.append('language', lang);
+
+						fetch(ajaxurl, { method: 'POST', body: fd })
+						.then(function(r) { return r.json(); })
+						.then(function(r) {
+							if (r.success) {
+								done++;
+								// Live update the table row's Done / Missing / Coverage bar
+								updateRowStats(postType, lang, done, total);
+							} else {
+								failed++;
+								var errMsg = (r.data && r.data.message) ? r.data.message : (typeof r.data === 'string' ? r.data : 'Unknown error');
+								if (statusEl) { statusEl.textContent = 'Error: ' + errMsg; statusEl.style.color = 'var(--n8n-error)'; }
+								if (failed === 1 && done === 0 && (errMsg.indexOf('API key') !== -1 || errMsg.indexOf('not configured') !== -1)) {
+									btn.disabled = false;
+									btn.innerHTML = '<span class="dashicons dashicons-warning"></span> API Key Missing';
+									if (fillEl) { fillEl.style.background = 'var(--n8n-error)'; }
+									return;
+								}
+							}
+							translateNext();
+						})
+						.catch(function() {
+							failed++;
+							translateNext();
+						});
+					}
+
+					translateNext();
+				})
+				.catch(function(err) {
+					btn.disabled = false;
+					btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Error';
+					if (statusEl) statusEl.textContent = 'Failed: ' + err.message;
+				});
+			});
+		});
+
+		// ─── Taxonomy Translation: AJAX ───
+		document.querySelectorAll('.tm-translate-tax-btn').forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				var taxonomy  = btn.dataset.taxonomy;
+				var languages = btn.dataset.languages;
+				var resultEl  = document.getElementById('tax-result-' + taxonomy);
+
+				btn.disabled = true;
+				btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Translating...';
+				if (resultEl) { resultEl.textContent = ''; resultEl.className = 'tm-tax-result'; }
+
+				var fd = new FormData();
+				fd.append('action', 'luwipress_translate_taxonomy_batch');
+				fd.append('nonce', nonce);
+				fd.append('taxonomy', taxonomy);
+				fd.append('languages', languages);
+
+				fetch(ajaxurl, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					btn.disabled = false;
+					if (d.success) {
+						btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> Done';
+						btn.classList.add('tm-btn-done');
+						if (resultEl) {
+							resultEl.textContent = (d.data.terms_sent || 0) + ' terms translated';
+							resultEl.className = 'tm-tax-result result-ok';
+						}
+						setTimeout(function() { location.reload(); }, 2000);
+					} else {
+						btn.innerHTML = '<span class="dashicons dashicons-translation"></span> Retry';
+						if (resultEl) {
+							resultEl.textContent = d.data || 'Error';
+							resultEl.className = 'tm-tax-result result-err';
+						}
+					}
+				})
+				.catch(function() {
+					btn.disabled = false;
+					btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Error';
+				});
+			});
+		});
+
+		// ─── Maintenance tools ───
+		function toolClick(btnId, resultId, action, nonceName, confirmMsg) {
+			var btn = document.getElementById(btnId);
+			if (!btn) return;
+			btn.addEventListener('click', function() {
+				if (confirmMsg && !confirm(confirmMsg)) return;
+				var result = document.getElementById(resultId);
+				btn.disabled = true; btn.classList.add('tm-btn-loading');
+				result.textContent = '';
+				fetch(ajaxurl + '?action=' + action + '&nonce=<?php echo wp_create_nonce( 'luwipress_fix_categories' ); ?>', {method:'POST'})
+				.then(function(r){return r.json()}).then(function(d){
+					btn.disabled = false; btn.classList.remove('tm-btn-loading');
+					if (d.success) {
+						result.textContent = JSON.stringify(d.data);
+						result.className = 'tm-tool-result result-ok';
+						if (action === 'luwipress_clean_orphan_translations' && (d.data.terms_removed + d.data.posts_removed > 0)) {
+							setTimeout(function(){ location.reload(); }, 1500);
+						}
+					} else {
+						result.textContent = d.data || 'Error';
+						result.className = 'tm-tool-result result-err';
+					}
+				}).catch(function(){ btn.disabled=false; btn.classList.remove('tm-btn-loading'); });
+			});
+		}
+		toolClick('luwipress-fix-categories', 'luwipress-fix-categories-result', 'luwipress_fix_category_assignments');
+		toolClick('luwipress-fix-images', 'luwipress-fix-images-result', 'luwipress_fix_translation_images');
+		toolClick('luwipress-clean-orphans', 'luwipress-clean-orphans-result', 'luwipress_clean_orphan_translations', null,
+			<?php echo wp_json_encode( __( 'This will delete orphan WPML translation records. Continue?', 'luwipress' ) ); ?>);
+	})();
 	</script>
 
 	<?php endif; ?>
