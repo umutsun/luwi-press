@@ -268,20 +268,23 @@ class LuwiPress_Translation {
         }
 
         $product = wc_get_product($product_id);
-        if (!$product) {
+        $post    = get_post($product_id);
+
+        if (!$post || 'product' !== $post->post_type) {
             return new WP_Error('not_found', 'Product not found', ['status' => 404]);
         }
 
         $source_language = get_option('luwipress_target_language', 'tr');
 
+        // Use WC product if available, fall back to WP post (WPML compatibility)
         $payload = [
             'product_id'       => $product_id,
             'source_language'  => $source_language,
             'target_languages' => $target_languages,
             'content' => [
-                'name'              => $product->get_name(),
-                'description'       => $product->get_description(),
-                'short_description' => $product->get_short_description(),
+                'name'              => $product ? $product->get_name() : $post->post_title,
+                'description'       => $product ? $product->get_description() : $post->post_content,
+                'short_description' => $product ? $product->get_short_description() : $post->post_excerpt,
                 'meta_title'        => $this->get_seo_meta($product_id, 'title'),
                 'meta_description'  => $this->get_seo_meta($product_id, 'description'),
                 'faq'               => get_post_meta($product_id, '_luwipress_faq', true) ?: [],
