@@ -348,7 +348,7 @@ class LuwiPress_Translation {
             }
         }
 
-        LuwiPress_Logger::log( 'Translation requested for product: ' . $product->get_name(), 'info', array(
+        LuwiPress_Logger::log( 'Translation requested for: ' . ( $product ? $product->get_name() : $post->post_title ), 'info', array(
             'product_id' => $product_id,
             'languages'  => $target_languages,
             'mode'       => $mode,
@@ -396,7 +396,8 @@ class LuwiPress_Translation {
         update_post_meta($product_id, '_luwipress_translation_' . $language . '_status', 'completed');
         update_post_meta($product_id, '_luwipress_translation_' . $language . '_completed', current_time('c'));
 
-        LuwiPress_Logger::log('Translation completed: ' . $product->get_name() . ' → ' . strtoupper( $language ), 'info', array(
+        $post_obj = get_post( $product_id );
+        LuwiPress_Logger::log('Translation completed: ' . ( $post_obj ? $post_obj->post_title : $product_id ) . ' → ' . strtoupper( $language ), 'info', array(
             'product_id' => $product_id,
             'language'   => $language,
         ));
@@ -496,13 +497,14 @@ class LuwiPress_Translation {
             return new WP_Error('no_translation', 'No translation found', ['status' => 404]);
         }
 
-        $product = wc_get_product($product_id);
+        $product  = wc_get_product($product_id);
+        $post_obj = get_post($product_id);
         $payload = [
             'product_id'      => $product_id,
             'language'        => $language,
             'source_content'  => [
-                'name'        => $product->get_name(),
-                'description' => $product->get_description(),
+                'name'        => $product ? $product->get_name() : ( $post_obj->post_title ?? '' ),
+                'description' => $product ? $product->get_description() : ( $post_obj->post_content ?? '' ),
             ],
             'translated_content' => $translated,
             'type' => 'quality_check',
