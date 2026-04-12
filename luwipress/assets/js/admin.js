@@ -70,7 +70,7 @@
             var $el = $(sel);
             $el.removeClass('n8np-skeleton').css('animation', 'n8np-count-in 0.4s ease');
             if (typeof target === 'string') {
-                $el.text(target);
+                $el.html(target);
                 return;
             }
             var start = 0, end = parseInt(target, 10) || 0, dur = 800;
