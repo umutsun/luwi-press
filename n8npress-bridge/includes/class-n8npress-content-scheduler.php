@@ -181,20 +181,69 @@ class N8nPress_Content_Scheduler {
             wp_send_json_error( $budget->get_error_message() );
         }
 
-        // Queue content generation via built-in AI Engine
-        N8nPress_Job_Queue::add( 'generate_content', array(
-            'schedule_id'    => $schedule_id,
-            'topic'          => $topic,
-            'keywords'       => $keywords,
-            'target_type'    => $post_type,
-            'publish_date'   => $publish_date . ' ' . $publish_time,
-            'generate_image' => (bool) $generate_image,
-            'language'       => $language,
-            'tone'           => $tone,
-            'word_count'     => $word_count,
-        ) );
-
         update_post_meta( $schedule_id, '_n8npress_schedule_status', self::STATUS_GENERATING );
+
+        $mode = N8nPress_AI_Engine::get_mode();
+
+        if ( N8nPress_AI_Engine::MODE_N8N === $mode ) {
+            // n8n mode: send to webhook, n8n will call back to /schedule/callback
+            N8nPress_AI_Engine::forward_to_n8n( 'n8npress-content-scheduler', array(
+                'action'         => 'generate_content',
+                'schedule_id'    => $schedule_id,
+                'topic'          => $topic,
+                'keywords'       => $keywords,
+                'target_type'    => $post_type,
+                'publish_date'   => $publish_date . ' ' . $publish_time,
+                'generate_image' => (bool) $generate_image,
+                'language'       => $language,
+                'tone'           => $tone,
+                'word_count'     => $word_count,
+            ), rest_url( 'n8npress/v1/schedule/callback' ) );
+        } else {
+            // Local mode: generate content via AI Engine directly
+            $prompt   = N8nPress_Prompts::content_generation( array(
+                'topic'     => $topic,
+                'keywords'  => $keywords,
+                'language'  => $language,
+                'tone'      => $tone,
+                'word_count' => $word_count,
+                'site_name' => get_bloginfo( 'name' ),
+            ) );
+            $messages  = N8nPress_AI_Engine::build_messages( $prompt );
+            $ai_result = N8nPress_AI_Engine::dispatch_json( 'content-scheduler', $messages, array(
+                'max_tokens' => 4096,
+            ) );
+
+            if ( is_wp_error( $ai_result ) ) {
+                update_post_meta( $schedule_id, '_n8npress_schedule_status', self::STATUS_FAILED );
+                N8nPress_Logger::log( 'Content generation failed: ' . $ai_result->get_error_message(), 'error', array( 'schedule_id' => $schedule_id ) );
+            } else {
+                // Feed result into existing callback handler
+                $callback_data = array(
+                    'schedule_id'    => $schedule_id,
+                    'title'          => $ai_result['title'] ?? $topic,
+                    'content'        => $ai_result['content'] ?? '',
+                    'excerpt'        => $ai_result['excerpt'] ?? '',
+                    'meta_title'     => $ai_result['meta_title'] ?? '',
+                    'meta_description' => $ai_result['meta_description'] ?? '',
+                    'tags'           => $ai_result['tags'] ?? array(),
+                );
+
+                // Generate featured image if requested
+                if ( $generate_image && class_exists( 'N8nPress_Image_Handler' ) ) {
+                    $image_prompt = N8nPress_Prompts::image_generation( $ai_result['title'] ?? $topic, $keywords );
+                    $attachment_id = N8nPress_Image_Handler::generate_and_attach( $image_prompt, $schedule_id );
+                    if ( ! is_wp_error( $attachment_id ) ) {
+                        $callback_data['image_id']  = $attachment_id;
+                        $callback_data['image_url'] = wp_get_attachment_url( $attachment_id );
+                    }
+                }
+
+                $request = new WP_REST_Request( 'POST', '/n8npress/v1/schedule/callback' );
+                $request->set_body_params( $callback_data );
+                $this->handle_callback( $request );
+            }
+        }
 
         N8nPress_Logger::log( 'Content generation queued', 'info', array(
             'schedule_id' => $schedule_id,
@@ -242,6 +291,9 @@ class N8nPress_Content_Scheduler {
      */
     public function handle_callback($request) {
         $data = $request->get_json_params();
+        if ( empty( $data ) ) {
+            $data = $request->get_body_params();
+        }
         $schedule_id = absint($data['schedule_id'] ?? 0);
 
         if (!$schedule_id || !get_post($schedule_id)) {
@@ -363,19 +415,15 @@ class N8nPress_Content_Scheduler {
             wp_set_post_tags($post_id, $tags);
         }
 
-        // Set SEO meta (Yoast / RankMath / n8nPress)
+        // Set SEO meta via Plugin Detector (writes to correct SEO plugin)
         $meta_title = get_post_meta($schedule_id, '_n8npress_generated_meta_title', true);
         $meta_desc  = get_post_meta($schedule_id, '_n8npress_generated_meta_desc', true);
 
-        if ($meta_title) {
-            update_post_meta($post_id, '_yoast_wpseo_title', $meta_title);
-            update_post_meta($post_id, 'rank_math_title', $meta_title);
-            update_post_meta($post_id, '_n8npress_meta_title', $meta_title);
-        }
-        if ($meta_desc) {
-            update_post_meta($post_id, '_yoast_wpseo_metadesc', $meta_desc);
-            update_post_meta($post_id, 'rank_math_description', $meta_desc);
-            update_post_meta($post_id, '_n8npress_meta_description', $meta_desc);
+        if ( $meta_title || $meta_desc ) {
+            $seo_data = array();
+            if ( $meta_title ) $seo_data['title'] = $meta_title;
+            if ( $meta_desc )  $seo_data['description'] = $meta_desc;
+            N8nPress_Plugin_Detector::get_instance()->set_seo_meta( $post_id, $seo_data );
         }
 
         // Mark schedule as published
@@ -393,15 +441,16 @@ class N8nPress_Content_Scheduler {
     /**
      * Get all scheduled items for admin display
      */
-    public static function get_scheduled_items($status = '') {
+    public static function get_scheduled_items( $status = '' ) {
         $args = array(
             'post_type'      => self::POST_TYPE,
             'posts_per_page' => 100,
             'orderby'        => 'date',
             'order'          => 'DESC',
+            'update_post_meta_cache' => true,
         );
 
-        if ($status) {
+        if ( $status ) {
             $args['meta_query'] = array(
                 array(
                     'key'   => '_n8npress_schedule_status',
@@ -410,7 +459,14 @@ class N8nPress_Content_Scheduler {
             );
         }
 
-        return get_posts($args);
+        $items = get_posts( $args );
+
+        // Prime meta cache for all items in one query
+        if ( ! empty( $items ) ) {
+            update_postmeta_cache( wp_list_pluck( $items, 'ID' ) );
+        }
+
+        return $items;
     }
 
     /**

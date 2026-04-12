@@ -113,22 +113,18 @@ class N8nPress_AEO {
             return new WP_Error( 'not_found', 'Product not found', array( 'status' => 404 ) );
         }
 
-        $budget = N8nPress_Token_Tracker::check_budget( 'aeo-generator' );
-        if ( is_wp_error( $budget ) ) {
-            return $budget;
-        }
-
-        $job_id = N8nPress_Job_Queue::add( 'generate_aeo', array(
-            'product_id' => $product_id,
-            'options'    => array( 'types' => array( 'faq' ) ),
-        ) );
-
         update_post_meta( $product_id, '_n8npress_aeo_faq_status', 'processing' );
 
+        $result = $this->dispatch_aeo_generation( $product, array( 'types' => array( 'faq' ) ) );
+
+        if ( is_wp_error( $result ) ) {
+            update_post_meta( $product_id, '_n8npress_aeo_faq_status', 'failed' );
+            return $result;
+        }
+
         return rest_ensure_response( array(
-            'status'     => 'queued',
+            'status'     => ! empty( $result['n8n_forwarded'] ) ? 'queued' : 'completed',
             'product_id' => $product_id,
-            'job_id'     => $job_id,
         ) );
     }
 
@@ -145,23 +141,87 @@ class N8nPress_AEO {
             return new WP_Error( 'not_found', 'Product not found', array( 'status' => 404 ) );
         }
 
-        $budget = N8nPress_Token_Tracker::check_budget( 'aeo-generator' );
-        if ( is_wp_error( $budget ) ) {
-            return $budget;
-        }
-
-        $job_id = N8nPress_Job_Queue::add( 'generate_aeo', array(
-            'product_id' => $product_id,
-            'options'    => array( 'types' => array( 'howto' ) ),
-        ) );
-
         update_post_meta( $product_id, '_n8npress_aeo_howto_status', 'processing' );
 
+        $result = $this->dispatch_aeo_generation( $product, array( 'types' => array( 'howto' ) ) );
+
+        if ( is_wp_error( $result ) ) {
+            update_post_meta( $product_id, '_n8npress_aeo_howto_status', 'failed' );
+            return $result;
+        }
+
         return rest_ensure_response( array(
-            'status'     => 'queued',
+            'status'     => ! empty( $result['n8n_forwarded'] ) ? 'queued' : 'completed',
             'product_id' => $product_id,
-            'job_id'     => $job_id,
         ) );
+    }
+
+    /**
+     * Dispatch AEO generation via AI Engine (local or n8n).
+     */
+    private function dispatch_aeo_generation( $product, $options = array() ) {
+        $product_id = $product->get_id();
+        $mode       = N8nPress_AI_Engine::get_mode();
+
+        if ( N8nPress_AI_Engine::MODE_N8N === $mode ) {
+            return N8nPress_AI_Engine::forward_to_n8n( 'aeo_generate_faq', array(
+                'product_id'      => $product_id,
+                'name'            => $product->get_name(),
+                'description'     => wp_strip_all_tags( $product->get_description() ),
+                'categories'      => wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'names' ) ),
+                'price'           => $product->get_price(),
+                'target_language' => get_option( 'n8npress_target_language', 'en' ),
+            ), rest_url( 'n8npress/v1/aeo/save-faq' ) );
+        }
+
+        // Local mode: call AI directly
+        $context = array(
+            'name'        => $product->get_name(),
+            'description' => wp_strip_all_tags( $product->get_description() ),
+            'categories'  => wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'names' ) ),
+        );
+
+        $prompt   = N8nPress_Prompts::aeo_faq( $context, $options );
+        $messages = N8nPress_AI_Engine::build_messages( $prompt );
+        $ai_result = N8nPress_AI_Engine::dispatch_json( 'aeo-generator', $messages, array(
+            'max_tokens' => 2000,
+        ) );
+
+        if ( is_wp_error( $ai_result ) ) {
+            return $ai_result;
+        }
+
+        // Feed into existing save handlers
+        $types = $options['types'] ?? array( 'faq', 'howto' );
+
+        if ( in_array( 'faq', $types, true ) && ! empty( $ai_result['faqs'] ) ) {
+            $faq_request = new WP_REST_Request( 'POST', '/n8npress/v1/aeo/save-faq' );
+            $faq_request->set_body_params( array(
+                'product_id' => $product_id,
+                'faq'        => $ai_result['faqs'],
+            ) );
+            $this->save_faq_data( $faq_request );
+        }
+
+        if ( in_array( 'howto', $types, true ) && ! empty( $ai_result['howto'] ) ) {
+            $howto_request = new WP_REST_Request( 'POST', '/n8npress/v1/aeo/save-howto' );
+            $howto_request->set_body_params( array(
+                'product_id' => $product_id,
+                'howto'      => $ai_result['howto'],
+            ) );
+            $this->save_howto_data( $howto_request );
+        }
+
+        if ( ! empty( $ai_result['speakable'] ) ) {
+            $speak_request = new WP_REST_Request( 'POST', '/n8npress/v1/aeo/save-speakable' );
+            $speak_request->set_body_params( array(
+                'product_id' => $product_id,
+                'speakable'  => $ai_result['speakable'],
+            ) );
+            $this->save_speakable_data( $speak_request );
+        }
+
+        return $ai_result;
     }
 
     /**

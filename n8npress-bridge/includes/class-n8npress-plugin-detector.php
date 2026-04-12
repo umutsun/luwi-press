@@ -314,7 +314,7 @@ class N8nPress_Plugin_Detector {
 	}
 
 	// ------------------------------------------------------------------
-	// Customer Support Detection (Chatwoot, LiveChat, Tawk.to, etc.)
+	// Customer Support Detection (LiveChat, Tawk.to, etc.)
 	// ------------------------------------------------------------------
 
 	public function detect_customer_support() {
@@ -327,22 +327,7 @@ class N8nPress_Plugin_Detector {
 			'version' => null,
 		);
 
-		// n8nPress Chatwoot integration (external, not a WP plugin)
-		$chatwoot_url = get_option( 'n8npress_chatwoot_url', '' );
-		$chatwoot_enabled = get_option( 'n8npress_chatwoot_enabled', 0 );
-		if ( ! empty( $chatwoot_url ) && $chatwoot_enabled ) {
-			$result['plugin']  = 'chatwoot';
-			$result['version'] = 'external';
-			$result['url']     = $chatwoot_url;
-			$result['features'] = array(
-				'live_chat'             => true,
-				'whatsapp'              => true,
-				'instagram'             => true,
-				'contact_management'    => true,
-				'conversation_history'  => true,
-				'webhook_integration'   => true,
-			);
-		} elseif ( class_exists( 'LiveChat\\LiveChat' ) || defined( 'STARTER_PLUGIN_VERSION' ) ) {
+		if ( class_exists( 'LiveChat\\LiveChat' ) || defined( 'STARTER_PLUGIN_VERSION' ) ) {
 			$result['plugin'] = 'livechat';
 		} elseif ( class_exists( 'TawkTo_Settings' ) ) {
 			$result['plugin'] = 'tawk-to';

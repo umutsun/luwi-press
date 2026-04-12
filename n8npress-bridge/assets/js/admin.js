@@ -203,6 +203,67 @@
         });
 
         // ========================================
+        // Content Scheduler
+        // ========================================
+        if ($('#sched-form').length) {
+            // Submit form
+            $('#sched-form').on('submit', function(e) {
+                e.preventDefault();
+                var $form = $(this);
+                var $btn = $form.find('.sched-submit');
+                var $result = $('#sched-result');
+
+                $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Generating...');
+                $result.html('');
+
+                $.ajax({
+                    url: n8npress.ajax_url,
+                    type: 'POST',
+                    data: $form.serialize() + '&action=n8npress_schedule_content',
+                    success: function(res) {
+                        if (res.success) {
+                            $result.html('<div class="notice notice-success" style="border-radius:6px;"><p>Content generation started! Refreshing...</p></div>');
+                            setTimeout(function() { location.reload(); }, 1500);
+                        } else {
+                            $result.html('<div class="notice notice-error" style="border-radius:6px;"><p>' + (res.data || 'Error') + '</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $result.html('<div class="notice notice-error" style="border-radius:6px;"><p>Request failed</p></div>');
+                    },
+                    complete: function() {
+                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-controls-play"></span> Generate & Schedule');
+                    }
+                });
+            });
+
+            // Delete item
+            $(document).on('click', '.sched-delete', function() {
+                if (!confirm('Delete this scheduled item?')) return;
+                var $item = $(this).closest('.sched-item');
+                var id = $(this).data('id');
+                $.post(n8npress.ajax_url, {
+                    action: 'n8npress_delete_schedule',
+                    schedule_id: id,
+                    _wpnonce: $('#sched-form input[name="_wpnonce"]').val()
+                }, function(res) {
+                    if (res.success) {
+                        $item.css({ opacity: 0, transform: 'translateX(20px)' });
+                        setTimeout(function() { $item.remove(); }, 300);
+                    }
+                });
+            });
+
+            // Poll generating items every 10s
+            var $generating = $('.sched-item[data-status="generating"]');
+            if ($generating.length) {
+                setInterval(function() {
+                    location.reload();
+                }, 15000);
+            }
+        }
+
+        // ========================================
         // Password toggle
         // ========================================
         $('.n8npress-toggle-password').on('click', function() {
@@ -291,39 +352,6 @@
                 },
                 error: function() {
                     $status.html('<span style="color:#dc2626;">&#10007; Request failed. Save settings first.</span>');
-                },
-                complete: function() {
-                    $btn.prop('disabled', false).find('.dashicons').removeClass('spin');
-                }
-            });
-        });
-
-        // ========================================
-        // Chatwoot test connection
-        // ========================================
-        $('#n8npress-test-chatwoot').on('click', function() {
-            var $btn = $(this);
-            var $result = $('#n8npress-chatwoot-test-result');
-
-            $btn.prop('disabled', true).find('.dashicons').addClass('spin');
-            $result.html('<span style="color:#6b7280;">Testing...</span>');
-
-            $.ajax({
-                url: ajaxurl,
-                type: 'POST',
-                data: {
-                    action: 'n8npress_chatwoot_test',
-                    _wpnonce: $('input[name="_wpnonce"]').val()
-                },
-                success: function(response) {
-                    if (response.success) {
-                        $result.html('<span style="color:#16a34a;">&#10003; ' + response.data.message + '</span>');
-                    } else {
-                        $result.html('<span style="color:#dc2626;">&#10007; ' + (response.data || 'Connection failed') + '</span>');
-                    }
-                },
-                error: function() {
-                    $result.html('<span style="color:#dc2626;">&#10007; Request failed. Save settings first.</span>');
                 },
                 complete: function() {
                     $btn.prop('disabled', false).find('.dashicons').removeClass('spin');

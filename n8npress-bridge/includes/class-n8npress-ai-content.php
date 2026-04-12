@@ -164,14 +164,9 @@ class N8nPress_AI_Content {
     }
 
     /**
-     * Queue product for AI enrichment via Job Queue + AI Engine.
+     * Send product for AI enrichment via AI Engine (local or n8n).
      */
     private function send_to_n8n_for_enrichment( $product, $options = array() ) {
-        $budget = N8nPress_Token_Tracker::check_budget( 'product-enricher' );
-        if ( is_wp_error( $budget ) ) {
-            return $budget;
-        }
-
         $product_id = $product->get_id();
 
         // Atomic lock: prevent concurrent enrichment of same product
@@ -181,17 +176,106 @@ class N8nPress_AI_Content {
         }
         set_transient( $lock_key, true, 300 ); // 5-minute lock
 
-        $job_id = N8nPress_Job_Queue::add( 'enrich_product', array(
-            'product_id' => $product_id,
-            'options'    => $options ?: array(),
-        ) );
+        $mode = N8nPress_AI_Engine::get_mode();
 
-        if ( ! $job_id ) {
-            delete_transient( $lock_key );
-            return new WP_Error( 'queue_failed', 'Failed to queue enrichment job.' );
+        if ( N8nPress_AI_Engine::MODE_N8N === $mode ) {
+            // n8n mode: forward to webhook, n8n will call back to /product/enrich-callback
+            $image_url = wp_get_attachment_url( $product->get_image_id() );
+            $gallery   = array_map( 'wp_get_attachment_url', $product->get_gallery_image_ids() );
+
+            $result = N8nPress_AI_Engine::forward_to_n8n( 'product_enrich', array(
+                'product' => array(
+                    'id'                => $product_id,
+                    'name'              => $product->get_name(),
+                    'short_description' => $product->get_short_description(),
+                    'description'       => $product->get_description(),
+                    'sku'               => $product->get_sku(),
+                    'price'             => $product->get_price(),
+                    'regular_price'     => $product->get_regular_price(),
+                    'sale_price'        => $product->get_sale_price(),
+                    'categories'        => wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'names' ) ),
+                    'tags'              => wp_get_post_terms( $product_id, 'product_tag', array( 'fields' => 'names' ) ),
+                    'attributes'        => $this->get_product_attributes( $product ),
+                    'image_url'         => $image_url ?: '',
+                    'gallery_urls'      => array_filter( $gallery ),
+                    'weight'            => $product->get_weight(),
+                    'dimensions'        => array(
+                        'length' => $product->get_length(),
+                        'width'  => $product->get_width(),
+                        'height' => $product->get_height(),
+                    ),
+                    'stock_status'      => $product->get_stock_status(),
+                    'permalink'         => get_permalink( $product_id ),
+                ),
+                'options' => wp_parse_args( $options, array(
+                    'generate_description'       => true,
+                    'generate_short_description' => true,
+                    'generate_meta_title'        => true,
+                    'generate_meta_description'  => true,
+                    'generate_faq'               => true,
+                    'generate_schema'            => true,
+                    'generate_alt_text'          => true,
+                    'generate_image'             => (bool) get_option( 'n8npress_enrich_generate_image', false ),
+                    'target_language'            => get_option( 'n8npress_target_language', 'tr' ),
+                ) ),
+            ), rest_url( 'n8npress/v1/product/enrich-callback' ) );
+
+            if ( is_wp_error( $result ) ) {
+                delete_transient( $lock_key );
+            }
+            return $result;
         }
 
-        return array( 'job_id' => $job_id );
+        // Local mode: call AI directly and feed result into existing callback handler
+        $product_data = array(
+            'name'              => $product->get_name(),
+            'description'       => $product->get_description(),
+            'short_description' => $product->get_short_description(),
+            'price'             => $product->get_price(),
+            'sku'               => $product->get_sku(),
+            'categories'        => wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'names' ) ),
+            'tags'              => wp_get_post_terms( $product_id, 'product_tag', array( 'fields' => 'names' ) ),
+            'attributes'        => $this->get_product_attributes( $product ),
+            'weight'            => $product->get_weight(),
+            'dimensions'        => array(
+                'length' => $product->get_length(),
+                'width'  => $product->get_width(),
+                'height' => $product->get_height(),
+            ),
+        );
+
+        $prompt   = N8nPress_Prompts::product_enrichment( $product_data, $options );
+        $messages = N8nPress_AI_Engine::build_messages( $prompt );
+        $ai_result = N8nPress_AI_Engine::dispatch_json( 'product-enricher', $messages, array(
+            'max_tokens' => 2048,
+        ) );
+
+        if ( is_wp_error( $ai_result ) ) {
+            delete_transient( $lock_key );
+            update_post_meta( $product_id, '_n8npress_enrich_status', 'failed' );
+            return $ai_result;
+        }
+
+        // Feed AI result into existing callback handler (reuse all save logic)
+        $callback_data = array(
+            'product_id'        => $product_id,
+            'description'       => $ai_result['description'] ?? '',
+            'short_description' => $ai_result['short_description'] ?? '',
+            'meta_title'        => $ai_result['meta_title'] ?? '',
+            'meta_description'  => $ai_result['meta_description'] ?? '',
+            'faq'               => $ai_result['faq'] ?? array(),
+            'alt_texts'         => ! empty( $ai_result['alt_text_main'] ) ? array( array(
+                'image_id' => $product->get_image_id(),
+                'alt_text' => $ai_result['alt_text_main'],
+            ) ) : array(),
+        );
+
+        $request = new WP_REST_Request( 'POST', '/n8npress/v1/product/enrich-callback' );
+        $request->set_body( wp_json_encode( $callback_data ) );
+        $request->set_header( 'Content-Type', 'application/json' );
+        $request->set_body_params( $callback_data );
+
+        return $this->handle_enrich_callback( $request );
     }
 
     // ─── CALLBACK: Receive enriched data from n8n ───────────────────────
@@ -440,27 +524,18 @@ class N8nPress_AI_Content {
     }
 
     /**
-     * Send batch of product IDs to n8n for sequential processing
+     * Send batch of product IDs for enrichment (n8n or local sequential).
      */
-    private function send_batch_to_n8n($product_ids, $options, $batch_id) {
-        $budget = N8nPress_Token_Tracker::check_budget( 'batch-enricher' );
-        if ( is_wp_error( $budget ) ) {
-            return $budget;
-        }
-
-        if (empty($this->n8n_webhook_url)) {
-            return new WP_Error('no_webhook', 'n8n webhook URL is not configured.');
-        }
-
+    private function send_batch_to_n8n( $product_ids, $options, $batch_id ) {
         $products_data = array();
-        foreach ($product_ids as $pid) {
-            $product = wc_get_product($pid);
-            if (!$product) {
+        foreach ( $product_ids as $pid ) {
+            $product = wc_get_product( $pid );
+            if ( ! $product ) {
                 continue;
             }
 
-            $image_url = wp_get_attachment_url($product->get_image_id());
-            $gallery   = array_map('wp_get_attachment_url', $product->get_gallery_image_ids());
+            $image_url = wp_get_attachment_url( $product->get_image_id() );
+            $gallery   = array_map( 'wp_get_attachment_url', $product->get_gallery_image_ids() );
 
             $products_data[] = array(
                 'id'                => $pid,
@@ -469,71 +544,55 @@ class N8nPress_AI_Content {
                 'description'       => $product->get_description(),
                 'sku'               => $product->get_sku(),
                 'price'             => $product->get_price(),
-                'categories'        => wp_get_post_terms($pid, 'product_cat', array('fields' => 'names')),
-                'tags'              => wp_get_post_terms($pid, 'product_tag', array('fields' => 'names')),
-                'attributes'        => $this->get_product_attributes($product),
+                'categories'        => wp_get_post_terms( $pid, 'product_cat', array( 'fields' => 'names' ) ),
+                'tags'              => wp_get_post_terms( $pid, 'product_tag', array( 'fields' => 'names' ) ),
+                'attributes'        => $this->get_product_attributes( $product ),
                 'image_url'         => $image_url ?: '',
-                'gallery_urls'      => array_filter($gallery),
-                'permalink'         => get_permalink($pid),
+                'gallery_urls'      => array_filter( $gallery ),
+                'permalink'         => get_permalink( $pid ),
             );
 
-            update_post_meta($pid, '_n8npress_enrich_status', 'processing');
-            update_post_meta($pid, '_n8npress_enrich_requested', current_time('mysql'));
+            update_post_meta( $pid, '_n8npress_enrich_status', 'processing' );
+            update_post_meta( $pid, '_n8npress_enrich_requested', current_time( 'mysql' ) );
         }
 
-        $payload = array(
-            'event'    => 'product_enrich_batch',
-            'batch_id' => $batch_id,
-            '_meta'    => n8npress_build_meta_block( rest_url( 'n8npress/v1/product/enrich-callback' ) ),
-            'products' => $products_data,
-            'options'      => wp_parse_args($options, array(
-                'generate_description'       => true,
-                'generate_short_description' => true,
-                'generate_meta_title'        => true,
-                'generate_meta_description'  => true,
-                'generate_faq'               => true,
-                'generate_schema'            => true,
-                'generate_alt_text'          => true,
-                'target_language'            => get_option('n8npress_target_language', 'tr'),
-            )),
-        );
+        $mode = N8nPress_AI_Engine::get_mode();
 
-        $headers = array(
-            'Content-Type'      => 'application/json',
-            'X-n8nPress-Event'  => 'product_enrich_batch',
-            'X-n8nPress-Source' => get_site_url(),
-        );
-
-        if (!empty($this->n8n_api_token)) {
-            $headers['Authorization'] = 'Bearer ' . $this->n8n_api_token;
-        }
-
-        $url = trailingslashit($this->n8n_webhook_url) . 'product-enrich-batch';
-
-        $response = wp_remote_post($url, array(
-            'headers' => $headers,
-            'body'    => wp_json_encode($payload),
-            'timeout' => 15,
-        ));
-
-        if ( is_wp_error( $response ) ) {
-            N8nPress_Logger::log( 'Batch enrichment send failed: ' . $response->get_error_message(), 'error', array(
+        if ( N8nPress_AI_Engine::MODE_N8N === $mode ) {
+            // n8n mode: send entire batch to n8n webhook
+            $result = N8nPress_AI_Engine::forward_to_n8n( 'product_enrich_batch', array(
                 'batch_id' => $batch_id,
-                'count'    => count( $product_ids ),
-            ) );
+                'products' => $products_data,
+                'options'  => wp_parse_args( $options, array(
+                    'generate_description'       => true,
+                    'generate_short_description' => true,
+                    'generate_meta_title'        => true,
+                    'generate_meta_description'  => true,
+                    'generate_faq'               => true,
+                    'generate_schema'            => true,
+                    'generate_alt_text'          => true,
+                    'target_language'            => get_option( 'n8npress_target_language', 'tr' ),
+                ) ),
+            ), rest_url( 'n8npress/v1/product/enrich-callback' ) );
+
+            if ( is_wp_error( $result ) ) {
+                N8nPress_Logger::log( 'Batch enrichment send failed: ' . $result->get_error_message(), 'error', array( 'batch_id' => $batch_id ) );
+            } else {
+                N8nPress_Logger::log( 'Batch enrichment sent to n8n: ' . count( $product_ids ) . ' products', 'info', array( 'batch_id' => $batch_id ) );
+            }
             return;
         }
 
-        $code = wp_remote_retrieve_response_code( $response );
-        if ( $code < 200 || $code >= 300 ) {
-            N8nPress_Logger::log( 'Batch enrichment n8n returned HTTP ' . $code, 'error', array(
-                'batch_id' => $batch_id,
-            ) );
-        } else {
-            N8nPress_Logger::log( 'Batch enrichment sent: ' . count( $product_ids ) . ' products', 'info', array(
-                'batch_id' => $batch_id,
-            ) );
+        // Local mode: process each product sequentially via AI Engine
+        foreach ( $products_data as $p ) {
+            $product = wc_get_product( $p['id'] );
+            if ( ! $product ) {
+                continue;
+            }
+            $this->send_to_n8n_for_enrichment( $product, $options ?: array() );
         }
+
+        N8nPress_Logger::log( 'Batch enrichment completed locally: ' . count( $products_data ) . ' products', 'info', array( 'batch_id' => $batch_id ) );
     }
 
     /**

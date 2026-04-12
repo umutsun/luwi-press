@@ -101,7 +101,6 @@ class N8nPress {
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-prompts.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-ai-engine.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-image-handler.php';
-        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-job-queue.php';
 
         // Content & automation modules
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-ai-content.php';
@@ -113,15 +112,7 @@ class N8nPress {
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-review-analytics.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-open-claw.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-crm-bridge.php';
-        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-chatwoot.php';
         require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-knowledge-graph.php';
-
-        // WebMCP server (MCP Streamable HTTP transport)
-        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-webmcp.php';
-
-        // Workflow management
-        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-workflow-templates.php';
-        require_once N8NPRESS_PLUGIN_DIR . 'includes/class-n8npress-workflow-tracker.php';
     }
     
     /**
@@ -134,8 +125,6 @@ class N8nPress {
         // Create all database tables
         N8nPress_Logger::create_table();
         N8nPress_Token_Tracker::create_table();
-        N8nPress_Workflow_Tracker::create_table();
-        N8nPress_Job_Queue::create_table();
 
         // Generate HMAC secret if not set
         N8nPress_HMAC::ensure_secret();
@@ -157,7 +146,6 @@ class N8nPress {
      */
     public function deactivate() {
         wp_clear_scheduled_hook( 'n8npress_daily_cleanup' );
-        N8nPress_Job_Queue::deactivate();
         flush_rewrite_rules();
         N8nPress_Logger::log('Plugin deactivated', 'info');
     }
@@ -170,9 +158,6 @@ class N8nPress {
 
         // Daily cleanup cron
         add_action( 'n8npress_daily_cleanup', array( $this, 'run_daily_cleanup' ) );
-
-        // Native AI job queue
-        N8nPress_Job_Queue::init();
 
         // Core infrastructure
         N8nPress_API::get_instance();
@@ -195,20 +180,7 @@ class N8nPress {
         N8nPress_Review_Analytics::get_instance();
         N8nPress_Open_Claw::get_instance();
         N8nPress_CRM_Bridge::get_instance();
-        N8nPress_Chatwoot::get_instance();
         N8nPress_Knowledge_Graph::get_instance();
-
-        // WebMCP server (load after all modules so tools can reference them)
-        if ( N8nPress_WebMCP::is_enabled() ) {
-            N8nPress_WebMCP::get_instance();
-        }
-
-        // Chatwoot frontend widget
-        add_action( 'wp_footer', array( 'N8nPress_Chatwoot', 'maybe_output_widget' ) );
-
-        // Workflow management
-        N8nPress_Workflow_Templates::get_instance();
-        N8nPress_Workflow_Tracker::get_instance();
     }
     
     /**
@@ -272,14 +244,6 @@ class N8nPress {
             array( $this, 'knowledge_graph_page' )
         );
 
-        add_submenu_page(
-            'n8npress',
-            __( 'WebMCP', 'n8npress' ),
-            __( 'WebMCP', 'n8npress' ),
-            'manage_options',
-            'n8npress-webmcp',
-            array( $this, 'webmcp_page' )
-        );
     }
     
     /**
@@ -318,13 +282,6 @@ class N8nPress {
     }
 
     /**
-     * WebMCP admin page
-     */
-    public function webmcp_page() {
-        include N8NPRESS_PLUGIN_DIR . 'admin/webmcp-page.php';
-    }
-
-    /**
      * AJAX: Emergency stop — disables all AI enrichment and sets limit to $0.001
      */
     public function ajax_emergency_stop() {
@@ -359,10 +316,6 @@ class N8nPress {
         if ( method_exists( 'N8nPress_Token_Tracker', 'cleanup' ) ) {
             N8nPress_Token_Tracker::cleanup( $token_days );
         }
-        if ( method_exists( 'N8nPress_Workflow_Tracker', 'cleanup' ) ) {
-            N8nPress_Workflow_Tracker::cleanup( $token_days );
-        }
-
         N8nPress_Logger::log( 'Daily cleanup completed', 'info' );
     }
 
@@ -370,14 +323,11 @@ class N8nPress {
      * Admin init
      */
     public function admin_init() {
-        N8nPress_Settings::get_instance();
-
         // Auto-upgrade: ensure all tables exist on version change
         $db_version = get_option( 'n8npress_db_version', '0' );
         if ( version_compare( $db_version, N8NPRESS_VERSION, '<' ) ) {
             N8nPress_Logger::create_table();
             N8nPress_Token_Tracker::create_table();
-            N8nPress_Workflow_Tracker::create_table();
             update_option( 'n8npress_db_version', N8NPRESS_VERSION );
         }
     }
@@ -418,16 +368,6 @@ class N8nPress {
             ));
         }
 
-        // WebMCP client JS: load on WebMCP admin page only
-        if ( strpos( $hook, 'n8npress-webmcp' ) !== false ) {
-            wp_enqueue_script(
-                'n8npress-webmcp-client',
-                N8NPRESS_PLUGIN_URL . 'assets/js/webmcp-client.js',
-                array(),
-                N8NPRESS_VERSION,
-                true
-            );
-        }
     }
     
     /**
@@ -686,7 +626,6 @@ class N8nPress {
             'n8npress_ai_provider'       => 'openai',
             'n8npress_ai_model'          => 'gpt-4o-mini',
             'n8npress_daily_token_limit' => 1.00,
-            'n8npress_webmcp_enabled'    => 1,
             // AI Engine defaults (v2.0)
             'n8npress_processing_mode'   => 'local',
             'n8npress_default_provider'  => 'anthropic',

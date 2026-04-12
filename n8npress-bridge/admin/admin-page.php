@@ -94,20 +94,10 @@ $engine_mode     = ! empty( $webhook_url ) ? 'n8n' : 'built-in';
 			$pills[] = array( 'ok', 'dashicons-email-alt', ucwords( str_replace( '-', ' ', $email['plugin'] ) ) );
 		}
 
-		// Chatwoot
-		if ( get_option( 'n8npress_chatwoot_enabled' ) && ! empty( get_option( 'n8npress_chatwoot_url' ) ) ) {
-			$pills[] = array( 'ok', 'dashicons-format-chat', 'Chatwoot' );
-		}
-
 		// Cache
 		$cache = $environment['cache'] ?? array();
 		if ( ! empty( $cache['plugin'] ) && 'none' !== $cache['plugin'] ) {
 			$pills[] = array( 'ok', 'dashicons-performance', ucwords( str_replace( '-', ' ', $cache['plugin'] ) ) );
-		}
-
-		// WebMCP
-		if ( get_option( 'n8npress_webmcp_enabled', true ) ) {
-			$pills[] = array( 'ok', 'dashicons-rest-api', 'MCP Server' );
 		}
 
 		foreach ( $pills as $p ) :
@@ -195,7 +185,6 @@ $engine_mode     = ! empty( $webhook_url ) ? 'n8n' : 'built-in';
 			array( 'dashicons-edit-large',       '#6366f1', __( 'Enrich Products', 'n8npress' ),    __( 'AI descriptions, SEO, FAQ', 'n8npress' ),         'n8npress-settings&tab=ai' ),
 			array( 'dashicons-translation',      '#2563eb', __( 'Translate', 'n8npress' ),          __( 'SEO-aware multilingual', 'n8npress' ),             'n8npress-translations' ),
 			array( 'dashicons-welcome-write-blog','#16a34a', __( 'Schedule Content', 'n8npress' ),  __( 'AI blog posts + images', 'n8npress' ),             'n8npress-scheduler' ),
-			array( 'dashicons-rest-api',         '#f59e0b', __( 'MCP Server', 'n8npress' ),         __( 'AI agent tools', 'n8npress' ),                     'n8npress-webmcp' ),
 			array( 'dashicons-chart-area',       '#ec4899', __( 'Usage & Logs', 'n8npress' ),       __( 'AI spend, activity', 'n8npress' ),                 'n8npress-usage' ),
 		);
 		foreach ( $actions as $a ) : ?>

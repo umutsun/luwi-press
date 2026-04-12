@@ -15,9 +15,21 @@ if ( ! current_user_can( 'manage_options' ) ) {
 
 // Handle settings save
 if ( isset( $_POST['n8npress_save_settings'] ) && check_admin_referer( 'n8npress_settings_nonce' ) ) {
-	// Connection
+	// Processing Mode
+	$mode = sanitize_text_field( $_POST['n8npress_processing_mode'] ?? 'local' );
+	if ( in_array( $mode, array( 'local', 'n8n' ), true ) ) {
+		update_option( 'n8npress_processing_mode', $mode );
+	}
+	update_option( 'n8npress_default_provider', sanitize_text_field( $_POST['n8npress_default_provider'] ?? 'anthropic' ) );
+
+	// Connection (n8n webhook)
 	update_option( 'n8npress_seo_webhook_url', sanitize_url( $_POST['n8npress_webhook_url'] ?? '' ) );
 	update_option( 'n8npress_seo_api_token', sanitize_text_field( $_POST['n8npress_api_token'] ?? '' ) );
+
+	// Provider model selections
+	update_option( 'n8npress_anthropic_model', sanitize_text_field( $_POST['n8npress_anthropic_model'] ?? 'claude-haiku-4-5-20241022' ) );
+	update_option( 'n8npress_openai_model', sanitize_text_field( $_POST['n8npress_openai_model'] ?? 'gpt-4o-mini' ) );
+	update_option( 'n8npress_google_model', sanitize_text_field( $_POST['n8npress_google_model'] ?? 'gemini-2.0-flash' ) );
 
 	// General
 	update_option( 'n8npress_enable_logging', isset( $_POST['n8npress_enable_logging'] ) ? 1 : 0 );
@@ -79,19 +91,6 @@ if ( isset( $_POST['n8npress_save_settings'] ) && check_admin_referer( 'n8npress
 	update_option( 'n8npress_whatsapp_number', sanitize_text_field( $_POST['n8npress_whatsapp_number'] ?? '' ) );
 	update_option( 'n8npress_whatsapp_admin_ids', sanitize_text_field( $_POST['n8npress_whatsapp_admin_ids'] ?? '' ) );
 
-	// Chatwoot
-	update_option( 'n8npress_chatwoot_enabled', isset( $_POST['n8npress_chatwoot_enabled'] ) ? 1 : 0 );
-	update_option( 'n8npress_chatwoot_url', esc_url_raw( $_POST['n8npress_chatwoot_url'] ?? '' ) );
-	update_option( 'n8npress_chatwoot_api_token', sanitize_text_field( $_POST['n8npress_chatwoot_api_token'] ?? '' ) );
-	update_option( 'n8npress_chatwoot_account_id', absint( $_POST['n8npress_chatwoot_account_id'] ?? 1 ) );
-	update_option( 'n8npress_chatwoot_webhook_token', sanitize_text_field( $_POST['n8npress_chatwoot_webhook_token'] ?? '' ) );
-	update_option( 'n8npress_chatwoot_forward_to_n8n', isset( $_POST['n8npress_chatwoot_forward_to_n8n'] ) ? 1 : 0 );
-	update_option( 'n8npress_chatwoot_n8n_path', sanitize_text_field( $_POST['n8npress_chatwoot_n8n_path'] ?? 'chatwoot' ) );
-	update_option( 'n8npress_chatwoot_widget_token', sanitize_text_field( $_POST['n8npress_chatwoot_widget_token'] ?? '' ) );
-	update_option( 'n8npress_chatwoot_show_widget', isset( $_POST['n8npress_chatwoot_show_widget'] ) ? 1 : 0 );
-	update_option( 'n8npress_chatwoot_widget_position', sanitize_text_field( $_POST['n8npress_chatwoot_widget_position'] ?? 'right' ) );
-	update_option( 'n8npress_chatwoot_widget_locale', sanitize_text_field( $_POST['n8npress_chatwoot_widget_locale'] ?? '' ) );
-
 	// Security
 	update_option( 'n8npress_security_headers', isset( $_POST['n8npress_security_headers'] ) ? 1 : 0 );
 	update_option( 'n8npress_ip_whitelist', sanitize_text_field( $_POST['n8npress_ip_whitelist'] ?? '' ) );
@@ -134,17 +133,6 @@ $tg_bot_token       = get_option( 'n8npress_telegram_bot_token', '' );
 $tg_admin_ids       = get_option( 'n8npress_telegram_admin_ids', '' );
 $wa_number          = get_option( 'n8npress_whatsapp_number', '' );
 $wa_admin_ids       = get_option( 'n8npress_whatsapp_admin_ids', '' );
-$chatwoot_enabled    = get_option( 'n8npress_chatwoot_enabled', 0 );
-$chatwoot_url        = get_option( 'n8npress_chatwoot_url', '' );
-$chatwoot_api_token  = get_option( 'n8npress_chatwoot_api_token', '' );
-$chatwoot_account_id = get_option( 'n8npress_chatwoot_account_id', 1 );
-$chatwoot_wh_token   = get_option( 'n8npress_chatwoot_webhook_token', '' );
-$chatwoot_fwd_n8n    = get_option( 'n8npress_chatwoot_forward_to_n8n', 1 );
-$chatwoot_n8n_path   = get_option( 'n8npress_chatwoot_n8n_path', 'chatwoot' );
-$chatwoot_widget_tkn = get_option( 'n8npress_chatwoot_widget_token', '' );
-$chatwoot_show_wdgt  = get_option( 'n8npress_chatwoot_show_widget', 0 );
-$chatwoot_wdgt_pos   = get_option( 'n8npress_chatwoot_widget_position', 'right' );
-$chatwoot_wdgt_loc   = get_option( 'n8npress_chatwoot_widget_locale', '' );
 $security_headers   = get_option( 'n8npress_security_headers', 1 );
 $ip_whitelist       = get_option( 'n8npress_ip_whitelist', '' );
 $hmac_secret        = get_option( 'n8npress_hmac_secret', '' );
@@ -184,9 +172,6 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		<a href="?page=n8npress-settings&tab=open-claw" class="nav-tab <?php echo 'open-claw' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-superhero-alt"></span> <?php esc_html_e( 'Open Claw', 'n8npress' ); ?>
 		</a>
-		<a href="?page=n8npress-settings&tab=chatwoot" class="nav-tab <?php echo 'chatwoot' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-format-chat"></span> <?php esc_html_e( 'Chatwoot', 'n8npress' ); ?>
-		</a>
 		<a href="?page=n8npress-settings&tab=security" class="nav-tab <?php echo 'security' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-shield-alt"></span> <?php esc_html_e( 'Security', 'n8npress' ); ?>
 		</a>
@@ -197,11 +182,127 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 
 		<!-- CONNECTION -->
 		<div class="n8npress-tab-content <?php echo 'connection' === $active_tab ? 'tab-active' : ''; ?>" id="tab-connection">
-			<div class="notice notice-info inline" style="margin:0 0 16px;padding:10px 16px;border-left-color:#0073aa;">
-				<p><strong><?php esc_html_e( 'SaaS Architecture', 'n8npress' ); ?></strong> — <?php esc_html_e( 'n8nPress automatically sends your site URL, API token, AI model, and language settings to every n8n workflow in the webhook payload (_meta block). You do not need to configure per-site environment variables in n8n — just set your webhook URL and API token here.', 'n8npress' ); ?></p>
+
+			<?php
+			$processing_mode  = get_option( 'n8npress_processing_mode', 'local' );
+			$default_provider = get_option( 'n8npress_default_provider', 'anthropic' );
+			$anthropic_key    = get_option( 'n8npress_anthropic_api_key', '' );
+			$openai_key       = get_option( 'n8npress_openai_api_key', '' );
+			$google_key       = get_option( 'n8npress_google_ai_api_key', '' );
+			$anthropic_model  = get_option( 'n8npress_anthropic_model', 'claude-haiku-4-5-20241022' );
+			$openai_model_sel = get_option( 'n8npress_openai_model', 'gpt-4o-mini' );
+			$google_model     = get_option( 'n8npress_google_model', 'gemini-2.0-flash' );
+			?>
+
+			<!-- Processing Mode -->
+			<div class="n8npress-card" style="border-left:4px solid #0073aa;">
+				<h2><?php esc_html_e( 'Processing Mode', 'n8npress' ); ?></h2>
+				<p class="description" style="margin-bottom:12px;"><?php esc_html_e( 'Choose how n8nPress processes AI tasks. Local AI calls your AI provider directly from WordPress. n8n Webhook sends tasks to your n8n instance for processing.', 'n8npress' ); ?></p>
+				<table class="form-table">
+					<tr>
+						<th><?php esc_html_e( 'Mode', 'n8npress' ); ?></th>
+						<td>
+							<fieldset>
+								<label style="display:block;margin-bottom:8px;">
+									<input type="radio" name="n8npress_processing_mode" value="local" <?php checked( $processing_mode, 'local' ); ?> />
+									<strong><?php esc_html_e( 'Local AI', 'n8npress' ); ?></strong> — <?php esc_html_e( 'Self-contained. Calls AI APIs (Claude, OpenAI, Gemini) directly from WordPress. No external server needed.', 'n8npress' ); ?>
+								</label>
+								<label style="display:block;">
+									<input type="radio" name="n8npress_processing_mode" value="n8n" <?php checked( $processing_mode, 'n8n' ); ?> />
+									<strong><?php esc_html_e( 'n8n Webhook', 'n8npress' ); ?></strong> — <?php esc_html_e( 'Advanced. Sends tasks to your n8n instance for AI processing. Requires n8n setup.', 'n8npress' ); ?>
+								</label>
+							</fieldset>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="n8npress_default_provider"><?php esc_html_e( 'Default AI Provider', 'n8npress' ); ?></label></th>
+						<td>
+							<select name="n8npress_default_provider" id="n8npress_default_provider">
+								<option value="anthropic" <?php selected( $default_provider, 'anthropic' ); ?>>Anthropic (Claude)</option>
+								<option value="openai" <?php selected( $default_provider, 'openai' ); ?>>OpenAI (GPT)</option>
+								<option value="google" <?php selected( $default_provider, 'google' ); ?>>Google (Gemini)</option>
+							</select>
+							<p class="description"><?php esc_html_e( 'Used for Local AI mode. Each workflow can also use a specific provider.', 'n8npress' ); ?></p>
+						</td>
+					</tr>
+				</table>
 			</div>
+
+			<!-- AI Provider API Keys -->
+			<div class="n8npress-card">
+				<h2><?php esc_html_e( 'AI Provider API Keys', 'n8npress' ); ?></h2>
+				<p class="description" style="margin-bottom:12px;"><?php esc_html_e( 'Enter API keys for the AI providers you want to use. At least one key is required for Local AI mode.', 'n8npress' ); ?></p>
+				<table class="form-table">
+					<tr>
+						<th><label for="n8npress_anthropic_api_key"><?php esc_html_e( 'Anthropic API Key', 'n8npress' ); ?></label></th>
+						<td>
+							<input type="password" id="n8npress_anthropic_api_key" name="n8npress_anthropic_api_key"
+							       value="<?php echo esc_attr( $anthropic_key ); ?>" class="regular-text" autocomplete="off"
+							       placeholder="sk-ant-..." />
+							<button type="button" class="button button-small n8npress-toggle-password" data-target="n8npress_anthropic_api_key">
+								<span class="dashicons dashicons-visibility"></span>
+							</button>
+							<?php if ( ! empty( $anthropic_key ) ) : ?>
+								<span class="dashicons dashicons-yes-alt" style="color:#46b450;margin-left:4px;line-height:30px;" title="<?php esc_attr_e( 'Configured', 'n8npress' ); ?>"></span>
+							<?php endif; ?>
+							<div style="margin-top:6px;">
+								<select name="n8npress_anthropic_model" style="width:300px;">
+									<option value="claude-haiku-4-5-20241022" <?php selected( $anthropic_model, 'claude-haiku-4-5-20241022' ); ?>>Claude Haiku 4.5 (fast, cheap)</option>
+									<option value="claude-sonnet-4-20250514" <?php selected( $anthropic_model, 'claude-sonnet-4-20250514' ); ?>>Claude Sonnet 4 (balanced)</option>
+									<option value="claude-opus-4-20250514" <?php selected( $anthropic_model, 'claude-opus-4-20250514' ); ?>>Claude Opus 4 (powerful)</option>
+								</select>
+							</div>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="n8npress_openai_api_key"><?php esc_html_e( 'OpenAI API Key', 'n8npress' ); ?></label></th>
+						<td>
+							<input type="password" id="n8npress_openai_api_key" name="n8npress_openai_api_key"
+							       value="<?php echo esc_attr( $openai_key ); ?>" class="regular-text" autocomplete="off"
+							       placeholder="sk-..." />
+							<button type="button" class="button button-small n8npress-toggle-password" data-target="n8npress_openai_api_key">
+								<span class="dashicons dashicons-visibility"></span>
+							</button>
+							<?php if ( ! empty( $openai_key ) ) : ?>
+								<span class="dashicons dashicons-yes-alt" style="color:#46b450;margin-left:4px;line-height:30px;" title="<?php esc_attr_e( 'Configured', 'n8npress' ); ?>"></span>
+							<?php endif; ?>
+							<div style="margin-top:6px;">
+								<select name="n8npress_openai_model" style="width:300px;">
+									<option value="gpt-4o-mini" <?php selected( $openai_model_sel, 'gpt-4o-mini' ); ?>>GPT-4o Mini (fast, cheap)</option>
+									<option value="gpt-4o" <?php selected( $openai_model_sel, 'gpt-4o' ); ?>>GPT-4o (balanced)</option>
+									<option value="gpt-4-turbo" <?php selected( $openai_model_sel, 'gpt-4-turbo' ); ?>>GPT-4 Turbo (powerful)</option>
+								</select>
+							</div>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="n8npress_google_ai_api_key"><?php esc_html_e( 'Google AI API Key', 'n8npress' ); ?></label></th>
+						<td>
+							<input type="password" id="n8npress_google_ai_api_key" name="n8npress_google_ai_api_key"
+							       value="<?php echo esc_attr( $google_key ); ?>" class="regular-text" autocomplete="off"
+							       placeholder="AIza..." />
+							<button type="button" class="button button-small n8npress-toggle-password" data-target="n8npress_google_ai_api_key">
+								<span class="dashicons dashicons-visibility"></span>
+							</button>
+							<?php if ( ! empty( $google_key ) ) : ?>
+								<span class="dashicons dashicons-yes-alt" style="color:#46b450;margin-left:4px;line-height:30px;" title="<?php esc_attr_e( 'Configured', 'n8npress' ); ?>"></span>
+							<?php endif; ?>
+							<div style="margin-top:6px;">
+								<select name="n8npress_google_model" style="width:300px;">
+									<option value="gemini-2.0-flash" <?php selected( $google_model, 'gemini-2.0-flash' ); ?>>Gemini 2.0 Flash (fast, cheap)</option>
+									<option value="gemini-2.5-flash" <?php selected( $google_model, 'gemini-2.5-flash' ); ?>>Gemini 2.5 Flash (balanced)</option>
+									<option value="gemini-2.5-pro" <?php selected( $google_model, 'gemini-2.5-pro' ); ?>>Gemini 2.5 Pro (powerful)</option>
+								</select>
+							</div>
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<!-- n8n Connection (for n8n mode) -->
 			<div class="n8npress-card">
 				<h2><?php esc_html_e( 'n8n Connection', 'n8npress' ); ?></h2>
+				<p class="description" style="margin-bottom:8px;"><?php esc_html_e( 'Only required when using n8n Webhook mode. n8nPress sends your site URL, API token, and AI settings in every webhook payload.', 'n8npress' ); ?></p>
 				<table class="form-table">
 					<tr>
 						<th><label for="n8npress_webhook_url"><?php esc_html_e( 'n8n Webhook URL', 'n8npress' ); ?></label></th>
@@ -892,151 +993,6 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			</div>
 		</div>
 
-		<!-- CHATWOOT -->
-		<div class="n8npress-tab-content <?php echo 'chatwoot' === $active_tab ? 'tab-active' : ''; ?>" id="tab-chatwoot">
-			<div class="n8npress-card">
-				<h2><span class="dashicons dashicons-format-chat" style="color:#6366f1;"></span> <?php esc_html_e( 'Chatwoot Integration', 'n8npress' ); ?></h2>
-				<p class="description"><?php esc_html_e( 'Connect Chatwoot to manage customer conversations from WhatsApp, website widget, Instagram & more. Chatwoot events are forwarded to n8n for AI-powered auto-responses.', 'n8npress' ); ?></p>
-
-				<table class="form-table">
-					<tr>
-						<th><label for="n8npress_chatwoot_enabled"><?php esc_html_e( 'Enable Chatwoot', 'n8npress' ); ?></label></th>
-						<td>
-							<label>
-								<input type="checkbox" id="n8npress_chatwoot_enabled" name="n8npress_chatwoot_enabled" value="1" <?php checked( $chatwoot_enabled, 1 ); ?> />
-								<?php esc_html_e( 'Enable Chatwoot integration (webhook receiver, contact sync, widget)', 'n8npress' ); ?>
-							</label>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="n8npress_chatwoot_url"><?php esc_html_e( 'Chatwoot URL', 'n8npress' ); ?></label></th>
-						<td>
-							<input type="url" id="n8npress_chatwoot_url" name="n8npress_chatwoot_url"
-							       value="<?php echo esc_attr( $chatwoot_url ); ?>" class="regular-text"
-							       placeholder="https://chatwoot.example.com" />
-							<p class="description"><?php esc_html_e( 'Your Chatwoot instance URL (no trailing slash)', 'n8npress' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="n8npress_chatwoot_api_token"><?php esc_html_e( 'API Access Token', 'n8npress' ); ?></label></th>
-						<td>
-							<input type="password" id="n8npress_chatwoot_api_token" name="n8npress_chatwoot_api_token"
-							       value="<?php echo esc_attr( $chatwoot_api_token ); ?>" class="regular-text" />
-							<button type="button" class="button n8npress-toggle-password" data-target="n8npress_chatwoot_api_token">
-								<span class="dashicons dashicons-visibility"></span>
-							</button>
-							<p class="description"><?php esc_html_e( 'Go to Chatwoot → Settings → Account → Access Token', 'n8npress' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="n8npress_chatwoot_account_id"><?php esc_html_e( 'Account ID', 'n8npress' ); ?></label></th>
-						<td>
-							<input type="number" id="n8npress_chatwoot_account_id" name="n8npress_chatwoot_account_id"
-							       value="<?php echo esc_attr( $chatwoot_account_id ); ?>" class="small-text" min="1" />
-							<p class="description"><?php esc_html_e( 'Usually 1 for self-hosted. Check Chatwoot → Settings → Account.', 'n8npress' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th></th>
-						<td>
-							<button type="button" class="button" id="n8npress-test-chatwoot">
-								<span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Test Connection', 'n8npress' ); ?>
-							</button>
-							<span id="n8npress-chatwoot-test-result" style="margin-left:10px;"></span>
-						</td>
-					</tr>
-				</table>
-			</div>
-
-			<div class="n8npress-card">
-				<h2><?php esc_html_e( 'Webhook & n8n Integration', 'n8npress' ); ?></h2>
-				<table class="form-table">
-					<tr>
-						<th><?php esc_html_e( 'Webhook URL', 'n8npress' ); ?></th>
-						<td>
-							<code><?php echo esc_html( rest_url( 'n8npress/v1/chatwoot/webhook' ) ); ?></code>
-							<p class="description"><?php esc_html_e( 'Add this URL in Chatwoot → Settings → Integrations → Webhooks', 'n8npress' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="n8npress_chatwoot_webhook_token"><?php esc_html_e( 'Webhook Token', 'n8npress' ); ?></label></th>
-						<td>
-							<input type="text" id="n8npress_chatwoot_webhook_token" name="n8npress_chatwoot_webhook_token"
-							       value="<?php echo esc_attr( $chatwoot_wh_token ); ?>" class="regular-text"
-							       placeholder="<?php esc_attr_e( 'Optional — leave empty to accept all', 'n8npress' ); ?>" />
-							<p class="description"><?php esc_html_e( 'Security token to verify incoming webhooks from Chatwoot. Set the same token in Chatwoot webhook config.', 'n8npress' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="n8npress_chatwoot_forward_to_n8n"><?php esc_html_e( 'Forward to n8n', 'n8npress' ); ?></label></th>
-						<td>
-							<label>
-								<input type="checkbox" id="n8npress_chatwoot_forward_to_n8n" name="n8npress_chatwoot_forward_to_n8n" value="1" <?php checked( $chatwoot_fwd_n8n, 1 ); ?> />
-								<?php esc_html_e( 'Forward all Chatwoot events to n8n webhook for AI processing', 'n8npress' ); ?>
-							</label>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="n8npress_chatwoot_n8n_path"><?php esc_html_e( 'n8n Webhook Path', 'n8npress' ); ?></label></th>
-						<td>
-							<input type="text" id="n8npress_chatwoot_n8n_path" name="n8npress_chatwoot_n8n_path"
-							       value="<?php echo esc_attr( $chatwoot_n8n_path ); ?>" class="regular-text"
-							       placeholder="chatwoot" />
-							<p class="description"><?php esc_html_e( 'Webhook path appended to your n8n base URL. Default: chatwoot', 'n8npress' ); ?></p>
-						</td>
-					</tr>
-				</table>
-			</div>
-
-			<div class="n8npress-card">
-				<h2><?php esc_html_e( 'Website Chat Widget', 'n8npress' ); ?></h2>
-				<table class="form-table">
-					<tr>
-						<th><label for="n8npress_chatwoot_show_widget"><?php esc_html_e( 'Show Widget', 'n8npress' ); ?></label></th>
-						<td>
-							<label>
-								<input type="checkbox" id="n8npress_chatwoot_show_widget" name="n8npress_chatwoot_show_widget" value="1" <?php checked( $chatwoot_show_wdgt, 1 ); ?> />
-								<?php esc_html_e( 'Display Chatwoot live chat widget on the frontend', 'n8npress' ); ?>
-							</label>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="n8npress_chatwoot_widget_token"><?php esc_html_e( 'Widget Token', 'n8npress' ); ?></label></th>
-						<td>
-							<input type="text" id="n8npress_chatwoot_widget_token" name="n8npress_chatwoot_widget_token"
-							       value="<?php echo esc_attr( $chatwoot_widget_tkn ); ?>" class="regular-text"
-							       placeholder="xxxxxxxxxxxxxxxx" />
-							<p class="description"><?php esc_html_e( 'Go to Chatwoot → Inboxes → Website → Settings → copy the Website Token', 'n8npress' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="n8npress_chatwoot_widget_position"><?php esc_html_e( 'Position', 'n8npress' ); ?></label></th>
-						<td>
-							<select id="n8npress_chatwoot_widget_position" name="n8npress_chatwoot_widget_position">
-								<option value="right" <?php selected( $chatwoot_wdgt_pos, 'right' ); ?>><?php esc_html_e( 'Bottom Right', 'n8npress' ); ?></option>
-								<option value="left" <?php selected( $chatwoot_wdgt_pos, 'left' ); ?>><?php esc_html_e( 'Bottom Left', 'n8npress' ); ?></option>
-							</select>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="n8npress_chatwoot_widget_locale"><?php esc_html_e( 'Locale', 'n8npress' ); ?></label></th>
-						<td>
-							<input type="text" id="n8npress_chatwoot_widget_locale" name="n8npress_chatwoot_widget_locale"
-							       value="<?php echo esc_attr( $chatwoot_wdgt_loc ); ?>" class="small-text"
-							       placeholder="auto" />
-							<p class="description"><?php esc_html_e( 'Leave empty for auto-detect from WordPress locale. Examples: tr, en, de, ar', 'n8npress' ); ?></p>
-						</td>
-					</tr>
-				</table>
-			</div>
-
-			<div class="n8npress-info-box">
-				<span class="dashicons dashicons-info"></span>
-				<?php esc_html_e( 'Chatwoot webhook events (message_created, conversation_created, contact_created, etc.) are received here and forwarded to n8n. WooCommerce customer data is automatically synced to Chatwoot contacts.', 'n8npress' ); ?>
-			</div>
-		</div>
-
-		<!-- SECURITY -->
 		<!-- SECURITY -->
 		<div class="n8npress-tab-content <?php echo 'security' === $active_tab ? 'tab-active' : ''; ?>" id="tab-security">
 			<div class="n8npress-card">

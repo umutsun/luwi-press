@@ -1455,8 +1455,37 @@ class N8nPress_Open_Claw {
 
 	private function send_to_n8n( $message, $conversation_id, $context ) {
 		if ( ! class_exists( 'N8nPress_AI_Engine' ) ) {
-			return new WP_Error( 'no_ai', 'No AI provider configured. Set an API key in Settings → AI API Keys.' );
+			return new WP_Error( 'no_ai', 'AI Engine not available. Check plugin installation.' );
 		}
+
+		$mode = N8nPress_AI_Engine::get_mode();
+
+		if ( N8nPress_AI_Engine::MODE_N8N === $mode ) {
+			// n8n mode: forward to webhook, n8n will call back to /claw/callback
+			$result = N8nPress_AI_Engine::forward_to_n8n( 'open_claw_message', array(
+				'conversation_id' => $conversation_id,
+				'message'         => $message,
+				'site_context'    => $context,
+				'user'            => array(
+					'name'  => wp_get_current_user()->display_name ?? '',
+					'email' => wp_get_current_user()->user_email ?? '',
+				),
+			), rest_url( 'n8npress/v1/claw/callback' ) );
+
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+
+			return array(
+				'response'        => __( 'Processing your request via n8n...', 'n8npress' ),
+				'actions'         => array(),
+				'conversation_id' => $conversation_id,
+				'success'         => true,
+				'async'           => true,
+			);
+		}
+
+		// Local mode: call AI directly
 		return $this->call_ai_directly( $message, $conversation_id, $context );
 	}
 

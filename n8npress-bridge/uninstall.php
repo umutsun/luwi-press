@@ -22,7 +22,8 @@ global $wpdb;
 $tables = array(
 	$wpdb->prefix . 'n8npress_token_usage',
 	$wpdb->prefix . 'n8npress_logs',
-	$wpdb->prefix . 'n8npress_workflow_stats',
+	$wpdb->prefix . 'n8npress_workflow_stats',  // legacy, may not exist
+	$wpdb->prefix . 'n8npress_jobs',            // legacy, may not exist
 );
 
 foreach ( $tables as $table ) {
