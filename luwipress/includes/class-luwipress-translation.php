@@ -270,8 +270,9 @@ class LuwiPress_Translation {
         $product = wc_get_product($product_id);
         $post    = get_post($product_id);
 
-        if (!$post || 'product' !== $post->post_type) {
-            return new WP_Error('not_found', 'Product not found', ['status' => 404]);
+        $translatable_types = array( 'product', 'post', 'page' );
+        if ( ! $post || ! in_array( $post->post_type, $translatable_types, true ) ) {
+            return new WP_Error('not_found', 'Post not found or not translatable', ['status' => 404]);
         }
 
         $source_language = get_option('luwipress_target_language', 'tr');
