@@ -182,8 +182,14 @@ function buildGraph(data) {
 	var nodeMap = {};
 	var edges = [];
 
+	// Normalize: API returns data.nodes.products, JS expects flat arrays
+	var productNodes  = (data.nodes && data.nodes.products)  ? data.nodes.products  : (data.product_nodes  || []);
+	var categoryNodes = (data.nodes && data.nodes.categories) ? data.nodes.categories : (data.category_nodes || []);
+	var languageNodes = (data.nodes && data.nodes.languages) ? data.nodes.languages : (data.language_nodes || []);
+	var graphEdges    = data.edges || [];
+
 	// Products
-	(data.product_nodes || []).forEach(function(p) {
+	(productNodes).forEach(function(p) {
 		var node = {
 			id: 'product:' + p.id,
 			type: 'product',
@@ -202,7 +208,7 @@ function buildGraph(data) {
 	});
 
 	// Categories
-	(data.category_nodes || []).forEach(function(c) {
+	(categoryNodes).forEach(function(c) {
 		var node = {
 			id: 'category:' + c.id,
 			type: 'category',
@@ -216,9 +222,9 @@ function buildGraph(data) {
 	});
 
 	// Languages
-	(data.language_nodes || []).forEach(function(l) {
+	(languageNodes).forEach(function(l) {
 		var node = {
-			id: 'language:' + l.code,
+			id: l.id || ('lang_' + l.code),
 			type: 'language',
 			label: l.code.toUpperCase(),
 			radius: 16,
@@ -230,7 +236,7 @@ function buildGraph(data) {
 	});
 
 	// Edges
-	(data.edges || []).forEach(function(e) {
+	(graphEdges).forEach(function(e) {
 		if (nodeMap[e.source] && nodeMap[e.target]) {
 			edges.push({
 				source: e.source,
