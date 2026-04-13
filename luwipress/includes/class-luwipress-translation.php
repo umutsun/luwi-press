@@ -816,28 +816,38 @@ class LuwiPress_Translation {
 
         $trid = apply_filters( 'wpml_element_trid', null, $product_id, $element_type );
         if ( ! $trid ) {
-            LuwiPress_Logger::log( 'No WPML trid for ' . $post_type . ' #' . $product_id, 'warning' );
+            LuwiPress_Logger::log( 'No WPML trid for ' . $post_type . ' #' . $product_id . ' (element_type: ' . $element_type . ')', 'warning' );
             return;
         }
 
         $default_lang  = apply_filters( 'wpml_default_language', 'tr' );
         $translated_id = apply_filters( 'wpml_object_id', $product_id, $post_type, false, $language );
 
+        LuwiPress_Logger::log( 'WPML save: source=#' . $product_id . ' trid=' . $trid . ' lang=' . $language . ' translated_id=' . ( $translated_id ?: 'null' ) . ' name_len=' . strlen( $translated['name'] ?? '' ) . ' desc_len=' . strlen( $translated['description'] ?? '' ), 'info' );
+
         if ( $translated_id && $translated_id !== $product_id ) {
             // ── Update existing translation ──
-            wp_update_post( array(
+            $update_data = array(
                 'ID'           => $translated_id,
                 'post_title'   => $translated['name'],
                 'post_content' => $translated['description'],
                 'post_excerpt' => $translated['short_description'] ?? '',
                 'post_status'  => 'publish',
-            ) );
+            );
+            $result = wp_update_post( $update_data, true );
+
+            if ( is_wp_error( $result ) ) {
+                LuwiPress_Logger::log( 'WPML update FAILED: #' . $translated_id . ' — ' . $result->get_error_message(), 'error' );
+            } else {
+                LuwiPress_Logger::log( 'WPML translation updated: #' . $translated_id . ' (' . strtoupper( $language ) . ') title="' . mb_substr( $translated['name'], 0, 50 ) . '" content_len=' . strlen( $translated['description'] ?? '' ), 'info' );
+            }
+
             $target_id = $translated_id;
 
             // ── Ensure product images match original ──
-            $this->copy_product_images( $product_id, $translated_id );
-
-            LuwiPress_Logger::log( 'WPML translation updated: #' . $translated_id . ' (' . strtoupper( $language ) . ')', 'info' );
+            if ( 'product' === $post_type ) {
+                $this->copy_product_images( $product_id, $translated_id );
+            }
         } else {
             // ── Create new translation post ──
             $original = get_post( $product_id );
