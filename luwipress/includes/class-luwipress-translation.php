@@ -34,6 +34,9 @@ class LuwiPress_Translation {
         add_action('wp_ajax_luwipress_translate_single', [$this, 'ajax_translate_single']);
         add_action('wp_ajax_luwipress_translate_taxonomy_batch', [$this, 'ajax_translate_taxonomy_batch']);
         add_action('wp_ajax_luwipress_translation_progress', [$this, 'ajax_translation_progress']);
+        add_action('wp_ajax_luwipress_get_missing_terms', [$this, 'ajax_get_missing_terms']);
+        add_action('wp_ajax_luwipress_translate_single_term', [$this, 'ajax_translate_single_term']);
+        add_action('wp_ajax_luwipress_retranslate_broken', [$this, 'ajax_retranslate_broken']);
     }
 
     /**
@@ -2709,5 +2712,150 @@ class LuwiPress_Translation {
         }
 
         wp_send_json_success( $results );
+    }
+
+    // ─── AJAX: Get missing taxonomy terms ───────────────────────────────
+
+    public function ajax_get_missing_terms() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        $taxonomy  = sanitize_text_field( $_POST['taxonomy'] ?? '' );
+        $languages = sanitize_text_field( $_POST['languages'] ?? '' );
+        if ( ! $taxonomy || ! $languages ) {
+            wp_send_json_error( 'Missing taxonomy or languages' );
+        }
+
+        $target_langs    = array_map( 'trim', explode( ',', $languages ) );
+        $source_language = apply_filters( 'wpml_default_language', get_locale() );
+        $terms           = $this->get_missing_taxonomy_terms( $taxonomy, $target_langs, $source_language, 500 );
+
+        // Flatten: one item per term+language pair for per-item progress
+        $items = array();
+        foreach ( $terms as $term ) {
+            foreach ( $term['missing_languages'] as $lang ) {
+                $items[] = array(
+                    'term_id' => $term['term_id'],
+                    'name'    => $term['name'],
+                    'lang'    => $lang,
+                );
+            }
+        }
+
+        wp_send_json_success( array( 'items' => $items, 'total' => count( $items ) ) );
+    }
+
+    // ─── AJAX: Translate a single taxonomy term ─────────────────────────
+
+    public function ajax_translate_single_term() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        $term_id  = absint( $_POST['term_id'] ?? 0 );
+        $taxonomy = sanitize_text_field( $_POST['taxonomy'] ?? '' );
+        $language = sanitize_text_field( $_POST['language'] ?? '' );
+        if ( ! $term_id || ! $taxonomy || ! $language ) {
+            wp_send_json_error( 'Missing term_id, taxonomy, or language' );
+        }
+
+        $term = get_term( $term_id, $taxonomy );
+        if ( ! $term || is_wp_error( $term ) ) {
+            wp_send_json_error( 'Term not found' );
+        }
+
+        $source_language = apply_filters( 'wpml_default_language', get_locale() );
+        $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese', 'pt-pt' => 'Portuguese', 'ko' => 'Korean' );
+        $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
+        $target_name = $lang_names[ $language ] ?? ucfirst( $language );
+
+        // Translate term name via AI
+        $prompt = sprintf(
+            'Translate the following %s taxonomy term name from %s to %s. Return ONLY the translated term name, nothing else. Term: "%s"',
+            $taxonomy, $source_name, $target_name, $term->name
+        );
+        $messages  = LuwiPress_AI_Engine::build_messages( $prompt );
+        $ai_result = LuwiPress_AI_Engine::dispatch( 'taxonomy-translation', $messages, array( 'max_tokens' => 256 ) );
+
+        if ( is_wp_error( $ai_result ) ) {
+            wp_send_json_error( $ai_result->get_error_message() );
+        }
+
+        $translated_name = sanitize_text_field( trim( $ai_result, ' "\'.' ) );
+        if ( empty( $translated_name ) ) {
+            wp_send_json_error( 'AI returned empty translation' );
+        }
+
+        $translated_slug = sanitize_title( $translated_name );
+
+        // Save via WPML
+        $result = $this->save_wpml_taxonomy_translation( $term_id, $taxonomy, $language, $translated_name, $translated_slug );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+
+        wp_send_json_success( array(
+            'term_id'   => $term_id,
+            'name'      => esc_html( $translated_name ),
+            'language'  => $language,
+        ) );
+    }
+
+    // ─── AJAX: Re-translate broken translations ─────────────────────────
+
+    public function ajax_retranslate_broken() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            wp_send_json_error( 'WPML not active' );
+        }
+
+        global $wpdb;
+        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+
+        // Find translated posts with empty title OR numeric slug (broken translations)
+        $broken = $wpdb->get_results( $wpdb->prepare(
+            "SELECT p.ID, p.post_title, p.post_name, p.post_type, t.trid, t.language_code
+             FROM {$wpdb->posts} p
+             JOIN {$wpdb->prefix}icl_translations t ON p.ID = t.element_id
+             WHERE t.source_language_code IS NOT NULL
+               AND t.language_code != %s
+               AND p.post_status = 'publish'
+               AND (p.post_title = '' OR p.post_name REGEXP '^[0-9]+$' OR p.post_title = (
+                   SELECT p2.post_title FROM {$wpdb->posts} p2
+                   JOIN {$wpdb->prefix}icl_translations t2 ON p2.ID = t2.element_id
+                   WHERE t2.trid = t.trid AND t2.source_language_code IS NULL LIMIT 1
+               ))
+             LIMIT 100",
+            $default_lang
+        ) );
+
+        if ( empty( $broken ) ) {
+            wp_send_json_success( array( 'fixed' => 0, 'message' => 'No broken translations found.' ) );
+        }
+
+        $deleted = 0;
+        foreach ( $broken as $row ) {
+            // Delete the broken translation post — WPML record stays, will be recreated
+            $wpdb->delete( $wpdb->prefix . 'icl_translations', array(
+                'element_id'   => $row->ID,
+                'element_type' => 'post_' . $row->post_type,
+            ) );
+            wp_delete_post( $row->ID, true );
+            $deleted++;
+
+            LuwiPress_Logger::log( sprintf( 'Re-translate: deleted broken #%d (%s, %s) — title="%s" slug="%s"',
+                $row->ID, $row->language_code, $row->post_type, $row->post_title, $row->post_name ), 'info' );
+        }
+
+        wp_send_json_success( array(
+            'fixed'   => $deleted,
+            'message' => sprintf( '%d broken translations removed. Use "Translate All" to re-create them.', $deleted ),
+        ) );
     }
 }

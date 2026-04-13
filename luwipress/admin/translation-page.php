@@ -393,6 +393,18 @@ $missing_count = $total_possible - $total_translated;
 					<span class="tm-check"><span class="dashicons dashicons-yes-alt"></span></span>
 				<?php endif; ?>
 			</div>
+			<?php if ( $tmiss > 0 ) : ?>
+			<div class="tm-tax-progress" id="tax-progress-<?php echo esc_attr( $tax_slug ); ?>" style="display:none;">
+				<div class="tm-live-wrapper">
+					<div class="tm-live-header">
+						<span class="tm-live-counter">0 / <?php echo $tmiss; ?></span>
+						<span class="tm-live-status"><?php esc_html_e( 'Preparing...', 'luwipress' ); ?></span>
+					</div>
+					<div class="tm-live-bar-full"><div class="tm-live-fill-full"></div></div>
+					<div class="tm-live-item"></div>
+				</div>
+			</div>
+			<?php endif; ?>
 			<?php endforeach; ?>
 		</div>
 	</div>
@@ -552,6 +564,16 @@ $missing_count = $total_possible - $total_translated;
 					<span class="dashicons dashicons-trash"></span> <?php esc_html_e( 'Clean', 'luwipress' ); ?>
 				</button>
 				<span id="luwipress-clean-orphans-result" class="tm-tool-result"></span>
+			</div>
+			<div class="tm-tool-card">
+				<div class="tm-tool-info">
+					<strong><?php esc_html_e( 'Re-translate Broken', 'luwipress' ); ?></strong>
+					<span><?php esc_html_e( 'Finds translated posts with empty titles or numeric slugs and queues them for re-translation.', 'luwipress' ); ?></span>
+				</div>
+				<button type="button" id="luwipress-retranslate-broken" class="tm-btn tm-btn-secondary">
+					<span class="dashicons dashicons-update"></span> <?php esc_html_e( 'Re-translate', 'luwipress' ); ?>
+				</button>
+				<span id="luwipress-retranslate-broken-result" class="tm-tool-result"></span>
 			</div>
 		</div>
 	</div>
@@ -773,19 +795,29 @@ $missing_count = $total_possible - $total_translated;
 			});
 		});
 
-		// ─── Taxonomy Translation: AJAX ───
+		// ─── Taxonomy Translation: AJAX with live per-term progress ───
 		document.querySelectorAll('.tm-translate-tax-btn').forEach(function(btn) {
 			btn.addEventListener('click', function() {
-				var taxonomy  = btn.dataset.taxonomy;
-				var languages = btn.dataset.languages;
-				var resultEl  = document.getElementById('tax-result-' + taxonomy);
+				var taxonomy    = btn.dataset.taxonomy;
+				var languages   = btn.dataset.languages;
+				var missing     = parseInt(btn.dataset.missing) || 0;
+				var resultEl    = document.getElementById('tax-result-' + taxonomy);
+				var progressEl  = document.getElementById('tax-progress-' + taxonomy);
+				var counterEl   = progressEl ? progressEl.querySelector('.tm-live-counter') : null;
+				var statusEl    = progressEl ? progressEl.querySelector('.tm-live-status') : null;
+				var fillEl      = progressEl ? progressEl.querySelector('.tm-live-fill-full') : null;
+				var itemEl      = progressEl ? progressEl.querySelector('.tm-live-item') : null;
 
 				btn.disabled = true;
-				btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Translating...';
+				btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Fetching...';
 				if (resultEl) { resultEl.textContent = ''; resultEl.className = 'tm-tax-result'; }
+				if (progressEl) progressEl.style.display = 'block';
+				if (statusEl) statusEl.textContent = 'Loading terms...';
+				if (fillEl) fillEl.style.width = '0%';
 
+				// Step 1: Fetch missing terms
 				var fd = new FormData();
-				fd.append('action', 'luwipress_translate_taxonomy_batch');
+				fd.append('action', 'luwipress_get_missing_terms');
 				fd.append('nonce', nonce);
 				fd.append('taxonomy', taxonomy);
 				fd.append('languages', languages);
@@ -793,26 +825,75 @@ $missing_count = $total_possible - $total_translated;
 				fetch(ajaxurl, { method: 'POST', body: fd })
 				.then(function(r) { return r.json(); })
 				.then(function(d) {
-					btn.disabled = false;
-					if (d.success) {
-						btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> Done';
-						btn.classList.add('tm-btn-done');
-						if (resultEl) {
-							resultEl.textContent = (d.data.terms_sent || 0) + ' terms translated';
-							resultEl.className = 'tm-tax-result result-ok';
-						}
-						setTimeout(function() { location.reload(); }, 2000);
-					} else {
-						btn.innerHTML = '<span class="dashicons dashicons-translation"></span> Retry';
-						if (resultEl) {
-							resultEl.textContent = d.data || 'Error';
-							resultEl.className = 'tm-tax-result result-err';
-						}
+					if (!d.success || !d.data.items || !d.data.items.length) {
+						btn.disabled = false;
+						btn.innerHTML = '<span class="dashicons dashicons-translation"></span> Nothing to translate';
+						if (statusEl) statusEl.textContent = 'No missing terms found.';
+						return;
 					}
+
+					var items = d.data.items;
+					var total = items.length;
+					var done = 0, failed = 0;
+
+					if (counterEl) counterEl.textContent = '0 / ' + total;
+					if (statusEl) statusEl.textContent = 'Translating...';
+					btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> 0/' + total;
+
+					// Step 2: Translate one by one
+					function translateNextTerm() {
+						if (done + failed >= total) {
+							btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> ' + done + ' done';
+							btn.classList.add('tm-btn-done');
+							if (counterEl) counterEl.textContent = done + ' / ' + total;
+							if (statusEl) {
+								statusEl.textContent = done + ' translated' + (failed > 0 ? ', ' + failed + ' failed' : '') + '. Reloading...';
+								statusEl.style.color = 'var(--n8n-success)';
+							}
+							if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-success)'; }
+							if (itemEl) itemEl.textContent = '';
+							setTimeout(function() { location.reload(); }, 2000);
+							return;
+						}
+
+						var idx = done + failed;
+						var item = items[idx];
+						var pct = Math.round((idx / total) * 100);
+
+						if (counterEl) counterEl.textContent = (idx + 1) + ' / ' + total;
+						if (statusEl) { statusEl.textContent = 'Translating...'; statusEl.style.color = ''; }
+						if (fillEl) fillEl.style.width = pct + '%';
+						if (itemEl) itemEl.textContent = item.name + ' → ' + item.lang.toUpperCase();
+						btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + (idx + 1) + '/' + total;
+
+						var tfd = new FormData();
+						tfd.append('action', 'luwipress_translate_single_term');
+						tfd.append('nonce', nonce);
+						tfd.append('term_id', item.term_id);
+						tfd.append('taxonomy', taxonomy);
+						tfd.append('language', item.lang);
+
+						fetch(ajaxurl, { method: 'POST', body: tfd })
+						.then(function(r) { return r.json(); })
+						.then(function(r) {
+							if (r.success) {
+								done++;
+							} else {
+								failed++;
+								var errMsg = (r.data && typeof r.data === 'string') ? r.data : 'Error';
+								if (statusEl) { statusEl.textContent = item.name + ': ' + errMsg; statusEl.style.color = 'var(--n8n-error)'; }
+							}
+							translateNextTerm();
+						})
+						.catch(function() { failed++; translateNextTerm(); });
+					}
+
+					translateNextTerm();
 				})
-				.catch(function() {
+				.catch(function(err) {
 					btn.disabled = false;
 					btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Error';
+					if (statusEl) statusEl.textContent = 'Failed: ' + err.message;
 				});
 			});
 		});
@@ -851,6 +932,39 @@ $missing_count = $total_possible - $total_translated;
 		toolClick('luwipress-fix-images', 'luwipress-fix-images-result', 'luwipress_fix_translation_images');
 		toolClick('luwipress-clean-orphans', 'luwipress-clean-orphans-result', 'luwipress_clean_orphan_translations', null,
 			<?php echo wp_json_encode( __( 'This will delete orphan WPML translation records. Continue?', 'luwipress' ) ); ?>);
+
+		// ─── Re-translate broken ───
+		(function() {
+			var rbtn = document.getElementById('luwipress-retranslate-broken');
+			if (!rbtn) return;
+			rbtn.addEventListener('click', function() {
+				if (!confirm(<?php echo wp_json_encode( __( 'This will delete broken translations (empty title, numeric slug, untranslated title) and let you re-translate them. Continue?', 'luwipress' ) ); ?>)) return;
+				var result = document.getElementById('luwipress-retranslate-broken-result');
+				rbtn.disabled = true; rbtn.classList.add('tm-btn-loading');
+				result.textContent = '';
+				var fd = new FormData();
+				fd.append('action', 'luwipress_retranslate_broken');
+				fd.append('nonce', nonce);
+				fetch(ajaxurl, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					rbtn.disabled = false; rbtn.classList.remove('tm-btn-loading');
+					if (d.success) {
+						result.textContent = d.data.message;
+						result.className = 'tm-tool-result result-ok';
+						if (d.data.fixed > 0) setTimeout(function() { location.reload(); }, 2000);
+					} else {
+						result.textContent = d.data || 'Error';
+						result.className = 'tm-tool-result result-err';
+					}
+				})
+				.catch(function() {
+					rbtn.disabled = false; rbtn.classList.remove('tm-btn-loading');
+					result.textContent = 'Request failed';
+					result.className = 'tm-tool-result result-err';
+				});
+			});
+		})();
 	})();
 	</script>
 

@@ -56,7 +56,11 @@ class LuwiPress_Elementor {
 
         LuwiPress_Logger::log( 'Cron: translating Elementor page #' . $source_id . ' → ' . $target_language, 'info' );
 
-        $result = $this->translate_page( $source_id, $target_language );
+        try {
+            $result = $this->translate_page( $source_id, $target_language );
+        } catch ( \Throwable $e ) {
+            $result = new \WP_Error( 'exception', $e->getMessage() );
+        }
 
         if ( is_wp_error( $result ) ) {
             update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
@@ -2871,7 +2875,7 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
         // Find the target snapshot
         $target = null;
         if ( empty( $snapshot_id ) ) {
-            // Most recent (after the backup we just created, the original most recent is at index 1)
+            // Most recent — $snapshots is the local copy fetched before create_snapshot() updated post meta
             $target = $snapshots[0] ?? null;
         } else {
             foreach ( $snapshots as $snap ) {
