@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, n8n, product enrichment
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.10.0
+Stable tag: 2.0.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -132,6 +132,51 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 2.0.4 — Translation Pipeline Hardening =
+* SECURITY: SQL injection fix — parameterized IN() placeholders in wpdb->prepare()
+* SECURITY: XSS fix — esc_html() on translated titles in AJAX responses
+* SECURITY: Race condition fix — transient lock on WPML translation creation
+* SECURITY: Nonce field added to Translation Manager form
+* FIX: Fatal error — replaced new WP_Post() with get_post()
+* FIX: Slug generation — translated posts now get sanitized slugs from translated title
+* FIX: Excerpt extraction — blog listing excerpts from first text-editor widget
+* FIX: WPML element_type dynamic (was hardcoded post_product for pages/posts)
+* FIX: WooCommerce meta copy guarded to product post_type only
+* FIX: Category taxonomy dynamic per post_type (was hardcoded product_cat)
+* FIX: Cron exception handling — try-catch prevents stuck "translating" status
+* NEW: Auto-snapshot before Elementor page translation (rollback support)
+* NEW: WP Revision integration — pre-translation revision saved, auto-revert on failure
+* NEW: Translation progress polling — AJAX endpoint for background job status
+* NEW: JS poller in Translation Manager for Elementor background jobs
+* NEW: Per-term taxonomy translation with live progress bar
+* NEW: "Re-translate Broken" maintenance tool — fixes empty title / numeric slug posts
+* IMPROVED: REST API accepts post_id param (backward compat product_id)
+* IMPROVED: Response key items (backward compat products)
+
+= 2.0.3 — Elementor Chunked Translation & KG Redesign =
+* NEW: Elementor page translation with chunked AI (background WP Cron)
+* NEW: ElementsKit heading widget support (ekit_heading_title, ekit_heading_extra_title)
+* NEW: Knowledge Graph redesign — product health bar, category/language panels, hover tooltips
+* FIX: Translation pipeline source language from WPML (was using target language option)
+* FIX: Taxonomy translation source_language_code fix
+* FIX: Grey overlay backdrop removed from KG sidebar panel
+
+= 2.0.2 — Translation Manager & Elementor Tools =
+* NEW: Translation Manager UI — step-based dashboard with coverage tracking
+* NEW: 20+ Elementor WebMCP tools — translate, style, bulk-update, snapshot, rollback
+* NEW: Elementor page outline endpoint for AI agents
+
+= 2.0.1 — Standalone AI Engine =
+* NEW: Multi-provider AI Engine (OpenAI, Anthropic, Google)
+* NEW: Job Queue with WP Cron for async processing
+* NEW: Token Tracker with budget enforcement
+* REMOVED: n8n dependency — all AI calls are now native
+
+= 2.0.0 — LuwiPress Rebrand =
+* REBRAND: n8nPress → LuwiPress
+* NEW: Standalone plugin architecture (no external dependencies)
+* NEW: Plugin Detector — auto-detects SEO, Translation, SMTP, CRM plugins
 
 = 1.10.0 — WebMCP: MCP Server for AI Agents =
 * NEW: MCP Streamable HTTP server at /luwipress/v1/mcp (spec 2025-03-26)
