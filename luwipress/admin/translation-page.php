@@ -567,8 +567,8 @@ $missing_count = $total_possible - $total_translated;
 			</div>
 			<div class="tm-tool-card">
 				<div class="tm-tool-info">
-					<strong><?php esc_html_e( 'Re-translate Broken', 'luwipress' ); ?></strong>
-					<span><?php esc_html_e( 'Finds translated posts with empty titles or numeric slugs and queues them for re-translation.', 'luwipress' ); ?></span>
+					<strong><?php esc_html_e( 'Fix Broken Translations', 'luwipress' ); ?></strong>
+					<span><?php esc_html_e( 'Fixes posts with empty titles or numeric slugs, then queues Elementor pages for re-translation. Safe — no deletions.', 'luwipress' ); ?></span>
 				</div>
 				<button type="button" id="luwipress-retranslate-broken" class="tm-btn tm-btn-secondary">
 					<span class="dashicons dashicons-update"></span> <?php esc_html_e( 'Re-translate', 'luwipress' ); ?>
@@ -948,7 +948,7 @@ $missing_count = $total_possible - $total_translated;
 			var rbtn = document.getElementById('luwipress-retranslate-broken');
 			if (!rbtn) return;
 			rbtn.addEventListener('click', function() {
-				if (!confirm(<?php echo wp_json_encode( __( 'This will delete broken translations (empty title, numeric slug, untranslated title) and let you re-translate them. Continue?', 'luwipress' ) ); ?>)) return;
+				if (!confirm(<?php echo wp_json_encode( __( 'This will fix posts with empty titles and numeric slugs, then queue Elementor pages for re-translation. No posts will be deleted. Continue?', 'luwipress' ) ); ?>)) return;
 				var result = document.getElementById('luwipress-retranslate-broken-result');
 				rbtn.disabled = true; rbtn.classList.add('tm-btn-loading');
 				result.textContent = '';

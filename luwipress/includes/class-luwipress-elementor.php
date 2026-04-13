@@ -71,13 +71,31 @@ class LuwiPress_Elementor {
             ) ) );
             LuwiPress_Logger::log( 'Cron: Elementor translation FAILED #' . $source_id . ' → ' . $target_language . ': ' . $result->get_error_message(), 'error' );
         } else {
+            // Verify translated post has a proper title and slug
+            $tid = $result['translated_id'] ?? 0;
+            if ( $tid ) {
+                $translated_post = get_post( $tid );
+                if ( $translated_post && ( empty( $translated_post->post_title ) || is_numeric( $translated_post->post_name ) ) ) {
+                    $source = get_post( $source_id );
+                    $fix = array( 'ID' => $tid );
+                    if ( empty( $translated_post->post_title ) && $source ) {
+                        $fix['post_title'] = $source->post_title;
+                    }
+                    if ( is_numeric( $translated_post->post_name ) ) {
+                        $fix['post_name'] = sanitize_title( $translated_post->post_title ?: $source->post_title ) . '-' . $target_language;
+                    }
+                    wp_update_post( $fix );
+                    LuwiPress_Logger::log( 'Cron: fixed missing title/slug on #' . $tid, 'warning' );
+                }
+            }
+
             update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
                 'status'        => 'completed',
                 'language'      => $target_language,
-                'translated_id' => $result['translated_id'] ?? 0,
+                'translated_id' => $tid,
                 'finished'      => current_time( 'mysql' ),
             ) ) );
-            LuwiPress_Logger::log( 'Cron: Elementor translation completed #' . $source_id . ' → #' . ( $result['translated_id'] ?? '?' ) . ' (' . $target_language . ')', 'info' );
+            LuwiPress_Logger::log( 'Cron: Elementor translation completed #' . $source_id . ' → #' . ( $tid ?: '?' ) . ' (' . $target_language . ')', 'info' );
         }
     }
 
@@ -821,6 +839,22 @@ class LuwiPress_Elementor {
             }
         }
 
+        // Fallback: if no widget title found, translate the source post title via AI
+        $source_post = get_post( $post_id );
+        if ( empty( $translated_title ) && $source_post && ! empty( $source_post->post_title ) ) {
+            $ai_title = LuwiPress_AI_Engine::dispatch( 'title-translation', LuwiPress_AI_Engine::build_messages(
+                sprintf( 'Translate this title from %s to %s. Return ONLY the translated title, nothing else: "%s"',
+                    $source_name, $target_name, $source_post->post_title )
+            ), array( 'max_tokens' => 256 ) );
+            if ( ! is_wp_error( $ai_title ) && ! empty( trim( $ai_title ) ) ) {
+                $translated_title = strip_tags( trim( $ai_title, " \t\n\r\"'." ) );
+            } else {
+                // Last resort: keep source title (better than empty)
+                $translated_title = $source_post->post_title;
+                LuwiPress_Logger::log( 'Title translation failed for #' . $post_id . ', keeping source title', 'warning' );
+            }
+        }
+
         // Create or update WPML translation
         $result = $this->save_translated_page( $post_id, $target_language, $translated_data );
         if ( is_wp_error( $result ) ) {
@@ -828,18 +862,21 @@ class LuwiPress_Elementor {
             return $result;
         }
 
-        // Update post_title, slug, and excerpt on the translated post
+        // ALWAYS update title, slug, and excerpt on the translated post
         if ( ! empty( $result['translated_id'] ) ) {
             $tid = $result['translated_id'];
             $update = array( 'ID' => $tid );
 
-            // Title: use translated widget title, fall back to source title
+            // Title: always set (never leave empty)
             if ( ! empty( $translated_title ) ) {
                 $update['post_title'] = $translated_title;
                 $update['post_name']  = sanitize_title( $translated_title );
+            } elseif ( $source_post ) {
+                $update['post_title'] = $source_post->post_title;
+                $update['post_name']  = sanitize_title( $source_post->post_title ) . '-' . $target_language;
             }
 
-            // Excerpt: extract plain text from first text-editor widget for blog listings
+            // Excerpt: extract from first text-editor widget
             $excerpt_text = '';
             foreach ( $trans_map as $wid => $fields ) {
                 foreach ( $fields as $field => $text ) {

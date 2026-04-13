@@ -2819,8 +2819,8 @@ class LuwiPress_Translation {
         global $wpdb;
         $default_lang = apply_filters( 'wpml_default_language', get_locale() );
 
-        // Find translated posts/pages/products with empty title OR numeric slug (broken translations)
-        // IMPORTANT: Only content types — never touch nav_menu_item, revision, etc.
+        // Find translated posts/pages with empty title OR numeric slug
+        // SAFE: only post, page, product — never nav_menu_item or other types
         $safe_types = array( 'post', 'page', 'product' );
         $type_ph    = implode( ',', array_fill( 0, count( $safe_types ), '%s' ) );
         $sql        = sprintf(
@@ -2843,23 +2843,56 @@ class LuwiPress_Translation {
             wp_send_json_success( array( 'fixed' => 0, 'message' => 'No broken translations found.' ) );
         }
 
-        $deleted = 0;
+        // FIX broken posts in-place: find source, queue re-translation via cron
+        $fixed = 0;
+        $queued = 0;
         foreach ( $broken as $row ) {
-            // Delete the broken translation post — WPML record stays, will be recreated
-            $wpdb->delete( $wpdb->prefix . 'icl_translations', array(
-                'element_id'   => $row->ID,
-                'element_type' => 'post_' . $row->post_type,
+            // Find source post for this translation
+            $source_id = $wpdb->get_var( $wpdb->prepare(
+                "SELECT element_id FROM {$wpdb->prefix}icl_translations
+                 WHERE trid = %d AND source_language_code IS NULL",
+                $row->trid
             ) );
-            wp_delete_post( $row->ID, true );
-            $deleted++;
 
-            LuwiPress_Logger::log( sprintf( 'Re-translate: deleted broken #%d (%s, %s) — title="%s" slug="%s"',
-                $row->ID, $row->language_code, $row->post_type, $row->post_title, $row->post_name ), 'info' );
+            if ( ! $source_id ) {
+                continue;
+            }
+
+            $source = get_post( absint( $source_id ) );
+            if ( ! $source ) {
+                continue;
+            }
+
+            // Fix 1: If title empty, copy source title as placeholder
+            if ( empty( $row->post_title ) ) {
+                wp_update_post( array( 'ID' => $row->ID, 'post_title' => $source->post_title ) );
+            }
+
+            // Fix 2: If slug numeric, generate from current title
+            if ( is_numeric( $row->post_name ) ) {
+                $title_for_slug = ! empty( $row->post_title ) ? $row->post_title : $source->post_title;
+                wp_update_post( array( 'ID' => $row->ID, 'post_name' => sanitize_title( $title_for_slug ) . '-' . $row->language_code ) );
+            }
+
+            $fixed++;
+
+            // Queue Elementor re-translation via cron (non-destructive — overwrites _elementor_data)
+            if ( class_exists( 'LuwiPress_Elementor' ) && LuwiPress_Elementor::is_elementor_page( $source_id ) ) {
+                wp_schedule_single_event( time() + $queued, 'luwipress_elementor_translate_single', array( absint( $source_id ), $row->language_code ) );
+                $queued++;
+            }
         }
 
+        if ( $queued > 0 ) {
+            spawn_cron();
+        }
+
+        LuwiPress_Logger::log( sprintf( 'Re-translate broken: %d fixed, %d queued for re-translation', $fixed, $queued ), 'info' );
+
         wp_send_json_success( array(
-            'fixed'   => $deleted,
-            'message' => sprintf( '%d broken translations removed. Use "Translate All" to re-create them.', $deleted ),
+            'fixed'   => $fixed,
+            'queued'  => $queued,
+            'message' => sprintf( '%d broken posts fixed. %d queued for Elementor re-translation via background jobs.', $fixed, $queued ),
         ) );
     }
 
