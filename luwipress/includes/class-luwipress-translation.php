@@ -341,17 +341,26 @@ class LuwiPress_Translation {
             $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese', 'pt-pt' => 'Portuguese', 'ko' => 'Korean' );
             $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
 
-            // Check if this is an Elementor page with long content → use chunked translation
-            $is_elementor_page = LuwiPress_Elementor::is_elementor_page( $product_id );
-            $elementor_content_length = 0;
-            if ( $is_elementor_page ) {
-                $raw_edata = get_post_meta( $product_id, '_elementor_data', true );
-                $elementor_content_length = strlen( $raw_edata ?: '' );
-            }
-            $use_chunked = $is_elementor_page && $elementor_content_length > 5000;
+            // Elementor pages: ALWAYS use cron background job (never sync — avoids timeout)
+            $is_elementor_page = class_exists( 'LuwiPress_Elementor' ) && LuwiPress_Elementor::is_elementor_page( $product_id );
 
-            if ( $use_chunked ) {
-                LuwiPress_Logger::log( 'Elementor chunked translation mode for #' . $product_id . ' (elementor_data=' . $elementor_content_length . ' chars)', 'info' );
+            if ( $is_elementor_page ) {
+                foreach ( $target_languages as $lang ) {
+                    update_post_meta( $product_id, '_luwipress_translation_status', wp_json_encode( array(
+                        'status'   => 'queued',
+                        'language' => $lang,
+                        'queued'   => current_time( 'mysql' ),
+                    ) ) );
+                    wp_schedule_single_event( time(), 'luwipress_elementor_translate_single', array( $product_id, $lang ) );
+                }
+                spawn_cron();
+                LuwiPress_Logger::log( 'Elementor page #' . $product_id . ' queued for background translation → ' . implode( ',', $target_languages ), 'info' );
+                return rest_ensure_response( array(
+                    'status'      => 'queued',
+                    'post_id'     => $product_id,
+                    'languages'   => $target_languages,
+                    'message'     => 'Elementor page queued for background translation',
+                ) );
             }
 
             foreach ( $target_languages as $lang ) {
@@ -359,60 +368,6 @@ class LuwiPress_Translation {
                 update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_requested', current_time( 'c' ) );
 
                 $target_name = $lang_names[ $lang ] ?? ucfirst( $lang );
-
-                if ( $use_chunked ) {
-                    // ── Elementor Chunked Translation Path ──
-                    // 1. Translate only the title via a short AI call
-                    $title_to_translate = $product ? $product->get_name() : $post->post_title;
-                    $translated_title = $this->translate_html_single( $title_to_translate, $source_name, $target_name );
-                    if ( is_wp_error( $translated_title ) || empty( $translated_title ) ) {
-                        $translated_title = $title_to_translate;
-                        LuwiPress_Logger::log( 'Elementor title translation failed for ' . $lang . ', keeping original', 'warning' );
-                    }
-                    // Strip any tags from title
-                    $translated_title = strip_tags( $translated_title );
-
-                    // 2. Create/update WPML post via callback (with placeholder description)
-                    //    Set _luwipress_elementor_chunked flag so copy_elementor_translated is skipped
-                    update_post_meta( $product_id, '_luwipress_elementor_chunked', '1' );
-
-                    $callback_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/callback' );
-                    $callback_request->set_body_params( array(
-                        'product_id' => $product_id,
-                        'language'   => $lang,
-                        'content'    => array(
-                            'name'              => $translated_title,
-                            'description'       => '', // Will be handled by chunked Elementor translation
-                            'short_description' => '',
-                            'meta_title'        => '',
-                            'meta_description'  => '',
-                            'focus_keyword'     => '',
-                            'slug'              => sanitize_title( $translated_title ),
-                        ),
-                        'status' => 'completed',
-                    ) );
-                    $this->handle_translation_callback( $callback_request );
-
-                    // 3. Find the translated post ID created by WPML
-                    $post_type     = $post->post_type;
-                    $translated_id = apply_filters( 'wpml_object_id', $product_id, $post_type, false, $lang );
-
-                    if ( $translated_id && $translated_id !== $product_id ) {
-                        // 4. Translate Elementor data chunk by chunk and write to target post
-                        $chunk_result = $this->translate_elementor_chunked( $product_id, $translated_id, $source_name, $target_name );
-                        if ( is_wp_error( $chunk_result ) ) {
-                            update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'failed' );
-                            LuwiPress_Logger::log( 'Elementor chunked translation failed for #' . $product_id . ' → ' . $lang . ': ' . $chunk_result->get_error_message(), 'error' );
-                        } else {
-                            LuwiPress_Logger::log( 'Elementor chunked translation completed: #' . $product_id . ' → #' . $translated_id . ' (' . $lang . ')', 'info' );
-                        }
-                    } else {
-                        LuwiPress_Logger::log( 'Elementor chunked: no WPML translated post found for #' . $product_id . ' → ' . $lang, 'warning' );
-                    }
-
-                    delete_post_meta( $product_id, '_luwipress_elementor_chunked' );
-                    continue;
-                }
 
                 // ── Standard Translation Path (non-Elementor or short content) ──
 
