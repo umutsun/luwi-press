@@ -805,29 +805,25 @@ $missing_count = $total_possible - $total_translated;
 			});
 		});
 
-		// ─── Taxonomy Translation: AJAX with live per-term progress ───
+		// ─── Taxonomy Translation: AJAX batch with progress ───
 		document.querySelectorAll('.tm-translate-tax-btn').forEach(function(btn) {
 			btn.addEventListener('click', function() {
-				var taxonomy    = btn.dataset.taxonomy;
-				var languages   = btn.dataset.languages;
-				var missing     = parseInt(btn.dataset.missing) || 0;
-				var resultEl    = document.getElementById('tax-result-' + taxonomy);
+				var taxonomy  = btn.dataset.taxonomy;
+				var languages = btn.dataset.languages;
+				var resultEl  = document.getElementById('tax-result-' + taxonomy);
 				var progressEl  = document.getElementById('tax-progress-' + taxonomy);
-				var counterEl   = progressEl ? progressEl.querySelector('.tm-live-counter') : null;
 				var statusEl    = progressEl ? progressEl.querySelector('.tm-live-status') : null;
 				var fillEl      = progressEl ? progressEl.querySelector('.tm-live-fill-full') : null;
-				var itemEl      = progressEl ? progressEl.querySelector('.tm-live-item') : null;
 
 				btn.disabled = true;
-				btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Fetching...';
+				btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Translating...';
 				if (resultEl) { resultEl.textContent = ''; resultEl.className = 'tm-tax-result'; }
 				if (progressEl) progressEl.style.display = 'block';
-				if (statusEl) statusEl.textContent = 'Loading terms...';
-				if (fillEl) fillEl.style.width = '0%';
+				if (statusEl) statusEl.textContent = 'Sending to AI...';
+				if (fillEl) { fillEl.style.width = '30%'; fillEl.style.transition = 'width 2s'; }
 
-				// Step 1: Fetch missing terms
 				var fd = new FormData();
-				fd.append('action', 'luwipress_get_missing_terms');
+				fd.append('action', 'luwipress_translate_taxonomy_batch');
 				fd.append('nonce', nonce);
 				fd.append('taxonomy', taxonomy);
 				fd.append('languages', languages);
@@ -835,75 +831,25 @@ $missing_count = $total_possible - $total_translated;
 				fetch(ajaxurl, { method: 'POST', body: fd })
 				.then(function(r) { return r.json(); })
 				.then(function(d) {
-					if (!d.success || !d.data.items || !d.data.items.length) {
+					if (d.success) {
+						btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> Done';
+						btn.classList.add('tm-btn-done');
+						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-success)'; }
+						if (statusEl) { statusEl.textContent = (d.data.terms_sent || 0) + ' terms translated. Reloading...'; statusEl.style.color = 'var(--n8n-success)'; }
+						if (resultEl) { resultEl.textContent = (d.data.terms_sent || 0) + ' terms'; resultEl.className = 'tm-tax-result result-ok'; }
+						setTimeout(function() { location.reload(); }, 2000);
+					} else {
 						btn.disabled = false;
-						btn.innerHTML = '<span class="dashicons dashicons-translation"></span> Nothing to translate';
-						if (statusEl) statusEl.textContent = 'No missing terms found.';
-						return;
+						btn.innerHTML = '<span class="dashicons dashicons-translation"></span> Retry';
+						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-error)'; }
+						if (statusEl) { statusEl.textContent = d.data || 'Error'; statusEl.style.color = 'var(--n8n-error)'; }
+						if (resultEl) { resultEl.textContent = d.data || 'Error'; resultEl.className = 'tm-tax-result result-err'; }
 					}
-
-					var items = d.data.items;
-					var total = items.length;
-					var done = 0, failed = 0;
-
-					if (counterEl) counterEl.textContent = '0 / ' + total;
-					if (statusEl) statusEl.textContent = 'Translating...';
-					btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> 0/' + total;
-
-					// Step 2: Translate one by one
-					function translateNextTerm() {
-						if (done + failed >= total) {
-							btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> ' + done + ' done';
-							btn.classList.add('tm-btn-done');
-							if (counterEl) counterEl.textContent = done + ' / ' + total;
-							if (statusEl) {
-								statusEl.textContent = done + ' translated' + (failed > 0 ? ', ' + failed + ' failed' : '') + '. Reloading...';
-								statusEl.style.color = 'var(--n8n-success)';
-							}
-							if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-success)'; }
-							if (itemEl) itemEl.textContent = '';
-							setTimeout(function() { location.reload(); }, 2000);
-							return;
-						}
-
-						var idx = done + failed;
-						var item = items[idx];
-						var pct = Math.round((idx / total) * 100);
-
-						if (counterEl) counterEl.textContent = (idx + 1) + ' / ' + total;
-						if (statusEl) { statusEl.textContent = 'Translating...'; statusEl.style.color = ''; }
-						if (fillEl) fillEl.style.width = pct + '%';
-						if (itemEl) itemEl.textContent = item.name + ' → ' + item.lang.toUpperCase();
-						btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + (idx + 1) + '/' + total;
-
-						var tfd = new FormData();
-						tfd.append('action', 'luwipress_translate_single_term');
-						tfd.append('nonce', nonce);
-						tfd.append('term_id', item.term_id);
-						tfd.append('taxonomy', taxonomy);
-						tfd.append('language', item.lang);
-
-						fetch(ajaxurl, { method: 'POST', body: tfd })
-						.then(function(r) { return r.json(); })
-						.then(function(r) {
-							if (r.success) {
-								done++;
-							} else {
-								failed++;
-								var errMsg = (r.data && typeof r.data === 'string') ? r.data : 'Error';
-								if (statusEl) { statusEl.textContent = item.name + ': ' + errMsg; statusEl.style.color = 'var(--n8n-error)'; }
-							}
-							translateNextTerm();
-						})
-						.catch(function() { failed++; translateNextTerm(); });
-					}
-
-					translateNextTerm();
 				})
-				.catch(function(err) {
+				.catch(function() {
 					btn.disabled = false;
 					btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Error';
-					if (statusEl) statusEl.textContent = 'Failed: ' + err.message;
+					if (statusEl) statusEl.textContent = 'Request failed';
 				});
 			});
 		});
