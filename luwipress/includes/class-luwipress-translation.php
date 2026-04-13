@@ -37,6 +37,7 @@ class LuwiPress_Translation {
         add_action('wp_ajax_luwipress_get_missing_terms', [$this, 'ajax_get_missing_terms']);
         add_action('wp_ajax_luwipress_translate_single_term', [$this, 'ajax_translate_single_term']);
         add_action('wp_ajax_luwipress_retranslate_broken', [$this, 'ajax_retranslate_broken']);
+        add_action('wp_ajax_luwipress_sync_wpml_menus', [$this, 'ajax_sync_wpml_menus']);
     }
 
     /**
@@ -2860,5 +2861,84 @@ class LuwiPress_Translation {
             'fixed'   => $deleted,
             'message' => sprintf( '%d broken translations removed. Use "Translate All" to re-create them.', $deleted ),
         ) );
+    }
+
+    // ─── AJAX: Sync WPML menus from default language ────────────────────
+
+    public function ajax_sync_wpml_menus() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            wp_send_json_error( 'WPML not active' );
+        }
+
+        global $wpdb;
+        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $target_langs = apply_filters( 'wpml_active_languages', array() );
+
+        // Get all menus in the default language
+        $menus = wp_get_nav_menus();
+        $synced = 0;
+
+        foreach ( $menus as $menu ) {
+            // Check if this menu belongs to default language
+            $menu_lang = apply_filters( 'wpml_element_language_code', null, array(
+                'element_id'   => $menu->term_id,
+                'element_type' => 'tax_nav_menu',
+            ) );
+            if ( $menu_lang !== $default_lang ) {
+                continue;
+            }
+
+            $menu_items = wp_get_nav_menu_items( $menu->term_id );
+            if ( empty( $menu_items ) ) {
+                continue;
+            }
+
+            $menu_trid = apply_filters( 'wpml_element_trid', null, $menu->term_id, 'tax_nav_menu' );
+            if ( ! $menu_trid ) {
+                continue;
+            }
+
+            // For each target language, check if menu translation exists
+            foreach ( $target_langs as $lang_code => $lang_info ) {
+                if ( $lang_code === $default_lang ) {
+                    continue;
+                }
+
+                $translated_menu_id = apply_filters( 'wpml_object_id', $menu->term_id, 'nav_menu', false, $lang_code );
+                if ( ! $translated_menu_id || $translated_menu_id === $menu->term_id ) {
+                    continue;
+                }
+
+                // Get existing translated menu items
+                $translated_items = wp_get_nav_menu_items( $translated_menu_id );
+                $existing_count = is_array( $translated_items ) ? count( $translated_items ) : 0;
+                $source_count = count( $menu_items );
+
+                // If translated menu has fewer items, sync
+                if ( $existing_count < $source_count ) {
+                    // Use WPML's sync mechanism
+                    do_action( 'wpml_sync_custom_element', $menu->term_id, 'nav_menu' );
+                    $synced++;
+                    LuwiPress_Logger::log( sprintf(
+                        'Menu sync: %s (%s → %s) — source: %d items, translated: %d items',
+                        $menu->name, $default_lang, $lang_code, $source_count, $existing_count
+                    ), 'info' );
+                }
+            }
+        }
+
+        if ( $synced > 0 ) {
+            wp_send_json_success( array(
+                'message' => sprintf( '%d menu(s) synced. Visit WPML → Menu Sync to complete item translations.', $synced ),
+            ) );
+        } else {
+            wp_send_json_success( array(
+                'message' => 'All menus are in sync. If menus are still broken, go to WPML → Menu Sync manually.',
+            ) );
+        }
     }
 }

@@ -575,6 +575,16 @@ $missing_count = $total_possible - $total_translated;
 				</button>
 				<span id="luwipress-retranslate-broken-result" class="tm-tool-result"></span>
 			</div>
+			<div class="tm-tool-card">
+				<div class="tm-tool-info">
+					<strong><?php esc_html_e( 'Sync WPML Menus', 'luwipress' ); ?></strong>
+					<span><?php esc_html_e( 'Re-syncs navigation menus from default language to all translations. Fixes missing menu items.', 'luwipress' ); ?></span>
+				</div>
+				<button type="button" id="luwipress-sync-menus" class="tm-btn tm-btn-secondary">
+					<span class="dashicons dashicons-menu"></span> <?php esc_html_e( 'Sync Menus', 'luwipress' ); ?>
+				</button>
+				<span id="luwipress-sync-menus-result" class="tm-tool-result"></span>
+			</div>
 		</div>
 	</div>
 
@@ -960,6 +970,37 @@ $missing_count = $total_possible - $total_translated;
 				})
 				.catch(function() {
 					rbtn.disabled = false; rbtn.classList.remove('tm-btn-loading');
+					result.textContent = 'Request failed';
+					result.className = 'tm-tool-result result-err';
+				});
+			});
+		})();
+
+		// ─── Sync WPML Menus ───
+		(function() {
+			var mbtn = document.getElementById('luwipress-sync-menus');
+			if (!mbtn) return;
+			mbtn.addEventListener('click', function() {
+				var result = document.getElementById('luwipress-sync-menus-result');
+				mbtn.disabled = true; mbtn.classList.add('tm-btn-loading');
+				result.textContent = '';
+				var fd = new FormData();
+				fd.append('action', 'luwipress_sync_wpml_menus');
+				fd.append('nonce', nonce);
+				fetch(ajaxurl, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					mbtn.disabled = false; mbtn.classList.remove('tm-btn-loading');
+					if (d.success) {
+						result.textContent = d.data.message;
+						result.className = 'tm-tool-result result-ok';
+					} else {
+						result.textContent = d.data || 'Error';
+						result.className = 'tm-tool-result result-err';
+					}
+				})
+				.catch(function() {
+					mbtn.disabled = false; mbtn.classList.remove('tm-btn-loading');
 					result.textContent = 'Request failed';
 					result.className = 'tm-tool-result result-err';
 				});
