@@ -1866,18 +1866,18 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
             wp_update_post( $update_data );
 
             // Write translated Elementor data directly to DB to bypass WPML meta filtering
+            // No wp_slash() — direct DB doesn't need it (wp_slash is only for update_post_meta)
             global $wpdb;
             $wpdb->update(
                 $wpdb->postmeta,
-                array( 'meta_value' => wp_slash( $translated_json ) ),
+                array( 'meta_value' => $translated_json ),
                 array( 'post_id' => $translated_id, 'meta_key' => '_elementor_data' )
             );
             if ( ! $wpdb->rows_affected ) {
-                // Meta doesn't exist yet — insert it
                 $wpdb->insert( $wpdb->postmeta, array(
                     'post_id'    => $translated_id,
                     'meta_key'   => '_elementor_data',
-                    'meta_value' => wp_slash( $translated_json ),
+                    'meta_value' => $translated_json,
                 ) );
             }
             update_post_meta( $translated_id, '_elementor_edit_mode', 'builder' );
@@ -1908,7 +1908,7 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
             $wpdb->insert( $wpdb->postmeta, array(
                 'post_id'    => $translated_id,
                 'meta_key'   => '_elementor_data',
-                'meta_value' => wp_slash( $translated_json ),
+                'meta_value' => $translated_json,
             ) );
             update_post_meta( $translated_id, '_elementor_edit_mode', 'builder' );
             update_post_meta( $translated_id, '_luwipress_elementor_translated', '1' );
