@@ -1097,68 +1097,28 @@ class LuwiPress_Translation {
     }
 
     /**
-     * Copy Elementor data to translated post with translated content.
-     * Copies the full _elementor_data JSON, then replaces text widget content
-     * with the AI-translated description using a simple search-replace approach.
+     * Handle Elementor page translation.
+     * Instead of copying _elementor_data (which would show English widgets),
+     * we REMOVE Elementor mode from the translated post so WordPress renders
+     * the translated post_content directly.
+     *
+     * For full Elementor-native translations (preserving layout), use
+     * the elementor_translate_page WebMCP tool which does widget-by-widget translation.
      */
     private function copy_elementor_translated( $source_id, $target_id, $translated ) {
-        $elementor_data = get_post_meta( $source_id, '_elementor_data', true );
-        if ( empty( $elementor_data ) ) {
-            return;
-        }
-
-        // Copy Elementor meta to target
-        update_post_meta( $target_id, '_elementor_data', $elementor_data );
-        update_post_meta( $target_id, '_elementor_edit_mode', 'builder' );
-
-        // Copy page settings
-        $page_settings = get_post_meta( $source_id, '_elementor_page_settings', true );
-        if ( $page_settings ) {
-            update_post_meta( $target_id, '_elementor_page_settings', $page_settings );
-        }
-
-        // Now try to replace widget texts with translated content
-        if ( ! empty( $translated['description'] ) && class_exists( 'LuwiPress_Elementor' ) ) {
-            $elem = LuwiPress_Elementor::get_instance();
-            $data = $elem->get_elementor_data( $target_id );
-
-            if ( ! is_wp_error( $data ) && is_array( $data ) ) {
-                // Extract original texts
-                $original_texts = $elem->extract_translatable_text( $source_id );
-
-                if ( ! empty( $original_texts ) ) {
-                    // Build a simple replacement map from original → translated
-                    // The translated description contains all the translated text
-                    $translated_desc = $translated['description'];
-
-                    // For each text widget, try to find its translation in the AI output
-                    // Simple approach: replace all original English texts in _elementor_data JSON
-                    $json_str = is_string( $elementor_data ) ? $elementor_data : wp_json_encode( $elementor_data );
-
-                    foreach ( $original_texts as $text_item ) {
-                        $original_text = $text_item['text'] ?? '';
-                        if ( strlen( $original_text ) < 5 ) continue; // Skip very short texts
-
-                        // JSON-encode the text to match the escaped format in elementor_data
-                        $search = json_encode( $original_text );
-                        $search = substr( $search, 1, -1 ); // Remove quotes
-
-                        // We can't automatically know the translated version of each widget
-                        // So we'll leave this for LuwiPress_Elementor::translate_page() to handle properly
-                    }
-
-                    // Use the Elementor translate_page method if available for proper widget-by-widget translation
-                    // For now, mark that Elementor data was copied (structure preserved, text still original)
-                    LuwiPress_Logger::log( 'Elementor data copied to #' . $target_id . ' — use elementor_translate_page for full widget translation', 'info' );
-                }
-            }
-        }
-
-        // Delete cached CSS so Elementor regenerates it
+        // Remove Elementor builder mode from translated post
+        // This forces WordPress to render post_content (which has the translation)
+        // instead of _elementor_data (which would be English)
+        delete_post_meta( $target_id, '_elementor_edit_mode' );
+        delete_post_meta( $target_id, '_elementor_data' );
         delete_post_meta( $target_id, '_elementor_css' );
+        delete_post_meta( $target_id, '_elementor_page_settings' );
         delete_post_meta( $target_id, '_elementor_page_assets' );
 
-        LuwiPress_Logger::log( 'Elementor structure copied: #' . $source_id . ' → #' . $target_id, 'info' );
+        LuwiPress_Logger::log(
+            'Elementor mode removed from translated post #' . $target_id . ' — using post_content for translation',
+            'info'
+        );
     }
 
     /**
