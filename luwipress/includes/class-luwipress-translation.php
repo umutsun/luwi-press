@@ -2818,22 +2818,25 @@ class LuwiPress_Translation {
         global $wpdb;
         $default_lang = apply_filters( 'wpml_default_language', get_locale() );
 
-        // Find translated posts with empty title OR numeric slug (broken translations)
-        $broken = $wpdb->get_results( $wpdb->prepare(
+        // Find translated posts/pages/products with empty title OR numeric slug (broken translations)
+        // IMPORTANT: Only content types — never touch nav_menu_item, revision, etc.
+        $safe_types = array( 'post', 'page', 'product' );
+        $type_ph    = implode( ',', array_fill( 0, count( $safe_types ), '%s' ) );
+        $sql        = sprintf(
             "SELECT p.ID, p.post_title, p.post_name, p.post_type, t.trid, t.language_code
              FROM {$wpdb->posts} p
              JOIN {$wpdb->prefix}icl_translations t ON p.ID = t.element_id
              WHERE t.source_language_code IS NOT NULL
-               AND t.language_code != %s
-               AND p.post_status = 'publish'
-               AND (p.post_title = '' OR p.post_name REGEXP '^[0-9]+$' OR p.post_title = (
-                   SELECT p2.post_title FROM {$wpdb->posts} p2
-                   JOIN {$wpdb->prefix}icl_translations t2 ON p2.ID = t2.element_id
-                   WHERE t2.trid = t.trid AND t2.source_language_code IS NULL LIMIT 1
-               ))
+               AND t.language_code != %%s
+               AND p.post_type IN (%s)
+               AND p.post_status IN ('publish','draft','private')
+               AND (p.post_title = '' OR p.post_name REGEXP '^[0-9]+$')
              LIMIT 100",
-            $default_lang
-        ) );
+            $type_ph
+        );
+        $broken = $wpdb->get_results(
+            $wpdb->prepare( $sql, array_merge( $safe_types, array( $default_lang ) ) )
+        );
 
         if ( empty( $broken ) ) {
             wp_send_json_success( array( 'fixed' => 0, 'message' => 'No broken translations found.' ) );
