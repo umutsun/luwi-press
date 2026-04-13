@@ -702,6 +702,15 @@ class LuwiPress_WebMCP {
         $this->register_linker_tools();
         $this->register_knowledge_graph_tools();
         $this->register_elementor_tools();
+        $this->register_admin_tools();
+        $this->register_taxonomy_tools();
+        $this->register_woo_tools();
+        $this->register_media_tools();
+        $this->register_comment_tools();
+        $this->register_settings_tools();
+        $this->register_plugin_theme_tools();
+        $this->register_menu_tools();
+        $this->register_meta_tools();
 
         /**
          * Allow third-party extensions to register additional MCP tools.
@@ -1184,7 +1193,7 @@ class LuwiPress_WebMCP {
             $trans   = LuwiPress_Translation::get_instance();
             $request = new WP_REST_Request( 'GET', '/luwipress/v1/translation/missing' );
             if ( ! empty( $args['language'] ) ) {
-                $request->set_param( 'language', $args['language'] );
+                $request->set_param( 'target_language', $args['language'] );
             }
             if ( ! empty( $args['post_type'] ) ) {
                 $request->set_param( 'post_type', $args['post_type'] );
@@ -1289,7 +1298,7 @@ class LuwiPress_WebMCP {
             $trans   = LuwiPress_Translation::get_instance();
             $request = new WP_REST_Request( 'GET', '/luwipress/v1/translation/taxonomy-missing' );
             if ( ! empty( $args['language'] ) ) {
-                $request->set_param( 'language', $args['language'] );
+                $request->set_param( 'target_languages', $args['language'] );
             }
             if ( ! empty( $args['taxonomy'] ) ) {
                 $request->set_param( 'taxonomy', $args['taxonomy'] );
@@ -2485,6 +2494,1387 @@ class LuwiPress_WebMCP {
             'id'      => $id,
             'error'   => $error,
         );
+    }
+
+    /* ───────────────────── Admin / User Tools ──────────────────────── */
+
+    private function register_admin_tools() {
+
+        $this->register_tool( 'admin_list_users', array(
+            'description' => 'List WordPress users with filtering by role, search, and pagination',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'role'     => array( 'type' => 'string', 'description' => 'Filter by role (administrator, editor, author, subscriber, customer, shop_manager)' ),
+                    'search'   => array( 'type' => 'string', 'description' => 'Search by name or email' ),
+                    'per_page' => array( 'type' => 'integer', 'description' => 'Results per page (max 100, default 20)' ),
+                    'page'     => array( 'type' => 'integer', 'description' => 'Page number (default 1)' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'List Users', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $query_args = array(
+                'number' => min( absint( $args['per_page'] ?? 20 ), 100 ),
+                'paged'  => max( 1, absint( $args['page'] ?? 1 ) ),
+            );
+            if ( ! empty( $args['role'] ) ) {
+                $query_args['role'] = sanitize_text_field( $args['role'] );
+            }
+            if ( ! empty( $args['search'] ) ) {
+                $query_args['search'] = '*' . sanitize_text_field( $args['search'] ) . '*';
+            }
+            $query = new WP_User_Query( $query_args );
+            $users = array();
+            foreach ( $query->get_results() as $user ) {
+                $users[] = array(
+                    'id'           => $user->ID,
+                    'username'     => $user->user_login,
+                    'email'        => $user->user_email,
+                    'display_name' => $user->display_name,
+                    'roles'        => $user->roles,
+                    'registered'   => $user->user_registered,
+                );
+            }
+            return array( 'users' => $users, 'total' => $query->get_total(), 'page' => $query_args['paged'] );
+        } );
+
+        $this->register_tool( 'admin_get_user', array(
+            'description' => 'Get a single user profile with full details',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'user_id' => array( 'type' => 'integer', 'description' => 'WordPress user ID (required)' ),
+                ),
+                'required' => array( 'user_id' ),
+            ),
+            'annotations' => array( 'title' => 'Get User', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $user = get_userdata( intval( $args['user_id'] ) );
+            if ( ! $user ) {
+                throw new Exception( 'User not found' );
+            }
+            $data = array(
+                'id'           => $user->ID,
+                'username'     => $user->user_login,
+                'email'        => $user->user_email,
+                'display_name' => $user->display_name,
+                'first_name'   => $user->first_name,
+                'last_name'    => $user->last_name,
+                'roles'        => $user->roles,
+                'registered'   => $user->user_registered,
+                'url'          => $user->user_url,
+            );
+            if ( function_exists( 'wc_get_customer_order_count' ) ) {
+                $data['order_count'] = wc_get_customer_order_count( $user->ID );
+                $data['total_spent'] = wc_get_customer_total_spent( $user->ID );
+            }
+            return $data;
+        } );
+
+        $this->register_tool( 'admin_create_user', array(
+            'description' => 'Create a new WordPress user with role assignment',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'username'     => array( 'type' => 'string', 'description' => 'Username (required)' ),
+                    'email'        => array( 'type' => 'string', 'description' => 'Email address (required)' ),
+                    'password'     => array( 'type' => 'string', 'description' => 'Password (auto-generated if omitted)' ),
+                    'display_name' => array( 'type' => 'string', 'description' => 'Display name' ),
+                    'first_name'   => array( 'type' => 'string', 'description' => 'First name' ),
+                    'last_name'    => array( 'type' => 'string', 'description' => 'Last name' ),
+                    'role'         => array( 'type' => 'string', 'description' => 'Role (default: subscriber)' ),
+                ),
+                'required' => array( 'username', 'email' ),
+            ),
+            'annotations' => array( 'title' => 'Create User', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $user_data = array(
+                'user_login'   => sanitize_user( $args['username'] ),
+                'user_email'   => sanitize_email( $args['email'] ),
+                'user_pass'    => $args['password'] ?? wp_generate_password( 16 ),
+                'display_name' => sanitize_text_field( $args['display_name'] ?? $args['username'] ),
+                'first_name'   => sanitize_text_field( $args['first_name'] ?? '' ),
+                'last_name'    => sanitize_text_field( $args['last_name'] ?? '' ),
+                'role'         => sanitize_text_field( $args['role'] ?? 'subscriber' ),
+            );
+            $user_id = wp_insert_user( $user_data );
+            if ( is_wp_error( $user_id ) ) {
+                throw new Exception( $user_id->get_error_message() );
+            }
+            return array( 'id' => $user_id, 'username' => $user_data['user_login'], 'email' => $user_data['user_email'], 'role' => $user_data['role'] );
+        } );
+
+        $this->register_tool( 'admin_update_user', array(
+            'description' => 'Update user profile fields (display name, email, role, meta)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'user_id'      => array( 'type' => 'integer', 'description' => 'User ID (required)' ),
+                    'email'        => array( 'type' => 'string', 'description' => 'New email' ),
+                    'display_name' => array( 'type' => 'string', 'description' => 'New display name' ),
+                    'first_name'   => array( 'type' => 'string', 'description' => 'New first name' ),
+                    'last_name'    => array( 'type' => 'string', 'description' => 'New last name' ),
+                    'role'         => array( 'type' => 'string', 'description' => 'New role' ),
+                ),
+                'required' => array( 'user_id' ),
+            ),
+            'annotations' => array( 'title' => 'Update User', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $user_id = intval( $args['user_id'] );
+            if ( ! get_userdata( $user_id ) ) {
+                throw new Exception( 'User not found' );
+            }
+            $user_data = array( 'ID' => $user_id );
+            if ( isset( $args['email'] ) ) $user_data['user_email'] = sanitize_email( $args['email'] );
+            if ( isset( $args['display_name'] ) ) $user_data['display_name'] = sanitize_text_field( $args['display_name'] );
+            if ( isset( $args['first_name'] ) ) $user_data['first_name'] = sanitize_text_field( $args['first_name'] );
+            if ( isset( $args['last_name'] ) ) $user_data['last_name'] = sanitize_text_field( $args['last_name'] );
+            if ( isset( $args['role'] ) ) $user_data['role'] = sanitize_text_field( $args['role'] );
+            $result = wp_update_user( $user_data );
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( $result->get_error_message() );
+            }
+            return array( 'id' => $user_id, 'updated' => true );
+        } );
+
+        $this->register_tool( 'admin_delete_user', array(
+            'description' => 'Delete a WordPress user with optional content reassignment',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'user_id'     => array( 'type' => 'integer', 'description' => 'User ID to delete (required)' ),
+                    'reassign_to' => array( 'type' => 'integer', 'description' => 'Reassign content to this user ID (recommended)' ),
+                ),
+                'required' => array( 'user_id' ),
+            ),
+            'annotations' => array( 'title' => 'Delete User', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            require_once ABSPATH . 'wp-admin/includes/user.php';
+            $user_id = intval( $args['user_id'] );
+            if ( ! get_userdata( $user_id ) ) {
+                throw new Exception( 'User not found' );
+            }
+            $reassign = isset( $args['reassign_to'] ) ? intval( $args['reassign_to'] ) : null;
+            $result = wp_delete_user( $user_id, $reassign );
+            if ( ! $result ) {
+                throw new Exception( 'Failed to delete user' );
+            }
+            return array( 'id' => $user_id, 'deleted' => true, 'reassigned_to' => $reassign );
+        } );
+
+        $this->register_tool( 'admin_list_roles', array(
+            'description' => 'List all registered WordPress roles with their capabilities',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'List Roles', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $wp_roles = wp_roles();
+            $roles = array();
+            foreach ( $wp_roles->roles as $slug => $role ) {
+                $count = count_users();
+                $roles[] = array(
+                    'slug'         => $slug,
+                    'name'         => $role['name'],
+                    'capabilities' => array_keys( array_filter( $role['capabilities'] ) ),
+                    'user_count'   => $count['avail_roles'][ $slug ] ?? 0,
+                );
+            }
+            return array( 'roles' => $roles );
+        } );
+    }
+
+    /* ───────────────────── Taxonomy Tools ──────────────────────────── */
+
+    private function register_taxonomy_tools() {
+
+        $this->register_tool( 'taxonomy_list_taxonomies', array(
+            'description' => 'List all registered taxonomies (built-in and custom) with their configuration',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'List Taxonomies', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $taxonomies = get_taxonomies( array( 'public' => true ), 'objects' );
+            $list = array();
+            foreach ( $taxonomies as $tax ) {
+                $count = wp_count_terms( array( 'taxonomy' => $tax->name, 'hide_empty' => false ) );
+                $list[] = array(
+                    'name'         => $tax->name,
+                    'label'        => $tax->label,
+                    'hierarchical' => $tax->hierarchical,
+                    'post_types'   => (array) $tax->object_type,
+                    'term_count'   => is_wp_error( $count ) ? 0 : absint( $count ),
+                );
+            }
+            return array( 'taxonomies' => $list );
+        } );
+
+        $this->register_tool( 'taxonomy_list_terms', array(
+            'description' => 'List terms for any taxonomy (category, post_tag, product_cat, product_tag, pa_*) with hierarchy',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'taxonomy'  => array( 'type' => 'string', 'description' => 'Taxonomy slug (required, e.g. category, product_cat, pa_color)' ),
+                    'parent'    => array( 'type' => 'integer', 'description' => 'Filter by parent term ID (0 for top-level)' ),
+                    'search'    => array( 'type' => 'string', 'description' => 'Search term name' ),
+                    'per_page'  => array( 'type' => 'integer', 'description' => 'Results per page (max 200, default 50)' ),
+                    'hide_empty' => array( 'type' => 'boolean', 'description' => 'Hide terms with no posts (default false)' ),
+                ),
+                'required' => array( 'taxonomy' ),
+            ),
+            'annotations' => array( 'title' => 'List Terms', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $taxonomy = sanitize_text_field( $args['taxonomy'] );
+            if ( ! taxonomy_exists( $taxonomy ) ) {
+                throw new Exception( "Taxonomy '{$taxonomy}' does not exist" );
+            }
+            $query = array(
+                'taxonomy'   => $taxonomy,
+                'number'     => min( absint( $args['per_page'] ?? 50 ), 200 ),
+                'hide_empty' => ! empty( $args['hide_empty'] ),
+            );
+            if ( isset( $args['parent'] ) ) {
+                $query['parent'] = absint( $args['parent'] );
+            }
+            if ( ! empty( $args['search'] ) ) {
+                $query['search'] = sanitize_text_field( $args['search'] );
+            }
+            $terms = get_terms( $query );
+            if ( is_wp_error( $terms ) ) {
+                throw new Exception( $terms->get_error_message() );
+            }
+            $list = array();
+            foreach ( $terms as $term ) {
+                $list[] = array(
+                    'id'       => $term->term_id,
+                    'name'     => $term->name,
+                    'slug'     => $term->slug,
+                    'parent'   => $term->parent,
+                    'count'    => $term->count,
+                    'description' => $term->description,
+                );
+            }
+            return array( 'taxonomy' => $taxonomy, 'terms' => $list, 'total' => count( $list ) );
+        } );
+
+        $this->register_tool( 'taxonomy_create_term', array(
+            'description' => 'Create a new term in any taxonomy with parent, description, and slug',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'taxonomy'    => array( 'type' => 'string', 'description' => 'Taxonomy slug (required)' ),
+                    'name'        => array( 'type' => 'string', 'description' => 'Term name (required)' ),
+                    'slug'        => array( 'type' => 'string', 'description' => 'Term slug (auto-generated if omitted)' ),
+                    'parent'      => array( 'type' => 'integer', 'description' => 'Parent term ID (for hierarchical taxonomies)' ),
+                    'description' => array( 'type' => 'string', 'description' => 'Term description' ),
+                ),
+                'required' => array( 'taxonomy', 'name' ),
+            ),
+            'annotations' => array( 'title' => 'Create Term', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $taxonomy = sanitize_text_field( $args['taxonomy'] );
+            if ( ! taxonomy_exists( $taxonomy ) ) {
+                throw new Exception( "Taxonomy '{$taxonomy}' does not exist" );
+            }
+            $term_args = array();
+            if ( isset( $args['slug'] ) ) $term_args['slug'] = sanitize_title( $args['slug'] );
+            if ( isset( $args['parent'] ) ) $term_args['parent'] = absint( $args['parent'] );
+            if ( isset( $args['description'] ) ) $term_args['description'] = sanitize_textarea_field( $args['description'] );
+
+            $result = wp_insert_term( sanitize_text_field( $args['name'] ), $taxonomy, $term_args );
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( $result->get_error_message() );
+            }
+            return array( 'term_id' => $result['term_id'], 'term_taxonomy_id' => $result['term_taxonomy_id'], 'taxonomy' => $taxonomy, 'name' => $args['name'] );
+        } );
+
+        $this->register_tool( 'taxonomy_update_term', array(
+            'description' => 'Update an existing term name, slug, description, or parent',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'term_id'     => array( 'type' => 'integer', 'description' => 'Term ID (required)' ),
+                    'taxonomy'    => array( 'type' => 'string', 'description' => 'Taxonomy slug (required)' ),
+                    'name'        => array( 'type' => 'string', 'description' => 'New name' ),
+                    'slug'        => array( 'type' => 'string', 'description' => 'New slug' ),
+                    'parent'      => array( 'type' => 'integer', 'description' => 'New parent term ID' ),
+                    'description' => array( 'type' => 'string', 'description' => 'New description' ),
+                ),
+                'required' => array( 'term_id', 'taxonomy' ),
+            ),
+            'annotations' => array( 'title' => 'Update Term', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $term_id  = absint( $args['term_id'] );
+            $taxonomy = sanitize_text_field( $args['taxonomy'] );
+            if ( ! taxonomy_exists( $taxonomy ) ) {
+                throw new Exception( "Taxonomy '{$taxonomy}' does not exist" );
+            }
+            $term_args = array();
+            if ( isset( $args['name'] ) ) $term_args['name'] = sanitize_text_field( $args['name'] );
+            if ( isset( $args['slug'] ) ) $term_args['slug'] = sanitize_title( $args['slug'] );
+            if ( isset( $args['parent'] ) ) $term_args['parent'] = absint( $args['parent'] );
+            if ( isset( $args['description'] ) ) $term_args['description'] = sanitize_textarea_field( $args['description'] );
+
+            $result = wp_update_term( $term_id, $taxonomy, $term_args );
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( $result->get_error_message() );
+            }
+            return array( 'term_id' => $term_id, 'taxonomy' => $taxonomy, 'updated' => true );
+        } );
+
+        $this->register_tool( 'taxonomy_delete_term', array(
+            'description' => 'Delete a term from any taxonomy',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'term_id'  => array( 'type' => 'integer', 'description' => 'Term ID to delete (required)' ),
+                    'taxonomy' => array( 'type' => 'string', 'description' => 'Taxonomy slug (required)' ),
+                ),
+                'required' => array( 'term_id', 'taxonomy' ),
+            ),
+            'annotations' => array( 'title' => 'Delete Term', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $term_id  = absint( $args['term_id'] );
+            $taxonomy = sanitize_text_field( $args['taxonomy'] );
+            if ( ! taxonomy_exists( $taxonomy ) ) {
+                throw new Exception( "Taxonomy '{$taxonomy}' does not exist" );
+            }
+            $result = wp_delete_term( $term_id, $taxonomy );
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( $result->get_error_message() );
+            }
+            if ( $result === false ) {
+                throw new Exception( 'Term not found or is default term' );
+            }
+            return array( 'term_id' => $term_id, 'taxonomy' => $taxonomy, 'deleted' => true );
+        } );
+    }
+
+    /* ───────────────────── WooCommerce Tools ───────────────────────── */
+
+    private function register_woo_tools() {
+        if ( ! class_exists( 'WooCommerce' ) ) {
+            return;
+        }
+
+        $this->register_tool( 'woo_list_orders', array(
+            'description' => 'List WooCommerce orders with filtering by status, date, customer',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'status'      => array( 'type' => 'string', 'description' => 'Order status: processing, completed, on-hold, cancelled, refunded, pending, failed, any (default: any)' ),
+                    'customer_id' => array( 'type' => 'integer', 'description' => 'Filter by customer user ID' ),
+                    'per_page'    => array( 'type' => 'integer', 'description' => 'Results per page (max 50, default 20)' ),
+                    'page'        => array( 'type' => 'integer', 'description' => 'Page number' ),
+                    'date_after'  => array( 'type' => 'string', 'description' => 'Orders after this date (YYYY-MM-DD)' ),
+                    'date_before' => array( 'type' => 'string', 'description' => 'Orders before this date (YYYY-MM-DD)' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'List Orders', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $query = array(
+                'limit'  => min( absint( $args['per_page'] ?? 20 ), 50 ),
+                'page'   => max( 1, absint( $args['page'] ?? 1 ) ),
+                'return' => 'objects',
+            );
+            $status = $args['status'] ?? 'any';
+            if ( $status !== 'any' ) {
+                $query['status'] = sanitize_text_field( $status );
+            }
+            if ( ! empty( $args['customer_id'] ) ) {
+                $query['customer_id'] = absint( $args['customer_id'] );
+            }
+            if ( ! empty( $args['date_after'] ) ) {
+                $query['date_created'] = '>' . sanitize_text_field( $args['date_after'] );
+            }
+            $orders = wc_get_orders( $query );
+            $list = array();
+            foreach ( $orders as $order ) {
+                $list[] = array(
+                    'id'              => $order->get_id(),
+                    'number'          => $order->get_order_number(),
+                    'status'          => $order->get_status(),
+                    'total'           => $order->get_total(),
+                    'currency'        => $order->get_currency(),
+                    'customer_id'     => $order->get_customer_id(),
+                    'billing_email'   => $order->get_billing_email(),
+                    'billing_name'    => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+                    'item_count'      => $order->get_item_count(),
+                    'payment_method'  => $order->get_payment_method_title(),
+                    'date_created'    => $order->get_date_created() ? $order->get_date_created()->format( 'Y-m-d H:i:s' ) : null,
+                );
+            }
+            return array( 'orders' => $list, 'count' => count( $list ) );
+        } );
+
+        $this->register_tool( 'woo_get_order', array(
+            'description' => 'Get full order details: items, billing, shipping, notes, totals',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'order_id' => array( 'type' => 'integer', 'description' => 'Order ID (required)' ),
+                ),
+                'required' => array( 'order_id' ),
+            ),
+            'annotations' => array( 'title' => 'Get Order', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $order = wc_get_order( intval( $args['order_id'] ) );
+            if ( ! $order ) {
+                throw new Exception( 'Order not found' );
+            }
+            $items = array();
+            foreach ( $order->get_items() as $item ) {
+                $items[] = array(
+                    'name'       => $item->get_name(),
+                    'product_id' => $item->get_product_id(),
+                    'quantity'   => $item->get_quantity(),
+                    'subtotal'   => $item->get_subtotal(),
+                    'total'      => $item->get_total(),
+                    'sku'        => $item->get_product() ? $item->get_product()->get_sku() : '',
+                );
+            }
+            $notes = wc_get_order_notes( array( 'order_id' => $order->get_id(), 'limit' => 10 ) );
+            $note_list = array();
+            foreach ( $notes as $note ) {
+                $note_list[] = array( 'content' => $note->content, 'date' => $note->date_created->format( 'Y-m-d H:i:s' ), 'author' => $note->added_by );
+            }
+            return array(
+                'id'              => $order->get_id(),
+                'number'          => $order->get_order_number(),
+                'status'          => $order->get_status(),
+                'total'           => $order->get_total(),
+                'subtotal'        => $order->get_subtotal(),
+                'tax_total'       => $order->get_total_tax(),
+                'shipping_total'  => $order->get_shipping_total(),
+                'discount_total'  => $order->get_discount_total(),
+                'currency'        => $order->get_currency(),
+                'payment_method'  => $order->get_payment_method_title(),
+                'customer_id'     => $order->get_customer_id(),
+                'billing'         => array(
+                    'first_name' => $order->get_billing_first_name(),
+                    'last_name'  => $order->get_billing_last_name(),
+                    'email'      => $order->get_billing_email(),
+                    'phone'      => $order->get_billing_phone(),
+                    'address_1'  => $order->get_billing_address_1(),
+                    'city'       => $order->get_billing_city(),
+                    'country'    => $order->get_billing_country(),
+                ),
+                'shipping'        => array(
+                    'first_name' => $order->get_shipping_first_name(),
+                    'last_name'  => $order->get_shipping_last_name(),
+                    'address_1'  => $order->get_shipping_address_1(),
+                    'city'       => $order->get_shipping_city(),
+                    'country'    => $order->get_shipping_country(),
+                ),
+                'items'           => $items,
+                'notes'           => $note_list,
+                'date_created'    => $order->get_date_created() ? $order->get_date_created()->format( 'Y-m-d H:i:s' ) : null,
+                'date_modified'   => $order->get_date_modified() ? $order->get_date_modified()->format( 'Y-m-d H:i:s' ) : null,
+            );
+        } );
+
+        $this->register_tool( 'woo_update_order_status', array(
+            'description' => 'Change order status (processing, completed, on-hold, cancelled)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'order_id' => array( 'type' => 'integer', 'description' => 'Order ID (required)' ),
+                    'status'   => array( 'type' => 'string', 'description' => 'New status: processing, completed, on-hold, cancelled, refunded (required)' ),
+                    'note'     => array( 'type' => 'string', 'description' => 'Optional order note explaining the change' ),
+                ),
+                'required' => array( 'order_id', 'status' ),
+            ),
+            'annotations' => array( 'title' => 'Update Order Status', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $order = wc_get_order( intval( $args['order_id'] ) );
+            if ( ! $order ) {
+                throw new Exception( 'Order not found' );
+            }
+            $old_status = $order->get_status();
+            $new_status = sanitize_text_field( $args['status'] );
+            $note       = sanitize_text_field( $args['note'] ?? 'Status updated via LuwiPress MCP' );
+            $order->update_status( $new_status, $note );
+            return array( 'order_id' => $order->get_id(), 'old_status' => $old_status, 'new_status' => $new_status );
+        } );
+
+        $this->register_tool( 'woo_list_coupons', array(
+            'description' => 'List WooCommerce coupons with filtering',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'search'   => array( 'type' => 'string', 'description' => 'Search coupon code' ),
+                    'per_page' => array( 'type' => 'integer', 'description' => 'Results per page (max 50, default 20)' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'List Coupons', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $query = new WP_Query( array(
+                'post_type'      => 'shop_coupon',
+                'posts_per_page' => min( absint( $args['per_page'] ?? 20 ), 50 ),
+                'post_status'    => 'publish',
+                's'              => sanitize_text_field( $args['search'] ?? '' ),
+            ) );
+            $coupons = array();
+            foreach ( $query->posts as $post ) {
+                $coupon = new WC_Coupon( $post->ID );
+                $coupons[] = array(
+                    'id'               => $coupon->get_id(),
+                    'code'             => $coupon->get_code(),
+                    'discount_type'    => $coupon->get_discount_type(),
+                    'amount'           => $coupon->get_amount(),
+                    'usage_count'      => $coupon->get_usage_count(),
+                    'usage_limit'      => $coupon->get_usage_limit(),
+                    'expiry_date'      => $coupon->get_date_expires() ? $coupon->get_date_expires()->format( 'Y-m-d' ) : null,
+                    'minimum_amount'   => $coupon->get_minimum_amount(),
+                    'free_shipping'    => $coupon->get_free_shipping(),
+                );
+            }
+            return array( 'coupons' => $coupons, 'total' => $query->found_posts );
+        } );
+
+        $this->register_tool( 'woo_create_coupon', array(
+            'description' => 'Create a WooCommerce coupon (percentage, fixed, free shipping)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'code'           => array( 'type' => 'string', 'description' => 'Coupon code (required)' ),
+                    'discount_type'  => array( 'type' => 'string', 'enum' => array( 'percent', 'fixed_cart', 'fixed_product' ), 'description' => 'Discount type (default: percent)' ),
+                    'amount'         => array( 'type' => 'number', 'description' => 'Discount amount (required)' ),
+                    'usage_limit'    => array( 'type' => 'integer', 'description' => 'Total usage limit' ),
+                    'expiry_date'    => array( 'type' => 'string', 'description' => 'Expiry date YYYY-MM-DD' ),
+                    'minimum_amount' => array( 'type' => 'number', 'description' => 'Minimum order amount' ),
+                    'free_shipping'  => array( 'type' => 'boolean', 'description' => 'Enable free shipping' ),
+                    'individual_use' => array( 'type' => 'boolean', 'description' => 'Cannot be combined with other coupons' ),
+                ),
+                'required' => array( 'code', 'amount' ),
+            ),
+            'annotations' => array( 'title' => 'Create Coupon', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $coupon = new WC_Coupon();
+            $coupon->set_code( sanitize_text_field( $args['code'] ) );
+            $coupon->set_discount_type( sanitize_text_field( $args['discount_type'] ?? 'percent' ) );
+            $coupon->set_amount( floatval( $args['amount'] ) );
+            if ( isset( $args['usage_limit'] ) ) $coupon->set_usage_limit( absint( $args['usage_limit'] ) );
+            if ( isset( $args['expiry_date'] ) ) $coupon->set_date_expires( sanitize_text_field( $args['expiry_date'] ) );
+            if ( isset( $args['minimum_amount'] ) ) $coupon->set_minimum_amount( floatval( $args['minimum_amount'] ) );
+            if ( isset( $args['free_shipping'] ) ) $coupon->set_free_shipping( (bool) $args['free_shipping'] );
+            if ( isset( $args['individual_use'] ) ) $coupon->set_individual_use( (bool) $args['individual_use'] );
+            $coupon->save();
+            return array( 'id' => $coupon->get_id(), 'code' => $coupon->get_code(), 'discount_type' => $coupon->get_discount_type(), 'amount' => $coupon->get_amount() );
+        } );
+
+        $this->register_tool( 'woo_get_shipping_zones', array(
+            'description' => 'List shipping zones with their methods and rates',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Shipping Zones', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $zones_raw = WC_Shipping_Zones::get_zones();
+            $zones = array();
+            foreach ( $zones_raw as $zone_data ) {
+                $zone = new WC_Shipping_Zone( $zone_data['id'] );
+                $methods = array();
+                foreach ( $zone->get_shipping_methods() as $method ) {
+                    $methods[] = array(
+                        'id'      => $method->id,
+                        'title'   => $method->get_title(),
+                        'enabled' => $method->is_enabled(),
+                        'cost'    => $method->get_option( 'cost', '' ),
+                    );
+                }
+                $zones[] = array(
+                    'id'        => $zone->get_id(),
+                    'name'      => $zone->get_zone_name(),
+                    'locations' => count( $zone_data['zone_locations'] ?? array() ),
+                    'methods'   => $methods,
+                );
+            }
+            return array( 'zones' => $zones );
+        } );
+
+        $this->register_tool( 'woo_get_tax_rates', array(
+            'description' => 'List tax rates by class',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'class' => array( 'type' => 'string', 'description' => 'Tax class slug (default: standard)' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Tax Rates', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            global $wpdb;
+            $class = sanitize_text_field( $args['class'] ?? '' );
+            $rates = $wpdb->get_results( $wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}woocommerce_tax_rates WHERE tax_rate_class = %s ORDER BY tax_rate_order",
+                $class
+            ) );
+            $list = array();
+            foreach ( $rates as $rate ) {
+                $list[] = array(
+                    'id'       => absint( $rate->tax_rate_id ),
+                    'country'  => $rate->tax_rate_country,
+                    'state'    => $rate->tax_rate_state,
+                    'rate'     => $rate->tax_rate,
+                    'name'     => $rate->tax_rate_name,
+                    'priority' => $rate->tax_rate_priority,
+                    'shipping' => $rate->tax_rate_shipping,
+                );
+            }
+            return array( 'tax_class' => $class ?: 'standard', 'rates' => $list );
+        } );
+    }
+
+    /* ───────────────────── Media Library Tools ─────────────────────── */
+
+    private function register_media_tools() {
+
+        $this->register_tool( 'media_list', array(
+            'description' => 'List media items with filtering by type, date, search',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'mime_type' => array( 'type' => 'string', 'description' => 'Filter by MIME type (image, video, application/pdf)' ),
+                    'search'    => array( 'type' => 'string', 'description' => 'Search by title' ),
+                    'per_page'  => array( 'type' => 'integer', 'description' => 'Results per page (max 50, default 20)' ),
+                    'page'      => array( 'type' => 'integer', 'description' => 'Page number' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'List Media', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $query_args = array(
+                'post_type'      => 'attachment',
+                'post_status'    => 'inherit',
+                'posts_per_page' => min( absint( $args['per_page'] ?? 20 ), 50 ),
+                'paged'          => max( 1, absint( $args['page'] ?? 1 ) ),
+            );
+            if ( ! empty( $args['mime_type'] ) ) {
+                $query_args['post_mime_type'] = sanitize_text_field( $args['mime_type'] );
+            }
+            if ( ! empty( $args['search'] ) ) {
+                $query_args['s'] = sanitize_text_field( $args['search'] );
+            }
+            $query = new WP_Query( $query_args );
+            $items = array();
+            foreach ( $query->posts as $post ) {
+                $meta = wp_get_attachment_metadata( $post->ID );
+                $items[] = array(
+                    'id'         => $post->ID,
+                    'title'      => $post->post_title,
+                    'url'        => wp_get_attachment_url( $post->ID ),
+                    'mime_type'  => $post->post_mime_type,
+                    'alt_text'   => get_post_meta( $post->ID, '_wp_attachment_image_alt', true ),
+                    'width'      => $meta['width'] ?? null,
+                    'height'     => $meta['height'] ?? null,
+                    'filesize'   => $meta['filesize'] ?? null,
+                    'date'       => $post->post_date,
+                );
+            }
+            return array( 'items' => $items, 'total' => $query->found_posts, 'page' => $query_args['paged'] );
+        } );
+
+        $this->register_tool( 'media_get', array(
+            'description' => 'Get media item details (URL, dimensions, alt text, file size, usage)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'attachment_id' => array( 'type' => 'integer', 'description' => 'Attachment ID (required)' ),
+                ),
+                'required' => array( 'attachment_id' ),
+            ),
+            'annotations' => array( 'title' => 'Get Media', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $id   = intval( $args['attachment_id'] );
+            $post = get_post( $id );
+            if ( ! $post || $post->post_type !== 'attachment' ) {
+                throw new Exception( 'Attachment not found' );
+            }
+            $meta = wp_get_attachment_metadata( $id );
+            $sizes = array();
+            if ( ! empty( $meta['sizes'] ) ) {
+                foreach ( $meta['sizes'] as $size => $data ) {
+                    $sizes[ $size ] = array( 'width' => $data['width'], 'height' => $data['height'], 'file' => $data['file'] );
+                }
+            }
+            return array(
+                'id'        => $id,
+                'title'     => $post->post_title,
+                'caption'   => $post->post_excerpt,
+                'description' => $post->post_content,
+                'alt_text'  => get_post_meta( $id, '_wp_attachment_image_alt', true ),
+                'url'       => wp_get_attachment_url( $id ),
+                'mime_type' => $post->post_mime_type,
+                'width'     => $meta['width'] ?? null,
+                'height'    => $meta['height'] ?? null,
+                'filesize'  => $meta['filesize'] ?? null,
+                'file'      => $meta['file'] ?? null,
+                'sizes'     => $sizes,
+                'parent_id' => $post->post_parent,
+                'date'      => $post->post_date,
+            );
+        } );
+
+        $this->register_tool( 'media_upload_from_url', array(
+            'description' => 'Download and import a media file from an external URL into the WordPress media library',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'url'      => array( 'type' => 'string', 'description' => 'External file URL (required)' ),
+                    'title'    => array( 'type' => 'string', 'description' => 'Attachment title' ),
+                    'alt_text' => array( 'type' => 'string', 'description' => 'Image alt text' ),
+                    'post_id'  => array( 'type' => 'integer', 'description' => 'Attach to this post ID' ),
+                ),
+                'required' => array( 'url' ),
+            ),
+            'annotations' => array( 'title' => 'Upload from URL', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => true ),
+        ), function ( $args ) {
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+
+            $url     = esc_url_raw( $args['url'] );
+            $post_id = absint( $args['post_id'] ?? 0 );
+
+            $tmp = download_url( $url, 30 );
+            if ( is_wp_error( $tmp ) ) {
+                throw new Exception( 'Download failed: ' . $tmp->get_error_message() );
+            }
+            $file_array = array(
+                'name'     => basename( wp_parse_url( $url, PHP_URL_PATH ) ),
+                'tmp_name' => $tmp,
+            );
+            $attachment_id = media_handle_sideload( $file_array, $post_id );
+            if ( is_wp_error( $attachment_id ) ) {
+                @unlink( $tmp );
+                throw new Exception( 'Upload failed: ' . $attachment_id->get_error_message() );
+            }
+            if ( ! empty( $args['title'] ) ) {
+                wp_update_post( array( 'ID' => $attachment_id, 'post_title' => sanitize_text_field( $args['title'] ) ) );
+            }
+            if ( ! empty( $args['alt_text'] ) ) {
+                update_post_meta( $attachment_id, '_wp_attachment_image_alt', sanitize_text_field( $args['alt_text'] ) );
+            }
+            return array( 'id' => $attachment_id, 'url' => wp_get_attachment_url( $attachment_id ) );
+        } );
+
+        $this->register_tool( 'media_update', array(
+            'description' => 'Update media alt text, title, caption, or description',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'attachment_id' => array( 'type' => 'integer', 'description' => 'Attachment ID (required)' ),
+                    'title'         => array( 'type' => 'string', 'description' => 'New title' ),
+                    'alt_text'      => array( 'type' => 'string', 'description' => 'New alt text' ),
+                    'caption'       => array( 'type' => 'string', 'description' => 'New caption' ),
+                    'description'   => array( 'type' => 'string', 'description' => 'New description' ),
+                ),
+                'required' => array( 'attachment_id' ),
+            ),
+            'annotations' => array( 'title' => 'Update Media', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $id = intval( $args['attachment_id'] );
+            $post = get_post( $id );
+            if ( ! $post || $post->post_type !== 'attachment' ) {
+                throw new Exception( 'Attachment not found' );
+            }
+            $update = array( 'ID' => $id );
+            if ( isset( $args['title'] ) ) $update['post_title'] = sanitize_text_field( $args['title'] );
+            if ( isset( $args['caption'] ) ) $update['post_excerpt'] = sanitize_text_field( $args['caption'] );
+            if ( isset( $args['description'] ) ) $update['post_content'] = wp_kses_post( $args['description'] );
+            wp_update_post( $update );
+            if ( isset( $args['alt_text'] ) ) {
+                update_post_meta( $id, '_wp_attachment_image_alt', sanitize_text_field( $args['alt_text'] ) );
+            }
+            return array( 'id' => $id, 'updated' => true );
+        } );
+
+        $this->register_tool( 'media_delete', array(
+            'description' => 'Delete a media item (with option to force-delete the file)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'attachment_id' => array( 'type' => 'integer', 'description' => 'Attachment ID (required)' ),
+                    'force'         => array( 'type' => 'boolean', 'description' => 'Permanently delete file (default: true)' ),
+                ),
+                'required' => array( 'attachment_id' ),
+            ),
+            'annotations' => array( 'title' => 'Delete Media', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $id = intval( $args['attachment_id'] );
+            $post = get_post( $id );
+            if ( ! $post || $post->post_type !== 'attachment' ) {
+                throw new Exception( 'Attachment not found' );
+            }
+            $force = $args['force'] ?? true;
+            $result = wp_delete_attachment( $id, $force );
+            if ( ! $result ) {
+                throw new Exception( 'Failed to delete attachment' );
+            }
+            return array( 'id' => $id, 'deleted' => true );
+        } );
+    }
+
+    /* ───────────────────── Comment Tools ───────────────────────────── */
+
+    private function register_comment_tools() {
+
+        $this->register_tool( 'comment_list', array(
+            'description' => 'List comments with filtering by post, status, type',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'  => array( 'type' => 'integer', 'description' => 'Filter by post ID' ),
+                    'status'   => array( 'type' => 'string', 'enum' => array( 'approve', 'hold', 'spam', 'trash', 'all' ), 'description' => 'Comment status (default: all)' ),
+                    'per_page' => array( 'type' => 'integer', 'description' => 'Results per page (max 100, default 20)' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'List Comments', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $query = array(
+                'number' => min( absint( $args['per_page'] ?? 20 ), 100 ),
+                'status' => sanitize_text_field( $args['status'] ?? 'all' ),
+            );
+            if ( ! empty( $args['post_id'] ) ) {
+                $query['post_id'] = absint( $args['post_id'] );
+            }
+            $comments = get_comments( $query );
+            $list = array();
+            foreach ( $comments as $c ) {
+                $list[] = array(
+                    'id'           => $c->comment_ID,
+                    'post_id'      => $c->comment_post_ID,
+                    'author'       => $c->comment_author,
+                    'author_email' => $c->comment_author_email,
+                    'content'      => wp_strip_all_tags( $c->comment_content ),
+                    'status'       => $c->comment_approved,
+                    'date'         => $c->comment_date,
+                    'parent'       => $c->comment_parent,
+                    'type'         => $c->comment_type ?: 'comment',
+                );
+            }
+            return array( 'comments' => $list, 'count' => count( $list ) );
+        } );
+
+        $this->register_tool( 'comment_moderate', array(
+            'description' => 'Approve, unapprove, spam, or trash a comment',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'comment_id' => array( 'type' => 'integer', 'description' => 'Comment ID (required)' ),
+                    'status'     => array( 'type' => 'string', 'enum' => array( 'approve', 'hold', 'spam', 'trash' ), 'description' => 'New status (required)' ),
+                ),
+                'required' => array( 'comment_id', 'status' ),
+            ),
+            'annotations' => array( 'title' => 'Moderate Comment', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $comment_id = absint( $args['comment_id'] );
+            if ( ! get_comment( $comment_id ) ) {
+                throw new Exception( 'Comment not found' );
+            }
+            $result = wp_set_comment_status( $comment_id, sanitize_text_field( $args['status'] ) );
+            if ( ! $result ) {
+                throw new Exception( 'Failed to update comment status' );
+            }
+            return array( 'comment_id' => $comment_id, 'status' => $args['status'] );
+        } );
+
+        $this->register_tool( 'comment_reply', array(
+            'description' => 'Reply to a comment (creates a child comment from admin)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'comment_id' => array( 'type' => 'integer', 'description' => 'Parent comment ID (required)' ),
+                    'content'    => array( 'type' => 'string', 'description' => 'Reply content (required)' ),
+                ),
+                'required' => array( 'comment_id', 'content' ),
+            ),
+            'annotations' => array( 'title' => 'Reply to Comment', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $parent = get_comment( absint( $args['comment_id'] ) );
+            if ( ! $parent ) {
+                throw new Exception( 'Parent comment not found' );
+            }
+            $current_user = wp_get_current_user();
+            $reply_id = wp_insert_comment( array(
+                'comment_post_ID'  => $parent->comment_post_ID,
+                'comment_parent'   => $parent->comment_ID,
+                'comment_content'  => wp_kses_post( $args['content'] ),
+                'comment_author'   => $current_user->display_name ?: 'Admin',
+                'comment_author_email' => $current_user->user_email ?: get_option( 'admin_email' ),
+                'user_id'          => $current_user->ID ?: 0,
+                'comment_approved' => 1,
+            ) );
+            if ( ! $reply_id ) {
+                throw new Exception( 'Failed to create reply' );
+            }
+            return array( 'reply_id' => $reply_id, 'parent_id' => $parent->comment_ID, 'post_id' => $parent->comment_post_ID );
+        } );
+
+        $this->register_tool( 'comment_delete', array(
+            'description' => 'Permanently delete a comment',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'comment_id' => array( 'type' => 'integer', 'description' => 'Comment ID (required)' ),
+                ),
+                'required' => array( 'comment_id' ),
+            ),
+            'annotations' => array( 'title' => 'Delete Comment', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $comment_id = absint( $args['comment_id'] );
+            if ( ! get_comment( $comment_id ) ) {
+                throw new Exception( 'Comment not found' );
+            }
+            $result = wp_delete_comment( $comment_id, true );
+            if ( ! $result ) {
+                throw new Exception( 'Failed to delete comment' );
+            }
+            return array( 'comment_id' => $comment_id, 'deleted' => true );
+        } );
+    }
+
+    /* ───────────────────── Settings Tools ──────────────────────────── */
+
+    private function register_settings_tools() {
+
+        // Whitelist of safe option keys
+        $safe_wp_keys = array(
+            'blogname', 'blogdescription', 'timezone_string', 'date_format', 'time_format',
+            'posts_per_page', 'permalink_structure', 'default_comment_status',
+            'default_ping_status', 'show_on_front', 'page_on_front', 'page_for_posts',
+            'blog_public', 'WPLANG',
+        );
+
+        $this->register_tool( 'settings_get', array(
+            'description' => 'Read WordPress settings (general, reading, writing, discussion, permalinks)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'keys' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Specific option keys to read (omit for all safe settings)' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Get Settings', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) use ( $safe_wp_keys ) {
+            $keys = ! empty( $args['keys'] ) ? array_intersect( $args['keys'], $safe_wp_keys ) : $safe_wp_keys;
+            $settings = array();
+            foreach ( $keys as $key ) {
+                $settings[ $key ] = get_option( $key );
+            }
+            return array( 'settings' => $settings );
+        } );
+
+        $this->register_tool( 'settings_update', array(
+            'description' => 'Update a whitelisted WordPress setting (cannot change siteurl, home, or admin_email for security)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'key'   => array( 'type' => 'string', 'description' => 'Option key (required)' ),
+                    'value' => array( 'type' => 'string', 'description' => 'New value (required)' ),
+                ),
+                'required' => array( 'key', 'value' ),
+            ),
+            'annotations' => array( 'title' => 'Update Setting', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) use ( $safe_wp_keys ) {
+            $key = sanitize_text_field( $args['key'] );
+            if ( ! in_array( $key, $safe_wp_keys, true ) ) {
+                throw new Exception( "Setting '{$key}' is not in the allowed whitelist" );
+            }
+            $old = get_option( $key );
+            update_option( $key, sanitize_text_field( $args['value'] ) );
+            return array( 'key' => $key, 'old_value' => $old, 'new_value' => $args['value'], 'updated' => true );
+        } );
+
+        $this->register_tool( 'settings_get_woo', array(
+            'description' => 'Read WooCommerce settings (store address, currency, tax, shipping defaults)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Get WooCommerce Settings', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'WooCommerce' ) ) {
+                return array( 'error' => 'WooCommerce not active' );
+            }
+            return array(
+                'currency'          => get_woocommerce_currency(),
+                'currency_symbol'   => get_woocommerce_currency_symbol(),
+                'store_address'     => get_option( 'woocommerce_store_address' ),
+                'store_city'        => get_option( 'woocommerce_store_city' ),
+                'store_country'     => get_option( 'woocommerce_default_country' ),
+                'store_postcode'    => get_option( 'woocommerce_store_postcode' ),
+                'calc_taxes'        => get_option( 'woocommerce_calc_taxes' ),
+                'prices_include_tax' => get_option( 'woocommerce_prices_include_tax' ),
+                'tax_display_shop'  => get_option( 'woocommerce_tax_display_shop' ),
+                'weight_unit'       => get_option( 'woocommerce_weight_unit' ),
+                'dimension_unit'    => get_option( 'woocommerce_dimension_unit' ),
+                'enable_reviews'    => get_option( 'woocommerce_enable_reviews' ),
+                'manage_stock'      => get_option( 'woocommerce_manage_stock' ),
+                'registration'      => get_option( 'woocommerce_enable_myaccount_registration' ),
+            );
+        } );
+
+        $safe_woo_keys = array(
+            'woocommerce_store_address', 'woocommerce_store_city', 'woocommerce_store_postcode',
+            'woocommerce_default_country', 'woocommerce_calc_taxes', 'woocommerce_prices_include_tax',
+            'woocommerce_weight_unit', 'woocommerce_dimension_unit', 'woocommerce_enable_reviews',
+        );
+
+        $this->register_tool( 'settings_update_woo', array(
+            'description' => 'Update a whitelisted WooCommerce setting',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'key'   => array( 'type' => 'string', 'description' => 'WooCommerce option key (required)' ),
+                    'value' => array( 'type' => 'string', 'description' => 'New value (required)' ),
+                ),
+                'required' => array( 'key', 'value' ),
+            ),
+            'annotations' => array( 'title' => 'Update WooCommerce Setting', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) use ( $safe_woo_keys ) {
+            $key = sanitize_text_field( $args['key'] );
+            if ( ! in_array( $key, $safe_woo_keys, true ) ) {
+                throw new Exception( "WooCommerce setting '{$key}' is not in the allowed whitelist" );
+            }
+            $old = get_option( $key );
+            update_option( $key, sanitize_text_field( $args['value'] ) );
+            return array( 'key' => $key, 'old_value' => $old, 'new_value' => $args['value'], 'updated' => true );
+        } );
+    }
+
+    /* ───────────────────── Plugin & Theme Tools ────────────────────── */
+
+    private function register_plugin_theme_tools() {
+
+        $this->register_tool( 'plugins_list', array(
+            'description' => 'List all installed plugins with status, version, update availability',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'List Plugins', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! function_exists( 'get_plugins' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            }
+            $all     = get_plugins();
+            $updates = get_site_transient( 'update_plugins' );
+            $list = array();
+            foreach ( $all as $file => $data ) {
+                $list[] = array(
+                    'file'           => $file,
+                    'name'           => $data['Name'],
+                    'version'        => $data['Version'],
+                    'active'         => is_plugin_active( $file ),
+                    'update_available' => isset( $updates->response[ $file ] ),
+                    'new_version'    => $updates->response[ $file ]->new_version ?? null,
+                    'author'         => $data['AuthorName'] ?? '',
+                );
+            }
+            return array( 'plugins' => $list, 'total' => count( $list ), 'active' => count( array_filter( $list, function( $p ) { return $p['active']; } ) ) );
+        } );
+
+        $this->register_tool( 'plugins_activate', array(
+            'description' => 'Activate an installed plugin by file path',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'plugin' => array( 'type' => 'string', 'description' => 'Plugin file path e.g. "akismet/akismet.php" (required)' ),
+                ),
+                'required' => array( 'plugin' ),
+            ),
+            'annotations' => array( 'title' => 'Activate Plugin', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $plugin = sanitize_text_field( $args['plugin'] );
+            $result = activate_plugin( $plugin );
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( $result->get_error_message() );
+            }
+            return array( 'plugin' => $plugin, 'activated' => true );
+        } );
+
+        $this->register_tool( 'plugins_deactivate', array(
+            'description' => 'Deactivate an active plugin by file path',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'plugin' => array( 'type' => 'string', 'description' => 'Plugin file path e.g. "akismet/akismet.php" (required)' ),
+                ),
+                'required' => array( 'plugin' ),
+            ),
+            'annotations' => array( 'title' => 'Deactivate Plugin', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $plugin = sanitize_text_field( $args['plugin'] );
+            deactivate_plugins( $plugin );
+            return array( 'plugin' => $plugin, 'deactivated' => true );
+        } );
+
+        $this->register_tool( 'themes_list', array(
+            'description' => 'List installed themes with active status',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'List Themes', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $themes = wp_get_themes();
+            $active = get_stylesheet();
+            $list = array();
+            foreach ( $themes as $slug => $theme ) {
+                $list[] = array(
+                    'slug'      => $slug,
+                    'name'      => $theme->get( 'Name' ),
+                    'version'   => $theme->get( 'Version' ),
+                    'active'    => $slug === $active,
+                    'parent'    => $theme->parent() ? $theme->parent()->get_stylesheet() : null,
+                    'author'    => $theme->get( 'Author' ),
+                );
+            }
+            return array( 'themes' => $list, 'active_theme' => $active );
+        } );
+
+        $this->register_tool( 'themes_activate', array(
+            'description' => 'Switch the active theme',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'theme' => array( 'type' => 'string', 'description' => 'Theme slug (required)' ),
+                ),
+                'required' => array( 'theme' ),
+            ),
+            'annotations' => array( 'title' => 'Activate Theme', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $theme_slug = sanitize_text_field( $args['theme'] );
+            $theme = wp_get_theme( $theme_slug );
+            if ( ! $theme->exists() ) {
+                throw new Exception( "Theme '{$theme_slug}' not found" );
+            }
+            switch_theme( $theme_slug );
+            return array( 'theme' => $theme_slug, 'activated' => true );
+        } );
+    }
+
+    /* ───────────────────── Menu Tools ──────────────────────────────── */
+
+    private function register_menu_tools() {
+
+        $this->register_tool( 'menu_list', array(
+            'description' => 'List all navigation menus with their item count and assigned locations',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'List Menus', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $menus     = wp_get_nav_menus();
+            $locations = get_nav_menu_locations();
+            $loc_names = get_registered_nav_menus();
+            $loc_map = array();
+            foreach ( $locations as $loc => $menu_id ) {
+                $loc_map[ $menu_id ][] = $loc_names[ $loc ] ?? $loc;
+            }
+            $list = array();
+            foreach ( $menus as $menu ) {
+                $list[] = array(
+                    'id'         => $menu->term_id,
+                    'name'       => $menu->name,
+                    'slug'       => $menu->slug,
+                    'item_count' => $menu->count,
+                    'locations'  => $loc_map[ $menu->term_id ] ?? array(),
+                );
+            }
+            return array( 'menus' => $list, 'registered_locations' => array_values( $loc_names ) );
+        } );
+
+        $this->register_tool( 'menu_get_items', array(
+            'description' => 'Get all items in a menu (hierarchical, with URLs, types)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'menu_id' => array( 'type' => 'integer', 'description' => 'Menu ID or term_id (required)' ),
+                ),
+                'required' => array( 'menu_id' ),
+            ),
+            'annotations' => array( 'title' => 'Get Menu Items', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $items = wp_get_nav_menu_items( intval( $args['menu_id'] ) );
+            if ( ! $items ) {
+                throw new Exception( 'Menu not found or empty' );
+            }
+            $list = array();
+            foreach ( $items as $item ) {
+                $list[] = array(
+                    'id'        => absint( $item->ID ),
+                    'title'     => $item->title,
+                    'url'       => $item->url,
+                    'type'      => $item->type,
+                    'object'    => $item->object,
+                    'object_id' => absint( $item->object_id ),
+                    'parent'    => absint( $item->menu_item_parent ),
+                    'position'  => absint( $item->menu_order ),
+                    'classes'   => array_filter( $item->classes ),
+                );
+            }
+            return array( 'menu_id' => intval( $args['menu_id'] ), 'items' => $list );
+        } );
+
+        $this->register_tool( 'menu_create', array(
+            'description' => 'Create a new navigation menu',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'name' => array( 'type' => 'string', 'description' => 'Menu name (required)' ),
+                ),
+                'required' => array( 'name' ),
+            ),
+            'annotations' => array( 'title' => 'Create Menu', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $menu_id = wp_create_nav_menu( sanitize_text_field( $args['name'] ) );
+            if ( is_wp_error( $menu_id ) ) {
+                throw new Exception( $menu_id->get_error_message() );
+            }
+            return array( 'menu_id' => $menu_id, 'name' => $args['name'] );
+        } );
+
+        $this->register_tool( 'menu_add_item', array(
+            'description' => 'Add an item to a navigation menu (page, post, custom URL, category)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'menu_id'   => array( 'type' => 'integer', 'description' => 'Menu ID (required)' ),
+                    'title'     => array( 'type' => 'string', 'description' => 'Menu item title (required)' ),
+                    'url'       => array( 'type' => 'string', 'description' => 'URL for custom link items' ),
+                    'object_id' => array( 'type' => 'integer', 'description' => 'Post/page/category ID for content items' ),
+                    'object'    => array( 'type' => 'string', 'description' => 'Object type: page, post, category, custom' ),
+                    'parent'    => array( 'type' => 'integer', 'description' => 'Parent menu item ID for submenus' ),
+                ),
+                'required' => array( 'menu_id', 'title' ),
+            ),
+            'annotations' => array( 'title' => 'Add Menu Item', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $menu_id = intval( $args['menu_id'] );
+            $item_data = array(
+                'menu-item-title'  => sanitize_text_field( $args['title'] ),
+                'menu-item-status' => 'publish',
+            );
+            if ( ! empty( $args['url'] ) ) {
+                $item_data['menu-item-url']  = esc_url_raw( $args['url'] );
+                $item_data['menu-item-type'] = 'custom';
+            } elseif ( ! empty( $args['object_id'] ) ) {
+                $item_data['menu-item-object-id'] = absint( $args['object_id'] );
+                $obj = sanitize_text_field( $args['object'] ?? 'page' );
+                $item_data['menu-item-object'] = $obj;
+                $item_data['menu-item-type'] = in_array( $obj, array( 'category', 'post_tag', 'product_cat' ), true ) ? 'taxonomy' : 'post_type';
+            }
+            if ( ! empty( $args['parent'] ) ) {
+                $item_data['menu-item-parent-id'] = absint( $args['parent'] );
+            }
+            $item_id = wp_update_nav_menu_item( $menu_id, 0, $item_data );
+            if ( is_wp_error( $item_id ) ) {
+                throw new Exception( $item_id->get_error_message() );
+            }
+            return array( 'item_id' => $item_id, 'menu_id' => $menu_id, 'title' => $args['title'] );
+        } );
+
+        $this->register_tool( 'menu_remove_item', array(
+            'description' => 'Remove an item from a navigation menu',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'item_id' => array( 'type' => 'integer', 'description' => 'Menu item post ID (required)' ),
+                ),
+                'required' => array( 'item_id' ),
+            ),
+            'annotations' => array( 'title' => 'Remove Menu Item', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $item_id = absint( $args['item_id'] );
+            $result = wp_delete_post( $item_id, true );
+            if ( ! $result ) {
+                throw new Exception( 'Failed to remove menu item' );
+            }
+            return array( 'item_id' => $item_id, 'removed' => true );
+        } );
+    }
+
+    /* ───────────────────── Custom Field / Meta Tools ──────────────── */
+
+    private function register_meta_tools() {
+
+        $this->register_tool( 'meta_get', array(
+            'description' => 'Get all or specific custom field values for a post/product',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'key'     => array( 'type' => 'string', 'description' => 'Specific meta key (omit for all public meta)' ),
+                ),
+                'required' => array( 'post_id' ),
+            ),
+            'annotations' => array( 'title' => 'Get Meta', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $post_id = intval( $args['post_id'] );
+            if ( ! get_post( $post_id ) ) {
+                throw new Exception( 'Post not found' );
+            }
+            if ( ! empty( $args['key'] ) ) {
+                $value = get_post_meta( $post_id, sanitize_text_field( $args['key'] ), true );
+                return array( 'post_id' => $post_id, 'key' => $args['key'], 'value' => $value );
+            }
+            $all_meta = get_post_meta( $post_id );
+            $filtered = array();
+            foreach ( $all_meta as $key => $values ) {
+                if ( substr( $key, 0, 1 ) !== '_' ) {
+                    $filtered[ $key ] = count( $values ) === 1 ? $values[0] : $values;
+                }
+            }
+            return array( 'post_id' => $post_id, 'meta' => $filtered );
+        } );
+
+        $this->register_tool( 'meta_set', array(
+            'description' => 'Set a custom field value for a post/product',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'key'     => array( 'type' => 'string', 'description' => 'Meta key (required)' ),
+                    'value'   => array( 'type' => 'string', 'description' => 'Meta value (required)' ),
+                ),
+                'required' => array( 'post_id', 'key', 'value' ),
+            ),
+            'annotations' => array( 'title' => 'Set Meta', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $post_id = intval( $args['post_id'] );
+            if ( ! get_post( $post_id ) ) {
+                throw new Exception( 'Post not found' );
+            }
+            $key = sanitize_text_field( $args['key'] );
+            update_post_meta( $post_id, $key, sanitize_text_field( $args['value'] ) );
+            return array( 'post_id' => $post_id, 'key' => $key, 'updated' => true );
+        } );
+
+        $this->register_tool( 'meta_delete', array(
+            'description' => 'Delete a custom field from a post/product',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'key'     => array( 'type' => 'string', 'description' => 'Meta key to delete (required)' ),
+                ),
+                'required' => array( 'post_id', 'key' ),
+            ),
+            'annotations' => array( 'title' => 'Delete Meta', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $post_id = intval( $args['post_id'] );
+            if ( ! get_post( $post_id ) ) {
+                throw new Exception( 'Post not found' );
+            }
+            $key = sanitize_text_field( $args['key'] );
+            $result = delete_post_meta( $post_id, $key );
+            return array( 'post_id' => $post_id, 'key' => $key, 'deleted' => $result );
+        } );
     }
 
     /* ═══════════════════════════════════════════════════════════════════

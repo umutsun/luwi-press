@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, n8n, product enrichment
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 2.0.4
+Stable tag: 2.0.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,7 +35,7 @@ LuwiPress is a **middleware plugin** that connects your WordPress/WooCommerce st
 * **AI Review Responder** — Auto-respond to WooCommerce product reviews
 * **Open Claw AI Assistant** — Chat interface for managing your store with natural language
 * **CRM Lifecycle** — Customer segmentation (VIP, at-risk, dormant) + win-back campaigns
-* **WebMCP Server** — MCP Streamable HTTP server exposing 40+ tools to AI agents (Claude Desktop, Claude Code, any MCP client)
+* **WebMCP Server** — MCP Streamable HTTP server exposing 115+ tools to AI agents (Claude Desktop, Claude Code, any MCP client)
 * **Plugin Auto-Detection** — Automatically detects Rank Math, WPML, Polylang, WP Mail SMTP, FluentCRM, Chatwoot
 * **Cost Protection** — Daily budget limits, token tracking, per-workflow cost breakdown
 * **Multi-Provider AI** — OpenAI (GPT-4o Mini), Anthropic (Claude), Google (Gemini)
@@ -132,6 +132,22 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 2.0.5 — Full Site X-Ray & WordPress Control =
+* NEW: Knowledge Graph — 8 new sections: posts, pages, taxonomies, media inventory, menus, product attributes, authors, order analytics
+* NEW: 44 MCP tools for full WordPress control — users, orders, coupons, media, comments, settings, plugins, themes, menus, taxonomies, custom fields
+* NEW: Blog post nodes with SEO status, categories, tags, author, staleness detection
+* NEW: Page hierarchy nodes with template detection, parent/child relationships
+* NEW: Media inventory — missing alt text count, orphaned media, file size analysis
+* NEW: Navigation menu structure with full item hierarchy
+* NEW: WooCommerce order analytics — 12-month revenue trend, repeat customer rate, payment methods, refund tracking
+* NEW: Author nodes with per-type content counts and activity tracking
+* NEW: Product attribute nodes with term listing
+* NEW: Content taxonomy discovery — all registered taxonomies with top terms
+* FIX: MCP translation_missing tool parameter mismatch (language → target_language)
+* FIX: MCP translation_taxonomy_missing tool parameter mismatch (language → target_languages)
+* IMPROVED: Cache invalidation broadened to save_post, delete_post, created_term, delete_term
+* IMPROVED: Settings tools use whitelist — siteurl, home, admin_email blocked for security
 
 = 2.0.4 — Translation Pipeline Hardening =
 * SECURITY: SQL injection fix — parameterized IN() placeholders in wpdb->prepare()

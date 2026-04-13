@@ -50,9 +50,11 @@ class LuwiPress_Knowledge_Graph {
 	private function __construct() {
 		add_action( 'rest_api_init', array( $this, 'register_endpoints' ) );
 
-		// Auto-invalidate cache when products change
-		add_action( 'save_post_product', array( $this, 'invalidate_cache' ) );
-		add_action( 'woocommerce_update_product', array( $this, 'invalidate_cache' ) );
+		// Auto-invalidate cache when content changes
+		add_action( 'save_post', array( $this, 'invalidate_cache' ) );
+		add_action( 'delete_post', array( $this, 'invalidate_cache' ) );
+		add_action( 'created_term', array( $this, 'invalidate_cache' ) );
+		add_action( 'delete_term', array( $this, 'invalidate_cache' ) );
 	}
 
 	public function register_endpoints() {
@@ -64,7 +66,7 @@ class LuwiPress_Knowledge_Graph {
 				'section' => array(
 					'type'              => 'string',
 					'sanitize_callback' => 'sanitize_text_field',
-					'description'       => 'Comma-separated sections: products,categories,translation,seo,aeo,crm,environment,opportunities',
+					'description'       => 'Comma-separated sections: products,categories,translation,seo,aeo,crm,store,plugins,taxonomy,environment,opportunities,posts,pages,content_taxonomy,media_inventory,menus,product_attributes,authors,order_analytics',
 				),
 				'fresh' => array(
 					'type'    => 'boolean',
@@ -85,7 +87,7 @@ class LuwiPress_Knowledge_Graph {
 
 		// Parse sections
 		$section_param = $request->get_param( 'section' );
-		$all_sections  = array( 'products', 'categories', 'translation', 'seo', 'aeo', 'crm', 'store', 'plugins', 'taxonomy', 'environment', 'opportunities' );
+		$all_sections  = array( 'products', 'categories', 'translation', 'seo', 'aeo', 'crm', 'store', 'plugins', 'taxonomy', 'environment', 'opportunities', 'posts', 'pages', 'content_taxonomy', 'media_inventory', 'menus', 'product_attributes', 'authors', 'order_analytics' );
 		$sections      = $section_param ? array_intersect( array_map( 'trim', explode( ',', $section_param ) ), $all_sections ) : $all_sections;
 
 		// Check cache
@@ -189,11 +191,6 @@ class LuwiPress_Knowledge_Graph {
 			$response['nodes']['customer_segments'] = $segment_nodes;
 		}
 
-		// Edges
-		if ( ! empty( $edges ) ) {
-			$response['edges'] = $edges;
-		}
-
 		// Store intelligence (WooCommerce deep analysis)
 		if ( in_array( 'store', $sections, true ) ) {
 			$response['store'] = $this->build_store_intelligence();
@@ -209,6 +206,59 @@ class LuwiPress_Knowledge_Graph {
 			$response['nodes']['taxonomies'] = $this->build_taxonomy_nodes( $target_languages );
 		}
 
+		// Blog posts
+		if ( in_array( 'posts', $sections, true ) ) {
+			$response['nodes']['posts'] = $this->build_post_nodes( $seo_meta_keys );
+		}
+
+		// Static pages
+		if ( in_array( 'pages', $sections, true ) ) {
+			$response['nodes']['pages'] = $this->build_page_nodes();
+		}
+
+		// Content taxonomy (all registered taxonomies)
+		if ( in_array( 'content_taxonomy', $sections, true ) ) {
+			$response['nodes']['content_taxonomy'] = $this->build_content_taxonomy_nodes();
+		}
+
+		// Media inventory
+		if ( in_array( 'media_inventory', $sections, true ) ) {
+			$response['nodes']['media_inventory'] = $this->build_media_inventory_nodes();
+		}
+
+		// Navigation menus
+		if ( in_array( 'menus', $sections, true ) ) {
+			$response['nodes']['menus'] = $this->build_menu_nodes();
+		}
+
+		// Product attributes
+		if ( in_array( 'product_attributes', $sections, true ) ) {
+			$response['nodes']['product_attributes'] = $this->build_product_attribute_nodes();
+		}
+
+		// Authors
+		if ( in_array( 'authors', $sections, true ) ) {
+			$response['nodes']['authors'] = $this->build_author_nodes();
+		}
+
+		// Order analytics
+		if ( in_array( 'order_analytics', $sections, true ) ) {
+			$response['nodes']['order_analytics'] = $this->build_order_analytics_nodes();
+		}
+
+		// Post/page edges
+		if ( in_array( 'posts', $sections, true ) && ! empty( $response['nodes']['posts'] ) ) {
+			$edges = array_merge( $edges, $this->build_post_edges( $response['nodes']['posts'] ) );
+		}
+		if ( in_array( 'pages', $sections, true ) && ! empty( $response['nodes']['pages'] ) ) {
+			$edges = array_merge( $edges, $this->build_page_edges( $response['nodes']['pages'] ) );
+		}
+
+		// Edges
+		if ( ! empty( $edges ) ) {
+			$response['edges'] = $edges;
+		}
+
 		// Environment
 		if ( in_array( 'environment', $sections, true ) ) {
 			$response['environment'] = $detector->get_environment();
@@ -217,6 +267,17 @@ class LuwiPress_Knowledge_Graph {
 		// Opportunities
 		if ( in_array( 'opportunities', $sections, true ) ) {
 			$response['opportunities'] = $this->build_opportunities( $product_nodes );
+		}
+
+		// Extend summary with new section counts
+		if ( in_array( 'posts', $sections, true ) && ! empty( $response['nodes']['posts'] ) ) {
+			$response['summary']['total_posts'] = count( $response['nodes']['posts'] );
+		}
+		if ( in_array( 'pages', $sections, true ) && ! empty( $response['nodes']['pages'] ) ) {
+			$response['summary']['total_pages'] = count( $response['nodes']['pages'] );
+		}
+		if ( in_array( 'authors', $sections, true ) && ! empty( $response['nodes']['authors'] ) ) {
+			$response['summary']['total_authors'] = count( $response['nodes']['authors'] );
 		}
 
 		$response['meta']['execution_time_ms'] = round( ( microtime( true ) - $start ) * 1000, 1 );
@@ -1385,6 +1446,655 @@ class LuwiPress_Knowledge_Graph {
 		}
 
 		return $nodes;
+	}
+
+	// ─── POSTS & PAGES ─────────────────────────────────────────────────
+
+	private function build_post_nodes( $seo_meta_keys ) {
+		global $wpdb;
+
+		// For WPML: only original posts
+		$wpml_join = '';
+		$wpml_where = '';
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			$wpml_join = "JOIN {$wpdb->prefix}icl_translations t ON p.ID = t.element_id AND t.element_type = 'post_post'";
+			$wpml_where = 'AND t.source_language_code IS NULL';
+		}
+
+		$posts = $wpdb->get_results(
+			"SELECT p.ID, p.post_title, p.post_name, p.post_status, p.post_author,
+			        p.post_date, p.post_modified, p.comment_count,
+			        LENGTH(p.post_content) AS content_length
+			 FROM {$wpdb->posts} p
+			 {$wpml_join}
+			 WHERE p.post_type = 'post'
+			   AND p.post_status = 'publish'
+			   {$wpml_where}
+			 ORDER BY p.post_date DESC
+			 LIMIT 500"
+		);
+
+		if ( empty( $posts ) ) {
+			return array();
+		}
+
+		$post_ids = wp_list_pluck( $posts, 'ID' );
+
+		// Bulk load terms
+		$term_map = $this->load_post_terms( $post_ids );
+
+		// Bulk load SEO meta
+		$seo_map = array();
+		if ( ! empty( $seo_meta_keys ) ) {
+			$id_ph  = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
+			$key_ph = implode( ',', array_fill( 0, count( $seo_meta_keys ), '%s' ) );
+			$rows = $wpdb->get_results( $wpdb->prepare(
+				"SELECT post_id, meta_key, meta_value FROM {$wpdb->postmeta}
+				 WHERE post_id IN ($id_ph) AND meta_key IN ($key_ph)",
+				...array_merge( $post_ids, $seo_meta_keys )
+			) );
+			foreach ( $rows as $row ) {
+				$seo_map[ $row->post_id ][ $row->meta_key ] = $row->meta_value;
+			}
+		}
+
+		// Bulk load featured image IDs
+		$thumb_ids = array();
+		$id_ph = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
+		$thumb_rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT post_id, meta_value FROM {$wpdb->postmeta}
+			 WHERE post_id IN ($id_ph) AND meta_key = '_thumbnail_id'",
+			...$post_ids
+		) );
+		foreach ( $thumb_rows as $tr ) {
+			$thumb_ids[ $tr->post_id ] = absint( $tr->meta_value );
+		}
+
+		// Collect author IDs
+		$author_ids = array_unique( wp_list_pluck( $posts, 'post_author' ) );
+		$author_map = array();
+		if ( ! empty( $author_ids ) ) {
+			$users = get_users( array( 'include' => $author_ids, 'fields' => array( 'ID', 'display_name' ) ) );
+			foreach ( $users as $u ) {
+				$author_map[ $u->ID ] = $u->display_name;
+			}
+		}
+
+		$nodes = array();
+		foreach ( $posts as $p ) {
+			$id   = absint( $p->ID );
+			$meta = $seo_map[ $id ] ?? array();
+			$terms = $term_map[ $id ] ?? array();
+
+			$has_seo_title = false;
+			$has_seo_desc  = false;
+			$has_focus_kw  = false;
+			foreach ( $seo_meta_keys as $key ) {
+				$val = $meta[ $key ] ?? '';
+				if ( empty( $val ) ) continue;
+				if ( strpos( $key, 'title' ) !== false ) $has_seo_title = true;
+				if ( strpos( $key, 'desc' ) !== false ) $has_seo_desc = true;
+				if ( strpos( $key, 'focus' ) !== false || strpos( $key, 'keyword' ) !== false ) $has_focus_kw = true;
+			}
+
+			$content_length = absint( $p->content_length );
+			$word_count     = intval( $content_length / 5 ); // rough estimate
+			$days_since_mod = max( 0, round( ( time() - strtotime( $p->post_modified ) ) / DAY_IN_SECONDS ) );
+
+			$category_ids = wp_list_pluck( $terms['categories'] ?? array(), 'id' );
+			$tag_ids      = wp_list_pluck( $terms['tags'] ?? array(), 'id' );
+
+			$nodes[] = array(
+				'id'                  => $id,
+				'type'                => 'post',
+				'title'               => $p->post_title,
+				'slug'                => $p->post_name,
+				'author_id'           => absint( $p->post_author ),
+				'author_name'         => $author_map[ $p->post_author ] ?? '',
+				'content_length'      => $content_length,
+				'word_count'          => $word_count,
+				'days_since_modified' => $days_since_mod,
+				'categories'          => $category_ids,
+				'tags'                => $tag_ids,
+				'comment_count'       => absint( $p->comment_count ),
+				'has_featured_image'  => isset( $thumb_ids[ $id ] ),
+				'seo'                 => array(
+					'has_title'       => $has_seo_title,
+					'has_description' => $has_seo_desc,
+					'has_focus_kw'    => $has_focus_kw,
+				),
+				'is_stale'            => $days_since_mod > 90,
+			);
+		}
+
+		return $nodes;
+	}
+
+	private function load_post_terms( $post_ids ) {
+		global $wpdb;
+
+		$id_ph = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT tr.object_id, t.term_id, t.name, t.slug, tt.taxonomy, tt.parent
+			 FROM {$wpdb->term_relationships} tr
+			 INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+			 INNER JOIN {$wpdb->terms} t ON tt.term_id = t.term_id
+			 WHERE tr.object_id IN ($id_ph)
+			   AND tt.taxonomy IN ('category', 'post_tag')",
+			...$post_ids
+		) );
+
+		$map = array();
+		foreach ( $rows as $row ) {
+			$key = 'category' === $row->taxonomy ? 'categories' : 'tags';
+			$map[ $row->object_id ][ $key ][] = array(
+				'id'   => absint( $row->term_id ),
+				'name' => $row->name,
+				'slug' => $row->slug,
+			);
+		}
+
+		return $map;
+	}
+
+	private function build_page_nodes() {
+		global $wpdb;
+
+		$front_page_id = absint( get_option( 'page_on_front', 0 ) );
+		$blog_page_id  = absint( get_option( 'page_for_posts', 0 ) );
+		$shop_page_id  = function_exists( 'wc_get_page_id' ) ? absint( wc_get_page_id( 'shop' ) ) : 0;
+
+		// For WPML: only original pages
+		$wpml_join = '';
+		$wpml_where = '';
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			$wpml_join = "JOIN {$wpdb->prefix}icl_translations t ON p.ID = t.element_id AND t.element_type = 'post_page'";
+			$wpml_where = 'AND t.source_language_code IS NULL';
+		}
+
+		$pages = $wpdb->get_results(
+			"SELECT p.ID, p.post_title, p.post_name, p.post_parent, p.menu_order,
+			        LENGTH(p.post_content) AS content_length
+			 FROM {$wpdb->posts} p
+			 {$wpml_join}
+			 WHERE p.post_type = 'page'
+			   AND p.post_status = 'publish'
+			   {$wpml_where}
+			 ORDER BY p.menu_order ASC, p.post_title ASC
+			 LIMIT 500"
+		);
+
+		if ( empty( $pages ) ) {
+			return array();
+		}
+
+		// Detect page template
+		$page_ids = wp_list_pluck( $pages, 'ID' );
+		$id_ph = implode( ',', array_fill( 0, count( $page_ids ), '%d' ) );
+		$template_rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT post_id, meta_value FROM {$wpdb->postmeta}
+			 WHERE post_id IN ($id_ph) AND meta_key = '_wp_page_template'",
+			...$page_ids
+		) );
+		$template_map = array();
+		foreach ( $template_rows as $tr ) {
+			$template_map[ $tr->post_id ] = $tr->meta_value;
+		}
+
+		// Build children map
+		$children_map = array();
+		foreach ( $pages as $pg ) {
+			if ( $pg->post_parent > 0 ) {
+				$children_map[ $pg->post_parent ][] = absint( $pg->ID );
+			}
+		}
+
+		$nodes = array();
+		foreach ( $pages as $pg ) {
+			$id = absint( $pg->ID );
+			$template = $template_map[ $id ] ?? 'default';
+			if ( $template === '' || $template === 'default' ) {
+				$template = 'default';
+			}
+
+			$nodes[] = array(
+				'id'              => $id,
+				'type'            => 'page',
+				'title'           => $pg->post_title,
+				'slug'            => $pg->post_name,
+				'parent_id'       => absint( $pg->post_parent ),
+				'menu_order'      => absint( $pg->menu_order ),
+				'content_length'  => absint( $pg->content_length ),
+				'template'        => $template,
+				'is_front_page'   => $id === $front_page_id,
+				'is_blog_page'    => $id === $blog_page_id,
+				'is_shop_page'    => $id === $shop_page_id,
+				'children_ids'    => $children_map[ $id ] ?? array(),
+			);
+		}
+
+		return $nodes;
+	}
+
+	// ─── CONTENT TAXONOMY ──────────────────────────────────────────────
+
+	private function build_content_taxonomy_nodes() {
+		$taxonomies = get_taxonomies( array( 'public' => true ), 'objects' );
+		$nodes = array();
+
+		foreach ( $taxonomies as $tax ) {
+			$term_count = wp_count_terms( array( 'taxonomy' => $tax->name, 'hide_empty' => false ) );
+			if ( is_wp_error( $term_count ) ) {
+				$term_count = 0;
+			}
+
+			// Get top 20 terms by count
+			$top_terms = get_terms( array(
+				'taxonomy'   => $tax->name,
+				'orderby'    => 'count',
+				'order'      => 'DESC',
+				'number'     => 20,
+				'hide_empty' => false,
+			) );
+
+			$term_list = array();
+			if ( ! is_wp_error( $top_terms ) ) {
+				foreach ( $top_terms as $term ) {
+					$term_list[] = array(
+						'id'    => $term->term_id,
+						'name'  => $term->name,
+						'slug'  => $term->slug,
+						'count' => $term->count,
+					);
+				}
+			}
+
+			$nodes[] = array(
+				'type'         => 'taxonomy',
+				'name'         => $tax->name,
+				'label'        => $tax->label,
+				'post_types'   => (array) $tax->object_type,
+				'hierarchical' => $tax->hierarchical,
+				'term_count'   => absint( $term_count ),
+				'top_terms'    => $term_list,
+			);
+		}
+
+		return $nodes;
+	}
+
+	// ─── MEDIA INVENTORY ───────────────────────────────────────────────
+
+	private function build_media_inventory_nodes() {
+		global $wpdb;
+
+		// Total counts by mime type
+		$type_counts = $wpdb->get_results(
+			"SELECT
+			    SUM(CASE WHEN post_mime_type LIKE 'image/%' THEN 1 ELSE 0 END) AS images,
+			    SUM(CASE WHEN post_mime_type LIKE 'video/%' THEN 1 ELSE 0 END) AS videos,
+			    SUM(CASE WHEN post_mime_type LIKE 'application/pdf' THEN 1 ELSE 0 END) AS documents,
+			    COUNT(*) AS total
+			 FROM {$wpdb->posts}
+			 WHERE post_type = 'attachment' AND post_status = 'inherit'"
+		);
+		$counts = $type_counts[0] ?? (object) array( 'images' => 0, 'videos' => 0, 'documents' => 0, 'total' => 0 );
+
+		// Images without alt text
+		$missing_alt = $wpdb->get_var(
+			"SELECT COUNT(*)
+			 FROM {$wpdb->posts} p
+			 LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_wp_attachment_image_alt'
+			 WHERE p.post_type = 'attachment'
+			   AND p.post_mime_type LIKE 'image/%'
+			   AND p.post_status = 'inherit'
+			   AND (pm.meta_value IS NULL OR pm.meta_value = '')"
+		);
+
+		// Orphaned media (no post_parent)
+		$orphaned = $wpdb->get_var(
+			"SELECT COUNT(*)
+			 FROM {$wpdb->posts}
+			 WHERE post_type = 'attachment'
+			   AND post_status = 'inherit'
+			   AND post_parent = 0"
+		);
+
+		// Top 10 largest files
+		$largest = $wpdb->get_results(
+			"SELECT p.ID, p.post_title, p.post_mime_type, pm.meta_value AS file_meta
+			 FROM {$wpdb->posts} p
+			 INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_wp_attachment_metadata'
+			 WHERE p.post_type = 'attachment' AND p.post_status = 'inherit'
+			 ORDER BY p.ID DESC
+			 LIMIT 10"
+		);
+
+		$largest_list = array();
+		foreach ( $largest as $file ) {
+			$meta = maybe_unserialize( $file->file_meta );
+			$filesize = 0;
+			if ( is_array( $meta ) && isset( $meta['filesize'] ) ) {
+				$filesize = absint( $meta['filesize'] );
+			}
+			$largest_list[] = array(
+				'id'        => absint( $file->ID ),
+				'title'     => $file->post_title,
+				'mime_type' => $file->post_mime_type,
+				'filesize'  => $filesize,
+			);
+		}
+
+		// Sort by filesize desc
+		usort( $largest_list, function( $a, $b ) {
+			return $b['filesize'] <=> $a['filesize'];
+		} );
+
+		return array(
+			'total_media'       => absint( $counts->total ),
+			'total_images'      => absint( $counts->images ),
+			'total_videos'      => absint( $counts->videos ),
+			'total_documents'   => absint( $counts->documents ),
+			'missing_alt_count' => absint( $missing_alt ),
+			'orphaned_count'    => absint( $orphaned ),
+			'largest_files'     => $largest_list,
+		);
+	}
+
+	// ─── MENUS ─────────────────────────────────────────────────────────
+
+	private function build_menu_nodes() {
+		$locations = get_nav_menu_locations();
+		$registered = get_registered_nav_menus();
+		$nodes = array();
+
+		foreach ( $registered as $location => $description ) {
+			$menu_id = $locations[ $location ] ?? 0;
+			$menu = $menu_id ? wp_get_nav_menu_object( $menu_id ) : null;
+
+			$items_data = array();
+			if ( $menu ) {
+				$items = wp_get_nav_menu_items( $menu->term_id );
+				if ( $items ) {
+					foreach ( $items as $item ) {
+						$items_data[] = array(
+							'id'        => absint( $item->ID ),
+							'title'     => $item->title,
+							'url'       => $item->url,
+							'type'      => $item->type,
+							'object'    => $item->object,
+							'object_id' => absint( $item->object_id ),
+							'parent'    => absint( $item->menu_item_parent ),
+						);
+					}
+				}
+			}
+
+			$nodes[] = array(
+				'location'    => $location,
+				'description' => $description,
+				'menu_name'   => $menu ? $menu->name : null,
+				'menu_id'     => $menu_id,
+				'item_count'  => count( $items_data ),
+				'items'       => $items_data,
+			);
+		}
+
+		return $nodes;
+	}
+
+	// ─── PRODUCT ATTRIBUTES ────────────────────────────────────────────
+
+	private function build_product_attribute_nodes() {
+		if ( ! function_exists( 'wc_get_attribute_taxonomies' ) ) {
+			return array();
+		}
+
+		$attributes = wc_get_attribute_taxonomies();
+		$nodes = array();
+
+		foreach ( $attributes as $attr ) {
+			$taxonomy = wc_attribute_taxonomy_name( $attr->attribute_name );
+			$terms = get_terms( array(
+				'taxonomy'   => $taxonomy,
+				'hide_empty' => false,
+			) );
+
+			$term_list = array();
+			if ( ! is_wp_error( $terms ) ) {
+				foreach ( $terms as $term ) {
+					$term_list[] = array(
+						'id'    => $term->term_id,
+						'name'  => $term->name,
+						'slug'  => $term->slug,
+						'count' => $term->count,
+					);
+				}
+			}
+
+			$nodes[] = array(
+				'id'         => absint( $attr->attribute_id ),
+				'type'       => 'product_attribute',
+				'name'       => $attr->attribute_name,
+				'label'      => $attr->attribute_label,
+				'taxonomy'   => $taxonomy,
+				'type_slug'  => $attr->attribute_type,
+				'term_count' => count( $term_list ),
+				'terms'      => $term_list,
+			);
+		}
+
+		return $nodes;
+	}
+
+	// ─── AUTHORS ───────────────────────────────────────────────────────
+
+	private function build_author_nodes() {
+		global $wpdb;
+
+		$authors = $wpdb->get_results(
+			"SELECT p.post_author,
+			        u.display_name,
+			        COUNT(*) AS post_count,
+			        MAX(p.post_date) AS last_published
+			 FROM {$wpdb->posts} p
+			 INNER JOIN {$wpdb->users} u ON p.post_author = u.ID
+			 WHERE p.post_status = 'publish'
+			   AND p.post_type IN ('post', 'page', 'product')
+			 GROUP BY p.post_author
+			 ORDER BY post_count DESC
+			 LIMIT 50"
+		);
+
+		// Get per-type counts
+		$type_counts = $wpdb->get_results(
+			"SELECT post_author, post_type, COUNT(*) AS cnt
+			 FROM {$wpdb->posts}
+			 WHERE post_status = 'publish'
+			   AND post_type IN ('post', 'page', 'product')
+			 GROUP BY post_author, post_type"
+		);
+		$type_map = array();
+		foreach ( $type_counts as $tc ) {
+			$type_map[ $tc->post_author ][ $tc->post_type ] = absint( $tc->cnt );
+		}
+
+		// Get roles
+		$author_ids = wp_list_pluck( $authors, 'post_author' );
+		$role_map = array();
+		if ( ! empty( $author_ids ) ) {
+			$users = get_users( array( 'include' => $author_ids ) );
+			foreach ( $users as $u ) {
+				$role_map[ $u->ID ] = implode( ', ', $u->roles );
+			}
+		}
+
+		$nodes = array();
+		foreach ( $authors as $a ) {
+			$uid = absint( $a->post_author );
+			$counts = $type_map[ $uid ] ?? array();
+			$days_since = max( 0, round( ( time() - strtotime( $a->last_published ) ) / DAY_IN_SECONDS ) );
+
+			$nodes[] = array(
+				'id'              => $uid,
+				'type'            => 'author',
+				'display_name'    => $a->display_name,
+				'role'            => $role_map[ $uid ] ?? 'unknown',
+				'total_posts'     => absint( $a->post_count ),
+				'post_count'      => $counts['post'] ?? 0,
+				'page_count'      => $counts['page'] ?? 0,
+				'product_count'   => $counts['product'] ?? 0,
+				'last_published'  => $a->last_published,
+				'days_since_last' => $days_since,
+			);
+		}
+
+		return $nodes;
+	}
+
+	// ─── ORDER ANALYTICS ───────────────────────────────────────────────
+
+	private function build_order_analytics_nodes() {
+		global $wpdb;
+
+		if ( ! class_exists( 'WooCommerce' ) ) {
+			return array( 'available' => false );
+		}
+
+		// Orders by status
+		$status_counts = $wpdb->get_results(
+			"SELECT post_status, COUNT(*) AS cnt
+			 FROM {$wpdb->posts}
+			 WHERE post_type = 'shop_order'
+			 GROUP BY post_status"
+		);
+		$by_status = array();
+		foreach ( $status_counts as $sc ) {
+			$by_status[ $sc->post_status ] = absint( $sc->cnt );
+		}
+
+		// Monthly revenue last 12 months
+		$monthly = $wpdb->get_results(
+			"SELECT DATE_FORMAT(p.post_date, '%Y-%m') AS month,
+			        COUNT(*) AS orders,
+			        COALESCE(SUM(pm.meta_value), 0) AS revenue
+			 FROM {$wpdb->posts} p
+			 INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_order_total'
+			 WHERE p.post_type = 'shop_order'
+			   AND p.post_status IN ('wc-completed', 'wc-processing')
+			   AND p.post_date > DATE_SUB(NOW(), INTERVAL 12 MONTH)
+			 GROUP BY DATE_FORMAT(p.post_date, '%Y-%m')
+			 ORDER BY month ASC"
+		);
+		$monthly_data = array();
+		foreach ( $monthly as $m ) {
+			$monthly_data[] = array(
+				'month'   => $m->month,
+				'orders'  => absint( $m->orders ),
+				'revenue' => round( floatval( $m->revenue ), 2 ),
+			);
+		}
+
+		// Repeat customer rate
+		$total_customers = $wpdb->get_var(
+			"SELECT COUNT(DISTINCT pm.meta_value)
+			 FROM {$wpdb->posts} p
+			 INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_customer_user'
+			 WHERE p.post_type = 'shop_order'
+			   AND p.post_status IN ('wc-completed', 'wc-processing')
+			   AND pm.meta_value != '0'"
+		);
+		$repeat_customers = $wpdb->get_var(
+			"SELECT COUNT(*) FROM (
+			    SELECT pm.meta_value
+			    FROM {$wpdb->posts} p
+			    INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_customer_user'
+			    WHERE p.post_type = 'shop_order'
+			      AND p.post_status IN ('wc-completed', 'wc-processing')
+			      AND pm.meta_value != '0'
+			    GROUP BY pm.meta_value
+			    HAVING COUNT(*) > 1
+			) AS repeats"
+		);
+		$repeat_rate = $total_customers > 0 ? round( ( $repeat_customers / $total_customers ) * 100, 1 ) : 0;
+
+		// Average items per order (last 90 days)
+		$avg_items = $wpdb->get_var(
+			"SELECT AVG(item_count) FROM (
+			    SELECT oi.order_id, COUNT(*) AS item_count
+			    FROM {$wpdb->prefix}woocommerce_order_items oi
+			    INNER JOIN {$wpdb->posts} p ON oi.order_id = p.ID
+			    WHERE p.post_type = 'shop_order'
+			      AND p.post_status IN ('wc-completed', 'wc-processing')
+			      AND p.post_date > DATE_SUB(NOW(), INTERVAL 90 DAY)
+			      AND oi.order_item_type = 'line_item'
+			    GROUP BY oi.order_id
+			) AS counts"
+		);
+
+		// Payment method distribution (last 90 days)
+		$payment_rows = $wpdb->get_results(
+			"SELECT pm.meta_value AS method, COUNT(*) AS cnt
+			 FROM {$wpdb->posts} p
+			 INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_payment_method_title'
+			 WHERE p.post_type = 'shop_order'
+			   AND p.post_status IN ('wc-completed', 'wc-processing')
+			   AND p.post_date > DATE_SUB(NOW(), INTERVAL 90 DAY)
+			 GROUP BY pm.meta_value
+			 ORDER BY cnt DESC"
+		);
+		$payment_methods = array();
+		foreach ( $payment_rows as $pr ) {
+			$payment_methods[ $pr->method ] = absint( $pr->cnt );
+		}
+
+		// Refund stats
+		$refund_total = $wpdb->get_row(
+			"SELECT COUNT(*) AS cnt, COALESCE(SUM(pm.meta_value), 0) AS amount
+			 FROM {$wpdb->posts} p
+			 INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_order_total'
+			 WHERE p.post_type = 'shop_order_refund'
+			   AND p.post_date > DATE_SUB(NOW(), INTERVAL 90 DAY)"
+		);
+
+		return array(
+			'orders_by_status'      => $by_status,
+			'monthly_revenue_12m'   => $monthly_data,
+			'repeat_customer_rate'  => $repeat_rate,
+			'total_customers'       => absint( $total_customers ),
+			'repeat_customers'      => absint( $repeat_customers ),
+			'avg_items_per_order'   => round( floatval( $avg_items ), 1 ),
+			'payment_methods'       => $payment_methods,
+			'refund_count_90d'      => absint( $refund_total->cnt ?? 0 ),
+			'refund_amount_90d'     => round( floatval( $refund_total->amount ?? 0 ), 2 ),
+		);
+	}
+
+	// ─── POST / PAGE EDGES ─────────────────────────────────────────────
+
+	private function build_post_edges( $post_nodes ) {
+		$edges = array();
+		foreach ( $post_nodes as $p ) {
+			$source = 'post:' . $p['id'];
+			foreach ( $p['categories'] as $cat_id ) {
+				$edges[] = array( 'source' => $source, 'target' => 'post_category:' . $cat_id, 'type' => 'belongs_to' );
+			}
+			foreach ( $p['tags'] as $tag_id ) {
+				$edges[] = array( 'source' => $source, 'target' => 'post_tag:' . $tag_id, 'type' => 'tagged_with' );
+			}
+			$edges[] = array( 'source' => $source, 'target' => 'author:' . $p['author_id'], 'type' => 'authored_by' );
+		}
+		return $edges;
+	}
+
+	private function build_page_edges( $page_nodes ) {
+		$edges = array();
+		foreach ( $page_nodes as $p ) {
+			if ( $p['parent_id'] > 0 ) {
+				$edges[] = array( 'source' => 'page:' . $p['id'], 'target' => 'page:' . $p['parent_id'], 'type' => 'child_of' );
+			}
+		}
+		return $edges;
 	}
 
 	// ─── CACHE ──────────────────────────────────────────────────────────
