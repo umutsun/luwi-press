@@ -1851,21 +1851,41 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
         $translated_json = wp_json_encode( $translated_data );
 
         if ( $translated_id && $translated_id !== $source_id ) {
-            // Update existing translation — don't overwrite title (keep translated title)
+            // Switch WPML language context to target — critical for cron where context is wrong
+            do_action( 'wpml_switch_language', $language );
+
+            // Update existing translation
             $existing = get_post( $translated_id );
             $update_data = array(
                 'ID'          => $translated_id,
                 'post_status' => 'publish',
             );
-            // Only set title if the existing post has no title or same as source (not yet translated)
             if ( ! $existing || empty( $existing->post_title ) || $existing->post_title === $source_post->post_title ) {
                 $update_data['post_title'] = $source_post->post_title;
             }
             wp_update_post( $update_data );
 
-            update_post_meta( $translated_id, '_elementor_data', wp_slash( $translated_json ) );
+            // Write translated Elementor data directly to DB to bypass WPML meta filtering
+            global $wpdb;
+            $wpdb->update(
+                $wpdb->postmeta,
+                array( 'meta_value' => wp_slash( $translated_json ) ),
+                array( 'post_id' => $translated_id, 'meta_key' => '_elementor_data' )
+            );
+            if ( ! $wpdb->rows_affected ) {
+                // Meta doesn't exist yet — insert it
+                $wpdb->insert( $wpdb->postmeta, array(
+                    'post_id'    => $translated_id,
+                    'meta_key'   => '_elementor_data',
+                    'meta_value' => wp_slash( $translated_json ),
+                ) );
+            }
             update_post_meta( $translated_id, '_elementor_edit_mode', 'builder' );
+            update_post_meta( $translated_id, '_luwipress_elementor_translated', '1' );
             $this->regenerate_css( $translated_id );
+
+            // Switch back to default language
+            do_action( 'wpml_switch_language', $default_lang );
 
             LuwiPress_Logger::log( 'Elementor WPML translation updated: #' . $translated_id, 'info' );
         } else {
@@ -1883,9 +1903,15 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
                 return $translated_id;
             }
 
-            // Save Elementor data
-            update_post_meta( $translated_id, '_elementor_data', wp_slash( $translated_json ) );
+            // Save Elementor data — direct DB to bypass WPML meta filtering in cron
+            global $wpdb;
+            $wpdb->insert( $wpdb->postmeta, array(
+                'post_id'    => $translated_id,
+                'meta_key'   => '_elementor_data',
+                'meta_value' => wp_slash( $translated_json ),
+            ) );
             update_post_meta( $translated_id, '_elementor_edit_mode', 'builder' );
+            update_post_meta( $translated_id, '_luwipress_elementor_translated', '1' );
             update_post_meta( $translated_id, '_elementor_version', get_post_meta( $source_id, '_elementor_version', true ) );
 
             // Copy _elementor_page_settings if present
