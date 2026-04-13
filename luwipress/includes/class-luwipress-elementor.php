@@ -824,9 +824,32 @@ class LuwiPress_Elementor {
             return $result;
         }
 
-        // Update post_title with translated title (for blog listings, SEO, etc.)
-        if ( ! empty( $translated_title ) && ! empty( $result['translated_id'] ) ) {
-            wp_update_post( array( 'ID' => $result['translated_id'], 'post_title' => $translated_title ) );
+        // Update post_title, slug, and excerpt on the translated post
+        if ( ! empty( $result['translated_id'] ) ) {
+            $tid = $result['translated_id'];
+            $update = array( 'ID' => $tid );
+
+            // Title: use translated widget title, fall back to source title
+            if ( ! empty( $translated_title ) ) {
+                $update['post_title'] = $translated_title;
+                $update['post_name']  = sanitize_title( $translated_title );
+            }
+
+            // Excerpt: extract plain text from first text-editor widget for blog listings
+            $excerpt_text = '';
+            foreach ( $trans_map as $wid => $fields ) {
+                foreach ( $fields as $field => $text ) {
+                    if ( in_array( $field, array( 'editor', 'description_text', 'testimonial_content' ), true ) && ! empty( $text ) ) {
+                        $excerpt_text = wp_trim_words( wp_strip_all_tags( $text ), 30, '...' );
+                        break 2;
+                    }
+                }
+            }
+            if ( ! empty( $excerpt_text ) ) {
+                $update['post_excerpt'] = $excerpt_text;
+            }
+
+            wp_update_post( $update );
         }
 
         $count = count( $texts_for_ai ) + count( $long_texts );
@@ -1805,9 +1828,10 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
 
             LuwiPress_Logger::log( 'Elementor WPML translation updated: #' . $translated_id, 'info' );
         } else {
-            // Create new translation post
+            // Create new translation post (title will be updated after AI translation)
             $translated_id = wp_insert_post( array(
                 'post_title'   => $source_post->post_title,
+                'post_name'    => sanitize_title( $source_post->post_title ) . '-' . $language,
                 'post_content' => '',
                 'post_type'    => $post_type,
                 'post_status'  => $source_post->post_status,

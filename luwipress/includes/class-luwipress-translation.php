@@ -383,7 +383,7 @@ class LuwiPress_Translation {
                             'meta_title'        => '',
                             'meta_description'  => '',
                             'focus_keyword'     => '',
-                            'slug'              => '',
+                            'slug'              => sanitize_title( $translated_title ),
                         ),
                         'status' => 'completed',
                     ) );
@@ -949,6 +949,8 @@ class LuwiPress_Translation {
 
         if ( $translated_id && $translated_id !== $product_id ) {
             // ── Update existing translation ──
+            $existing_post = get_post( $translated_id );
+            $needs_slug = $existing_post && ( is_numeric( $existing_post->post_name ) || empty( $existing_post->post_name ) );
             $update_data = array(
                 'ID'           => $translated_id,
                 'post_title'   => $translated['name'],
@@ -956,6 +958,9 @@ class LuwiPress_Translation {
                 'post_excerpt' => $translated['short_description'] ?? '',
                 'post_status'  => 'publish',
             );
+            if ( $needs_slug && ! empty( $translated['name'] ) ) {
+                $update_data['post_name'] = ! empty( $translated['slug'] ) ? sanitize_title( $translated['slug'] ) : sanitize_title( $translated['name'] );
+            }
             $result = wp_update_post( $update_data, true );
 
             if ( is_wp_error( $result ) ) {
@@ -997,8 +1002,10 @@ class LuwiPress_Translation {
             }
             set_transient( $lock_key, 1, 30 );
 
+            $slug = ! empty( $translated['slug'] ) ? sanitize_title( $translated['slug'] ) : sanitize_title( $translated['name'] );
             $new_id = wp_insert_post( array(
                 'post_title'   => $translated['name'],
+                'post_name'    => $slug,
                 'post_content' => $translated['description'],
                 'post_excerpt' => $translated['short_description'] ?? '',
                 'post_type'    => $post_type,
