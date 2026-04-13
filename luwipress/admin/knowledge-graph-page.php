@@ -285,10 +285,17 @@ function buildGraph(data) {
 	var g = svg.append('g');
 	var zoom = d3.zoom()
 		.scaleExtent([0.1, 5])
+		.filter(function(event) {
+			// Don't zoom on node clicks — let click event through
+			if (event.type === 'dblclick') return true;
+			if (event.type === 'mousedown' && event.target.closest('.kg-node')) return false;
+			return !event.ctrlKey && !event.button;
+		})
 		.on('zoom', function(event) {
 			g.attr('transform', event.transform);
 		});
-	svg.call(zoom);
+	svg.call(zoom)
+		.on('dblclick.zoom', null); // disable double-click zoom
 
 	// Links
 	var link = g.append('g').attr('class', 'kg-links')
@@ -357,11 +364,49 @@ function buildGraph(data) {
 
 	// Tooltip
 	var tooltip = document.getElementById('kg-tooltip');
+	var tooltipTimeout = null;
+	var hoveredNode = null;
 
-	node.on('mouseover', function(event, d) {
+	function showTooltip(event, d) {
+		clearTimeout(tooltipTimeout);
+		hoveredNode = d;
 		tooltip.innerHTML = buildTooltip(d);
 		tooltip.style.display = 'block';
 		tooltip.style.opacity = '1';
+
+		// Position near the node
+		var rect = svg.node().getBoundingClientRect();
+		var tx = event.clientX - rect.left + rect.left + 14;
+		var ty = event.clientY - rect.top + rect.top - 8;
+		var tw = 260;
+		if (tx + tw > window.innerWidth - 20) tx = tx - tw - 28;
+		if (ty < 50) ty = ty + 20;
+		tooltip.style.left = tx + 'px';
+		tooltip.style.top = ty + 'px';
+	}
+
+	function hideTooltip() {
+		tooltipTimeout = setTimeout(function() {
+			tooltip.style.opacity = '0';
+			setTimeout(function(){ tooltip.style.display = 'none'; }, 150);
+			hoveredNode = null;
+			node.transition().duration(300).style('opacity', 1);
+			node.selectAll('circle')
+				.transition().duration(200)
+				.attr('r', function(d){ return d.radius; })
+				.attr('stroke-width', 2);
+			link.transition().duration(300)
+				.style('opacity', 1)
+				.attr('stroke-width', function(d){ return d.type === 'belongs_to' ? 1.5 : 1; });
+		}, 300);
+	}
+
+	// Keep tooltip open when hovering over it
+	tooltip.addEventListener('mouseenter', function() { clearTimeout(tooltipTimeout); });
+	tooltip.addEventListener('mouseleave', function() { hideTooltip(); });
+
+	node.on('mouseover', function(event, d) {
+		showTooltip(event, d);
 
 		d3.select(this).select('circle')
 			.transition().duration(200)
@@ -388,24 +433,14 @@ function buildGraph(data) {
 				return connected ? 1 : 0.2;
 			});
 	})
-	.on('mousemove', function(event) {
-		tooltip.style.left = (event.pageX + 14) + 'px';
-		tooltip.style.top = (event.pageY - 14) + 'px';
+	.on('mousemove', function(event, d) {
+		showTooltip(event, d);
 	})
 	.on('mouseout', function() {
-		tooltip.style.opacity = '0';
-		setTimeout(function(){ tooltip.style.display = 'none'; }, 200);
-
-		node.transition().duration(300).style('opacity', 1);
-		d3.select(this).select('circle')
-			.transition().duration(200)
-			.attr('r', function(d){ return d.radius; })
-			.attr('stroke-width', 2);
-		link.transition().duration(300)
-			.style('opacity', 1)
-			.attr('stroke-width', function(d){ return d.type === 'belongs_to' ? 1.5 : 1; });
+		hideTooltip();
 	})
 	.on('click', function(event, d) {
+		event.stopPropagation();
 		showDetailPanel(d);
 	});
 
@@ -495,56 +530,150 @@ function showDetailPanel(d) {
 
 	if (d.type === 'product') {
 		var p = d.data;
-		h += '<h3>' + escHtml(p.name) + '</h3>';
-		h += '<div class="kg-detail-badge">#' + p.id + ' · ' + (p.sku || 'No SKU') + '</div>';
-		h += '<div class="kg-detail-section"><h4>SEO Status</h4>';
-		h += statusBadge(p.seo.has_title, 'Meta Title');
-		h += statusBadge(p.seo.has_description, 'Meta Description');
-		h += statusBadge(p.seo.has_focus_kw, 'Focus Keyword');
-		h += '</div>';
-		h += '<div class="kg-detail-section"><h4>AEO Status</h4>';
-		h += statusBadge(p.aeo.has_faq, 'FAQ Schema');
-		h += statusBadge(p.aeo.has_howto, 'HowTo Schema');
-		h += statusBadge(p.aeo.has_schema, 'Product Schema');
-		h += '</div>';
-		h += '<div class="kg-detail-section"><h4>Enrichment</h4>';
-		h += '<div class="kg-detail-enrichment-status kg-es-' + p.enrichment.status + '">' + p.enrichment.status + '</div>';
-		h += '</div>';
-		h += '<div class="kg-detail-section"><h4>Translations</h4>';
-		Object.keys(p.translation || {}).forEach(function(lang) {
-			var s = p.translation[lang];
-			h += '<div class="kg-detail-lang"><span class="kg-detail-lang-code">' + lang.toUpperCase() + '</span>';
-			h += '<span class="kg-detail-lang-status kg-ls-' + s + '">' + s + '</span></div>';
+
+		// ── Calculate health ──
+		var total = 0, done = 0;
+		total += 3; done += (p.seo.has_title?1:0) + (p.seo.has_description?1:0) + (p.seo.has_focus_kw?1:0);
+		total += 3; done += (p.aeo.has_faq?1:0) + (p.aeo.has_howto?1:0) + (p.aeo.has_schema?1:0);
+		total += 1; done += (p.enrichment.status === 'completed'?1:0);
+		var langKeys = Object.keys(p.translation || {});
+		total += langKeys.length;
+		langKeys.forEach(function(l) { if (p.translation[l]==='completed') done++; });
+		var healthPct = total > 0 ? Math.round(done/total*100) : 0;
+		var healthCls = healthPct >= 80 ? 'good' : healthPct >= 40 ? 'warn' : 'bad';
+
+		// ── Header: Name + Score Bar ──
+		h += '<h3 class="kg-p-name">' + escHtml(p.name) + '</h3>';
+		h += '<div class="kg-p-meta">#' + p.id + (p.sku ? ' &middot; ' + p.sku : '') + '</div>';
+		h += '<div class="kg-p-health kg-h-' + healthCls + '">';
+		h += '<div class="kg-p-health-bar" style="width:' + healthPct + '%"></div>';
+		h += '<span class="kg-p-health-label">Health ' + healthPct + '%</span></div>';
+
+		// ── Status Row: compact chips ──
+		h += '<div class="kg-p-chips">';
+		h += statusChip(p.seo.has_title, 'Title');
+		h += statusChip(p.seo.has_description, 'Meta Desc');
+		h += statusChip(p.seo.has_focus_kw, 'Keyword');
+		h += statusChip(p.aeo.has_faq, 'FAQ');
+		h += statusChip(p.aeo.has_howto, 'HowTo');
+		h += statusChip(p.aeo.has_schema, 'Schema');
+		h += statusChip(p.enrichment.status === 'completed', 'Enriched');
+		langKeys.forEach(function(lang) {
+			h += statusChip(p.translation[lang] === 'completed', lang.toUpperCase());
 		});
 		h += '</div>';
-		h += '<div class="kg-detail-section"><h4>Opportunity Score</h4>';
-		h += '<div class="kg-detail-score">' + p.opportunity_score + '</div>';
-		h += '<ul class="kg-detail-opps">';
-		(p.opportunities || []).forEach(function(o) {
-			h += '<li>' + o.replace(/_/g, ' ') + '</li>';
-		});
-		h += '</ul></div>';
-		h += '<a href="' + (p.permalink || '/wp-admin/post.php?post=' + p.id + '&action=edit') + '" target="_blank" class="kg-btn kg-btn-primary" style="margin-top:12px;display:inline-block;">Edit Product →</a>';
+
+		// ── Recommendations (only missing items) ──
+		var recs = [];
+		if (!p.seo.has_title || !p.seo.has_description) {
+			var miss = [];
+			if (!p.seo.has_title) miss.push('title');
+			if (!p.seo.has_description) miss.push('description');
+			recs.push({a:'enrich', l:'Optimize SEO', d:'Missing ' + miss.join(' & '), p:'high'});
+		} else if (!p.seo.has_focus_kw) {
+			recs.push({a:'enrich', l:'Add Focus Keyword', d:'SEO meta OK, keyword missing', p:'medium'});
+		}
+		if (p.enrichment.status !== 'completed') recs.push({a:'enrich', l:'AI Enrichment', d:'Generate rich product content', p:'high'});
+		if (!p.aeo.has_faq) recs.push({a:'faq', l:'Generate FAQ', d:'Rich snippets in search results', p:'medium'});
+		if (!p.aeo.has_howto) recs.push({a:'howto', l:'Generate HowTo', d:'How-to rich result cards', p:'low'});
+		var missingLangs = [];
+		langKeys.forEach(function(l) { if (p.translation[l] !== 'completed') missingLangs.push(l); });
+		if (missingLangs.length) recs.push({a:'translate', l:'Translate ' + missingLangs.map(function(x){return x.toUpperCase();}).join(', '), d:missingLangs.length + ' language' + (missingLangs.length>1?'s':''), p:'medium', langs:missingLangs.join(',')});
+
+		// Sort: high > medium > low
+		var pri = {high:0,medium:1,low:2};
+		recs.sort(function(a,b){ return (pri[a.p]||9)-(pri[b.p]||9); });
+
+		if (recs.length > 0) {
+			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
+			recs.forEach(function(r) {
+				var extra = r.langs ? ",'" + r.langs + "'" : '';
+				h += '<button class="kg-rec kg-rec-' + r.p + '" onclick="kgAction(\'' + r.a + '\',' + p.id + ',this' + extra + ')">';
+				h += '<span class="kg-rec-dot"></span>';
+				h += '<span class="kg-rec-body"><strong>' + r.l + '</strong><br><small>' + r.d + '</small></span>';
+				h += '</button>';
+			});
+			h += '</div>';
+		} else {
+			h += '<div class="kg-p-allgood">All optimizations complete</div>';
+		}
+
+		// ── Footer ──
+		h += '<div class="kg-p-footer">';
+		h += '<a href="/wp-admin/post.php?post=' + p.id + '&action=edit" target="_blank" class="kg-btn kg-btn-primary">Edit Product</a>';
+		if (p.permalink) h += '<a href="' + p.permalink + '" target="_blank" class="kg-btn kg-btn-outline">View</a>';
+		h += '</div>';
+
 	} else if (d.type === 'category') {
 		var c = d.data;
-		h += '<h3>' + escHtml(c.name) + '</h3>';
-		h += '<div class="kg-detail-badge">Category · ' + c.product_count + ' products</div>';
-		h += '<div class="kg-detail-section"><h4>Coverage</h4>';
-		h += progressBar('SEO', c.seo_coverage_pct || 0);
-		h += progressBar('Enrichment', c.enrichment_pct || 0);
+
+		// Health calc for category
+		var cSeo = c.seo_coverage_pct || 0;
+		var cEnrich = c.enrichment_pct || 0;
+		var cTrans = 0, cTransCount = 0;
+		Object.keys(c.translation_pct || {}).forEach(function(l) { cTrans += (c.translation_pct[l] || 0); cTransCount++; });
+		var cAvg = cTransCount > 0 ? Math.round((cSeo + cEnrich + (cTrans / cTransCount)) / 3) : Math.round((cSeo + cEnrich) / 2);
+		var cCls = cAvg >= 80 ? 'good' : cAvg >= 40 ? 'warn' : 'bad';
+
+		h += '<div class="kg-p-type-badge kg-type-category">Category</div>';
+		h += '<h3 class="kg-p-name">' + escHtml(c.name) + '</h3>';
+		h += '<div class="kg-p-meta">' + c.product_count + ' products</div>';
+
+		h += '<div class="kg-p-health kg-h-' + cCls + '">';
+		h += '<div class="kg-p-health-bar" style="width:' + cAvg + '%"></div>';
+		h += '<span class="kg-p-health-label">Health ' + cAvg + '%</span></div>';
+
+		// SEO & Enrichment chips
+		h += '<div class="kg-p-chips">';
+		h += statusChip(cSeo >= 80, 'SEO ' + cSeo + '%');
+		h += statusChip(cEnrich >= 80, 'Enriched ' + cEnrich + '%');
 		Object.keys(c.translation_pct || {}).forEach(function(l) {
-			h += progressBar(l.toUpperCase() + ' Translation', c.translation_pct[l]);
+			var tp = c.translation_pct[l] || 0;
+			h += statusChip(tp >= 95, l.toUpperCase() + ' ' + tp + '%');
 		});
 		h += '</div>';
+
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Coverage Breakdown</div>';
+		h += progressBar('SEO', cSeo);
+		h += progressBar('Enrichment', cEnrich);
+		Object.keys(c.translation_pct || {}).forEach(function(l) {
+			h += progressBar(l.toUpperCase(), c.translation_pct[l] || 0);
+		});
+		h += '</div>';
+
 	} else if (d.type === 'language') {
 		var l = d.data;
-		h += '<h3>' + l.code.toUpperCase() + '</h3>';
-		h += '<div class="kg-detail-badge">Language</div>';
-		h += '<div class="kg-detail-section">';
-		h += progressBar('Coverage', l.coverage_pct || 0);
-		h += '<div class="kg-detail-row">Translated: <b>' + l.products_translated + '</b></div>';
-		h += '<div class="kg-detail-row">Missing: <b>' + l.products_missing + '</b></div>';
+		var covPct = l.coverage_pct || 0;
+		var covCls = covPct >= 80 ? 'good' : covPct >= 40 ? 'warn' : 'bad';
+		var translated = l.products_translated || 0;
+		var missing = l.products_missing || 0;
+		var total = translated + missing;
+
+		h += '<div class="kg-p-type-badge kg-type-language">Language</div>';
+		h += '<h3 class="kg-p-name">' + (l.name || l.code.toUpperCase()) + '</h3>';
+		h += '<div class="kg-p-meta">' + total + ' total products</div>';
+
+		h += '<div class="kg-p-health kg-h-' + covCls + '">';
+		h += '<div class="kg-p-health-bar" style="width:' + covPct + '%"></div>';
+		h += '<span class="kg-p-health-label">Coverage ' + covPct.toFixed(0) + '%</span></div>';
+
+		// Stats
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Translation Status</div>';
+		h += '<div class="kg-p-stat-row"><span>Translated</span><strong style="color:var(--n8n-success)">' + translated + '</strong></div>';
+		h += '<div class="kg-p-stat-row"><span>Missing</span><strong' + (missing > 0 ? ' class="kg-text-error"' : '') + '>' + missing + '</strong></div>';
+		h += '<div class="kg-p-stat-row"><span>Total</span><strong>' + total + '</strong></div>';
 		h += '</div>';
+
+		// Recommendations
+		if (missing > 0) {
+			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
+			h += '<button class="kg-rec kg-rec-high" onclick="kgAction(\'translate_lang\',0,this,\'' + l.code + '\')">';
+			h += '<span class="kg-rec-dot"></span>';
+			h += '<span class="kg-rec-body"><strong>Translate ' + missing + ' missing products</strong><br><small>Complete ' + l.code.toUpperCase() + ' coverage to 100%</small></span>';
+			h += '</button></div>';
+		} else {
+			h += '<div class="kg-p-allgood">Full coverage — all products translated</div>';
+		}
 	}
 
 	content.innerHTML = h;
@@ -554,6 +683,10 @@ function showDetailPanel(d) {
 function statusBadge(ok, label) {
 	return '<div class="kg-detail-status ' + (ok ? 'ok' : 'missing') + '">' +
 		'<span class="kg-detail-status-icon">' + (ok ? '✓' : '✗') + '</span> ' + label + '</div>';
+}
+
+function statusChip(ok, label) {
+	return '<span class="kg-chip kg-chip-' + (ok ? 'ok' : 'miss') + '">' + label + '</span>';
 }
 
 function progressBar(label, pct) {
@@ -629,6 +762,48 @@ function init() {
 init();
 
 })();
+
+// Quick Action handler (outside IIFE so onclick attributes can reach it)
+var lpKgRestUrl = <?php echo wp_json_encode( rest_url( 'luwipress/v1/' ) ); ?>;
+var lpKgNonce = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
+
+function kgAction(action, productId, btn, langs) {
+	var originalText = btn.innerHTML;
+	btn.disabled = true;
+	btn.innerHTML = '<span class="kg-action-spinner"></span> Working...';
+
+	var endpoint, body;
+	if (action === 'enrich') {
+		endpoint = 'product/enrich';
+		body = { product_id: productId };
+	} else if (action === 'faq') {
+		endpoint = 'aeo/generate-faq';
+		body = { product_id: productId };
+	} else if (action === 'howto') {
+		endpoint = 'aeo/generate-howto';
+		body = { product_id: productId };
+	} else if (action === 'translate') {
+		endpoint = 'translation/request';
+		body = { product_id: productId, target_languages: langs ? langs.split(',') : [] };
+	}
+
+	fetch(lpKgRestUrl + endpoint, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce },
+		body: JSON.stringify(body),
+		credentials: 'same-origin'
+	})
+	.then(function(r) { return r.json(); })
+	.then(function(data) {
+		btn.innerHTML = '<span class="kg-action-icon" style="color:var(--n8n-success);">&#10003;</span> Done';
+		btn.classList.add('kg-action-done');
+		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 3000);
+	})
+	.catch(function(err) {
+		btn.innerHTML = '<span style="color:var(--n8n-error);">Failed</span>';
+		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
+	});
+}
 </script>
 </content>
 </invoke>

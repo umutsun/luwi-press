@@ -30,6 +30,32 @@ class LuwiPress_Elementor {
 
     private function __construct() {
         add_action( 'rest_api_init', array( $this, 'register_endpoints' ) );
+
+        // Background job: translate Elementor pages one at a time via wp_cron
+        add_action( 'luwipress_elementor_translate_single', array( $this, 'cron_translate_single' ), 10, 2 );
+    }
+
+    /**
+     * WP Cron handler: translate a single Elementor page in the background.
+     *
+     * @param int    $source_id       Source post ID.
+     * @param string $target_language Target language code.
+     */
+    public function cron_translate_single( $source_id, $target_language ) {
+        // Increase execution time for background processing
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 300 );
+        }
+
+        LuwiPress_Logger::log( 'Cron: translating Elementor page #' . $source_id . ' → ' . $target_language, 'info' );
+
+        $result = $this->translate_page( $source_id, $target_language );
+
+        if ( is_wp_error( $result ) ) {
+            LuwiPress_Logger::log( 'Cron: Elementor translation FAILED #' . $source_id . ' → ' . $target_language . ': ' . $result->get_error_message(), 'error' );
+        } else {
+            LuwiPress_Logger::log( 'Cron: Elementor translation completed #' . $source_id . ' → #' . ( $result['translated_id'] ?? '?' ) . ' (' . $target_language . ')', 'info' );
+        }
     }
 
     /* ──────────────────────────── Constants ──────────────────────────── */
@@ -54,6 +80,8 @@ class LuwiPress_Elementor {
         'progress'        => array( 'title', 'inner_text' ),
         'icon-list'       => array(),  // handled specially (items array)
         'animated-headline' => array( 'before_text', 'highlighted_text', 'after_text', 'rotating_text' ),
+        // ElementsKit widgets
+        'elementskit-heading' => array( 'ekit_heading_title', 'ekit_heading_sub_title', 'ekit_heading_extra_title', 'ekit_heading_description' ),
     );
 
     /**
@@ -160,6 +188,13 @@ class LuwiPress_Elementor {
         register_rest_route( $ns, '/elementor/translate', array(
             'methods'             => 'POST',
             'callback'            => array( $this, 'rest_translate_page' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        // Queue Elementor translations as background jobs (no timeout)
+        register_rest_route( $ns, '/elementor/translate-queue', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_queue_translations' ),
             'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
         ) );
 
@@ -629,19 +664,36 @@ class LuwiPress_Elementor {
 
         // Build a flat structure for AI translation
         $texts_for_ai = array();
+        $long_texts   = array(); // Texts > 3000 chars — translated individually via chunking
         foreach ( $translatable as $widget_id => $info ) {
+            // Get the widget's title to detect duplicate <h1> in extra_title
+            $widget_title = $info['texts']['ekit_heading_title'] ?? '';
+
             foreach ( $info['texts'] as $field => $text ) {
                 if ( ! empty( trim( strip_tags( $text ) ) ) ) {
-                    $texts_for_ai[] = array(
-                        'widget_id' => $widget_id,
-                        'field'     => $field,
-                        'text'      => $text,
-                    );
+                    // Strip leading <h1> from ekit_heading_extra_title if it duplicates ekit_heading_title
+                    if ( 'ekit_heading_extra_title' === $field && ! empty( $widget_title ) ) {
+                        $text = preg_replace( '/^\s*<h1[^>]*>.*?<\/h1>\s*/is', '', $text, 1 );
+                    }
+
+                    if ( strlen( $text ) > 3000 ) {
+                        $long_texts[] = array(
+                            'widget_id' => $widget_id,
+                            'field'     => $field,
+                            'text'      => $text,
+                        );
+                    } else {
+                        $texts_for_ai[] = array(
+                            'widget_id' => $widget_id,
+                            'field'     => $field,
+                            'text'      => $text,
+                        );
+                    }
                 }
             }
         }
 
-        if ( empty( $texts_for_ai ) ) {
+        if ( empty( $texts_for_ai ) && empty( $long_texts ) ) {
             return new WP_Error( 'no_text', 'No non-empty translatable text found', array( 'status' => 400 ) );
         }
 
@@ -650,36 +702,49 @@ class LuwiPress_Elementor {
         $source_name     = self::LANG_NAMES[ $source_language ] ?? ucfirst( $source_language );
         $target_name     = self::LANG_NAMES[ $target_language ] ?? ucfirst( $target_language );
 
-        // Build AI prompt
-        $prompt   = $this->build_translation_prompt( $texts_for_ai, $source_name, $target_name );
-        $messages = LuwiPress_AI_Engine::build_messages( $prompt );
-
-        $ai_result = LuwiPress_AI_Engine::dispatch_json( 'elementor-translation', $messages, array(
-            'max_tokens' => 4096,
-        ) );
-
-        if ( is_wp_error( $ai_result ) ) {
-            LuwiPress_Logger::log( 'Elementor translation failed: ' . $ai_result->get_error_message(), 'error', array(
-                'post_id'  => $post_id,
-                'language' => $target_language,
-            ) );
-            return $ai_result;
-        }
-
-        // Parse AI result — expect array of {widget_id, field, text}
-        $translations = $ai_result['translations'] ?? $ai_result;
-        if ( ! is_array( $translations ) ) {
-            return new WP_Error( 'ai_parse_error', 'AI did not return valid translation array', array( 'status' => 500 ) );
-        }
-
-        // Build translation map: widget_id => [field => translated_text]
         $trans_map = array();
-        foreach ( $translations as $item ) {
-            $wid   = $item['widget_id'] ?? '';
-            $field = $item['field'] ?? '';
-            $text  = $item['text'] ?? '';
-            if ( $wid && $field && $text ) {
-                $trans_map[ $wid ][ $field ] = $text;
+
+        // ── Short texts: batch translate via JSON ──
+        if ( ! empty( $texts_for_ai ) ) {
+            $prompt   = $this->build_translation_prompt( $texts_for_ai, $source_name, $target_name );
+            $messages = LuwiPress_AI_Engine::build_messages( $prompt );
+
+            $estimated_tokens = max( 4096, intval( array_sum( array_map( function ( $t ) { return strlen( $t['text'] ); }, $texts_for_ai ) ) / 3 ) );
+            $max_tokens = min( $estimated_tokens, 16000 );
+
+            $ai_result = LuwiPress_AI_Engine::dispatch_json( 'elementor-translation', $messages, array(
+                'max_tokens' => $max_tokens,
+            ) );
+
+            if ( is_wp_error( $ai_result ) ) {
+                LuwiPress_Logger::log( 'Elementor batch translation failed: ' . $ai_result->get_error_message(), 'error', array(
+                    'post_id'  => $post_id,
+                    'language' => $target_language,
+                ) );
+                // Don't return — still try long texts
+            } else {
+                $translations = $ai_result['translations'] ?? $ai_result;
+                if ( is_array( $translations ) ) {
+                    foreach ( $translations as $item ) {
+                        $wid   = $item['widget_id'] ?? '';
+                        $field = $item['field'] ?? '';
+                        $text  = $item['text'] ?? '';
+                        if ( $wid && $field && $text ) {
+                            $trans_map[ $wid ][ $field ] = $text;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Long texts: chunked translation (plain HTML, not JSON) ──
+        foreach ( $long_texts as $lt ) {
+            $translated = $this->translate_long_html( $lt['text'], $source_name, $target_name );
+            if ( ! is_wp_error( $translated ) && ! empty( $translated ) ) {
+                $trans_map[ $lt['widget_id'] ][ $lt['field'] ] = $translated;
+                LuwiPress_Logger::log( sprintf( 'Elementor long text translated: widget=%s field=%s len=%d→%d', $lt['widget_id'], $lt['field'], strlen( $lt['text'] ), strlen( $translated ) ), 'info' );
+            } else {
+                LuwiPress_Logger::log( sprintf( 'Elementor long text FAILED: widget=%s field=%s: %s', $lt['widget_id'], $lt['field'], is_wp_error( $translated ) ? $translated->get_error_message() : 'empty' ), 'warning' );
             }
         }
 
@@ -706,13 +771,30 @@ class LuwiPress_Elementor {
             }
         } );
 
+        // Extract translated title from widget texts (for post_title update)
+        $translated_title = '';
+        $title_fields = array( 'title', 'ekit_heading_title', 'heading_title' );
+        foreach ( $trans_map as $wid => $fields ) {
+            foreach ( $title_fields as $tf ) {
+                if ( ! empty( $fields[ $tf ] ) ) {
+                    $translated_title = strip_tags( $fields[ $tf ] );
+                    break 2;
+                }
+            }
+        }
+
         // Create or update WPML translation
         $result = $this->save_translated_page( $post_id, $target_language, $translated_data );
         if ( is_wp_error( $result ) ) {
             return $result;
         }
 
-        $count = count( $texts_for_ai );
+        // Update post_title with translated title (for blog listings, SEO, etc.)
+        if ( ! empty( $translated_title ) && ! empty( $result['translated_id'] ) ) {
+            wp_update_post( array( 'ID' => $result['translated_id'], 'post_title' => $translated_title ) );
+        }
+
+        $count = count( $texts_for_ai ) + count( $long_texts );
         LuwiPress_Logger::log(
             sprintf( 'Elementor page #%d translated to %s (%d texts)', $post_id, strtoupper( $target_language ), $count ),
             'info',
@@ -781,6 +863,80 @@ class LuwiPress_Elementor {
         }
 
         return rest_ensure_response( $this->translate_page( $post_id, $target_language ) );
+    }
+
+    /**
+     * POST /elementor/translate-queue
+     * Queue multiple Elementor pages for background translation.
+     *
+     * Body: { "post_ids": [31329, 31691, ...], "target_language": "fr" }
+     *   or: { "post_type": "post", "target_language": "fr" } to auto-discover
+     */
+    public function rest_queue_translations( $request ) {
+        $action = sanitize_text_field( $request->get_param( 'action' ) ?: '' );
+
+        // Cancel all pending jobs
+        if ( 'cancel' === $action ) {
+            $cleared = wp_unschedule_hook( 'luwipress_elementor_translate_single' );
+            LuwiPress_Logger::log( 'Elementor translate queue cancelled: ' . $cleared . ' jobs removed', 'info' );
+            return rest_ensure_response( array( 'status' => 'cancelled', 'jobs_removed' => $cleared ) );
+        }
+
+        $target_language = sanitize_text_field( $request->get_param( 'target_language' ) );
+        if ( ! $target_language ) {
+            return new WP_Error( 'missing_params', 'target_language required', array( 'status' => 400 ) );
+        }
+
+        $post_ids  = $request->get_param( 'post_ids' );
+        $post_type = sanitize_text_field( $request->get_param( 'post_type' ) ?: '' );
+
+        if ( ! empty( $post_ids ) && is_array( $post_ids ) ) {
+            $source_ids = array_map( 'absint', $post_ids );
+        } elseif ( $post_type ) {
+            // Auto-discover: find source-language Elementor posts that need translation
+            $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+            $posts = get_posts( array(
+                'post_type'   => $post_type,
+                'post_status' => 'publish',
+                'numberposts' => 100,
+                'meta_key'    => '_elementor_data',
+                'suppress_filters' => false,
+            ) );
+            $source_ids = array();
+            foreach ( $posts as $p ) {
+                // Check if translation already exists with own _elementor_data
+                $translated_id = apply_filters( 'wpml_object_id', $p->ID, $post_type, false, $target_language );
+                if ( $translated_id && $translated_id !== $p->ID ) {
+                    $has_own = get_post_meta( $translated_id, '_luwipress_elementor_translated', true );
+                    if ( $has_own ) {
+                        continue; // Already translated
+                    }
+                }
+                $source_ids[] = $p->ID;
+            }
+        } else {
+            return new WP_Error( 'missing_params', 'post_ids array or post_type required', array( 'status' => 400 ) );
+        }
+
+        // Schedule each as a separate wp_cron event with staggered timing
+        $queued = 0;
+        $delay  = 5; // seconds between jobs
+        foreach ( $source_ids as $source_id ) {
+            $timestamp = time() + ( $queued * $delay );
+            $scheduled = wp_schedule_single_event( $timestamp, 'luwipress_elementor_translate_single', array( $source_id, $target_language ) );
+            if ( false !== $scheduled ) {
+                $queued++;
+            }
+        }
+
+        LuwiPress_Logger::log( 'Elementor translate queue: ' . $queued . ' jobs scheduled for ' . $target_language, 'info' );
+
+        return rest_ensure_response( array(
+            'status'          => 'queued',
+            'queued'          => $queued,
+            'target_language' => $target_language,
+            'source_ids'      => $source_ids,
+        ) );
     }
 
     /**
@@ -1386,18 +1542,35 @@ class LuwiPress_Elementor {
     public function regenerate_css( $post_id ) {
         // Delete cached CSS so Elementor rebuilds on next load
         delete_post_meta( $post_id, '_elementor_css' );
+        delete_post_meta( $post_id, '_elementor_page_assets' );
 
-        // If Elementor plugin is active, use its API
+        // If Elementor plugin is active, use its API to clear CSS
         if ( class_exists( '\Elementor\Plugin' ) ) {
-            $post_css = \Elementor\Plugin::$instance->files_manager->get( 'post', array( 'post_id' => $post_id ) );
-            if ( $post_css ) {
-                $post_css->delete();
+            try {
+                // Elementor 3.x: Post_CSS class
+                if ( class_exists( '\Elementor\Core\Files\CSS\Post' ) ) {
+                    $post_css = new \Elementor\Core\Files\CSS\Post( $post_id );
+                    $post_css->delete();
+                } elseif ( method_exists( \Elementor\Plugin::$instance, 'files_manager' ) ) {
+                    // Fallback: files_manager API (may vary by version)
+                    $post_css = \Elementor\Plugin::$instance->files_manager->get( 'post', array( 'post_id' => $post_id ) );
+                    if ( $post_css ) {
+                        $post_css->delete();
+                    }
+                }
+            } catch ( \Throwable $e ) {
+                // Silently fail — CSS will regenerate on next page load anyway
+                LuwiPress_Logger::log( 'Elementor CSS clear error: ' . $e->getMessage(), 'debug' );
             }
-        }
 
-        // Also clear Elementor global cache
-        if ( class_exists( '\Elementor\Plugin' ) && method_exists( \Elementor\Plugin::$instance->files_manager, 'clear_cache' ) ) {
-            \Elementor\Plugin::$instance->files_manager->clear_cache();
+            // Also clear global cache
+            try {
+                if ( method_exists( \Elementor\Plugin::$instance->files_manager, 'clear_cache' ) ) {
+                    \Elementor\Plugin::$instance->files_manager->clear_cache();
+                }
+            } catch ( \Throwable $e ) {
+                // Silently fail
+            }
         }
 
         LuwiPress_Logger::log( 'Elementor CSS regenerated for post #' . $post_id, 'debug' );
@@ -1460,6 +1633,84 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
      * @param array  $translated_data Translated Elementor data array.
      * @return array|WP_Error Array with 'translated_id' or error.
      */
+
+    /**
+     * Translate a long HTML string by splitting into chunks at heading boundaries.
+     *
+     * @param string $html        Full HTML content.
+     * @param string $source_lang Source language name.
+     * @param string $target_lang Target language name.
+     * @return string|WP_Error Translated HTML.
+     */
+    private function translate_long_html( $html, $source_lang, $target_lang ) {
+        $chunks = $this->split_html_by_headings( $html, 3000 );
+
+        LuwiPress_Logger::log( sprintf( 'Elementor long text: %d chunks from %d chars', count( $chunks ), strlen( $html ) ), 'info' );
+
+        $translated_chunks = array();
+        foreach ( $chunks as $i => $chunk ) {
+            $prompt   = LuwiPress_Prompts::elementor_html_translation( $chunk, $source_lang, $target_lang );
+            $messages = LuwiPress_AI_Engine::build_messages( $prompt );
+
+            $max_tokens = max( 2048, intval( strlen( $chunk ) / 2 ) );
+            $max_tokens = min( $max_tokens, 16000 );
+
+            $result = LuwiPress_AI_Engine::dispatch( 'elementor-translation', $messages, array(
+                'max_tokens' => $max_tokens,
+                'timeout'    => 120,
+            ) );
+
+            if ( is_wp_error( $result ) ) {
+                LuwiPress_Logger::log( 'Chunk ' . $i . ' failed: ' . $result->get_error_message(), 'warning' );
+                $translated_chunks[] = $chunk; // Keep original on failure
+            } else {
+                $text = $result['content'] ?? '';
+                $text = preg_replace( '/^```(?:html)?\s*/i', '', $text );
+                $text = preg_replace( '/\s*```\s*$/', '', $text );
+                $translated_chunks[] = trim( $text );
+            }
+        }
+
+        return implode( '', $translated_chunks );
+    }
+
+    /**
+     * Split HTML content at heading boundaries.
+     *
+     * @param string $html      Full HTML.
+     * @param int    $max_chars Max chars per chunk.
+     * @return array Chunks.
+     */
+    private function split_html_by_headings( $html, $max_chars = 3000 ) {
+        $parts = preg_split( '/(?=<h[23][^>]*>)/i', $html );
+
+        if ( empty( $parts ) || count( $parts ) <= 1 ) {
+            $parts = preg_split( '/(?=<p[^>]*>)/i', $html );
+        }
+
+        if ( empty( $parts ) || count( $parts ) <= 1 ) {
+            return array( $html );
+        }
+
+        $chunks  = array();
+        $current = '';
+
+        foreach ( $parts as $part ) {
+            if ( strlen( $current ) + strlen( $part ) > $max_chars && ! empty( $current ) ) {
+                $chunks[] = $current;
+                $current  = $part;
+            } else {
+                $current .= $part;
+            }
+        }
+
+        if ( ! empty( $current ) ) {
+            $chunks[] = $current;
+        }
+
+        return $chunks;
+    }
+
     private function save_translated_page( $source_id, $language, array $translated_data ) {
         $source_post = get_post( $source_id );
         if ( ! $source_post ) {
@@ -1468,7 +1719,7 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
 
         $post_type    = $source_post->post_type;
         $element_type = 'post_' . $post_type;
-        $default_lang = apply_filters( 'wpml_default_language', 'tr' );
+        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
 
         // Check if WPML is available
         if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
@@ -1482,18 +1733,36 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
             return $this->save_translated_page_standalone( $source_id, $language, $translated_data );
         }
 
-        // Check for existing translation
+        // Check for existing translation — switch WPML context to find it
+        do_action( 'wpml_switch_language', $language );
         $translated_id = apply_filters( 'wpml_object_id', $source_id, $post_type, false, $language );
+        do_action( 'wpml_switch_language', $default_lang );
+
+        // Also try direct DB lookup (WPML filter sometimes fails in cron context)
+        if ( ! $translated_id || $translated_id === $source_id ) {
+            global $wpdb;
+            $translated_id = $wpdb->get_var( $wpdb->prepare(
+                "SELECT element_id FROM {$wpdb->prefix}icl_translations
+                 WHERE trid = %d AND language_code = %s AND element_id != %d",
+                $trid, $language, $source_id
+            ) );
+            $translated_id = $translated_id ? absint( $translated_id ) : null;
+        }
 
         $translated_json = wp_json_encode( $translated_data );
 
         if ( $translated_id && $translated_id !== $source_id ) {
-            // Update existing translation
-            wp_update_post( array(
-                'ID'           => $translated_id,
-                'post_title'   => $source_post->post_title, // Title stays from source (widget text is in _elementor_data)
-                'post_status'  => 'publish',
-            ) );
+            // Update existing translation — don't overwrite title (keep translated title)
+            $existing = get_post( $translated_id );
+            $update_data = array(
+                'ID'          => $translated_id,
+                'post_status' => 'publish',
+            );
+            // Only set title if the existing post has no title or same as source (not yet translated)
+            if ( ! $existing || empty( $existing->post_title ) || $existing->post_title === $source_post->post_title ) {
+                $update_data['post_title'] = $source_post->post_title;
+            }
+            wp_update_post( $update_data );
 
             update_post_meta( $translated_id, '_elementor_data', wp_slash( $translated_json ) );
             update_post_meta( $translated_id, '_elementor_edit_mode', 'builder' );
@@ -1575,6 +1844,9 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
         if ( $thumb_id ) {
             set_post_thumbnail( $translated_id, $thumb_id );
         }
+
+        // Mark as LuwiPress Elementor translated — prevents bypass filter
+        update_post_meta( $translated_id, '_luwipress_elementor_translated', '1' );
 
         return array( 'translated_id' => $translated_id );
     }
@@ -2171,7 +2443,7 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
             return array();
         }
 
-        $default_lang = apply_filters( 'wpml_default_language', 'tr' );
+        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
 
         global $wpdb;
         $rows = $wpdb->get_results( $wpdb->prepare(

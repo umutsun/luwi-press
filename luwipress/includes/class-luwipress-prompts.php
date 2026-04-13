@@ -264,6 +264,34 @@ Respond ONLY with valid JSON:
 	}
 
 	/**
+	 * Elementor HTML chunk translation prompt.
+	 * Returns plain translated HTML (not JSON) to avoid parse failures on long content.
+	 *
+	 * @param string $html_chunk   HTML content to translate.
+	 * @param string $source_lang  Source language name (e.g. 'Turkish').
+	 * @param string $target_lang  Target language name (e.g. 'French').
+	 * @return array ['system' => string, 'user' => string]
+	 */
+	public static function elementor_html_translation( $html_chunk, $source_lang, $target_lang ) {
+		$system = sprintf(
+			'You are an expert translator. Translate the following HTML content from %1$s to %2$s.
+
+RULES:
+- Preserve ALL HTML tags, attributes, classes, and structure exactly as-is.
+- Only translate visible text content between tags.
+- Keep brand names, product names, and proper nouns as-is.
+- Do NOT wrap the output in JSON, code fences, or any wrapper — return ONLY the translated HTML.
+- Do NOT add any explanation or commentary.',
+			$source_lang,
+			$target_lang
+		);
+
+		$user = $html_chunk;
+
+		return array( 'system' => $system, 'user' => $user );
+	}
+
+	/**
 	 * Taxonomy translation prompt.
 	 *
 	 * @param array  $terms       Array of terms: [['term_id' => int, 'name' => string, 'slug' => string], ...].

@@ -766,7 +766,12 @@ $missing_count = $total_possible - $total_translated;
 				var result = document.getElementById(resultId);
 				btn.disabled = true; btn.classList.add('tm-btn-loading');
 				result.textContent = '';
-				fetch(ajaxurl + '?action=' + action + '&nonce=<?php echo wp_create_nonce( 'luwipress_fix_categories' ); ?>', {method:'POST'})
+				var toolNonces = {
+					luwipress_fix_category_assignments: <?php echo wp_json_encode( wp_create_nonce( 'luwipress_fix_categories' ) ); ?>,
+					luwipress_fix_translation_images: <?php echo wp_json_encode( wp_create_nonce( 'luwipress_fix_images' ) ); ?>,
+					luwipress_clean_orphan_translations: <?php echo wp_json_encode( wp_create_nonce( 'luwipress_clean_orphans' ) ); ?>
+				};
+				fetch(ajaxurl + '?action=' + action + '&nonce=' + (toolNonces[action] || ''), {method:'POST'})
 				.then(function(r){return r.json()}).then(function(d){
 					btn.disabled = false; btn.classList.remove('tm-btn-loading');
 					if (d.success) {
