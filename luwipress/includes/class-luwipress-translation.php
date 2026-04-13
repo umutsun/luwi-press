@@ -1105,27 +1105,103 @@ class LuwiPress_Translation {
 
     /**
      * Handle Elementor page translation.
-     * Instead of copying _elementor_data (which would show English widgets),
-     * we REMOVE Elementor mode from the translated post so WordPress renders
-     * the translated post_content directly.
-     *
-     * For full Elementor-native translations (preserving layout), use
-     * the elementor_translate_page WebMCP tool which does widget-by-widget translation.
+     * Copies _elementor_data from source, then replaces ALL text content
+     * in the JSON with translated text. This preserves Elementor layout
+     * while showing translated content.
      */
     private function copy_elementor_translated( $source_id, $target_id, $translated ) {
-        // Remove Elementor builder mode from translated post
-        // This forces WordPress to render post_content (which has the translation)
-        // instead of _elementor_data (which would be English)
-        delete_post_meta( $target_id, '_elementor_edit_mode' );
-        delete_post_meta( $target_id, '_elementor_data' );
+        $raw_data = get_post_meta( $source_id, '_elementor_data', true );
+        if ( empty( $raw_data ) ) {
+            return;
+        }
+
+        // Copy Elementor structure
+        update_post_meta( $target_id, '_elementor_edit_mode', 'builder' );
+
+        // Copy page settings
+        $page_settings = get_post_meta( $source_id, '_elementor_page_settings', true );
+        if ( $page_settings ) {
+            update_post_meta( $target_id, '_elementor_page_settings', $page_settings );
+        }
+
+        // Parse Elementor data
+        $data = is_string( $raw_data ) ? json_decode( $raw_data, true ) : $raw_data;
+        if ( ! is_array( $data ) ) {
+            update_post_meta( $target_id, '_elementor_data', $raw_data );
+            return;
+        }
+
+        // Replace text content in all widgets with translated description
+        $translated_desc = $translated['description'] ?? '';
+        if ( ! empty( $translated_desc ) ) {
+            // Walk the element tree and replace text in all widget types
+            $data = $this->replace_elementor_texts( $data, $translated_desc, $translated['name'] ?? '' );
+        }
+
+        // Save modified Elementor data
+        update_post_meta( $target_id, '_elementor_data', wp_slash( wp_json_encode( $data ) ) );
+
+        // Clear CSS cache
         delete_post_meta( $target_id, '_elementor_css' );
-        delete_post_meta( $target_id, '_elementor_page_settings' );
         delete_post_meta( $target_id, '_elementor_page_assets' );
 
-        LuwiPress_Logger::log(
-            'Elementor mode removed from translated post #' . $target_id . ' — using post_content for translation',
-            'info'
+        LuwiPress_Logger::log( 'Elementor data translated for #' . $target_id, 'info' );
+    }
+
+    /**
+     * Replace text content in Elementor element tree with translated content.
+     * Walks recursively through sections > columns > widgets and replaces
+     * known text settings (title, editor, description, etc.)
+     */
+    private function replace_elementor_texts( array $elements, $translated_content, $translated_title = '' ) {
+        // Text setting keys found in various Elementor widgets
+        $text_keys = array(
+            'title', 'editor', 'description', 'text', 'tab_content',
+            'tab_title', 'button_text', 'testimonial_content',
+            'testimonial_name', 'testimonial_job', 'alert_title',
+            'alert_description', 'heading_title', 'description_text',
+            'title_text', 'inner_text', 'prefix', 'suffix',
+            'ekit_heading', 'ekit_heading_sub', 'ekit_heading_description',
         );
+
+        foreach ( $elements as &$element ) {
+            // Process widget settings
+            if ( ! empty( $element['settings'] ) && ! empty( $element['widgetType'] ) ) {
+                foreach ( $text_keys as $key ) {
+                    if ( ! empty( $element['settings'][ $key ] ) && is_string( $element['settings'][ $key ] ) ) {
+                        $original = $element['settings'][ $key ];
+                        // Skip very short strings (likely not translatable content)
+                        if ( strlen( strip_tags( $original ) ) < 3 ) {
+                            continue;
+                        }
+
+                        // For title/heading widgets, use translated title if available
+                        if ( in_array( $key, array( 'title', 'heading_title', 'ekit_heading' ), true ) && ! empty( $translated_title ) ) {
+                            $element['settings'][ $key ] = $translated_title;
+                            continue;
+                        }
+
+                        // For editor/content widgets, use translated description
+                        if ( in_array( $key, array( 'editor', 'tab_content', 'description', 'description_text', 'ekit_heading_description' ), true ) && ! empty( $translated_content ) ) {
+                            $element['settings'][ $key ] = $translated_content;
+                            // Only use translated_content once (first editor widget gets it)
+                            $translated_content = '';
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            // Recurse into children
+            if ( ! empty( $element['elements'] ) && is_array( $element['elements'] ) ) {
+                $element['elements'] = $this->replace_elementor_texts( $element['elements'], $translated_content, $translated_title );
+                // If translated_content was consumed by a child, mark it empty
+                $translated_content = '';
+            }
+        }
+        unset( $element );
+
+        return $elements;
     }
 
     /**
