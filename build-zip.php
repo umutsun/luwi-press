@@ -40,7 +40,8 @@ foreach ( $files as $file ) {
         continue;
     }
 
-    $zip->addFile( $real, 'luwipress/' . $rel );
+    // Use addFromString to avoid ZipArchive truncation on large files (Windows)
+    $zip->addFromString( 'luwipress/' . $rel, file_get_contents( $real ) );
     $count++;
 }
 
