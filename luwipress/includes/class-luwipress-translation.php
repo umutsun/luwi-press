@@ -379,12 +379,19 @@ class LuwiPress_Translation {
                 }
 
                 // Feed into existing callback handler
+                // If title is empty (JSON fallback), keep original title rather than leaving blank
+                $translated_title = $ai_result['title'] ?? $ai_result['name'] ?? '';
+                if ( empty( $translated_title ) ) {
+                    $translated_title = $post ? ( $product ? $product->get_name() : $post->post_title ) : '';
+                    LuwiPress_Logger::log( 'Translation title empty for ' . $lang . ', keeping original: "' . mb_substr( $translated_title, 0, 50 ) . '"', 'warning' );
+                }
+
                 $callback_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/callback' );
                 $callback_request->set_body_params( array(
                     'product_id' => $product_id,
                     'language'   => $lang,
                     'content'    => array(
-                        'name'             => $ai_result['title'] ?? '',
+                        'name'             => $translated_title,
                         'description'      => $ai_result['description'] ?? '',
                         'short_description' => $ai_result['short_description'] ?? '',
                         'meta_title'       => $ai_result['meta_title'] ?? '',
