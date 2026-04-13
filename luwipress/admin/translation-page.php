@@ -240,6 +240,7 @@ $missing_count = $total_possible - $total_translated;
 ?>
 
 <div class="wrap n8n-tm">
+	<?php wp_nonce_field( 'luwipress_translation_nonce' ); ?>
 
 	<!-- ═══ HEADER ═══ -->
 	<div class="tm-header">
@@ -639,29 +640,82 @@ $missing_count = $total_possible - $total_translated;
 					var total = items.length;
 					var done  = 0;
 					var failed = 0;
+					var queued = []; // Elementor pages sent to background cron
 
 					if (counterEl) counterEl.textContent = '0 / ' + total;
 					if (statusEl) statusEl.textContent = 'Translating...';
 					btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> 0/' + total;
 
+					// Poll background translation jobs until all complete
+					function pollQueued() {
+						if (queued.length === 0) return finishAll();
+						var pfd = new FormData();
+						pfd.append('action', 'luwipress_translation_progress');
+						pfd.append('nonce', nonce);
+						queued.forEach(function(q) { pfd.append('post_ids[]', q.id); });
+
+						if (statusEl) { statusEl.textContent = 'Waiting for ' + queued.length + ' background job(s)...'; statusEl.style.color = 'var(--n8n-blue, #2563eb)'; }
+
+						fetch(ajaxurl, { method: 'POST', body: pfd })
+						.then(function(r) { return r.json(); })
+						.then(function(r) {
+							if (!r.success) { setTimeout(pollQueued, 3000); return; }
+							var stillPending = [];
+							r.data.forEach(function(st) {
+								if (st.status === 'completed') {
+									done++;
+									updateRowStats(postType, lang, done, total);
+									if (itemEl) itemEl.textContent = st.title + ' — done';
+								} else if (st.status === 'failed') {
+									failed++;
+									if (itemEl) itemEl.textContent = st.title + ' — ' + (st.error || 'failed');
+								} else {
+									stillPending.push({ id: st.post_id, title: st.title });
+								}
+							});
+							// Update counter
+							var processed = done + failed;
+							var pct = Math.round((processed / total) * 100);
+							if (counterEl) counterEl.textContent = processed + ' / ' + total;
+							if (fillEl) fillEl.style.width = pct + '%';
+							btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + processed + '/' + total;
+
+							queued = stillPending;
+							if (queued.length > 0) {
+								setTimeout(pollQueued, 3000);
+							} else {
+								finishAll();
+							}
+						})
+						.catch(function() { setTimeout(pollQueued, 5000); });
+					}
+
+					function finishAll() {
+						btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> ' + done + ' done';
+						btn.classList.add('tm-btn-done');
+						if (counterEl) counterEl.textContent = done + ' / ' + total;
+						if (statusEl) {
+							statusEl.textContent = done + ' translated' + (failed > 0 ? ', ' + failed + ' failed' : '') + '. Reloading...';
+							statusEl.style.color = 'var(--n8n-success)';
+						}
+						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-success)'; }
+						if (itemEl) itemEl.textContent = '';
+						setTimeout(function() { location.reload(); }, 2500);
+					}
+
 					// Step 2: Translate one by one
 					function translateNext() {
-						if (done + failed >= total) {
-							// All done
-							btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> ' + done + ' done';
-							btn.classList.add('tm-btn-done');
-							if (counterEl) counterEl.textContent = done + ' / ' + total;
-							if (statusEl) {
-								statusEl.textContent = done + ' translated' + (failed > 0 ? ', ' + failed + ' failed' : '') + '. Reloading...';
-								statusEl.style.color = 'var(--n8n-success)';
+						if (done + failed + queued.length >= total) {
+							// All items sent — poll any background jobs
+							if (queued.length > 0) {
+								pollQueued();
+							} else {
+								finishAll();
 							}
-							if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-success)'; }
-							if (itemEl) itemEl.textContent = '';
-							setTimeout(function() { location.reload(); }, 2500);
 							return;
 						}
 
-						var idx  = done + failed;
+						var idx  = done + failed + queued.length;
 						var item = items[idx];
 						var pct  = Math.round((idx / total) * 100);
 
@@ -681,9 +735,15 @@ $missing_count = $total_possible - $total_translated;
 						.then(function(r) { return r.json(); })
 						.then(function(r) {
 							if (r.success) {
-								done++;
-								// Live update the table row's Done / Missing / Coverage bar
-								updateRowStats(postType, lang, done, total);
+								var st = r.data.status || 'completed';
+								if (st === 'queued') {
+									// Elementor page — background cron job
+									queued.push({ id: item.id, title: item.title });
+									if (statusEl) { statusEl.textContent = item.title + ' — queued for background'; statusEl.style.color = 'var(--n8n-blue, #2563eb)'; }
+								} else {
+									done++;
+									updateRowStats(postType, lang, done, total);
+								}
 							} else {
 								failed++;
 								var errMsg = (r.data && r.data.message) ? r.data.message : (typeof r.data === 'string' ? r.data : 'Unknown error');

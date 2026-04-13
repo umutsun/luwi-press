@@ -33,6 +33,7 @@ class LuwiPress_Translation {
         add_action('wp_ajax_luwipress_get_missing_items', [$this, 'ajax_get_missing_items']);
         add_action('wp_ajax_luwipress_translate_single', [$this, 'ajax_translate_single']);
         add_action('wp_ajax_luwipress_translate_taxonomy_batch', [$this, 'ajax_translate_taxonomy_batch']);
+        add_action('wp_ajax_luwipress_translation_progress', [$this, 'ajax_translation_progress']);
     }
 
     /**
@@ -90,7 +91,8 @@ class LuwiPress_Translation {
             'callback'            => [$this, 'request_translation'],
             'permission_callback' => [$this, 'check_permission'],
             'args' => [
-                'product_id'       => ['required' => true, 'sanitize_callback' => 'absint'],
+                'post_id'          => ['sanitize_callback' => 'absint'],
+                'product_id'       => ['sanitize_callback' => 'absint'], // backward compat alias for post_id
                 'target_languages' => ['required' => true],
             ],
         ]);
@@ -223,25 +225,27 @@ class LuwiPress_Translation {
         $existing_translations = array();
 
         if ( ! empty( $trids ) ) {
-            $trid_placeholders = implode( ',', array_fill( 0, count( $trids ), '%d' ) );
-            $lang_placeholders = implode( ',', array_fill( 0, count( $target_langs ), '%s' ) );
-            $params = array_merge( $trids, array( $element_type ), $target_langs );
-
-            $rows = $wpdb->get_results( $wpdb->prepare(
+            $trid_ph = implode( ',', array_fill( 0, count( $trids ), '%d' ) );
+            $lang_ph = implode( ',', array_fill( 0, count( $target_langs ), '%s' ) );
+            $sql     = sprintf(
                 "SELECT trid, language_code
                  FROM {$wpdb->prefix}icl_translations
-                 WHERE trid IN ($trid_placeholders)
-                   AND element_type = %s
-                   AND language_code IN ($lang_placeholders)",
-                $params
-            ) );
+                 WHERE trid IN (%s)
+                   AND element_type = %%s
+                   AND language_code IN (%s)",
+                $trid_ph,
+                $lang_ph
+            );
+            $rows = $wpdb->get_results(
+                $wpdb->prepare( $sql, array_merge( array_map( 'intval', $trids ), array( $element_type ), $target_langs ) )
+            );
 
             foreach ( $rows as $row ) {
                 $existing_translations[ $row->trid ][ $row->language_code ] = true;
             }
         }
 
-        $products = [];
+        $items = [];
         foreach ($originals as $orig) {
             $missing_langs = [];
             foreach ($target_langs as $lang) {
@@ -251,14 +255,15 @@ class LuwiPress_Translation {
             }
 
             if (!empty($missing_langs)) {
-                $products[] = [
-                    'product_id'        => absint($orig->ID),
+                $items[] = [
+                    'post_id'           => absint($orig->ID),
+                    'product_id'        => absint($orig->ID), // backward compat
                     'name'              => $orig->post_title,
                     'missing_languages' => $missing_langs,
                 ];
             }
 
-            if (count($products) >= $limit) {
+            if (count($items) >= $limit) {
                 break;
             }
         }
@@ -266,23 +271,29 @@ class LuwiPress_Translation {
         return rest_ensure_response([
             'target_languages'    => $target_langs,
             'translation_plugin'  => 'wpml',
-            'count'               => count($products),
-            'products'            => $products,
+            'count'               => count($items),
+            'items'               => $items,
+            'products'            => $items, // backward compat
         ]);
     }
 
     /**
-     * POST /translation/request — Send product for translation via n8n
+     * POST /translation/request — Translate a post/product/page via AI.
+     * Accepts post_id (preferred) or product_id (backward compat).
      */
     public function request_translation($request) {
-        $product_id = $request->get_param('product_id');
+        $product_id = $request->get_param('post_id') ?: $request->get_param('product_id');
         $target_languages = $request->get_param('target_languages');
+
+        if ( ! $product_id ) {
+            return new WP_Error('missing_id', 'post_id or product_id is required', ['status' => 400]);
+        }
 
         if (is_string($target_languages)) {
             $target_languages = array_map('trim', explode(',', $target_languages));
         }
 
-        $product = wc_get_product($product_id);
+        $product = function_exists( 'wc_get_product' ) ? wc_get_product($product_id) : null;
         $post    = get_post($product_id);
 
         $translatable_types = array( 'product', 'post', 'page' );
@@ -305,7 +316,7 @@ class LuwiPress_Translation {
                 'meta_description'  => $this->get_seo_meta($product_id, 'description'),
                 'faq'               => get_post_meta($product_id, '_luwipress_faq', true) ?: [],
             ],
-            'categories' => wp_list_pluck(get_the_terms($product_id, 'product_cat') ?: [], 'name'),
+            'categories' => wp_list_pluck(get_the_terms($product_id, $post->post_type === 'product' ? 'product_cat' : 'category') ?: [], 'name'),
             'permalink'  => get_permalink($product_id),
         ];
 
@@ -522,7 +533,7 @@ class LuwiPress_Translation {
 
         $missing_response = $this->get_missing_translations_all( $fetch_request );
         $missing_data     = $missing_response->get_data();
-        $missing_items    = $missing_data['products'] ?? array();
+        $missing_items    = $missing_data['items'] ?? $missing_data['products'] ?? array();
 
         if ( empty( $missing_items ) ) {
             return array( 'translated' => 0, 'message' => 'Nothing to translate.' );
@@ -531,7 +542,7 @@ class LuwiPress_Translation {
         $translated = 0;
 
         foreach ( $missing_items as $item ) {
-            $post_id        = $item['product_id'] ?? 0;
+            $post_id        = $item['post_id'] ?? $item['product_id'] ?? 0;
             $missing_langs  = $item['missing_languages'] ?? $languages;
 
             if ( ! $post_id ) {
@@ -540,7 +551,7 @@ class LuwiPress_Translation {
 
             // Call the existing request_translation for each item
             $tr_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
-            $tr_request->set_param( 'product_id', $post_id );
+            $tr_request->set_param( 'post_id', $post_id );
             $tr_request->set_param( 'target_languages', $missing_langs );
 
             $result = $this->request_translation( $tr_request );
@@ -571,7 +582,7 @@ class LuwiPress_Translation {
             return new WP_Error('invalid_data', 'Missing required fields', ['status' => 400]);
         }
 
-        $product = wc_get_product($product_id);
+        $product = function_exists( 'wc_get_product' ) ? wc_get_product($product_id) : null;
         $post    = get_post($product_id);
         if ( ! $post ) {
             return new WP_Error('not_found', 'Post not found', ['status' => 404]);
@@ -650,14 +661,15 @@ class LuwiPress_Translation {
         foreach ( $target_languages as $lang ) {
             $meta_keys[] = '_luwipress_translation_' . $lang . '_status';
         }
-        $key_placeholders = implode( ',', array_fill( 0, count( $meta_keys ), '%s' ) );
-        $rows = $wpdb->get_results( $wpdb->prepare(
+        $key_ph = implode( ',', array_fill( 0, count( $meta_keys ), '%s' ) );
+        $sql    = sprintf(
             "SELECT meta_key, meta_value, COUNT(DISTINCT post_id) AS cnt
              FROM {$wpdb->postmeta}
-             WHERE meta_key IN ({$key_placeholders}) AND meta_value IN ('processing','completed')
+             WHERE meta_key IN (%s) AND meta_value IN ('processing','completed')
              GROUP BY meta_key, meta_value",
-            $meta_keys
-        ) );
+            $key_ph
+        );
+        $rows = $wpdb->get_results( $wpdb->prepare( $sql, $meta_keys ) );
         $counts = array();
         foreach ( $rows as $row ) {
             $counts[ $row->meta_key ][ $row->meta_value ] = (int) $row->cnt;
@@ -694,7 +706,7 @@ class LuwiPress_Translation {
             return new WP_Error('no_translation', 'No translation found', ['status' => 404]);
         }
 
-        $product  = wc_get_product($product_id);
+        $product  = function_exists( 'wc_get_product' ) ? wc_get_product($product_id) : null;
         $post_obj = get_post($product_id);
         $payload = [
             'product_id'      => $product_id,
@@ -977,6 +989,14 @@ class LuwiPress_Translation {
                 return;
             }
 
+            // Transient lock to prevent duplicate creation from parallel cron jobs
+            $lock_key = 'luwipress_lock_' . $product_id . '_' . $language;
+            if ( get_transient( $lock_key ) ) {
+                LuwiPress_Logger::log( 'Translation lock active, skipping #' . $product_id . ' → ' . $language, 'info' );
+                return;
+            }
+            set_transient( $lock_key, 1, 30 );
+
             $new_id = wp_insert_post( array(
                 'post_title'   => $translated['name'],
                 'post_content' => $translated['description'],
@@ -987,6 +1007,7 @@ class LuwiPress_Translation {
             ) );
 
             if ( is_wp_error( $new_id ) ) {
+                delete_transient( $lock_key );
                 LuwiPress_Logger::log( 'Failed to create translation: ' . $new_id->get_error_message(), 'error' );
                 return;
             }
@@ -1004,8 +1025,8 @@ class LuwiPress_Translation {
             global $wpdb;
             $linked = $wpdb->get_var( $wpdb->prepare(
                 "SELECT translation_id FROM {$wpdb->prefix}icl_translations
-                 WHERE element_id = %d AND element_type = 'post_product'",
-                $new_id
+                 WHERE element_id = %d AND element_type = %s",
+                $new_id, $element_type
             ) );
 
             if ( ! $linked ) {
@@ -1045,41 +1066,43 @@ class LuwiPress_Translation {
                 set_post_thumbnail( $new_id, $thumb_id );
             }
 
-            // ── Copy WooCommerce product meta (whitelist approach) ──
-            $wc_meta_keys = array(
-                '_price', '_regular_price', '_sale_price', '_sku',
-                '_stock', '_stock_status', '_manage_stock', '_backorders',
-                '_weight', '_length', '_width', '_height',
-                '_virtual', '_downloadable', '_sold_individually',
-                '_tax_status', '_tax_class',
-                '_thumbnail_id', '_product_image_gallery',
-                '_upsell_ids', '_crosssell_ids',
-                '_product_attributes', '_default_attributes',
-                '_purchase_note', '_product_url', '_button_text',
-                'total_sales', '_wc_average_rating', '_wc_review_count',
-            );
-            foreach ( $wc_meta_keys as $key ) {
-                $val = get_post_meta( $product_id, $key, true );
-                if ( '' !== $val && false !== $val ) {
-                    update_post_meta( $new_id, $key, $val );
+            // ── Copy WooCommerce-specific meta & taxonomies (products only) ──
+            if ( 'product' === $post_type ) {
+                $wc_meta_keys = array(
+                    '_price', '_regular_price', '_sale_price', '_sku',
+                    '_stock', '_stock_status', '_manage_stock', '_backorders',
+                    '_weight', '_length', '_width', '_height',
+                    '_virtual', '_downloadable', '_sold_individually',
+                    '_tax_status', '_tax_class',
+                    '_thumbnail_id', '_product_image_gallery',
+                    '_upsell_ids', '_crosssell_ids',
+                    '_product_attributes', '_default_attributes',
+                    '_purchase_note', '_product_url', '_button_text',
+                    'total_sales', '_wc_average_rating', '_wc_review_count',
+                );
+                foreach ( $wc_meta_keys as $key ) {
+                    $val = get_post_meta( $product_id, $key, true );
+                    if ( '' !== $val && false !== $val ) {
+                        update_post_meta( $new_id, $key, $val );
+                    }
                 }
+
+                $type_terms = wp_get_object_terms( $product_id, 'product_type', array( 'fields' => 'slugs' ) );
+                if ( ! empty( $type_terms ) && ! is_wp_error( $type_terms ) ) {
+                    wp_set_object_terms( $new_id, $type_terms, 'product_type' );
+                }
+
+                $visibility = wp_get_object_terms( $product_id, 'product_visibility', array( 'fields' => 'slugs' ) );
+                if ( ! empty( $visibility ) && ! is_wp_error( $visibility ) ) {
+                    wp_set_object_terms( $new_id, $visibility, 'product_visibility' );
+                }
+
+                $this->copy_wpml_taxonomy_translations( $product_id, $new_id, $language, 'product_cat' );
+                $this->copy_wpml_taxonomy_translations( $product_id, $new_id, $language, 'product_tag' );
             }
 
-            // ── Copy product type taxonomy ──
-            $type_terms = wp_get_object_terms( $product_id, 'product_type', array( 'fields' => 'slugs' ) );
-            if ( ! empty( $type_terms ) && ! is_wp_error( $type_terms ) ) {
-                wp_set_object_terms( $new_id, $type_terms, 'product_type' );
-            }
-
-            // ── Copy product visibility ──
-            $visibility = wp_get_object_terms( $product_id, 'product_visibility', array( 'fields' => 'slugs' ) );
-            if ( ! empty( $visibility ) && ! is_wp_error( $visibility ) ) {
-                wp_set_object_terms( $new_id, $visibility, 'product_visibility' );
-            }
-
-            // ── Translate and link categories ──
-            $this->copy_wpml_taxonomy_translations( $product_id, $new_id, $language, 'product_cat' );
-            $this->copy_wpml_taxonomy_translations( $product_id, $new_id, $language, 'product_tag' );
+            // Release creation lock
+            delete_transient( $lock_key );
 
             LuwiPress_Logger::log(
                 sprintf( 'WPML translation created: #%d (%s) from #%d — "%s"', $new_id, strtoupper( $language ), $product_id, $translated['name'] ),
@@ -2130,11 +2153,9 @@ class LuwiPress_Translation {
         }
 
         foreach ( $post_ids as $pid ) {
-            // Use direct DB to bypass WPML filters
-            global $wpdb;
-            $post = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->posts} WHERE ID = %d", $pid ) );
+            // Use get_post() to get a proper WP_Post object
+            $post = get_post( $pid );
             if ( $post ) {
-                $post = new \WP_Post( $post ); // Cast to WP_Post
                 $source_id = null;
                 $post_lang = null;
 
@@ -2545,9 +2566,9 @@ class LuwiPress_Translation {
         $data     = $response->get_data();
 
         $items = array();
-        foreach ( ( $data['products'] ?? array() ) as $item ) {
+        foreach ( ( $data['items'] ?? $data['products'] ?? array() ) as $item ) {
             $items[] = array(
-                'id'    => $item['product_id'],
+                'id'    => $item['post_id'] ?? $item['product_id'],
                 'title' => $item['name'],
             );
         }
@@ -2581,6 +2602,12 @@ class LuwiPress_Translation {
 
         // For Elementor pages: use background job to avoid timeout
         if ( LuwiPress_Elementor::is_elementor_page( $post_id ) && class_exists( 'LuwiPress_Elementor' ) ) {
+            // Store queued status for progress polling
+            update_post_meta( $post_id, '_luwipress_translation_status', wp_json_encode( array(
+                'status'   => 'queued',
+                'language' => $lang,
+                'queued'   => current_time( 'mysql' ),
+            ) ) );
             wp_schedule_single_event( time(), 'luwipress_elementor_translate_single', array( $post_id, $lang ) );
             spawn_cron();
             wp_send_json_success( array(
@@ -2592,7 +2619,7 @@ class LuwiPress_Translation {
         }
 
         $request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
-        $request->set_param( 'product_id', $post_id );
+        $request->set_param( 'post_id', $post_id );
         $request->set_param( 'target_languages', array( $lang ) );
 
         $result = $this->request_translation( $request );
@@ -2648,5 +2675,32 @@ class LuwiPress_Translation {
             'status'     => $result_data['status'] ?? 'completed',
             'terms_sent' => $result_data['terms_sent'] ?? 0,
         ) );
+    }
+
+    // ─── AJAX: Poll translation progress for background jobs ────────────
+
+    public function ajax_translation_progress() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        $post_ids = array_map( 'absint', (array) ( $_POST['post_ids'] ?? array() ) );
+        if ( empty( $post_ids ) ) {
+            wp_send_json_error( 'Missing post_ids' );
+        }
+
+        $results = array();
+        foreach ( $post_ids as $pid ) {
+            $raw = get_post_meta( $pid, '_luwipress_translation_status', true );
+            if ( $raw ) {
+                $data = json_decode( $raw, true );
+                $data['post_id'] = $pid;
+                $data['title']   = esc_html( get_the_title( $pid ) );
+                $results[]       = $data;
+            }
+        }
+
+        wp_send_json_success( $results );
     }
 }

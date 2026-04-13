@@ -47,13 +47,32 @@ class LuwiPress_Elementor {
             @set_time_limit( 300 );
         }
 
+        // Track translation status for progress polling
+        update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
+            'status'   => 'translating',
+            'language' => $target_language,
+            'started'  => current_time( 'mysql' ),
+        ) ) );
+
         LuwiPress_Logger::log( 'Cron: translating Elementor page #' . $source_id . ' → ' . $target_language, 'info' );
 
         $result = $this->translate_page( $source_id, $target_language );
 
         if ( is_wp_error( $result ) ) {
+            update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
+                'status'   => 'failed',
+                'language' => $target_language,
+                'error'    => $result->get_error_message(),
+                'finished' => current_time( 'mysql' ),
+            ) ) );
             LuwiPress_Logger::log( 'Cron: Elementor translation FAILED #' . $source_id . ' → ' . $target_language . ': ' . $result->get_error_message(), 'error' );
         } else {
+            update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
+                'status'        => 'completed',
+                'language'      => $target_language,
+                'translated_id' => $result['translated_id'] ?? 0,
+                'finished'      => current_time( 'mysql' ),
+            ) ) );
             LuwiPress_Logger::log( 'Cron: Elementor translation completed #' . $source_id . ' → #' . ( $result['translated_id'] ?? '?' ) . ' (' . $target_language . ')', 'info' );
         }
     }
@@ -653,6 +672,15 @@ class LuwiPress_Elementor {
             return $data;
         }
 
+        // Auto-snapshot before translation for rollback support
+        $this->create_snapshot( $post_id, sprintf( 'Pre-translation backup (%s)', $target_language ) );
+
+        // Save pre-translation revision
+        $revision_id = wp_save_post_revision( $post_id );
+        if ( $revision_id ) {
+            update_post_meta( $post_id, '_luwipress_pre_translation_revision', $revision_id );
+        }
+
         // Extract translatable texts
         $translatable = $this->extract_translatable_text( $post_id );
         if ( is_wp_error( $translatable ) ) {
@@ -748,6 +776,12 @@ class LuwiPress_Elementor {
             }
         }
 
+        // If all AI calls failed, revert and bail
+        if ( empty( $trans_map ) ) {
+            $this->revert_to_pre_translation_revision( $post_id );
+            return new WP_Error( 'translation_failed', 'All AI translation calls failed — reverted to pre-translation state', array( 'status' => 500 ) );
+        }
+
         // Apply translations to a copy of the Elementor data
         $translated_data = $this->walk_elements_modify( $data, function ( &$element ) use ( $trans_map ) {
             $wid = $element['id'] ?? '';
@@ -786,6 +820,7 @@ class LuwiPress_Elementor {
         // Create or update WPML translation
         $result = $this->save_translated_page( $post_id, $target_language, $translated_data );
         if ( is_wp_error( $result ) ) {
+            $this->revert_to_pre_translation_revision( $post_id );
             return $result;
         }
 
@@ -2868,6 +2903,27 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
         }
 
         return array( 'post_id' => $post_id, 'snapshots' => $list );
+    }
+
+    /**
+     * Revert a post to its pre-translation revision.
+     *
+     * Uses the WP revision saved before translate_page() ran.
+     *
+     * @param int $post_id Post ID.
+     * @return bool True if reverted, false if no revision found.
+     */
+    public function revert_to_pre_translation_revision( $post_id ) {
+        $revision_id = get_post_meta( $post_id, '_luwipress_pre_translation_revision', true );
+        if ( ! $revision_id ) {
+            return false;
+        }
+
+        wp_restore_post_revision( $revision_id );
+        delete_post_meta( $post_id, '_luwipress_pre_translation_revision' );
+
+        LuwiPress_Logger::log( sprintf( 'Reverted post #%d to pre-translation revision #%d', $post_id, $revision_id ), 'info' );
+        return true;
     }
 
     /* ═══════════════════════════════════════════════════════════════════
