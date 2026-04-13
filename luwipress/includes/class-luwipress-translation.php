@@ -332,25 +332,42 @@ class LuwiPress_Translation {
                     'timeout'    => 180,
                 ) );
 
-                // If JSON parse failed, try raw text extraction as fallback
+                // If JSON parse failed, extract from error data or retry
                 if ( is_wp_error( $ai_result ) && strpos( $ai_result->get_error_message(), 'parse JSON' ) !== false ) {
-                    // Retry with dispatch (non-JSON) and manually extract
-                    $raw_result = LuwiPress_AI_Engine::dispatch( 'translation-pipeline', $messages, array(
-                        'max_tokens' => $max_tokens,
-                        'timeout'    => 180,
-                    ) );
-                    if ( ! is_wp_error( $raw_result ) && ! empty( $raw_result['content'] ) ) {
-                        $raw_text = $raw_result['content'];
-                        // Try to extract JSON from the response
-                        $ai_result = LuwiPress_AI_Engine::extract_json( $raw_text );
-                        if ( ! $ai_result ) {
-                            // Last resort: use raw text as description
+                    $raw_text = $ai_result->get_error_data()['raw'] ?? '';
+
+                    // If no raw text in error, do a single retry with dispatch (non-JSON)
+                    if ( empty( $raw_text ) ) {
+                        $raw_result = LuwiPress_AI_Engine::dispatch( 'translation-pipeline', $messages, array(
+                            'max_tokens' => $max_tokens,
+                            'timeout'    => 180,
+                        ) );
+                        if ( ! is_wp_error( $raw_result ) ) {
+                            $raw_text = $raw_result['content'] ?? '';
+                        }
+                    }
+
+                    if ( ! empty( $raw_text ) ) {
+                        // Try to extract JSON
+                        $parsed = LuwiPress_AI_Engine::extract_json( $raw_text );
+                        if ( $parsed ) {
+                            $ai_result = $parsed;
+                        } else {
+                            // Smart fallback: extract title from first line, rest is description
+                            $lines = preg_split( '/\n+/', trim( $raw_text ), 2 );
+                            $first_line = trim( strip_tags( $lines[0] ?? '' ) );
+                            $rest = trim( $lines[1] ?? $raw_text );
+
+                            // If first line looks like a title (short, no period)
+                            $title_candidate = ( strlen( $first_line ) < 200 && strpos( $first_line, '.' ) === false )
+                                ? $first_line : '';
+
                             $ai_result = array(
-                                'title'             => '',
-                                'description'       => $raw_text,
+                                'title'             => $title_candidate,
+                                'description'       => $rest ?: $raw_text,
                                 'short_description' => '',
                             );
-                            LuwiPress_Logger::log( 'Translation JSON fallback: using raw AI text for ' . $lang, 'warning' );
+                            LuwiPress_Logger::log( 'Translation JSON fallback for ' . $lang . ': title="' . mb_substr( $title_candidate, 0, 50 ) . '" desc_len=' . strlen( $rest ), 'warning' );
                         }
                     }
                 }
