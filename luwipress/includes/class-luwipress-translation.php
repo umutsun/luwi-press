@@ -1156,12 +1156,27 @@ class LuwiPress_Translation {
     private function replace_elementor_texts( array $elements, $translated_content, $translated_title = '' ) {
         // Text setting keys found in various Elementor widgets
         $text_keys = array(
+            // Standard Elementor
             'title', 'editor', 'description', 'text', 'tab_content',
             'tab_title', 'button_text', 'testimonial_content',
             'testimonial_name', 'testimonial_job', 'alert_title',
             'alert_description', 'heading_title', 'description_text',
             'title_text', 'inner_text', 'prefix', 'suffix',
-            'ekit_heading', 'ekit_heading_sub', 'ekit_heading_description',
+            // ElementsKit heading widget
+            'ekit_heading_title', 'ekit_heading_sub_title',
+            'ekit_heading_extra_title', 'ekit_heading_description',
+            'ekit_heading_focused_title',
+        );
+
+        // Title keys — get translated title
+        $title_keys = array(
+            'title', 'heading_title', 'ekit_heading_title', 'ekit_heading_focused_title',
+        );
+
+        // Content keys — get translated description (long content)
+        $content_keys = array(
+            'editor', 'tab_content', 'description', 'description_text',
+            'ekit_heading_extra_title', 'ekit_heading_description',
         );
 
         foreach ( $elements as &$element ) {
@@ -1175,16 +1190,15 @@ class LuwiPress_Translation {
                             continue;
                         }
 
-                        // For title/heading widgets, use translated title if available
-                        if ( in_array( $key, array( 'title', 'heading_title', 'ekit_heading' ), true ) && ! empty( $translated_title ) ) {
+                        // Title keys → use translated title
+                        if ( in_array( $key, $title_keys, true ) && ! empty( $translated_title ) ) {
                             $element['settings'][ $key ] = $translated_title;
                             continue;
                         }
 
-                        // For editor/content widgets, use translated description
-                        if ( in_array( $key, array( 'editor', 'tab_content', 'description', 'description_text', 'ekit_heading_description' ), true ) && ! empty( $translated_content ) ) {
+                        // Content keys → use translated description
+                        if ( in_array( $key, $content_keys, true ) && ! empty( $translated_content ) ) {
                             $element['settings'][ $key ] = $translated_content;
-                            // Only use translated_content once (first editor widget gets it)
                             $translated_content = '';
                             continue;
                         }
