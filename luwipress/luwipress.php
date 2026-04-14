@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 2.0.5
+ * Version: 2.0.6
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '2.0.5');
+define('LUWIPRESS_VERSION', '2.0.6');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -409,7 +409,7 @@ class LuwiPress {
     }
     
     /**
-     * AJAX: Test n8n webhook connection
+     * AJAX: Test webhook connection
      */
     public function ajax_test_connection() {
         check_ajax_referer('luwipress_settings_nonce');
@@ -444,7 +444,7 @@ class LuwiPress {
         if ($code >= 200 && $code < 400) {
             wp_send_json_success(array('status_code' => $code));
         } else {
-            wp_send_json_error(sprintf(__('HTTP %d response from n8n', 'luwipress'), $code));
+            wp_send_json_error(sprintf(__('HTTP %d response from webhook', 'luwipress'), $code));
         }
     }
 
@@ -680,7 +680,7 @@ class LuwiPress {
             }
         }
 
-        // Migration: if webhook URL is already set, keep n8n mode for existing installs.
+        // Migration: if webhook URL is already set, keep webhook mode for existing installs.
         $webhook_url = get_option( 'luwipress_seo_webhook_url', '' );
         if ( ! empty( $webhook_url ) && get_option( 'luwipress_processing_mode' ) === 'local' ) {
             // Only override if this is the first time setting defaults (fresh activation with existing config).
@@ -712,12 +712,12 @@ function luwipress_get_option($option, $default = false) {
 }
 
 /**
- * Build the standard _meta block sent with every WP→n8n webhook payload.
+ * Build the standard _meta block sent with every webhook payload.
  *
  * Workflows read $json.body._meta.* so they never need per-site env variables.
- * Only the user's AI API key stays in n8n credentials store.
+ * Only the user's AI API key stays in provider credentials.
  *
- * @param string $callback_url  Full REST URL n8n should POST results back to.
+ * @param string $callback_url  Full REST URL webhook should POST results back to.
  * @return array
  */
 function luwipress_build_meta_block( $callback_url = '' ) {

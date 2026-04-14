@@ -72,13 +72,13 @@ $ajax_url = admin_url( 'admin-ajax.php' );
 $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 ?>
 
-<div class="wrap n8n-tm">
+<div class="wrap lp-tm">
 
 	<!-- ═══ HEADER ═══ -->
 	<div class="tm-header">
 		<div class="tm-header-left">
 			<h1 class="tm-title">
-				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--n8n-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--lp-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>
 				</svg>
 				<?php esc_html_e( 'Usage & Logs', 'luwipress' ); ?>
@@ -96,7 +96,7 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 	<!-- ═══ COST STATS ═══ -->
 	<div class="tm-stats">
 		<?php
-		$bar_colour = $limit_pct >= 90 ? 'var(--n8n-error)' : ( $limit_pct >= 70 ? 'var(--n8n-warning)' : 'var(--n8n-success)' );
+		$bar_colour = $limit_pct >= 90 ? 'var(--lp-error)' : ( $limit_pct >= 70 ? 'var(--lp-warning)' : 'var(--lp-success)' );
 		$cost_cards = array(
 			array(
 				'icon'  => 'dashicons-clock',
@@ -110,7 +110,7 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 				'label' => __( 'This Month', 'luwipress' ),
 				'value' => '$' . number_format( $month_cost, 4 ),
 				'sub'   => $month_calls . ' ' . __( 'calls', 'luwipress' ),
-				'color' => 'var(--n8n-primary)',
+				'color' => 'var(--lp-primary)',
 			),
 			array(
 				'icon'  => 'dashicons-shield',
@@ -125,7 +125,7 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 				'label' => __( 'AI Workflows', 'luwipress' ),
 				'value' => count( $by_workflow ),
 				'sub'   => __( 'active this month', 'luwipress' ),
-				'color' => 'var(--n8n-blue)',
+				'color' => 'var(--lp-blue)',
 			),
 		);
 		foreach ( $cost_cards as $ci => $card ) :
@@ -168,8 +168,8 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 	<!-- ═══ OVERVIEW ═══ -->
 	<div class="usage-grid">
 		<!-- Workflow Breakdown -->
-		<div class="n8npress-card" style="animation: n8n-fade-up var(--duration-slow) var(--ease-out) both;">
-			<h2><span class="dashicons dashicons-chart-bar" style="color:var(--n8n-primary);"></span> <?php esc_html_e( 'Cost by Workflow (30d)', 'luwipress' ); ?></h2>
+		<div class="lpress-card" style="animation: lp-fade-up var(--duration-slow) var(--ease-out) both;">
+			<h2><span class="dashicons dashicons-chart-bar" style="color:var(--lp-primary);"></span> <?php esc_html_e( 'Cost by Workflow (30d)', 'luwipress' ); ?></h2>
 			<?php if ( empty( $by_workflow ) ) : ?>
 				<div class="usage-empty">
 					<span class="dashicons dashicons-chart-bar"></span>
@@ -198,8 +198,8 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 		</div>
 
 		<!-- Recent Activity -->
-		<div class="n8npress-card" style="animation: n8n-fade-up var(--duration-slow) var(--ease-out) both; animation-delay: 100ms;">
-			<h2><span class="dashicons dashicons-clock" style="color:var(--n8n-primary);"></span> <?php esc_html_e( 'Recent Activity', 'luwipress' ); ?></h2>
+		<div class="lpress-card" style="animation: lp-fade-up var(--duration-slow) var(--ease-out) both; animation-delay: 100ms;">
+			<h2><span class="dashicons dashicons-clock" style="color:var(--lp-primary);"></span> <?php esc_html_e( 'Recent Activity', 'luwipress' ); ?></h2>
 			<?php
 			$summary_logs = array_slice( $all_logs, 0, 10 );
 			if ( empty( $summary_logs ) ) : ?>
@@ -211,7 +211,7 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 				<div class="usage-activity-list">
 				<?php foreach ( $summary_logs as $log ) :
 					$icon  = 'info' === $log->level ? 'yes-alt' : ( 'warning' === $log->level ? 'warning' : 'dismiss' );
-					$color = 'info' === $log->level ? 'var(--n8n-success)' : ( 'warning' === $log->level ? 'var(--n8n-warning)' : 'var(--n8n-error)' );
+					$color = 'info' === $log->level ? 'var(--lp-success)' : ( 'warning' === $log->level ? 'var(--lp-warning)' : 'var(--lp-error)' );
 				?>
 					<div class="usage-activity-item">
 						<span class="dashicons dashicons-<?php echo esc_attr( $icon ); ?>" style="color:<?php echo esc_attr( $color ); ?>;"></span>
@@ -297,8 +297,8 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 		<?php endif; ?>
 
 		<!-- Log Maintenance -->
-		<div class="n8npress-card" style="margin-top:var(--space-lg);">
-			<h2><span class="dashicons dashicons-trash" style="color:var(--n8n-text-secondary);"></span> <?php esc_html_e( 'Log Maintenance', 'luwipress' ); ?></h2>
+		<div class="lpress-card" style="margin-top:var(--space-lg);">
+			<h2><span class="dashicons dashicons-trash" style="color:var(--lp-text-secondary);"></span> <?php esc_html_e( 'Log Maintenance', 'luwipress' ); ?></h2>
 			<form method="post" class="usage-maint-form">
 				<?php wp_nonce_field( 'luwipress_usage_nonce' ); ?>
 				<label>
@@ -318,8 +318,8 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 
 	<?php elseif ( 'api-calls' === $active_tab ) : ?>
 	<!-- ═══ API CALLS ═══ -->
-	<div class="n8npress-card" style="margin-top:var(--space-lg); animation: n8n-fade-up var(--duration-slow) var(--ease-out) both;">
-		<h2><span class="dashicons dashicons-cloud" style="color:var(--n8n-primary);"></span> <?php esc_html_e( 'Recent API Calls', 'luwipress' ); ?></h2>
+	<div class="lpress-card" style="margin-top:var(--space-lg); animation: lp-fade-up var(--duration-slow) var(--ease-out) both;">
+		<h2><span class="dashicons dashicons-cloud" style="color:var(--lp-primary);"></span> <?php esc_html_e( 'Recent API Calls', 'luwipress' ); ?></h2>
 		<table class="tm-table">
 			<thead><tr>
 				<th><?php esc_html_e( 'Time', 'luwipress' ); ?></th>

@@ -142,7 +142,7 @@ if ( isset( $_POST['luwipress_trigger_taxonomy_translation'] ) && check_admin_re
 
 // ── Calculate coverage ──
 global $wpdb;
-$content_types = array( 'product' => 'var(--n8n-primary)', 'post' => 'var(--n8n-blue)', 'page' => 'var(--n8n-success)' );
+$content_types = array( 'product' => 'var(--lp-primary)', 'post' => 'var(--lp-blue)', 'page' => 'var(--lp-success)' );
 $coverage = array();
 
 foreach ( $content_types as $pt => $color ) {
@@ -274,14 +274,14 @@ if ( $is_wpml ) {
 }
 ?>
 
-<div class="wrap n8n-tm">
+<div class="wrap lp-tm">
 	<?php wp_nonce_field( 'luwipress_translation_nonce' ); ?>
 
 	<!-- ═══ HEADER ═══ -->
 	<div class="tm-header">
 		<div class="tm-header-left">
 			<h1 class="tm-title">
-				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--n8n-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--lp-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<path d="M5 8l6 6"/><path d="M4 14l6 6"/><path d="M2 5h12"/><path d="M7 2h1"/>
 					<path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/>
 				</svg>
@@ -291,7 +291,7 @@ if ( $is_wpml ) {
 				<?php if ( 'local' === $processing_mode ) : ?>
 					<span class="dashicons dashicons-desktop" style="font-size:14px;width:14px;height:14px;"></span> <?php esc_html_e( 'Local AI', 'luwipress' ); ?>
 				<?php else : ?>
-					<span class="dashicons dashicons-cloud" style="font-size:14px;width:14px;height:14px;"></span> n8n
+					<span class="dashicons dashicons-cloud" style="font-size:14px;width:14px;height:14px;"></span> Webhook
 				<?php endif; ?>
 			</span>
 		</div>
@@ -310,7 +310,7 @@ if ( $is_wpml ) {
 
 	<?php if ( empty( $target_langs ) ) : ?>
 		<div class="tm-empty-state">
-			<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--n8n-border)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+			<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--lp-border)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
 				<path d="M5 8l6 6"/><path d="M4 14l6 6"/><path d="M2 5h12"/><path d="M7 2h1"/>
 				<path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/>
 			</svg>
@@ -327,7 +327,7 @@ if ( $is_wpml ) {
 				'icon'  => 'dashicons-chart-pie',
 				'label' => __( 'Overall Coverage', 'luwipress' ),
 				'value' => $overall_pct . '%',
-				'color' => $overall_pct >= 80 ? 'var(--n8n-success)' : ( $overall_pct >= 50 ? 'var(--n8n-warning)' : 'var(--n8n-error)' ),
+				'color' => $overall_pct >= 80 ? 'var(--lp-success)' : ( $overall_pct >= 50 ? 'var(--lp-warning)' : 'var(--lp-error)' ),
 				'bar'   => $overall_pct,
 			),
 			array(
@@ -340,25 +340,25 @@ if ( $is_wpml ) {
 				'icon'  => 'dashicons-yes-alt',
 				'label' => __( 'Translated', 'luwipress' ),
 				'value' => number_format_i18n( $total_translated ),
-				'color' => 'var(--n8n-success)',
+				'color' => 'var(--lp-success)',
 				'sub'   => sprintf( __( '%s total needed', 'luwipress' ), number_format_i18n( $total_possible ) ),
 			),
 			array(
 				'icon'  => 'dashicons-warning',
 				'label' => __( 'Missing', 'luwipress' ),
 				'value' => number_format_i18n( $missing_count ),
-				'color' => $missing_count > 0 ? 'var(--n8n-error)' : 'var(--n8n-success)',
+				'color' => $missing_count > 0 ? 'var(--lp-error)' : 'var(--lp-success)',
 			),
 		);
 		foreach ( $stat_items as $si => $stat ) :
 		?>
 		<div class="tm-stat-card" style="animation-delay:<?php echo $si * 80; ?>ms;">
-			<div class="tm-stat-icon" style="color:<?php echo $stat['color'] ?? 'var(--n8n-primary)'; ?>;">
+			<div class="tm-stat-icon" style="color:<?php echo $stat['color'] ?? 'var(--lp-primary)'; ?>;">
 				<span class="dashicons <?php echo esc_attr( $stat['icon'] ); ?>"></span>
 			</div>
 			<div class="tm-stat-body">
 				<span class="tm-stat-label"><?php echo esc_html( $stat['label'] ); ?></span>
-				<span class="tm-stat-value" style="color:<?php echo $stat['color'] ?? 'var(--n8n-text)'; ?>;"><?php echo esc_html( $stat['value'] ); ?></span>
+				<span class="tm-stat-value" style="color:<?php echo $stat['color'] ?? 'var(--lp-text)'; ?>;"><?php echo esc_html( $stat['value'] ); ?></span>
 				<?php if ( ! empty( $stat['bar'] ) ) : ?>
 					<div class="tm-stat-bar"><div class="tm-stat-bar-fill" style="width:<?php echo (int) $stat['bar']; ?>%;background:<?php echo $stat['color']; ?>;"></div></div>
 				<?php elseif ( ! empty( $stat['sub'] ) ) : ?>
@@ -512,9 +512,9 @@ if ( $is_wpml ) {
 						<div class="tm-progress">
 							<div class="tm-progress-track">
 								<div class="tm-progress-fill" id="fill-<?php echo esc_attr( $pt . '-' . $lang ); ?>" style="width:<?php echo $pct; ?>%;<?php
-									if ( $pct >= 100 ) echo 'background:var(--n8n-success);';
-									elseif ( $pct >= 60 ) echo 'background:var(--n8n-primary);';
-									else echo 'background:var(--n8n-warning);';
+									if ( $pct >= 100 ) echo 'background:var(--lp-success);';
+									elseif ( $pct >= 60 ) echo 'background:var(--lp-primary);';
+									else echo 'background:var(--lp-warning);';
 								?>"></div>
 							</div>
 							<span class="tm-progress-pct" id="pct-<?php echo esc_attr( $pt . '-' . $lang ); ?>"><?php echo $pct; ?>%</span>
@@ -533,7 +533,7 @@ if ( $is_wpml ) {
 								data-post-type="<?php echo esc_attr( $pt ); ?>"
 								data-cron-ids="<?php echo esc_attr( implode( ',', $active['ids'] ) ); ?>"
 								data-progress-id="progress-<?php echo esc_attr( $cron_key ); ?>"
-								style="background:var(--n8n-blue, #2563eb);color:#fff;opacity:0.9;">
+								style="background:var(--lp-blue, #2563eb);color:#fff;opacity:0.9;">
 								<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span>
 								<?php printf( '%d translating...', $active['count'] ); ?>
 							</button>
@@ -542,7 +542,7 @@ if ( $is_wpml ) {
 								data-lang="<?php echo esc_attr( $lang ); ?>"
 								data-post-type="<?php echo esc_attr( $pt ); ?>"
 								data-cron-ids="<?php echo esc_attr( implode( ',', $active['ids'] ) ); ?>"
-								style="background:var(--n8n-error, #dc2626);color:#fff;"
+								style="background:var(--lp-error, #dc2626);color:#fff;"
 								title="<?php esc_attr_e( 'Stop background translations', 'luwipress' ); ?>">
 								<span class="dashicons dashicons-no"></span>
 							</button>
@@ -572,7 +572,7 @@ if ( $is_wpml ) {
 								<span class="tm-live-counter"><?php echo $show_progress ? $active['count'] . ' in background' : '0 / ' . $missing; ?></span>
 								<span class="tm-live-status"><?php echo $show_progress ? esc_html__( 'Translating in background (~30s each)...', 'luwipress' ) : esc_html__( 'Preparing...', 'luwipress' ); ?></span>
 							</div>
-							<div class="tm-live-bar-full"><div class="tm-live-fill-full" <?php if ( $show_progress ) echo 'style="width:10%;background:var(--n8n-blue, #2563eb);animation:pulse 2s infinite;"'; ?>></div></div>
+							<div class="tm-live-bar-full"><div class="tm-live-fill-full" <?php if ( $show_progress ) echo 'style="width:10%;background:var(--lp-blue, #2563eb);animation:pulse 2s infinite;"'; ?>></div></div>
 							<div class="tm-live-item"></div>
 						</div>
 					</td>
@@ -589,7 +589,7 @@ if ( $is_wpml ) {
 	<!-- ═══ MAINTENANCE ═══ -->
 	<div class="tm-step tm-step-maint">
 		<div class="tm-step-header">
-			<div class="tm-step-number" style="background:var(--n8n-gray);">
+			<div class="tm-step-number" style="background:var(--lp-gray);">
 				<span class="dashicons dashicons-admin-tools" style="font-size:16px;width:16px;height:16px;"></span>
 			</div>
 			<div class="tm-step-info">
@@ -787,9 +787,9 @@ if ( $is_wpml ) {
 			if (fillBarEl) {
 				fillBarEl.style.width = currentPct + '%';
 				fillBarEl.style.transition = 'width 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
-				if (currentPct >= 100) fillBarEl.style.background = 'var(--n8n-success)';
-				else if (currentPct >= 60) fillBarEl.style.background = 'var(--n8n-primary)';
-				else fillBarEl.style.background = 'var(--n8n-warning)';
+				if (currentPct >= 100) fillBarEl.style.background = 'var(--lp-success)';
+				else if (currentPct >= 60) fillBarEl.style.background = 'var(--lp-primary)';
+				else fillBarEl.style.background = 'var(--lp-warning)';
 			}
 			if (pctEl) pctEl.textContent = currentPct + '%';
 		}
@@ -846,7 +846,7 @@ if ( $is_wpml ) {
 						if (sent >= total) {
 							// All sent — now show real progress
 							if (bgIds.length > 0) {
-								if (statusEl) { statusEl.textContent = done + ' instant, ' + bgIds.length + ' in background queue. Monitoring...'; statusEl.style.color = 'var(--n8n-blue, #2563eb)'; }
+								if (statusEl) { statusEl.textContent = done + ' instant, ' + bgIds.length + ' in background queue. Monitoring...'; statusEl.style.color = 'var(--lp-blue, #2563eb)'; }
 								btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + done + '/' + total;
 								// Start polling cron progress
 								setTimeout(pollCron, 5000);
@@ -922,7 +922,7 @@ if ( $is_wpml ) {
 							if (statusEl) {
 								if (bgIds.length > 0) {
 									statusEl.textContent = bgIds.length + ' still translating in background (~30s each)...';
-									statusEl.style.color = 'var(--n8n-blue, #2563eb)';
+									statusEl.style.color = 'var(--lp-blue, #2563eb)';
 								}
 							}
 
@@ -943,9 +943,9 @@ if ( $is_wpml ) {
 						if (counterEl) counterEl.textContent = done + ' / ' + total;
 						if (statusEl) {
 							statusEl.textContent = done + ' translated' + (failed > 0 ? ', ' + failed + ' failed' : '') + '. Reloading...';
-							statusEl.style.color = 'var(--n8n-success)';
+							statusEl.style.color = 'var(--lp-success)';
 						}
-						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-success)'; }
+						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--lp-success)'; }
 						if (itemEl) itemEl.textContent = '';
 						setTimeout(function() { location.reload(); }, 3000);
 					}
@@ -989,15 +989,15 @@ if ( $is_wpml ) {
 					if (d.success) {
 						btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> Done';
 						btn.classList.add('tm-btn-done');
-						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-success)'; }
-						if (statusEl) { statusEl.textContent = (d.data.terms_sent || 0) + ' terms translated. Reloading...'; statusEl.style.color = 'var(--n8n-success)'; }
+						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--lp-success)'; }
+						if (statusEl) { statusEl.textContent = (d.data.terms_sent || 0) + ' terms translated. Reloading...'; statusEl.style.color = 'var(--lp-success)'; }
 						if (resultEl) { resultEl.textContent = (d.data.terms_sent || 0) + ' terms'; resultEl.className = 'tm-tax-result result-ok'; }
 						setTimeout(function() { location.reload(); }, 2000);
 					} else {
 						btn.disabled = false;
 						btn.innerHTML = '<span class="dashicons dashicons-translation"></span> Retry';
-						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-error)'; }
-						if (statusEl) { statusEl.textContent = d.data || 'Error'; statusEl.style.color = 'var(--n8n-error)'; }
+						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--lp-error)'; }
+						if (statusEl) { statusEl.textContent = d.data || 'Error'; statusEl.style.color = 'var(--lp-error)'; }
 						if (resultEl) { resultEl.textContent = d.data || 'Error'; resultEl.className = 'tm-tax-result result-err'; }
 					}
 				})
@@ -1030,14 +1030,14 @@ if ( $is_wpml ) {
 					if (d.success) {
 						var fixed = d.data.fixed || 0;
 						btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> ' + fixed + ' fixed';
-						btn.style.background = 'var(--n8n-success, #16a34a)'; btn.style.color = '#fff';
+						btn.style.background = 'var(--lp-success, #16a34a)'; btn.style.color = '#fff';
 						result.textContent = d.data.message || (fixed + ' items fixed');
 						result.className = 'tm-tool-result result-ok';
 						if (fixed > 0) setTimeout(function(){ location.reload(); }, 2500);
 						else setTimeout(function(){ btn.innerHTML = origHTML; btn.style.background = ''; btn.style.color = ''; }, 3000);
 					} else {
 						btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Failed';
-						btn.style.background = 'var(--n8n-error, #dc2626)'; btn.style.color = '#fff';
+						btn.style.background = 'var(--lp-error, #dc2626)'; btn.style.color = '#fff';
 						result.textContent = d.data || 'Error';
 						result.className = 'tm-tool-result result-err';
 						setTimeout(function(){ btn.innerHTML = origHTML; btn.style.background = ''; btn.style.color = ''; }, 3000);
@@ -1075,7 +1075,7 @@ if ( $is_wpml ) {
 						result.className = 'tm-tool-result result-ok';
 						if (d.data.total > 0) {
 							btn.innerHTML = '<span class="dashicons dashicons-trash"></span> Confirm Clean (' + d.data.total + ')';
-							btn.style.background = 'var(--n8n-error, #dc2626)'; btn.style.color = '#fff';
+							btn.style.background = 'var(--lp-error, #dc2626)'; btn.style.color = '#fff';
 							confirmed = true;
 						}
 					} else {

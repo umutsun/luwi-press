@@ -24,7 +24,7 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 	<div class="kg-header">
 		<div class="kg-header-left">
 			<h1 class="kg-title">
-				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--n8n-primary)" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="8" r="2"/><circle cx="20" cy="8" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="20" cy="16" r="2"/><line x1="6" y1="8" x2="9" y2="10"/><line x1="18" y1="8" x2="15" y2="10"/><line x1="6" y1="16" x2="9" y2="14"/><line x1="18" y1="16" x2="15" y2="14"/></svg>
+				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--lp-primary)" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="8" r="2"/><circle cx="20" cy="8" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="20" cy="16" r="2"/><line x1="6" y1="8" x2="9" y2="10"/><line x1="18" y1="8" x2="15" y2="10"/><line x1="6" y1="16" x2="9" y2="14"/><line x1="18" y1="16" x2="15" y2="14"/></svg>
 				<?php esc_html_e( 'Knowledge Graph', 'luwipress' ); ?>
 			</h1>
 			<span class="kg-subtitle"><?php esc_html_e( 'Interactive store intelligence map', 'luwipress' ); ?></span>
@@ -63,6 +63,10 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 			<div class="kg-stat-value" data-counter="opportunity_score_total">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Opportunities', 'luwipress' ); ?></div>
 		</div>
+		<div class="kg-stat kg-stat-skeleton">
+			<div class="kg-stat-value" data-counter="design_health">—</div>
+			<div class="kg-stat-label"><?php esc_html_e( 'Design Health', 'luwipress' ); ?></div>
+		</div>
 	</div>
 
 	<!-- Graph Canvas -->
@@ -82,11 +86,11 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 		</div>
 		<!-- Legend -->
 		<div class="kg-legend">
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--n8n-primary)"></span> Product</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--n8n-warning)"></span> Category</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--n8n-blue)"></span> Language</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--n8n-success)"></span> SEO Complete</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--n8n-error)"></span> Needs Work</div>
+			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-primary)"></span> Product</div>
+			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-warning)"></span> Category</div>
+			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-blue)"></span> Language</div>
+			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-success)"></span> SEO Complete</div>
+			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-error)"></span> Needs Work</div>
 		</div>
 	</div>
 
@@ -143,7 +147,7 @@ function fetchGraph(cb) {
 		headers['Authorization'] = 'Bearer ' + CONFIG.apiToken;
 	}
 
-	fetch(CONFIG.apiUrl + '?sections=products,categories,translation,store,opportunities', {
+	fetch(CONFIG.apiUrl + '?sections=products,categories,translation,store,opportunities,design_audit', {
 		headers: headers,
 		credentials: 'same-origin'
 	})
@@ -659,7 +663,7 @@ function showDetailPanel(d) {
 
 		// Stats
 		h += '<div class="kg-p-section"><div class="kg-p-section-title">Translation Status</div>';
-		h += '<div class="kg-p-stat-row"><span>Translated</span><strong style="color:var(--n8n-success)">' + translated + '</strong></div>';
+		h += '<div class="kg-p-stat-row"><span>Translated</span><strong style="color:var(--lp-success)">' + translated + '</strong></div>';
 		h += '<div class="kg-p-stat-row"><span>Missing</span><strong' + (missing > 0 ? ' class="kg-text-error"' : '') + '>' + missing + '</strong></div>';
 		h += '<div class="kg-p-stat-row"><span>Total</span><strong>' + total + '</strong></div>';
 		h += '</div>';
@@ -680,6 +684,82 @@ function showDetailPanel(d) {
 	panel.classList.add('open');
 }
 
+// ── Design Audit Panel ──
+function showDesignAuditPanel(auditData) {
+	var panel = document.getElementById('kg-detail-panel');
+	var content = document.getElementById('kg-detail-content');
+	var summary = auditData.summary || {};
+	var pages = auditData.page_types || [];
+	var kit = auditData.kit || {};
+	var h = '';
+
+	var healthCls = summary.overall_health >= 80 ? 'good' : summary.overall_health >= 50 ? 'warn' : 'bad';
+
+	h += '<div class="kg-p-type-badge" style="background:#8b5cf6;color:#fff">Design Audit</div>';
+	h += '<h3 class="kg-p-name">Design Health Report</h3>';
+	h += '<div class="kg-p-meta">' + summary.pages_audited + ' pages audited</div>';
+
+	h += '<div class="kg-p-health kg-h-' + healthCls + '">';
+	h += '<div class="kg-p-health-bar" style="width:' + summary.overall_health + '%"></div>';
+	h += '<span class="kg-p-health-label">Design Health ' + summary.overall_health + '%</span></div>';
+
+	// Issue summary chips
+	h += '<div class="kg-p-chips">';
+	if (summary.critical_issues > 0) h += '<span class="kg-chip kg-chip-miss">' + summary.critical_issues + ' Critical</span>';
+	if ((summary.total_issues - summary.critical_issues) > 0) h += '<span class="kg-chip kg-chip-miss">' + (summary.total_issues - summary.critical_issues) + ' Warnings</span>';
+	if (summary.total_issues === 0) h += '<span class="kg-chip kg-chip-ok">No Issues</span>';
+	h += '</div>';
+
+	// Kit CSS coverage
+	if (kit.has_kit) {
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Kit CSS Coverage</div>';
+		var scopes = kit.scopes || {};
+		Object.keys(scopes).forEach(function(scope) {
+			var s = scopes[scope];
+			var hasCss = s.has_desktop || s.has_mobile || s.has_tablet;
+			var chips = [];
+			if (s.has_desktop) chips.push('Desktop');
+			if (s.has_mobile) chips.push('Mobile');
+			if (s.has_tablet) chips.push('Tablet');
+			h += '<div class="kg-p-stat-row"><span>' + scope.charAt(0).toUpperCase() + scope.slice(1) + '</span>';
+			h += '<strong style="color:' + (hasCss ? 'var(--lp-success)' : 'var(--lp-error)') + '">' + (chips.length > 0 ? chips.join(', ') : 'None') + '</strong></div>';
+		});
+		h += '</div>';
+	}
+
+	// Per-page results
+	if (pages.length > 0) {
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Page Results</div>';
+		pages.forEach(function(p) {
+			var pCls = p.health_score >= 80 ? 'var(--lp-success)' : p.health_score >= 50 ? 'var(--lp-warning)' : 'var(--lp-error)';
+			h += '<div style="margin-bottom:12px;padding:10px;background:var(--lp-bg-hover);border-radius:8px;">';
+			h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+			h += '<strong>' + escHtml(p.title || p.page_type) + '</strong>';
+			h += '<span style="color:' + pCls + ';font-weight:600;">' + p.health_score + '%</span></div>';
+			h += '<div style="font-size:11px;color:var(--lp-text-muted);">' + p.page_type + '</div>';
+			if (p.issues && p.issues.length > 0) {
+				h += '<div style="margin-top:6px;">';
+				p.issues.forEach(function(issue) {
+					var iColor = issue.severity === 'critical' ? 'var(--lp-error)' : issue.severity === 'warning' ? 'var(--lp-warning)' : 'var(--lp-text-muted)';
+					h += '<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--lp-border);">';
+					h += '<span style="color:' + iColor + ';font-weight:600;">' + issue.severity.toUpperCase() + '</span> ';
+					h += issue.message;
+					if (issue.fix) h += '<div style="color:var(--lp-text-muted);font-size:10px;">Fix: ' + issue.fix + '</div>';
+					h += '</div>';
+				});
+				h += '</div>';
+			} else {
+				h += '<div style="margin-top:4px;font-size:11px;color:var(--lp-success);">No issues found</div>';
+			}
+			h += '</div>';
+		});
+		h += '</div>';
+	}
+
+	content.innerHTML = h;
+	panel.classList.add('open');
+}
+
 function statusBadge(ok, label) {
 	return '<div class="kg-detail-status ' + (ok ? 'ok' : 'missing') + '">' +
 		'<span class="kg-detail-status-icon">' + (ok ? '✓' : '✗') + '</span> ' + label + '</div>';
@@ -691,7 +771,7 @@ function statusChip(ok, label) {
 
 function progressBar(label, pct) {
 	pct = Math.min(100, Math.max(0, pct));
-	var color = pct >= 80 ? 'var(--n8n-success)' : (pct >= 50 ? 'var(--n8n-warning)' : 'var(--n8n-error)');
+	var color = pct >= 80 ? 'var(--lp-success)' : (pct >= 50 ? 'var(--lp-warning)' : 'var(--lp-error)');
 	return '<div class="kg-detail-progress"><span class="kg-detail-progress-label">' + label + '</span>' +
 		'<div class="kg-detail-progress-bar"><div class="kg-detail-progress-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
 		'<span class="kg-detail-progress-pct">' + pct.toFixed(0) + '%</span></div>';
@@ -704,11 +784,14 @@ function escHtml(s) {
 // ── Update Stats ──
 function updateStats(data) {
 	var summary = data.summary || {};
+	var designAudit = (data.nodes && data.nodes.design_audit) ? data.nodes.design_audit : {};
+	var designSummary = designAudit.summary || {};
 	var stats = {
 		total_products: summary.total_products || 0,
 		seo_coverage: summary.seo_coverage || 0,
 		enrichment_coverage: summary.enrichment_coverage || 0,
-		opportunity_score_total: summary.opportunity_score_total || 0
+		opportunity_score_total: summary.opportunity_score_total || 0,
+		design_health: designSummary.overall_health || 0
 	};
 
 	document.querySelectorAll('.kg-stat').forEach(function(el) {
@@ -719,7 +802,7 @@ function updateStats(data) {
 	Object.keys(stats).forEach(function(key) {
 		var el = document.querySelector('[data-counter="' + key + '"]');
 		if (el) {
-			var suffix = (key.indexOf('coverage') !== -1) ? '%' : '';
+			var suffix = (key.indexOf('coverage') !== -1 || key === 'design_health') ? '%' : '';
 			animateCounter(el, Math.round(stats[key]), suffix);
 		}
 	});
@@ -746,16 +829,33 @@ window.addEventListener('resize', function() {
 });
 
 // ── Init ──
+var _kgData = null; // Store for click handlers
+
 function init() {
 	loadD3(function() {
 		fetchGraph(function(err, data) {
 			if (err || !data) {
-				document.getElementById('kg-loading').innerHTML = '<p style="color:var(--n8n-error);">Failed to load knowledge graph. Check connection settings.</p>';
+				document.getElementById('kg-loading').innerHTML = '<p style="color:var(--lp-error);">Failed to load knowledge graph. Check connection settings.</p>';
 				return;
 			}
+			_kgData = data;
 			updateStats(data);
 			buildGraph(data);
+			bindDesignHealthClick(data);
 		});
+	});
+}
+
+function bindDesignHealthClick(data) {
+	var el = document.querySelector('[data-counter="design_health"]');
+	if (!el) return;
+	var card = el.closest('.kg-stat');
+	if (!card) return;
+	card.style.cursor = 'pointer';
+	card.title = 'Click to view Design Audit details';
+	card.addEventListener('click', function() {
+		var audit = (data.nodes && data.nodes.design_audit) ? data.nodes.design_audit : null;
+		if (audit) showDesignAuditPanel(audit);
 	});
 }
 
@@ -795,12 +895,12 @@ function kgAction(action, productId, btn, langs) {
 	})
 	.then(function(r) { return r.json(); })
 	.then(function(data) {
-		btn.innerHTML = '<span class="kg-action-icon" style="color:var(--n8n-success);">&#10003;</span> Done';
+		btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> Done';
 		btn.classList.add('kg-action-done');
 		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 3000);
 	})
 	.catch(function(err) {
-		btn.innerHTML = '<span style="color:var(--n8n-error);">Failed</span>';
+		btn.innerHTML = '<span style="color:var(--lp-error);">Failed</span>';
 		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
 	});
 }

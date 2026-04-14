@@ -1,18 +1,18 @@
 === LuwiPress — AI-Powered WooCommerce Automation ===
 Contributors: luwidev
-Tags: woocommerce, ai, seo, translation, automation, n8n, product enrichment
+Tags: woocommerce, ai, seo, translation, automation, product enrichment, multilingual
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 2.0.5
+Stable tag: 2.0.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores via n8n workflows.
+AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores for WooCommerce stores.
 
 == Description ==
 
-LuwiPress is a **middleware plugin** that connects your WordPress/WooCommerce store to [n8n](https://n8n.io) workflows, adding AI-powered automation that your existing plugins can't do alone.
+LuwiPress is a **standalone AI plugin** for WooCommerce stores — generates content, optimizes SEO, translates products, and automates store management without external dependencies.
 
 **It doesn't replace your plugins — it makes them smarter.**
 
@@ -132,6 +132,17 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 2.0.6 — Rebrand Cleanup =
+* REBRAND: All CSS variables renamed --n8n-* → --lp-*
+* REBRAND: All HTML classes renamed n8np-* → lp-*
+* REBRAND: JS functions and WebMCP client class renamed
+* REBRAND: MCP resource URIs changed n8npress:// → luwipress://
+* REBRAND: readme.txt rewritten — standalone AI plugin description
+* REBRAND: Removed all n8n references from user-facing UI
+* IMPROVED: Coverage calculation — only counts real translations linked to EN sources
+* IMPROVED: Fix Orphans tool detects EN-registered non-English posts
+* IMPROVED: MCP content tools bypass WPML language filter
 
 = 2.0.5 — Full Site X-Ray & WordPress Control =
 * NEW: Knowledge Graph — 8 new sections: posts, pages, taxonomies, media inventory, menus, product attributes, authors, order analytics

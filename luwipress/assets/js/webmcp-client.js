@@ -5,7 +5,7 @@
  * Handles the full MCP lifecycle: initialize → tools/list → tools/call.
  *
  * Usage:
- *   const client = new N8nPressWebMCP('https://site.com/wp-json/n8npress/v1/mcp', 'your-api-token');
+ *   const client = new LuwiPressWebMCP('https://site.com/wp-json/luwipress/v1/mcp', 'your-api-token');
  *   await client.connect();
  *   const tools = await client.listTools();
  *   const result = await client.callTool('system_health', {});
@@ -13,7 +13,7 @@
  * @since 1.10.0
  */
 
-class N8nPressWebMCP {
+class LuwiPressWebMCP {
 
     /**
      * @param {string} endpoint  MCP endpoint URL
@@ -45,7 +45,7 @@ class N8nPressWebMCP {
                 roots: { listChanged: false },
             },
             clientInfo: clientInfo || {
-                name: 'n8npress-webmcp-client',
+                name: 'luwipress-webmcp-client',
                 version: '1.10.0',
             },
         });
@@ -189,7 +189,7 @@ class N8nPressWebMCP {
     /**
      * Read a specific resource by URI.
      *
-     * @param {string} uri  Resource URI (e.g., 'n8npress://health')
+     * @param {string} uri  Resource URI (e.g., 'luwipress://health')
      * @returns {object} Resource contents
      */
     async readResource(uri) {
@@ -324,8 +324,8 @@ class N8nPressWebMCP {
         }
 
         // WordPress nonce (if available from wp_localize_script)
-        if (typeof n8npress !== 'undefined' && n8npress.nonce) {
-            headers['X-WP-Nonce'] = n8npress.nonce;
+        if (typeof luwipress !== 'undefined' && luwipress.nonce) {
+            headers['X-WP-Nonce'] = luwipress.nonce;
         }
 
         return headers;
@@ -340,5 +340,5 @@ class N8nPressWebMCP {
 
 // Export for module environments
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = N8nPressWebMCP;
+    module.exports = LuwiPressWebMCP;
 }

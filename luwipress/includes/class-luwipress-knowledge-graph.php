@@ -87,7 +87,7 @@ class LuwiPress_Knowledge_Graph {
 
 		// Parse sections
 		$section_param = $request->get_param( 'section' );
-		$all_sections  = array( 'products', 'categories', 'translation', 'seo', 'aeo', 'crm', 'store', 'plugins', 'taxonomy', 'environment', 'opportunities', 'posts', 'pages', 'content_taxonomy', 'media_inventory', 'menus', 'product_attributes', 'authors', 'order_analytics' );
+		$all_sections  = array( 'products', 'categories', 'translation', 'seo', 'aeo', 'crm', 'store', 'plugins', 'taxonomy', 'environment', 'opportunities', 'posts', 'pages', 'content_taxonomy', 'media_inventory', 'menus', 'product_attributes', 'authors', 'order_analytics', 'design_audit' );
 		$sections      = $section_param ? array_intersect( array_map( 'trim', explode( ',', $section_param ) ), $all_sections ) : $all_sections;
 
 		// Check cache
@@ -244,6 +244,11 @@ class LuwiPress_Knowledge_Graph {
 		// Order analytics
 		if ( in_array( 'order_analytics', $sections, true ) ) {
 			$response['nodes']['order_analytics'] = $this->build_order_analytics_nodes();
+		}
+
+		// Design audit (Elementor responsive/spacing/accessibility analysis)
+		if ( in_array( 'design_audit', $sections, true ) ) {
+			$response['nodes']['design_audit'] = $this->build_design_audit_nodes();
 		}
 
 		// Post/page edges
@@ -2095,6 +2100,291 @@ class LuwiPress_Knowledge_Graph {
 			}
 		}
 		return $edges;
+	}
+
+	// ─── DESIGN AUDIT ──────────────────────────────────────────────────
+
+	/**
+	 * Build design audit nodes for Elementor-built pages.
+	 *
+	 * Checks: responsive settings, mobile padding, image optimization,
+	 * accessibility basics, spacing consistency, Kit CSS coverage.
+	 *
+	 * @return array Design audit data per page type.
+	 */
+	private function build_design_audit_nodes() {
+		$audit = array(
+			'kit'        => $this->audit_kit_css(),
+			'page_types' => $this->audit_page_types(),
+			'summary'    => array(),
+		);
+
+		// Calculate overall design health score
+		$scores = wp_list_pluck( $audit['page_types'], 'health_score' );
+		$audit['summary'] = array(
+			'overall_health'  => count( $scores ) > 0 ? round( array_sum( $scores ) / count( $scores ) ) : 0,
+			'total_issues'    => array_sum( wp_list_pluck( $audit['page_types'], 'issue_count' ) ),
+			'critical_issues' => array_sum( wp_list_pluck( $audit['page_types'], 'critical_count' ) ),
+			'pages_audited'   => count( $audit['page_types'] ),
+		);
+
+		return $audit;
+	}
+
+	/**
+	 * Audit Elementor Kit CSS — check coverage per page type.
+	 */
+	private function audit_kit_css() {
+		$kit_id = (int) get_option( 'elementor_active_kit', 0 );
+		if ( ! $kit_id ) {
+			return array( 'has_kit' => false, 'scopes' => array() );
+		}
+
+		$kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
+		$css = is_array( $kit_settings ) ? ( $kit_settings['custom_css'] ?? '' ) : '';
+
+		$scopes = array(
+			'global'    => array( 'selector' => null,                'has_desktop' => false, 'has_mobile' => false, 'has_tablet' => false ),
+			'homepage'  => array( 'selector' => '.home',             'has_desktop' => false, 'has_mobile' => false, 'has_tablet' => false ),
+			'shop'      => array( 'selector' => '.woocommerce-shop', 'has_desktop' => false, 'has_mobile' => false, 'has_tablet' => false ),
+			'product'   => array( 'selector' => '.single-product',   'has_desktop' => false, 'has_mobile' => false, 'has_tablet' => false ),
+			'blog'      => array( 'selector' => '.single-post',      'has_desktop' => false, 'has_mobile' => false, 'has_tablet' => false ),
+		);
+
+		foreach ( $scopes as $key => &$scope ) {
+			if ( $scope['selector'] === null ) {
+				$scope['has_desktop'] = ! empty( $css );
+				$scope['has_mobile']  = strpos( $css, 'max-width' ) !== false;
+				$scope['has_tablet']  = strpos( $css, 'min-width: 768px' ) !== false;
+			} else {
+				$scope['has_desktop'] = strpos( $css, $scope['selector'] ) !== false;
+				$scope['has_mobile']  = preg_match( '/max-width.*?' . preg_quote( $scope['selector'], '/' ) . '|' . preg_quote( $scope['selector'], '/' ) . '.*?max-width/s', $css ) === 1;
+				$scope['has_tablet']  = preg_match( '/min-width:\s*768px.*?' . preg_quote( $scope['selector'], '/' ) . '|' . preg_quote( $scope['selector'], '/' ) . '.*?min-width:\s*768px/s', $css ) === 1;
+			}
+		}
+		unset( $scope );
+
+		return array(
+			'has_kit'    => true,
+			'kit_id'     => $kit_id,
+			'css_length' => strlen( $css ),
+			'scopes'     => $scopes,
+		);
+	}
+
+	/**
+	 * Audit individual page types for design health.
+	 */
+	private function audit_page_types() {
+		$results = array();
+
+		// Homepage
+		$front_id = absint( get_option( 'page_on_front', 0 ) );
+		if ( $front_id ) {
+			$results[] = $this->audit_single_page( $front_id, 'homepage' );
+		}
+
+		// Shop page
+		$shop_id = function_exists( 'wc_get_page_id' ) ? absint( wc_get_page_id( 'shop' ) ) : 0;
+		if ( $shop_id ) {
+			$results[] = $this->audit_single_page( $shop_id, 'shop' );
+		}
+
+		// Sample blog post (latest)
+		$latest_post = get_posts( array( 'numberposts' => 1, 'post_type' => 'post', 'post_status' => 'publish' ) );
+		if ( ! empty( $latest_post ) ) {
+			$results[] = $this->audit_single_page( $latest_post[0]->ID, 'blog_post' );
+		}
+
+		// Sample product (latest)
+		$latest_product = get_posts( array( 'numberposts' => 1, 'post_type' => 'product', 'post_status' => 'publish' ) );
+		if ( ! empty( $latest_product ) ) {
+			$results[] = $this->audit_single_page( $latest_product[0]->ID, 'product' );
+		}
+
+		return $results;
+	}
+
+	/**
+	 * Audit a single Elementor page for design issues.
+	 *
+	 * @param int    $post_id   Post ID.
+	 * @param string $page_type Page type identifier.
+	 * @return array Audit results.
+	 */
+	private function audit_single_page( $post_id, $page_type ) {
+		$issues   = array();
+		$post     = get_post( $post_id );
+		$title    = $post ? $post->post_title : 'Unknown';
+
+		// Check Elementor data exists
+		$el_data_raw = get_post_meta( $post_id, '_elementor_data', true );
+		$has_elementor = ! empty( $el_data_raw );
+
+		if ( $has_elementor ) {
+			$el_data = is_string( $el_data_raw ) ? json_decode( $el_data_raw, true ) : $el_data_raw;
+			if ( is_array( $el_data ) ) {
+				$this->audit_elementor_tree( $el_data, $issues, $page_type );
+			}
+		}
+
+		// Check page-level custom CSS
+		$page_settings = get_post_meta( $post_id, '_elementor_page_settings', true );
+		$has_page_css  = is_array( $page_settings ) && ! empty( $page_settings['custom_css'] );
+
+		// Calculate health score (100 = perfect, 0 = many issues)
+		$critical = count( array_filter( $issues, function( $i ) { return $i['severity'] === 'critical'; } ) );
+		$warnings = count( array_filter( $issues, function( $i ) { return $i['severity'] === 'warning'; } ) );
+		$info     = count( $issues ) - $critical - $warnings;
+		$deduction = ( $critical * 20 ) + ( $warnings * 8 ) + ( $info * 2 );
+		$score     = max( 0, 100 - $deduction );
+
+		return array(
+			'post_id'        => $post_id,
+			'title'          => $title,
+			'page_type'      => $page_type,
+			'has_elementor'  => $has_elementor,
+			'has_page_css'   => $has_page_css,
+			'health_score'   => $score,
+			'issue_count'    => count( $issues ),
+			'critical_count' => $critical,
+			'warning_count'  => $warnings,
+			'info_count'     => $info,
+			'issues'         => $issues,
+		);
+	}
+
+	/**
+	 * Walk Elementor element tree and detect design issues.
+	 *
+	 * @param array  $elements  Elementor data array.
+	 * @param array  &$issues   Issues array to append to.
+	 * @param string $page_type Page type for context.
+	 */
+	private function audit_elementor_tree( array $elements, array &$issues, $page_type ) {
+		foreach ( $elements as $el ) {
+			$type     = $el['elType'] ?? '';
+			$wtype    = $el['widgetType'] ?? '';
+			$id       = $el['id'] ?? '';
+			$settings = $el['settings'] ?? array();
+
+			// Check sections/containers for responsive issues
+			if ( in_array( $type, array( 'section', 'container' ), true ) ) {
+				$this->check_responsive_spacing( $settings, $id, $type, $issues );
+			}
+
+			// Check columns for zero padding
+			if ( $type === 'column' ) {
+				$this->check_column_padding( $settings, $id, $issues );
+			}
+
+			// Check containers for mobile flex direction
+			if ( $type === 'container' ) {
+				$this->check_container_responsive( $settings, $id, $issues );
+			}
+
+			// Recurse into children
+			if ( ! empty( $el['elements'] ) ) {
+				$this->audit_elementor_tree( $el['elements'], $issues, $page_type );
+			}
+		}
+	}
+
+	/**
+	 * Check section/container for missing mobile padding.
+	 */
+	private function check_responsive_spacing( $settings, $id, $type, &$issues ) {
+		$padding = $settings['padding'] ?? null;
+		$padding_mobile = $settings['padding_mobile'] ?? null;
+
+		// Has desktop padding with 0 left/right but no mobile override
+		if ( is_array( $padding ) ) {
+			$left  = $padding['left'] ?? '';
+			$right = $padding['right'] ?? '';
+			if ( ( $left === '0' || $left === '' ) && ( $right === '0' || $right === '' ) ) {
+				if ( ! is_array( $padding_mobile ) || empty( $padding_mobile['left'] ) ) {
+					$issues[] = array(
+						'element_id' => $id,
+						'element_type' => $type,
+						'severity'   => 'warning',
+						'type'       => 'missing_mobile_padding',
+						'message'    => 'Zero left/right padding with no mobile override — content hugs edges on mobile',
+						'fix'        => 'Add padding_mobile with 16px left/right',
+					);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Check column for zero padding on all sides.
+	 */
+	private function check_column_padding( $settings, $id, &$issues ) {
+		$padding = $settings['padding'] ?? null;
+		if ( ! is_array( $padding ) ) {
+			return;
+		}
+
+		$all_zero = true;
+		foreach ( array( 'top', 'right', 'bottom', 'left' ) as $side ) {
+			$val = $padding[ $side ] ?? '';
+			if ( $val !== '0' && $val !== '' && $val !== 0 ) {
+				$all_zero = false;
+				break;
+			}
+		}
+
+		if ( $all_zero ) {
+			$padding_mobile = $settings['padding_mobile'] ?? null;
+			if ( ! is_array( $padding_mobile ) || empty( $padding_mobile['left'] ) ) {
+				$issues[] = array(
+					'element_id' => $id,
+					'element_type' => 'column',
+					'severity'   => 'warning',
+					'type'       => 'zero_column_padding',
+					'message'    => 'Column has zero padding — content touches edges',
+					'fix'        => 'Add at least 16px horizontal padding for mobile',
+				);
+			}
+		}
+	}
+
+	/**
+	 * Check container for missing mobile flex direction.
+	 */
+	private function check_container_responsive( $settings, $id, &$issues ) {
+		$direction = $settings['flex_direction'] ?? '';
+		$direction_mobile = $settings['flex_direction_mobile'] ?? '';
+
+		// Row direction on desktop without mobile column override
+		if ( $direction === 'row' && empty( $direction_mobile ) ) {
+			// Check if children have fixed widths that would be too narrow on mobile
+			$width = $settings['width'] ?? null;
+			if ( is_array( $width ) && isset( $width['size'] ) && $width['unit'] === '%' && $width['size'] < 50 ) {
+				$issues[] = array(
+					'element_id' => $id,
+					'element_type' => 'container',
+					'severity'   => 'critical',
+					'type'       => 'narrow_container_no_stack',
+					'message'    => 'Container is ' . $width['size'] . '% wide in row layout with no mobile column override — too narrow on mobile',
+					'fix'        => 'Add flex_direction_mobile: column and width_mobile: 100%',
+				);
+			}
+		}
+
+		// Row container without any mobile override
+		if ( $direction === 'row' && empty( $direction_mobile ) ) {
+			$child_count = 0;
+			// Count is checked upstream — flag if row has no mobile stack
+			$issues[] = array(
+				'element_id' => $id,
+				'element_type' => 'container',
+				'severity'   => 'info',
+				'type'       => 'row_no_mobile_stack',
+				'message'    => 'Row container without explicit mobile column direction',
+				'fix'        => 'Consider adding flex_direction_mobile: column for better mobile layout',
+			);
+		}
 	}
 
 	// ─── CACHE ──────────────────────────────────────────────────────────

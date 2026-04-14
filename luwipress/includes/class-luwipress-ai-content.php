@@ -17,7 +17,7 @@ class LuwiPress_AI_Content {
 
     private static $instance = null;
 
-    /** n8n webhook base URL */
+    /** webhook base URL */
     private $n8n_webhook_url;
 
     /** API token for n8n auth */
@@ -60,7 +60,7 @@ class LuwiPress_AI_Content {
      * Register REST API endpoints
      */
     public function register_endpoints() {
-        // Trigger product enrichment → sends to n8n
+        // Trigger product enrichment → sends for AI processing
         register_rest_route('luwipress/v1', '/product/enrich', array(
             'methods'             => 'POST',
             'callback'            => array($this, 'handle_enrich_request'),
@@ -71,25 +71,25 @@ class LuwiPress_AI_Content {
             ),
         ));
 
-        // Callback from n8n: receives enriched data
+        // Callback from AI: receives enriched data
         register_rest_route('luwipress/v1', '/product/enrich-callback', array(
             'methods'             => 'POST',
             'callback'            => array($this, 'handle_enrich_callback'),
-            'permission_callback' => array($this, 'check_n8n_token'),
+            'permission_callback' => array($this, 'check_api_token'),
         ));
 
         // Save/update schema markup for any post/product
         register_rest_route('luwipress/v1', '/seo/schema', array(
             'methods'             => 'POST',
             'callback'            => array($this, 'handle_save_schema'),
-            'permission_callback' => array($this, 'check_n8n_token'),
+            'permission_callback' => array($this, 'check_api_token'),
         ));
 
         // Save FAQ data for any post/product
         register_rest_route('luwipress/v1', '/seo/faq', array(
             'methods'             => 'POST',
             'callback'            => array($this, 'handle_save_faq'),
-            'permission_callback' => array($this, 'check_n8n_token'),
+            'permission_callback' => array($this, 'check_api_token'),
         ));
 
         // Batch product enrichment → sends multiple products to n8n
@@ -126,7 +126,7 @@ class LuwiPress_AI_Content {
         ));
     }
 
-    // ─── TRIGGER: Send product to n8n for enrichment ────────────────────
+    // ─── TRIGGER: Send for AI enrichment for enrichment ────────────────────
 
     /**
      * Handle enrich request from WP admin
@@ -140,7 +140,7 @@ class LuwiPress_AI_Content {
             return new WP_Error('not_found', 'Product not found.', array('status' => 404));
         }
 
-        $result = $this->send_to_n8n_for_enrichment($product, $options);
+        $result = $this->send_for_enrichment($product, $options);
 
         if (is_wp_error($result)) {
             return $result;
@@ -166,7 +166,7 @@ class LuwiPress_AI_Content {
     /**
      * Send product for AI enrichment via AI Engine (local or n8n).
      */
-    private function send_to_n8n_for_enrichment( $product, $options = array() ) {
+    private function send_for_enrichment( $product, $options = array() ) {
         $product_id = $product->get_id();
 
         // Atomic lock: prevent concurrent enrichment of same product
@@ -179,7 +179,7 @@ class LuwiPress_AI_Content {
         $mode = LuwiPress_AI_Engine::get_mode();
 
         if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            // n8n mode: forward to webhook, n8n will call back to /product/enrich-callback
+            // webhook mode: forward to webhook, n8n will call back to /product/enrich-callback
             $image_url = wp_get_attachment_url( $product->get_image_id() );
             $gallery   = array_map( 'wp_get_attachment_url', $product->get_gallery_image_ids() );
 
@@ -278,10 +278,10 @@ class LuwiPress_AI_Content {
         return $this->handle_enrich_callback( $request );
     }
 
-    // ─── CALLBACK: Receive enriched data from n8n ───────────────────────
+    // ─── CALLBACK: Receive enriched data from AI ───────────────────────
 
     /**
-     * n8n calls this endpoint with AI-generated content
+     * AI callback receives endpoint with AI-generated content
      */
     public function handle_enrich_callback($request) {
         $data       = $request->get_json_params();
@@ -504,9 +504,9 @@ class LuwiPress_AI_Content {
             $queued[] = $pid;
         }
 
-        // Send batch to n8n as a single payload
+        // Send for AI enrichment as a single payload
         if (!empty($queued)) {
-            $this->send_batch_to_n8n($queued, $options, $batch_id);
+            $this->send_batch_for_enrichment($queued, $options, $batch_id);
         }
 
         LuwiPress_Logger::log('Batch enrichment started', 'info', array(
@@ -526,7 +526,7 @@ class LuwiPress_AI_Content {
     /**
      * Send batch of product IDs for enrichment (n8n or local sequential).
      */
-    private function send_batch_to_n8n( $product_ids, $options, $batch_id ) {
+    private function send_batch_for_enrichment( $product_ids, $options, $batch_id ) {
         $products_data = array();
         foreach ( $product_ids as $pid ) {
             $product = wc_get_product( $pid );
@@ -559,7 +559,7 @@ class LuwiPress_AI_Content {
         $mode = LuwiPress_AI_Engine::get_mode();
 
         if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            // n8n mode: send entire batch to n8n webhook
+            // webhook mode: send entire batch to webhook
             $result = LuwiPress_AI_Engine::forward_to_n8n( 'product_enrich_batch', array(
                 'batch_id' => $batch_id,
                 'products' => $products_data,
@@ -578,7 +578,7 @@ class LuwiPress_AI_Content {
             if ( is_wp_error( $result ) ) {
                 LuwiPress_Logger::log( 'Batch enrichment send failed: ' . $result->get_error_message(), 'error', array( 'batch_id' => $batch_id ) );
             } else {
-                LuwiPress_Logger::log( 'Batch enrichment sent to n8n: ' . count( $product_ids ) . ' products', 'info', array( 'batch_id' => $batch_id ) );
+                LuwiPress_Logger::log( 'Batch enrichment sent for AI processing: ' . count( $product_ids ) . ' products', 'info', array( 'batch_id' => $batch_id ) );
             }
             return;
         }
@@ -589,7 +589,7 @@ class LuwiPress_AI_Content {
             if ( ! $product ) {
                 continue;
             }
-            $this->send_to_n8n_for_enrichment( $product, $options ?: array() );
+            $this->send_for_enrichment( $product, $options ?: array() );
         }
 
         LuwiPress_Logger::log( 'Batch enrichment completed locally: ' . count( $products_data ) . ' products', 'info', array( 'batch_id' => $batch_id ) );
@@ -683,7 +683,7 @@ class LuwiPress_AI_Content {
             update_post_meta($pid, '_luwipress_enrich_batch_id', $batch_id);
         }
 
-        $this->send_batch_to_n8n($thin_products, array(), $batch_id);
+        $this->send_batch_for_enrichment($thin_products, array(), $batch_id);
 
         LuwiPress_Logger::log('Thin content auto-enrichment triggered', 'info', array(
             'batch_id' => $batch_id,
@@ -729,7 +729,7 @@ class LuwiPress_AI_Content {
         }
 
         if (!empty($queued)) {
-            $this->send_batch_to_n8n($queued, array(), $batch_id);
+            $this->send_batch_for_enrichment($queued, array(), $batch_id);
         }
 
         wp_send_json_success(array(
@@ -947,7 +947,7 @@ class LuwiPress_AI_Content {
 
         // Only if product has a title but empty description
         if ($product->get_name() && empty($product->get_description())) {
-            $this->send_to_n8n_for_enrichment($product);
+            $this->send_for_enrichment($product);
             update_post_meta($product_id, '_luwipress_enrich_status', 'processing');
         }
     }
@@ -1012,7 +1012,7 @@ class LuwiPress_AI_Content {
         return LuwiPress_Permission::check_token_or_admin( $request );
     }
 
-    public function check_n8n_token( $request ) {
+    public function check_api_token( $request ) {
         return LuwiPress_Permission::check_token( $request );
     }
 }

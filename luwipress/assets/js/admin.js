@@ -9,13 +9,13 @@
         // ========================================
         // Dashboard v2 — AJAX loader
         // ========================================
-        if ($('#n8np-hero').length) {
-            n8npLoadDashboard();
+        if ($('#lp-hero').length) {
+            lpLoadDashboard();
             // Auto-refresh activity every 30s
-            setInterval(function() { n8npRefreshActivity(); }, 30000);
+            setInterval(function() { lpRefreshActivity(); }, 30000);
         }
 
-        function n8npLoadDashboard() {
+        function lpLoadDashboard() {
             $.post(luwipress.ajax_url, {
                 action: 'luwipress_dashboard_data',
                 nonce: luwipress.nonce
@@ -24,10 +24,10 @@
                 var d = res.data;
 
                 // Hero counters (animated)
-                n8npAnimateNum('[data-key="products"] .n8np-hero-num', d.products);
-                n8npAnimateNum('[data-key="revenue"] .n8np-hero-num', d.currency + n8npFormatNum(d.revenue));
-                n8npAnimateNum('[data-key="ai_calls"] .n8np-hero-num', d.ai_calls);
-                n8npAnimateNum('[data-key="budget"] .n8np-hero-num', d.budget_pct + '%');
+                lpAnimateNum('[data-key="products"] .lp-hero-num', d.products);
+                lpAnimateNum('[data-key="revenue"] .lp-hero-num', d.currency + lpFormatNum(d.revenue));
+                lpAnimateNum('[data-key="ai_calls"] .lp-hero-num', d.ai_calls);
+                lpAnimateNum('[data-key="budget"] .lp-hero-num', d.budget_pct + '%');
 
                 // Budget bar
                 var $bf = $('[data-key="budget_pct"]');
@@ -36,39 +36,39 @@
                 else if (d.budget_pct >= 70) $bf.addClass('budget-warn');
 
                 // 7-day chart
-                n8npRenderChart(d.daily_costs);
+                lpRenderChart(d.daily_costs);
 
                 // Content health ring
-                n8npRenderHealthRing(d.health_pct, d.health_thin, d.health_seo, d.products);
+                lpRenderHealthRing(d.health_pct, d.health_thin, d.health_seo, d.products);
 
                 // Opportunities
                 if (d.opportunities) {
                     $.each(d.opportunities, function(key, val) {
                         var $row = $('[data-opp="' + key + '"]');
-                        $row.find('.n8np-opp-count').removeClass('n8np-skeleton').text(val);
+                        $row.find('.lp-opp-count').removeClass('lp-skeleton').text(val);
                     });
                 }
 
                 // Activity
-                n8npRenderActivity(d.logs);
+                lpRenderActivity(d.logs);
 
                 // Translation coverage
                 if (d.trans_coverage) {
                     $.each(d.trans_coverage, function(lang, pct) {
                         var $row = $('[data-lang="' + lang + '"]');
-                        $row.find('.n8np-trans-fill').removeClass('n8np-skeleton').css('width', pct + '%');
-                        if (pct >= 80) $row.find('.n8np-trans-fill').css('background', 'var(--n8n-success)');
-                        else if (pct >= 40) $row.find('.n8np-trans-fill').css('background', 'var(--n8n-warning)');
-                        else $row.find('.n8np-trans-fill').css('background', 'var(--n8n-error)');
-                        $row.find('.n8np-trans-pct').removeClass('n8np-skeleton').text(pct + '%');
+                        $row.find('.lp-trans-fill').removeClass('lp-skeleton').css('width', pct + '%');
+                        if (pct >= 80) $row.find('.lp-trans-fill').css('background', 'var(--lp-success)');
+                        else if (pct >= 40) $row.find('.lp-trans-fill').css('background', 'var(--lp-warning)');
+                        else $row.find('.lp-trans-fill').css('background', 'var(--lp-error)');
+                        $row.find('.lp-trans-pct').removeClass('lp-skeleton').text(pct + '%');
                     });
                 }
             });
         }
 
-        function n8npAnimateNum(sel, target) {
+        function lpAnimateNum(sel, target) {
             var $el = $(sel);
-            $el.removeClass('n8np-skeleton').css('animation', 'n8np-count-in 0.4s ease');
+            $el.removeClass('lp-skeleton').css('animation', 'lp-count-in 0.4s ease');
             if (typeof target === 'string') {
                 $el.html(target);
                 return;
@@ -86,99 +86,99 @@
             requestAnimationFrame(step);
         }
 
-        function n8npFormatNum(n) {
+        function lpFormatNum(n) {
             if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
             if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
             return n.toFixed(2);
         }
 
-        function n8npRenderChart(days) {
+        function lpRenderChart(days) {
             if (!days || !days.length) return;
-            var $chart = $('#n8np-cost-chart');
+            var $chart = $('#lp-cost-chart');
             var maxCost = Math.max.apply(null, days.map(function(d) { return d.cost; })) || 0.01;
             var total = 0;
             var html = '';
             days.forEach(function(d) {
                 total += d.cost;
                 var h = Math.max(4, (d.cost / maxCost) * 100);
-                html += '<div class="n8np-chart-bar" style="height:' + h + '%">' +
+                html += '<div class="lp-chart-bar" style="height:' + h + '%">' +
                     '<span class="bar-tooltip">$' + d.cost.toFixed(4) + '</span></div>';
             });
             $chart.html(html);
 
             // Labels
-            var labels = '<div class="n8np-chart-labels">';
+            var labels = '<div class="lp-chart-labels">';
             days.forEach(function(d) { labels += '<span>' + d.day + '</span>'; });
             labels += '</div>';
             $chart.after(labels);
 
             // Footer
-            $('#n8np-cost-footer .n8np-chart-total').removeClass('n8np-skeleton').text('$' + total.toFixed(4));
+            $('#lp-cost-footer .lp-chart-total').removeClass('lp-skeleton').text('$' + total.toFixed(4));
         }
 
-        function n8npRenderHealthRing(pct, thin, seo, total) {
-            var $wrap = $('#n8np-health');
+        function lpRenderHealthRing(pct, thin, seo, total) {
+            var $wrap = $('#lp-health');
             var thinPct = total > 0 ? Math.round((thin / total) * 100) : 0;
             var seoPct = total > 0 ? Math.round((seo / total) * 100) : 0;
             var goodPct = Math.max(0, 100 - thinPct - seoPct);
 
             var gradient = 'conic-gradient(' +
-                'var(--n8n-success) 0% ' + goodPct + '%, ' +
+                'var(--lp-success) 0% ' + goodPct + '%, ' +
                 '#ea580c ' + goodPct + '% ' + (goodPct + thinPct) + '%, ' +
-                'var(--n8n-error) ' + (goodPct + thinPct) + '% 100%)';
+                'var(--lp-error) ' + (goodPct + thinPct) + '% 100%)';
 
             $wrap.html(
-                '<div class="n8np-health-ring" style="background:' + gradient + '">' +
-                    '<div class="n8np-health-ring-inner">' +
-                        '<span class="n8np-health-pct">' + pct + '%</span>' +
-                        '<span class="n8np-health-sub">Optimized</span>' +
+                '<div class="lp-health-ring" style="background:' + gradient + '">' +
+                    '<div class="lp-health-ring-inner">' +
+                        '<span class="lp-health-pct">' + pct + '%</span>' +
+                        '<span class="lp-health-sub">Optimized</span>' +
                     '</div>' +
                 '</div>'
             );
 
-            $('#n8np-health-legend').html(
-                '<span class="n8np-health-legend-item"><span class="n8np-health-legend-dot" style="background:var(--n8n-success)"></span> Optimized (' + goodPct + '%)</span>' +
-                '<span class="n8np-health-legend-item"><span class="n8np-health-legend-dot" style="background:#ea580c"></span> Thin (' + thinPct + '%)</span>' +
-                '<span class="n8np-health-legend-item"><span class="n8np-health-legend-dot" style="background:var(--n8n-error)"></span> Missing SEO (' + seoPct + '%)</span>'
+            $('#lp-health-legend').html(
+                '<span class="lp-health-legend-item"><span class="lp-health-legend-dot" style="background:var(--lp-success)"></span> Optimized (' + goodPct + '%)</span>' +
+                '<span class="lp-health-legend-item"><span class="lp-health-legend-dot" style="background:#ea580c"></span> Thin (' + thinPct + '%)</span>' +
+                '<span class="lp-health-legend-item"><span class="lp-health-legend-dot" style="background:var(--lp-error)"></span> Missing SEO (' + seoPct + '%)</span>'
             );
         }
 
-        function n8npRenderActivity(logs) {
-            var $feed = $('#n8np-activity');
+        function lpRenderActivity(logs) {
+            var $feed = $('#lp-activity');
             if (!logs || !logs.length) {
-                $feed.html('<div class="n8np-empty">No recent activity.</div>');
+                $feed.html('<div class="lp-empty">No recent activity.</div>');
                 return;
             }
             var html = '';
             logs.forEach(function(log) {
-                html += '<div class="n8np-activity-item">' +
-                    '<span class="n8np-activity-dot dot-' + log.level + '"></span>' +
-                    '<span class="n8np-activity-msg">' + $('<span>').text(log.message).html() + '</span>' +
-                    '<span class="n8np-activity-time">' + log.time + ' ago</span>' +
+                html += '<div class="lp-activity-item">' +
+                    '<span class="lp-activity-dot dot-' + log.level + '"></span>' +
+                    '<span class="lp-activity-msg">' + $('<span>').text(log.message).html() + '</span>' +
+                    '<span class="lp-activity-time">' + log.time + ' ago</span>' +
                 '</div>';
             });
             $feed.html(html);
         }
 
-        function n8npRefreshActivity() {
+        function lpRefreshActivity() {
             $.post(luwipress.ajax_url, {
                 action: 'luwipress_dashboard_data',
                 nonce: luwipress.nonce
             }, function(res) {
-                if (res.success) n8npRenderActivity(res.data.logs);
+                if (res.success) lpRenderActivity(res.data.logs);
             });
         }
 
         // Scan button
-        $('#n8np-scan-btn').on('click', function() {
+        $('#lp-scan-btn').on('click', function() {
             var $btn = $(this);
             $btn.prop('disabled', true).find('.dashicons').addClass('spin');
-            n8npLoadDashboard();
+            lpLoadDashboard();
             setTimeout(function() { $btn.prop('disabled', false).find('.dashicons').removeClass('spin'); }, 2000);
         });
 
         // Bulk enrich
-        $('#n8np-bulk-enrich').on('click', function() {
+        $('#lp-bulk-enrich').on('click', function() {
             if (!confirm('Start bulk AI enrichment for thin content products?')) return;
             var $btn = $(this);
             $btn.prop('disabled', true).text('Processing...');
@@ -467,7 +467,7 @@
                 return;
             }
 
-            if (!confirm('Send up to 50 thin content products for AI enrichment? This will trigger n8n workflows.')) {
+            if (!confirm('Send up to 50 thin content products for AI enrichment? This will trigger AI enrichment.')) {
                 return;
             }
 

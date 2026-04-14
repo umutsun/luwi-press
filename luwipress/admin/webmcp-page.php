@@ -52,14 +52,14 @@ $category_labels = array(
 );
 ?>
 
-<div class="wrap n8npress-dashboard">
+<div class="wrap lpress-dashboard">
 
 	<!-- Header -->
 	<div class="mcp-header">
 		<div class="mcp-header-left">
 			<h1 class="mcp-title">
 				<svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-					<rect width="28" height="28" rx="8" fill="var(--n8n-primary)"/>
+					<rect width="28" height="28" rx="8" fill="var(--lp-primary)"/>
 					<path d="M8 14h12M14 8v12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
 					<circle cx="8" cy="14" r="2" fill="#fff"/><circle cx="20" cy="14" r="2" fill="#fff"/>
 					<circle cx="14" cy="8" r="2" fill="#fff"/><circle cx="14" cy="20" r="2" fill="#fff"/>
@@ -76,28 +76,28 @@ $category_labels = array(
 
 	<!-- Stats -->
 	<div class="mcp-stats">
-		<div class="mcp-stat" style="--accent: <?php echo $enabled ? 'var(--n8n-success)' : 'var(--n8n-error)'; ?>;">
+		<div class="mcp-stat" style="--accent: <?php echo $enabled ? 'var(--lp-success)' : 'var(--lp-error)'; ?>;">
 			<span class="dashicons dashicons-<?php echo $enabled ? 'yes-alt' : 'dismiss'; ?>" style="color: var(--accent);"></span>
 			<div>
 				<strong><?php echo $enabled ? esc_html__( 'Active', 'luwipress' ) : esc_html__( 'Disabled', 'luwipress' ); ?></strong>
 				<span><?php esc_html_e( 'Server Status', 'luwipress' ); ?></span>
 			</div>
 		</div>
-		<div class="mcp-stat" style="--accent: var(--n8n-primary);">
+		<div class="mcp-stat" style="--accent: var(--lp-primary);">
 			<span class="dashicons dashicons-admin-tools" style="color: var(--accent);"></span>
 			<div>
 				<strong><?php echo esc_html( $tool_count ); ?></strong>
 				<span><?php esc_html_e( 'MCP Tools', 'luwipress' ); ?></span>
 			</div>
 		</div>
-		<div class="mcp-stat" style="--accent: var(--n8n-blue);">
+		<div class="mcp-stat" style="--accent: var(--lp-blue);">
 			<span class="dashicons dashicons-database" style="color: var(--accent);"></span>
 			<div>
 				<strong>3 + Templates</strong>
 				<span><?php esc_html_e( 'MCP Resources', 'luwipress' ); ?></span>
 			</div>
 		</div>
-		<div class="mcp-stat" style="--accent: <?php echo ! empty( $api_token ) ? 'var(--n8n-success)' : 'var(--n8n-warning)'; ?>;">
+		<div class="mcp-stat" style="--accent: <?php echo ! empty( $api_token ) ? 'var(--lp-success)' : 'var(--lp-warning)'; ?>;">
 			<span class="dashicons dashicons-shield" style="color: var(--accent);"></span>
 			<div>
 				<strong><?php echo ! empty( $api_token ) ? esc_html__( 'Configured', 'luwipress' ) : esc_html__( 'Missing', 'luwipress' ); ?></strong>
@@ -107,9 +107,9 @@ $category_labels = array(
 	</div>
 
 	<!-- Endpoint -->
-	<div class="n8npress-card">
+	<div class="lpress-card">
 		<h2>
-			<span class="dashicons dashicons-admin-links" style="color:var(--n8n-primary);"></span>
+			<span class="dashicons dashicons-admin-links" style="color:var(--lp-primary);"></span>
 			<?php esc_html_e( 'MCP Endpoint', 'luwipress' ); ?>
 		</h2>
 		<div class="mcp-endpoint-box">
@@ -147,15 +147,15 @@ $category_labels = array(
 
 	<!-- Tool Catalog -->
 	<?php if ( ! empty( $catalog ) ) : ?>
-	<div class="n8npress-card">
+	<div class="lpress-card">
 		<h2>
-			<span class="dashicons dashicons-admin-tools" style="color:var(--n8n-primary);"></span>
+			<span class="dashicons dashicons-admin-tools" style="color:var(--lp-primary);"></span>
 			<?php esc_html_e( 'Tool Catalog', 'luwipress' ); ?>
 			<span class="mcp-tool-count"><?php echo esc_html( $tool_count ); ?> <?php esc_html_e( 'tools', 'luwipress' ); ?></span>
 		</h2>
 		<div class="mcp-catalog-grid">
 			<?php foreach ( $catalog as $category => $tools ) :
-				$label = $category_labels[ $category ] ?? array( ucfirst( $category ), 'dashicons-admin-generic', 'var(--n8n-gray)' );
+				$label = $category_labels[ $category ] ?? array( ucfirst( $category ), 'dashicons-admin-generic', 'var(--lp-gray)' );
 			?>
 			<div class="mcp-tool-group">
 				<div class="mcp-group-header">
@@ -178,9 +178,9 @@ $category_labels = array(
 	<?php endif; ?>
 
 	<!-- Usage Examples -->
-	<div class="n8npress-card">
+	<div class="lpress-card">
 		<h2>
-			<span class="dashicons dashicons-editor-code" style="color:var(--n8n-primary);"></span>
+			<span class="dashicons dashicons-editor-code" style="color:var(--lp-primary);"></span>
 			<?php esc_html_e( 'Usage Examples', 'luwipress' ); ?>
 		</h2>
 
@@ -217,9 +217,9 @@ curl -X POST <?php echo esc_html( $endpoint_url ); ?> \
 	</div>
 
 	<!-- Settings -->
-	<div class="n8npress-card">
+	<div class="lpress-card">
 		<h2>
-			<span class="dashicons dashicons-admin-settings" style="color:var(--n8n-primary);"></span>
+			<span class="dashicons dashicons-admin-settings" style="color:var(--lp-primary);"></span>
 			<?php esc_html_e( 'Settings', 'luwipress' ); ?>
 		</h2>
 		<form method="post">

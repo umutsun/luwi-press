@@ -32,7 +32,7 @@
       .done(function (res) {
         $btn.prop('disabled', false).text('AI Enrich');
         $result.html(
-          '<p style="color:#46b450;">' + (res.message || 'Sent to n8n') + '</p>'
+          '<p style="color:#46b450;">' + (res.message || 'Processing...') + '</p>'
         );
       })
       .fail(function (xhr) {

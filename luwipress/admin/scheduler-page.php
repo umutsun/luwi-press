@@ -61,21 +61,21 @@ foreach ( $scheduled_items as $item ) {
 <div class="wrap luwipress-dashboard">
 
 	<!-- Header -->
-	<div class="n8np-header">
-		<div class="n8np-header-left">
-			<h1 class="n8np-title">
-				<span class="dashicons dashicons-calendar-alt" style="color:var(--n8n-primary);"></span>
+	<div class="lp-header">
+		<div class="lp-header-left">
+			<h1 class="lp-title">
+				<span class="dashicons dashicons-calendar-alt" style="color:var(--lp-primary);"></span>
 				<?php esc_html_e( 'Content Scheduler', 'luwipress' ); ?>
 			</h1>
 		</div>
-		<div class="n8np-header-actions">
+		<div class="lp-header-actions">
 			<?php if ( $has_ai_key ) : ?>
-			<span class="n8np-pill pill-ok">
+			<span class="lp-pill pill-ok">
 				<span class="dashicons dashicons-admin-generic"></span>
 				<?php echo esc_html( ( $provider_labels[ $ai_provider ] ?? 'AI' ) . ' / ' . $ai_model ); ?>
 			</span>
 			<?php else : ?>
-			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-settings&tab=api-keys' ) ); ?>" class="n8np-pill pill-err">
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-settings&tab=api-keys' ) ); ?>" class="lp-pill pill-err">
 				<span class="dashicons dashicons-warning"></span>
 				<?php esc_html_e( 'No AI key configured', 'luwipress' ); ?>
 			</a>
@@ -97,8 +97,8 @@ foreach ( $scheduled_items as $item ) {
 	</div>
 
 	<!-- Create Form -->
-	<div class="n8np-card sched-form-card">
-		<div class="n8np-card-header">
+	<div class="lp-card sched-form-card">
+		<div class="lp-card-header">
 			<h3><span class="dashicons dashicons-edit-large"></span> <?php esc_html_e( 'New Content', 'luwipress' ); ?></h3>
 		</div>
 
@@ -109,7 +109,7 @@ foreach ( $scheduled_items as $item ) {
 				<!-- Main Fields -->
 				<div class="sched-form-main">
 					<div class="sched-field">
-						<label for="sched-topic"><?php esc_html_e( 'Topic', 'luwipress' ); ?> <span style="color:var(--n8n-error);">*</span></label>
+						<label for="sched-topic"><?php esc_html_e( 'Topic', 'luwipress' ); ?> <span style="color:var(--lp-error);">*</span></label>
 						<input type="text" id="sched-topic" name="topic" class="large-text"
 						       placeholder="<?php esc_attr_e( 'e.g., Best practices for acoustic guitar maintenance', 'luwipress' ); ?>" required />
 					</div>
@@ -147,7 +147,7 @@ foreach ( $scheduled_items as $item ) {
 				<!-- Sidebar -->
 				<div class="sched-form-side">
 					<div class="sched-field">
-						<label for="sched-date"><?php esc_html_e( 'Publish Date', 'luwipress' ); ?> <span style="color:var(--n8n-error);">*</span></label>
+						<label for="sched-date"><?php esc_html_e( 'Publish Date', 'luwipress' ); ?> <span style="color:var(--lp-error);">*</span></label>
 						<input type="date" id="sched-date" name="publish_date" required
 						       min="<?php echo esc_attr( wp_date( 'Y-m-d' ) ); ?>" />
 					</div>
@@ -180,10 +180,10 @@ foreach ( $scheduled_items as $item ) {
 	</div>
 
 	<!-- Content List -->
-	<div class="n8np-card">
-		<div class="n8np-card-header">
+	<div class="lp-card">
+		<div class="lp-card-header">
 			<h3><span class="dashicons dashicons-list-view"></span> <?php esc_html_e( 'Scheduled Content', 'luwipress' ); ?></h3>
-			<span class="n8np-card-badge"><?php echo absint( count( $scheduled_items ) ); ?> <?php esc_html_e( 'items', 'luwipress' ); ?></span>
+			<span class="lp-card-badge"><?php echo absint( count( $scheduled_items ) ); ?> <?php esc_html_e( 'items', 'luwipress' ); ?></span>
 		</div>
 
 		<?php if ( empty( $scheduled_items ) ) : ?>

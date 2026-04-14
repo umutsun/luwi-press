@@ -3,7 +3,7 @@
  * N8nPress WebMCP Server
  *
  * Implements the MCP (Model Context Protocol) Streamable HTTP transport,
- * exposing all n8npress REST API endpoints as MCP tools that AI agents
+ * exposing all LuwiPress REST API endpoints as MCP tools that AI agents
  * can discover and invoke over a single HTTP endpoint.
  *
  * Spec: https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http
@@ -91,7 +91,7 @@ class LuwiPress_WebMCP {
      *
      * Accepts:
      *  1. WordPress admin cookie (for browser-based clients)
-     *  2. Bearer token matching the n8npress API token
+     *  2. Bearer token matching the LuwiPress API token
      *  3. X-n8nPress-Token header
      *
      * Also validates Origin header to prevent DNS rebinding (per MCP spec).
@@ -361,7 +361,7 @@ class LuwiPress_WebMCP {
     }
 
     /**
-     * Server instructions for the AI agent — describes what n8npress can do.
+     * Server instructions for the AI agent — describes what LuwiPress can do.
      */
     private function get_server_instructions() {
         $site_name = get_bloginfo( 'name' );
@@ -469,19 +469,19 @@ class LuwiPress_WebMCP {
     private function handle_resources_list( $id ) {
         $resources = array(
             array(
-                'uri'         => 'n8npress://site-config',
+                'uri'         => 'luwipress://site-config',
                 'name'        => 'Site Configuration',
                 'description' => 'Full WordPress + WooCommerce + plugin environment snapshot',
                 'mimeType'    => 'application/json',
             ),
             array(
-                'uri'         => 'n8npress://health',
+                'uri'         => 'luwipress://health',
                 'name'        => 'Health Check',
                 'description' => 'Server health status (database, filesystem, memory)',
                 'mimeType'    => 'application/json',
             ),
             array(
-                'uri'         => 'n8npress://aeo-coverage',
+                'uri'         => 'luwipress://aeo-coverage',
                 'name'        => 'AEO Coverage Report',
                 'description' => 'FAQ/HowTo/Speakable schema coverage across products',
                 'mimeType'    => 'application/json',
@@ -497,19 +497,19 @@ class LuwiPress_WebMCP {
     private function handle_resource_templates_list( $id, $params ) {
         $templates = array(
             array(
-                'uriTemplate'  => 'n8npress://post/{post_id}',
+                'uriTemplate'  => 'luwipress://post/{post_id}',
                 'name'         => 'WordPress Post',
                 'description'  => 'Read a specific post/product by ID',
                 'mimeType'     => 'application/json',
             ),
             array(
-                'uriTemplate'  => 'n8npress://seo-meta/{post_id}',
+                'uriTemplate'  => 'luwipress://seo-meta/{post_id}',
                 'name'         => 'SEO Meta',
                 'description'  => 'Rank Math / Yoast SEO meta for a post',
                 'mimeType'     => 'application/json',
             ),
             array(
-                'uriTemplate'  => 'n8npress://translation-status/{post_id}',
+                'uriTemplate'  => 'luwipress://translation-status/{post_id}',
                 'name'         => 'Translation Status',
                 'description'  => 'Translation status for a post across all languages',
                 'mimeType'     => 'application/json',
@@ -565,18 +565,18 @@ class LuwiPress_WebMCP {
         $uri = $params['uri'] ?? '';
 
         switch ( $uri ) {
-            case 'n8npress://site-config':
+            case 'luwipress://site-config':
                 $config  = LuwiPress_Site_Config::get_instance();
                 $request = new WP_REST_Request( 'GET', '/luwipress/v1/site-config' );
                 $data    = $config->get_site_config( $request );
                 break;
 
-            case 'n8npress://health':
+            case 'luwipress://health':
                 $api  = LuwiPress_API::get_instance();
                 $data = $api->health_check();
                 break;
 
-            case 'n8npress://aeo-coverage':
+            case 'luwipress://aeo-coverage':
                 if ( class_exists( 'LuwiPress_AEO' ) ) {
                     $aeo     = LuwiPress_AEO::get_instance();
                     $request = new WP_REST_Request( 'GET', '/luwipress/v1/aeo/coverage' );
@@ -613,12 +613,12 @@ class LuwiPress_WebMCP {
     /**
      * Resolve a parameterized resource URI template.
      *
-     * @param string $uri The resource URI (e.g., 'n8npress://post/42').
+     * @param string $uri The resource URI (e.g., 'luwipress://post/42').
      * @return array|null  Resource data, or null if not matched.
      */
     private function resolve_resource_template( $uri ) {
-        // n8npress://post/{post_id}
-        if ( preg_match( '#^n8npress://post/(\d+)$#', $uri, $m ) ) {
+        // luwipress://post/{post_id}
+        if ( preg_match( '#^luwipress://post/(\d+)$#', $uri, $m ) ) {
             $post = get_post( intval( $m[1] ) );
             if ( ! $post ) {
                 return null;
@@ -637,8 +637,8 @@ class LuwiPress_WebMCP {
             );
         }
 
-        // n8npress://seo-meta/{post_id}
-        if ( preg_match( '#^n8npress://seo-meta/(\d+)$#', $uri, $m ) ) {
+        // luwipress://seo-meta/{post_id}
+        if ( preg_match( '#^luwipress://seo-meta/(\d+)$#', $uri, $m ) ) {
             $post_id = intval( $m[1] );
             if ( ! get_post( $post_id ) ) {
                 return null;
@@ -658,8 +658,8 @@ class LuwiPress_WebMCP {
             return array( 'post_id' => $post_id, 'seo_meta' => $meta );
         }
 
-        // n8npress://translation-status/{post_id}
-        if ( preg_match( '#^n8npress://translation-status/(\d+)$#', $uri, $m ) ) {
+        // luwipress://translation-status/{post_id}
+        if ( preg_match( '#^luwipress://translation-status/(\d+)$#', $uri, $m ) ) {
             $post_id = intval( $m[1] );
             if ( ! get_post( $post_id ) ) {
                 return null;
@@ -681,7 +681,7 @@ class LuwiPress_WebMCP {
      *  TOOL REGISTRATION
      * ═══════════════════════════════════════════════════════════════════
      *
-     * Each tool wraps an existing n8npress REST endpoint.
+     * Each tool wraps an existing LuwiPress REST endpoint.
      * Tools are grouped by domain: content, seo, aeo, translation,
      * crm, email, system, claw, chatwoot, workflow.
      */
