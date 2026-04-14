@@ -30,6 +30,7 @@ class LuwiPress_Elementor {
 
     private function __construct() {
         add_action( 'rest_api_init', array( $this, 'register_endpoints' ) );
+        add_action( 'wp_head', array( $this, 'output_global_css' ), 99 );
 
         // Background job: translate Elementor pages one at a time via wp_cron
         add_action( 'luwipress_elementor_translate_single', array( $this, 'cron_translate_single' ), 10, 2 );
@@ -353,6 +354,34 @@ class LuwiPress_Elementor {
         register_rest_route( $ns, '/elementor/responsive-audit/(?P<post_id>\d+)', array(
             'methods'             => 'GET',
             'callback'            => array( $this, 'rest_responsive_audit' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        // Global CSS — Elementor Kit custom_css field
+        register_rest_route( $ns, '/elementor/global-css', array(
+            array(
+                'methods'             => 'GET',
+                'callback'            => array( $this, 'rest_get_global_css' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+            array(
+                'methods'             => 'POST',
+                'callback'            => array( $this, 'rest_set_global_css' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+        ) );
+
+        // Batch page-level CSS — apply CSS to multiple posts by ID or post_type
+        register_rest_route( $ns, '/elementor/batch-css', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_batch_page_css' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        // Elementor Kit info — expose kit ID, settings, breakpoints
+        register_rest_route( $ns, '/elementor/kit', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'rest_get_kit_info' ),
             'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
         ) );
     }
@@ -1180,6 +1209,226 @@ class LuwiPress_Elementor {
 
         return rest_ensure_response( $this->clone_element( $post_id, $element_id ) );
     }
+
+    /* ──────────── Elementor Kit & Global CSS ──────────────────────────── */
+
+    /**
+     * Get the Elementor active kit post ID.
+     *
+     * @return int Kit post ID, or 0 if not found.
+     */
+    private function get_kit_id() {
+        return (int) get_option( 'elementor_active_kit', 0 );
+    }
+
+    /**
+     * Get Elementor active breakpoints using the Breakpoints Manager API (3.2+).
+     *
+     * @return array Breakpoint name → pixel value map.
+     */
+    private function get_breakpoints() {
+        $breakpoints = array(
+            'mobile'  => 767,
+            'tablet'  => 1024,
+        );
+
+        if ( class_exists( '\Elementor\Plugin' ) && isset( \Elementor\Plugin::$instance->breakpoints ) ) {
+            $active = \Elementor\Plugin::$instance->breakpoints->get_active_breakpoints();
+            foreach ( $active as $name => $bp ) {
+                $breakpoints[ $name ] = $bp->get_value();
+            }
+        }
+
+        return $breakpoints;
+    }
+
+    /**
+     * Flush Elementor CSS cache — Kit + individual posts.
+     *
+     * @param int|null $post_id Optional specific post to clear.
+     */
+    private function flush_elementor_css( $post_id = null ) {
+        if ( ! class_exists( '\Elementor\Plugin' ) ) {
+            return;
+        }
+
+        // Clear global CSS cache (Kit CSS, global widgets, etc.)
+        \Elementor\Plugin::$instance->files_manager->clear_cache();
+
+        // Always regenerate Kit CSS
+        $kit_id = $this->get_kit_id();
+        if ( $kit_id ) {
+            $this->regenerate_css( $kit_id );
+        }
+
+        // Clear specific post CSS if provided
+        if ( $post_id && $post_id !== $kit_id ) {
+            $this->regenerate_css( $post_id );
+        }
+    }
+
+    /* ── Kit Info ── */
+
+    public function rest_get_kit_info( $request ) {
+        $kit_id = $this->get_kit_id();
+
+        if ( ! $kit_id ) {
+            return new WP_Error( 'no_kit', 'Elementor active kit not found', array( 'status' => 404 ) );
+        }
+
+        $kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
+        if ( ! is_array( $kit_settings ) ) {
+            $kit_settings = array();
+        }
+
+        $breakpoints = $this->get_breakpoints();
+
+        return rest_ensure_response( array(
+            'kit_id'      => $kit_id,
+            'breakpoints' => $breakpoints,
+            'custom_css'  => $kit_settings['custom_css'] ?? '',
+            'css_length'  => strlen( $kit_settings['custom_css'] ?? '' ),
+        ) );
+    }
+
+    /* ── Global CSS (Kit custom_css) ── */
+
+    public function rest_get_global_css( $request ) {
+        $kit_id = $this->get_kit_id();
+        $css    = '';
+        $source = 'none';
+
+        if ( $kit_id ) {
+            $kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
+            if ( is_array( $kit_settings ) && ! empty( $kit_settings['custom_css'] ) ) {
+                $css    = $kit_settings['custom_css'];
+                $source = 'elementor_kit';
+            }
+        }
+
+        return rest_ensure_response( array(
+            'css'    => $css,
+            'source' => $source,
+            'kit_id' => $kit_id,
+        ) );
+    }
+
+    public function rest_set_global_css( $request ) {
+        $css    = $request->get_param( 'css' );
+        $append = (bool) $request->get_param( 'append' );
+
+        if ( $css === null ) {
+            return new WP_Error( 'missing_params', 'css required', array( 'status' => 400 ) );
+        }
+
+        $css    = wp_strip_all_tags( $css );
+        $kit_id = $this->get_kit_id();
+
+        if ( ! $kit_id ) {
+            return new WP_Error( 'no_kit', 'Elementor active kit not found', array( 'status' => 404 ) );
+        }
+
+        $kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
+        if ( ! is_array( $kit_settings ) ) {
+            $kit_settings = array();
+        }
+
+        if ( $append && ! empty( $kit_settings['custom_css'] ) ) {
+            $css = $kit_settings['custom_css'] . "\n" . $css;
+        }
+
+        $kit_settings['custom_css'] = $css;
+        update_post_meta( $kit_id, '_elementor_page_settings', $kit_settings );
+        $this->flush_elementor_css();
+
+        LuwiPress_Logger::log( 'Elementor Kit CSS updated (kit #' . $kit_id . ', ' . strlen( $css ) . ' bytes)', 'info' );
+
+        return rest_ensure_response( array(
+            'status' => 'updated',
+            'source' => 'elementor_kit',
+            'kit_id' => $kit_id,
+            'length' => strlen( $css ),
+        ) );
+    }
+
+    /* ── Batch Page CSS — apply to multiple posts by IDs or post_type ── */
+
+    public function rest_batch_page_css( $request ) {
+        $css       = $request->get_param( 'css' );
+        $post_ids  = $request->get_param( 'post_ids' );
+        $post_type = sanitize_text_field( $request->get_param( 'post_type' ) ?? '' );
+        $append    = (bool) $request->get_param( 'append' );
+
+        if ( ! $css ) {
+            return new WP_Error( 'missing_params', 'css required', array( 'status' => 400 ) );
+        }
+
+        $css = wp_strip_all_tags( $css );
+
+        // Resolve target post IDs
+        if ( empty( $post_ids ) && ! empty( $post_type ) ) {
+            // Find all Elementor-built posts of this type
+            global $wpdb;
+            $post_ids = $wpdb->get_col( $wpdb->prepare(
+                "SELECT p.ID FROM {$wpdb->posts} p
+                 INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+                 WHERE p.post_type = %s AND p.post_status = 'publish'
+                 AND pm.meta_key = '_elementor_edit_mode' AND pm.meta_value = 'builder'",
+                $post_type
+            ) );
+        }
+
+        if ( empty( $post_ids ) || ! is_array( $post_ids ) ) {
+            return new WP_Error( 'no_targets', 'No target posts found. Provide post_ids array or post_type.', array( 'status' => 400 ) );
+        }
+
+        $updated = array();
+        $errors  = array();
+
+        foreach ( $post_ids as $pid ) {
+            $pid = intval( $pid );
+            if ( ! $pid ) {
+                continue;
+            }
+
+            $page_settings = get_post_meta( $pid, '_elementor_page_settings', true );
+            if ( ! is_array( $page_settings ) ) {
+                $page_settings = array();
+            }
+
+            if ( $append && ! empty( $page_settings['custom_css'] ) ) {
+                $page_settings['custom_css'] = $page_settings['custom_css'] . "\n" . $css;
+            } else {
+                $page_settings['custom_css'] = $css;
+            }
+
+            update_post_meta( $pid, '_elementor_page_settings', $page_settings );
+            $this->regenerate_css( $pid );
+            $updated[] = $pid;
+        }
+
+        LuwiPress_Logger::log( sprintf( 'Batch page CSS applied to %d posts', count( $updated ) ), 'info' );
+
+        return rest_ensure_response( array(
+            'status'       => 'updated',
+            'updated_ids'  => $updated,
+            'total'        => count( $updated ),
+        ) );
+    }
+
+    /* ── wp_head fallback — only if Kit has no custom_css ── */
+
+    public function output_global_css() {
+        $kit_id = $this->get_kit_id();
+        if ( $kit_id ) {
+            $kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
+            if ( is_array( $kit_settings ) && ! empty( $kit_settings['custom_css'] ) ) {
+                return; // Elementor Kit handles CSS output natively
+            }
+        }
+    }
+
+    /* ──────────── Page-level Custom CSS ──────────── */
 
     public function rest_set_custom_css( $request ) {
         $post_id    = intval( $request->get_param( 'post_id' ) );

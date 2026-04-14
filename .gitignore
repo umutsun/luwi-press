@@ -30,3 +30,5 @@ exec*.json
 # Legacy plugins (deprecated)
 n8npress-seo-off/
 n8npress-seo-woo/
+_*.json
+tapadum-kit-css.css

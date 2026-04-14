@@ -16,14 +16,10 @@ if ( ! current_user_can( 'manage_options' ) ) {
 // Handle settings save
 if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipress_settings_nonce' ) ) {
 	// Processing Mode
-	$mode = sanitize_text_field( $_POST['luwipress_processing_mode'] ?? 'local' );
-	if ( in_array( $mode, array( 'local', 'n8n' ), true ) ) {
-		update_option( 'luwipress_processing_mode', $mode );
-	}
+	update_option( 'luwipress_processing_mode', 'local' );
 	update_option( 'luwipress_default_provider', sanitize_text_field( $_POST['luwipress_default_provider'] ?? 'anthropic' ) );
 
-	// Connection (n8n webhook)
-	update_option( 'luwipress_seo_webhook_url', sanitize_url( $_POST['luwipress_webhook_url'] ?? '' ) );
+	// API Token
 	update_option( 'luwipress_seo_api_token', sanitize_text_field( $_POST['luwipress_api_token'] ?? '' ) );
 
 	// Provider model selections
@@ -35,7 +31,7 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 	update_option( 'luwipress_enable_logging', isset( $_POST['luwipress_enable_logging'] ) ? 1 : 0 );
 	update_option( 'luwipress_log_level', sanitize_text_field( $_POST['luwipress_log_level'] ?? 'info' ) );
 	update_option( 'luwipress_rate_limit', absint( $_POST['luwipress_rate_limit'] ?? 1000 ) );
-	update_option( 'luwipress_webhook_timeout', absint( $_POST['luwipress_webhook_timeout'] ?? 30 ) );
+	update_option( 'luwipress_api_timeout', absint( $_POST['luwipress_api_timeout'] ?? 30 ) );
 
 	// AI Content
 	update_option( 'luwipress_auto_enrich', isset( $_POST['luwipress_auto_enrich'] ) ? 1 : 0 );
@@ -102,12 +98,11 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 }
 
 // Load current values
-$webhook_url        = get_option( 'luwipress_seo_webhook_url', '' );
 $api_token          = get_option( 'luwipress_seo_api_token', '' );
 $enable_logging     = get_option( 'luwipress_enable_logging', 1 );
 $log_level          = get_option( 'luwipress_log_level', 'info' );
 $rate_limit         = get_option( 'luwipress_rate_limit', 1000 );
-$webhook_timeout    = get_option( 'luwipress_webhook_timeout', 30 );
+$api_timeout        = get_option( 'luwipress_api_timeout', 30 );
 $auto_enrich        = get_option( 'luwipress_auto_enrich', 0 );
 $target_language    = get_option( 'luwipress_target_language', 'tr' );
 $auto_thin          = get_option( 'luwipress_auto_enrich_thin', 0 );
@@ -188,26 +183,11 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			$default_provider = get_option( 'luwipress_default_provider', 'anthropic' );
 			?>
 
-			<!-- Processing Mode -->
+			<!-- AI Provider -->
 			<div class="luwipress-card" style="border-left:4px solid #0073aa;">
-				<h2><?php esc_html_e( 'Processing Mode', 'luwipress' ); ?></h2>
-				<p class="description" style="margin-bottom:12px;"><?php esc_html_e( 'Choose how LuwiPress processes AI tasks. Local AI calls your AI provider directly from WordPress. n8n Webhook sends tasks to your n8n instance for processing.', 'luwipress' ); ?></p>
+				<h2><?php esc_html_e( 'AI Provider', 'luwipress' ); ?></h2>
+				<p class="description" style="margin-bottom:12px;"><?php esc_html_e( 'LuwiPress calls AI APIs directly from WordPress. Select your preferred provider.', 'luwipress' ); ?></p>
 				<table class="form-table">
-					<tr>
-						<th><?php esc_html_e( 'Mode', 'luwipress' ); ?></th>
-						<td>
-							<fieldset>
-								<label style="display:block;margin-bottom:8px;">
-									<input type="radio" name="luwipress_processing_mode" value="local" <?php checked( $processing_mode, 'local' ); ?> />
-									<strong><?php esc_html_e( 'Local AI', 'luwipress' ); ?></strong> — <?php esc_html_e( 'Self-contained. Calls AI APIs (Claude, OpenAI, Gemini) directly from WordPress. No external server needed.', 'luwipress' ); ?>
-								</label>
-								<label style="display:block;">
-									<input type="radio" name="luwipress_processing_mode" value="n8n" <?php checked( $processing_mode, 'n8n' ); ?> />
-									<strong><?php esc_html_e( 'n8n Webhook', 'luwipress' ); ?></strong> — <?php esc_html_e( 'Advanced. Sends tasks to your n8n instance for AI processing. Requires n8n setup.', 'luwipress' ); ?>
-								</label>
-							</fieldset>
-						</td>
-					</tr>
 					<tr>
 						<th><label for="luwipress_default_provider"><?php esc_html_e( 'Default AI Provider', 'luwipress' ); ?></label></th>
 						<td>
@@ -216,28 +196,19 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 								<option value="openai" <?php selected( $default_provider, 'openai' ); ?>>OpenAI (GPT)</option>
 								<option value="google" <?php selected( $default_provider, 'google' ); ?>>Google (Gemini)</option>
 							</select>
-							<p class="description"><?php esc_html_e( 'Used for Local AI mode. Each workflow can also use a specific provider.', 'luwipress' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Each task can also use a specific provider.', 'luwipress' ); ?></p>
 						</td>
 					</tr>
 				</table>
 			</div>
 
-			<!-- n8n Connection (for n8n mode) -->
+			<!-- API Authentication -->
 			<div class="luwipress-card">
-				<h2><?php esc_html_e( 'n8n Connection', 'luwipress' ); ?></h2>
-				<p class="description" style="margin-bottom:8px;"><?php esc_html_e( 'Only required when using n8n Webhook mode. LuwiPress sends your site URL, API token, and AI settings in every webhook payload.', 'luwipress' ); ?></p>
+				<h2><?php esc_html_e( 'API Authentication', 'luwipress' ); ?></h2>
+				<p class="description" style="margin-bottom:8px;"><?php esc_html_e( 'Token for REST API and MCP Server authentication.', 'luwipress' ); ?></p>
 				<table class="form-table">
 					<tr>
-						<th><label for="luwipress_webhook_url"><?php esc_html_e( 'n8n Webhook URL', 'luwipress' ); ?></label></th>
-						<td>
-							<input type="url" id="luwipress_webhook_url" name="luwipress_webhook_url"
-							       value="<?php echo esc_attr( $webhook_url ); ?>" class="regular-text"
-							       placeholder="https://n8n.example.com/webhook/..." />
-							<p class="description"><?php esc_html_e( 'The webhook URL from your n8n workflow.', 'luwipress' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="luwipress_api_token"><?php esc_html_e( 'API Bearer Token', 'luwipress' ); ?></label></th>
+						<th><label for="luwipress_api_token"><?php esc_html_e( 'API Token', 'luwipress' ); ?></label></th>
 						<td>
 							<input type="password" id="luwipress_api_token" name="luwipress_api_token"
 							       value="<?php echo esc_attr( $api_token ); ?>" class="regular-text" autocomplete="off" />
@@ -273,7 +244,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 						<th><?php esc_html_e( 'Site Config', 'luwipress' ); ?></th>
 						<td>
 							<code><?php echo esc_html( get_rest_url( null, 'luwipress/v1/site-config' ) ); ?></code>
-							<p class="description"><?php esc_html_e( 'n8n workflows call this first to get all WP/WC/plugin settings.', 'luwipress' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Returns full site environment: WP, WooCommerce, plugin settings.', 'luwipress' ); ?></p>
 						</td>
 					</tr>
 					<tr>
@@ -302,7 +273,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 						<td>
 							<label>
 								<input type="checkbox" id="luwipress_enable_logging" name="luwipress_enable_logging" value="1" <?php checked( $enable_logging, 1 ); ?> />
-								<?php esc_html_e( 'Record webhook and workflow events', 'luwipress' ); ?>
+								<?php esc_html_e( 'Record API and AI processing events', 'luwipress' ); ?>
 							</label>
 						</td>
 					</tr>
@@ -331,10 +302,10 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 						</td>
 					</tr>
 					<tr>
-						<th><label for="luwipress_webhook_timeout"><?php esc_html_e( 'Webhook Timeout', 'luwipress' ); ?></label></th>
+						<th><label for="luwipress_api_timeout"><?php esc_html_e( 'API Timeout', 'luwipress' ); ?></label></th>
 						<td>
-							<input type="number" id="luwipress_webhook_timeout" name="luwipress_webhook_timeout"
-							       value="<?php echo esc_attr( $webhook_timeout ); ?>" min="5" max="120" class="small-text" />
+							<input type="number" id="luwipress_api_timeout" name="luwipress_api_timeout"
+							       value="<?php echo esc_attr( $api_timeout ); ?>" min="5" max="120" class="small-text" />
 							<span class="description"><?php esc_html_e( 'seconds', 'luwipress' ); ?></span>
 						</td>
 					</tr>
@@ -346,7 +317,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		<div class="luwipress-tab-content <?php echo 'api-keys' === $active_tab ? 'tab-active' : ''; ?>" id="tab-api-keys">
 			<div class="luwipress-info-box">
 				<span class="dashicons dashicons-info" style="color:#6366f1"></span>
-				<?php esc_html_e( 'n8n workflows use these API keys for AI content generation, translation, and review responses. Select your preferred provider and enter its key.', 'luwipress' ); ?>
+				<?php esc_html_e( 'LuwiPress uses these API keys for AI content generation, translation, and review responses. Select your preferred provider and enter its key.', 'luwipress' ); ?>
 			</div>
 
 			<div class="luwipress-card">
@@ -386,7 +357,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			<div class="luwipress-card">
 				<h2><?php esc_html_e( 'API Keys', 'luwipress' ); ?></h2>
 				<p class="description" style="margin-bottom:16px;">
-					<?php esc_html_e( 'Enter the API key for your selected provider. n8n workflows will read the active key from the /site-config endpoint.', 'luwipress' ); ?>
+					<?php esc_html_e( 'Enter the API key for your selected provider.', 'luwipress' ); ?>
 				</p>
 				<table class="form-table">
 					<tr>
@@ -477,7 +448,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 									<option value="gemini-2.5-pro" <?php selected( $ai_model, 'gemini-2.5-pro' ); ?>>Gemini 2.5 Pro ($1.25/$10.00/M)</option>
 								</optgroup>
 							</select>
-							<p class="description"><?php esc_html_e( 'Selected model is sent to n8n workflows via the enrichment payload.', 'luwipress' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Selected model is used for AI content enrichment.', 'luwipress' ); ?></p>
 						</td>
 					</tr>
 					<tr>
@@ -726,7 +697,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			<?php else : ?>
 			<div class="luwipress-info-box">
 				<span class="dashicons dashicons-info-outline"></span>
-				<?php esc_html_e( 'No CRM plugin detected. LuwiPress will compute customer segments from WooCommerce order data and provide lifecycle automation via n8n.', 'luwipress' ); ?>
+				<?php esc_html_e( 'No CRM plugin detected. LuwiPress will compute customer segments from WooCommerce order data and provide lifecycle automation.', 'luwipress' ); ?>
 			</div>
 			<?php endif; ?>
 
@@ -782,7 +753,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				</p>
 				<?php else : ?>
 				<p class="description" style="margin-bottom:12px;">
-					<?php esc_html_e( 'n8n workflows process lifecycle events. Connect your n8n instance to automate:', 'luwipress' ); ?>
+					<?php esc_html_e( 'LuwiPress processes lifecycle events automatically:', 'luwipress' ); ?>
 				</p>
 				<ul class="luwipress-feature-list">
 					<li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Post-purchase thank you emails', 'luwipress' ); ?></li>
@@ -794,7 +765,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 						<th><?php esc_html_e( 'Lifecycle Queue', 'luwipress' ); ?></th>
 						<td>
 							<code>GET <?php echo esc_html( rest_url( 'luwipress/v1/crm/lifecycle-queue' ) ); ?></code>
-							<p class="description"><?php esc_html_e( 'n8n polls this endpoint for pending lifecycle events to process', 'luwipress' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Endpoint for pending lifecycle events', 'luwipress' ); ?></p>
 						</td>
 					</tr>
 				</table>
@@ -835,7 +806,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			<div class="luwipress-card">
 				<h2><span class="dashicons dashicons-telegram" style="color:#229ED9;"></span> <?php esc_html_e( 'Telegram Bot', 'luwipress' ); ?></h2>
 				<p class="description" style="margin-bottom:12px;">
-					<?php esc_html_e( 'Create a Telegram bot via @BotFather, paste the token below, and connect it to your n8n Telegram Trigger node.', 'luwipress' ); ?>
+					<?php esc_html_e( 'Create a Telegram bot via @BotFather, paste the token below. Messages will be processed by Open Claw.', 'luwipress' ); ?>
 				</p>
 				<table class="form-table">
 					<tr>
@@ -865,7 +836,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			<div class="luwipress-card">
 				<h2><span class="dashicons dashicons-phone" style="color:#25D366;"></span> <?php esc_html_e( 'WhatsApp', 'luwipress' ); ?></h2>
 				<p class="description" style="margin-bottom:12px;">
-					<?php esc_html_e( 'Connect WhatsApp Business API through n8n. Messages from authorized numbers will be processed by Open Claw.', 'luwipress' ); ?>
+					<?php esc_html_e( 'Connect WhatsApp Business API. Messages from authorized numbers will be processed by Open Claw.', 'luwipress' ); ?>
 				</p>
 				<table class="form-table">
 					<tr>
@@ -890,9 +861,9 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			</div>
 
 			<div class="luwipress-card">
-				<h2><?php esc_html_e( 'n8n Workflow Setup', 'luwipress' ); ?></h2>
+				<h2><?php esc_html_e( 'API Endpoints', 'luwipress' ); ?></h2>
 				<p class="description" style="margin-bottom:12px;">
-					<?php esc_html_e( 'Use these endpoints in your n8n Telegram/WhatsApp workflows:', 'luwipress' ); ?>
+					<?php esc_html_e( 'Telegram/WhatsApp message processing endpoints:', 'luwipress' ); ?>
 				</p>
 				<table class="form-table">
 					<tr>
@@ -964,7 +935,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 						<td>
 							<label>
 								<input type="checkbox" name="luwipress_regenerate_hmac" value="1" />
-								<?php esc_html_e( 'Generate new HMAC secret (invalidates existing webhook signatures)', 'luwipress' ); ?>
+								<?php esc_html_e( 'Generate new HMAC secret (invalidates existing API signatures)', 'luwipress' ); ?>
 							</label>
 						</td>
 					</tr>
