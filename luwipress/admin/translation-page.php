@@ -1002,34 +1002,40 @@ if ( $is_wpml ) {
 			});
 		});
 
-		// ─── Maintenance tools ───
-		function toolClick(btnId, resultId, action, nonceName, confirmMsg) {
+		// ─── Maintenance tools — spinner + result feedback ───
+		var toolNonces = {
+			luwipress_fix_category_assignments: <?php echo wp_json_encode( wp_create_nonce( 'luwipress_fix_categories' ) ); ?>,
+			luwipress_fix_translation_images: <?php echo wp_json_encode( wp_create_nonce( 'luwipress_fix_images' ) ); ?>
+		};
+		function toolClick(btnId, resultId, action) {
 			var btn = document.getElementById(btnId);
 			if (!btn) return;
 			btn.addEventListener('click', function() {
-				if (confirmMsg && !confirm(confirmMsg)) return;
 				var result = document.getElementById(resultId);
-				btn.disabled = true; btn.classList.add('tm-btn-loading');
-				result.textContent = '';
-				var toolNonces = {
-					luwipress_fix_category_assignments: <?php echo wp_json_encode( wp_create_nonce( 'luwipress_fix_categories' ) ); ?>,
-					luwipress_fix_translation_images: <?php echo wp_json_encode( wp_create_nonce( 'luwipress_fix_images' ) ); ?>,
-					luwipress_clean_orphan_translations: <?php echo wp_json_encode( wp_create_nonce( 'luwipress_clean_orphans' ) ); ?>
-				};
+				var origHTML = btn.innerHTML;
+				btn.disabled = true;
+				btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Working...';
+				result.textContent = ''; result.className = 'tm-tool-result';
+
 				fetch(ajaxurl + '?action=' + action + '&nonce=' + (toolNonces[action] || ''), {method:'POST'})
 				.then(function(r){return r.json()}).then(function(d){
-					btn.disabled = false; btn.classList.remove('tm-btn-loading');
+					btn.disabled = false;
 					if (d.success) {
-						result.textContent = JSON.stringify(d.data);
+						var fixed = d.data.fixed || 0;
+						btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> ' + fixed + ' fixed';
+						btn.style.background = 'var(--n8n-success, #16a34a)'; btn.style.color = '#fff';
+						result.textContent = d.data.message || (fixed + ' items fixed');
 						result.className = 'tm-tool-result result-ok';
-						if (action === 'luwipress_clean_orphan_translations' && (d.data.terms_removed + d.data.posts_removed > 0)) {
-							setTimeout(function(){ location.reload(); }, 1500);
-						}
+						if (fixed > 0) setTimeout(function(){ location.reload(); }, 2500);
+						else setTimeout(function(){ btn.innerHTML = origHTML; btn.style.background = ''; btn.style.color = ''; }, 3000);
 					} else {
+						btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Failed';
+						btn.style.background = 'var(--n8n-error, #dc2626)'; btn.style.color = '#fff';
 						result.textContent = d.data || 'Error';
 						result.className = 'tm-tool-result result-err';
+						setTimeout(function(){ btn.innerHTML = origHTML; btn.style.background = ''; btn.style.color = ''; }, 3000);
 					}
-				}).catch(function(){ btn.disabled=false; btn.classList.remove('tm-btn-loading'); });
+				}).catch(function(){ btn.disabled=false; btn.innerHTML = origHTML; result.textContent = 'Request failed'; result.className = 'tm-tool-result result-err'; });
 			});
 		}
 		toolClick('luwipress-fix-categories', 'luwipress-fix-categories-result', 'luwipress_fix_category_assignments');
