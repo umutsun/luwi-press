@@ -629,7 +629,7 @@ $missing_count = $total_possible - $total_translated;
 			if (pctEl) pctEl.textContent = currentPct + '%';
 		}
 
-		// ─── Content Translation: AJAX with live progress row ───
+		// ─── Content Translation: queue all items, show real cron progress ───
 		document.querySelectorAll('.tm-translate-btn').forEach(function(btn) {
 			btn.addEventListener('click', function() {
 				var lang       = btn.dataset.lang;
@@ -670,29 +670,70 @@ $missing_count = $total_possible - $total_translated;
 
 					var items = d.data.items;
 					var total = items.length;
-					var done  = 0;
-					var failed = 0;
-					var queued = []; // Elementor pages sent to background cron
+					var sent = 0, done = 0, failed = 0;
+					var bgIds = []; // IDs queued for background cron
 
 					if (counterEl) counterEl.textContent = '0 / ' + total;
-					if (statusEl) statusEl.textContent = 'Translating...';
-					btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> 0/' + total;
+					if (statusEl) statusEl.textContent = 'Queuing translations...';
 
-					// Poll background translation jobs until all complete
-					function pollQueued() {
-						if (queued.length === 0) return finishAll();
+					// Step 2: Send all items to server (fast — just queues them)
+					function sendNext() {
+						if (sent >= total) {
+							// All sent — now show real progress
+							if (bgIds.length > 0) {
+								if (statusEl) { statusEl.textContent = done + ' instant, ' + bgIds.length + ' in background queue. Monitoring...'; statusEl.style.color = 'var(--n8n-blue, #2563eb)'; }
+								btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + done + '/' + total;
+								// Start polling cron progress
+								setTimeout(pollCron, 5000);
+							} else {
+								finishAll();
+							}
+							return;
+						}
+
+						var item = items[sent];
+						if (counterEl) counterEl.textContent = 'Queuing ' + (sent + 1) + ' / ' + total;
+						if (itemEl) itemEl.textContent = item.title;
+
+						var fd = new FormData();
+						fd.append('action', 'luwipress_translate_single');
+						fd.append('nonce', nonce);
+						fd.append('post_id', item.id);
+						fd.append('language', lang);
+
+						fetch(ajaxurl, { method: 'POST', body: fd })
+						.then(function(r) { return r.json(); })
+						.then(function(r) {
+							sent++;
+							if (r.success) {
+								var st = r.data.status || 'completed';
+								if (st === 'queued') {
+									bgIds.push(item.id);
+								} else {
+									done++;
+									updateRowStats(postType, lang, done, total);
+								}
+							} else {
+								failed++;
+							}
+							sendNext();
+						})
+						.catch(function() { sent++; failed++; sendNext(); });
+					}
+
+					// Step 3: Poll cron progress every 10s until all background jobs complete
+					function pollCron() {
+						if (bgIds.length === 0) return finishAll();
+
 						var pfd = new FormData();
 						pfd.append('action', 'luwipress_translation_progress');
 						pfd.append('nonce', nonce);
-						queued.forEach(function(q) { pfd.append('post_ids[]', q.id); });
-
-						if (counterEl) counterEl.textContent = done + ' / ' + total + ' (' + queued.length + ' in background)';
-						if (statusEl) { statusEl.textContent = 'Waiting for ' + queued.length + ' background job(s)...'; statusEl.style.color = 'var(--n8n-blue, #2563eb)'; }
+						bgIds.forEach(function(id) { pfd.append('post_ids[]', id); });
 
 						fetch(ajaxurl, { method: 'POST', body: pfd })
 						.then(function(r) { return r.json(); })
 						.then(function(r) {
-							if (!r.success) { setTimeout(pollQueued, 3000); return; }
+							if (!r.success || !r.data) { setTimeout(pollCron, 10000); return; }
 							var stillPending = [];
 							r.data.forEach(function(st) {
 								if (st.status === 'completed') {
@@ -703,24 +744,32 @@ $missing_count = $total_possible - $total_translated;
 									failed++;
 									if (itemEl) itemEl.textContent = st.title + ' — ' + (st.error || 'failed');
 								} else {
-									stillPending.push({ id: st.post_id, title: st.title });
+									stillPending.push(st.post_id);
 								}
 							});
-							// Update counter
-							var processed = done + failed;
-							var pct = Math.round((processed / total) * 100);
-							if (counterEl) counterEl.textContent = processed + ' / ' + total;
-							if (fillEl) fillEl.style.width = pct + '%';
-							btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + processed + '/' + total;
 
-							queued = stillPending;
-							if (queued.length > 0) {
-								setTimeout(pollQueued, 3000);
+							bgIds = stillPending;
+							var processed = done + failed;
+							var pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+							if (counterEl) counterEl.textContent = done + ' / ' + total + (bgIds.length > 0 ? ' (' + bgIds.length + ' translating...)' : '');
+							if (fillEl) fillEl.style.width = pct + '%';
+							btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + done + '/' + total;
+							if (statusEl) {
+								if (bgIds.length > 0) {
+									statusEl.textContent = bgIds.length + ' still translating in background (~30s each)...';
+									statusEl.style.color = 'var(--n8n-blue, #2563eb)';
+								}
+							}
+
+							if (bgIds.length > 0) {
+								// Trigger cron and poll again
+								fetch(window.location.origin + '/wp-cron.php?doing_wp_cron=' + Date.now(), {mode:'no-cors'}).catch(function(){});
+								setTimeout(pollCron, 10000);
 							} else {
 								finishAll();
 							}
 						})
-						.catch(function() { setTimeout(pollQueued, 5000); });
+						.catch(function() { setTimeout(pollCron, 15000); });
 					}
 
 					function finishAll() {
@@ -733,70 +782,10 @@ $missing_count = $total_possible - $total_translated;
 						}
 						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--n8n-success)'; }
 						if (itemEl) itemEl.textContent = '';
-						setTimeout(function() { location.reload(); }, 2500);
+						setTimeout(function() { location.reload(); }, 3000);
 					}
 
-					// Step 2: Translate one by one
-					function translateNext() {
-						if (done + failed + queued.length >= total) {
-							// All items sent — poll any background jobs
-							if (queued.length > 0) {
-								pollQueued();
-							} else {
-								finishAll();
-							}
-							return;
-						}
-
-						var idx  = done + failed + queued.length;
-						var item = items[idx];
-						var pct  = Math.round((idx / total) * 100);
-
-						if (counterEl) counterEl.textContent = done + ' / ' + total + (queued.length > 0 ? ' (' + queued.length + ' in background)' : '');
-						if (statusEl) { statusEl.textContent = 'Sending ' + (idx + 1) + '/' + total + '...'; statusEl.style.color = ''; }
-						if (fillEl) fillEl.style.width = pct + '%';
-						if (itemEl) itemEl.textContent = item.title;
-						btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + done + '/' + total;
-
-						var fd = new FormData();
-						fd.append('action', 'luwipress_translate_single');
-						fd.append('nonce', nonce);
-						fd.append('post_id', item.id);
-						fd.append('language', lang);
-
-						fetch(ajaxurl, { method: 'POST', body: fd })
-						.then(function(r) { return r.json(); })
-						.then(function(r) {
-							if (r.success) {
-								var st = r.data.status || 'completed';
-								if (st === 'queued') {
-									// Elementor page — background cron job
-									queued.push({ id: item.id, title: item.title });
-									if (statusEl) { statusEl.textContent = item.title + ' — queued for background'; statusEl.style.color = 'var(--n8n-blue, #2563eb)'; }
-								} else {
-									done++;
-									updateRowStats(postType, lang, done, total);
-								}
-							} else {
-								failed++;
-								var errMsg = (r.data && r.data.message) ? r.data.message : (typeof r.data === 'string' ? r.data : 'Unknown error');
-								if (statusEl) { statusEl.textContent = 'Error: ' + errMsg; statusEl.style.color = 'var(--n8n-error)'; }
-								if (failed === 1 && done === 0 && (errMsg.indexOf('API key') !== -1 || errMsg.indexOf('not configured') !== -1)) {
-									btn.disabled = false;
-									btn.innerHTML = '<span class="dashicons dashicons-warning"></span> API Key Missing';
-									if (fillEl) { fillEl.style.background = 'var(--n8n-error)'; }
-									return;
-								}
-							}
-							translateNext();
-						})
-						.catch(function() {
-							failed++;
-							translateNext();
-						});
-					}
-
-					translateNext();
+					sendNext();
 				})
 				.catch(function(err) {
 					btn.disabled = false;
