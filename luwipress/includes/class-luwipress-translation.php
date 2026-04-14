@@ -235,7 +235,9 @@ class LuwiPress_Translation {
             ) );
             if ( $trid_count > 1 ) return true; // Has translations — real source
             // Lonely trid — check if title looks non-English
-            return ! preg_match( '/[àâäéèêëïîôùûüçñáíóúìòü]/u', mb_strtolower( $orig->post_title ) );
+            $t = mb_strtolower( $orig->post_title );
+            return ! preg_match( '/[àâäéèêëïîôùûüçñáíóúìòü]/u', $t )
+                && ! preg_match( '/\b(della|degli|delle|nella|tutto|ogni|comme|tout|sur le|acheter|pour|avec|dans|entre|une|thérap|découvr|tambour|flûte|también|guía|cómo|instrumentos|terapia|poder|viaje|encanto|fascino|tecniche|strumenti|accordare|persiano|gioco)\b/u', $t );
         } );
 
         // Bulk-fetch all existing translations for these trids in one query
@@ -3160,8 +3162,8 @@ class LuwiPress_Translation {
             // AND the title looks non-English, it's likely an orphan
             if ( $trid_count <= 1 ) {
                 $title = mb_strtolower( $row->post_title );
-                $is_foreign = preg_match( '/[àâäéèêëïîôùûüçñáíóúìòü]/', $title )
-                    || preg_match( '/\b(della|degli|delle|nella|sono|une|dans|pour|avec|entre|también|guía|cómo|del|alla|degli)\b/u', $title );
+                $is_foreign = preg_match( '/[àâäéèêëïîôùûüçñáíóúìòü]/u', $title )
+                    || preg_match( '/\b(della|degli|delle|nella|sono|tutto|ogni|comme|tout|sur le|acheter|pour|avec|dans|entre|une|thérap|découvr|tambour|flûte|también|guía|cómo|instrumentos|terapia|poder|viaje|encanto|fascino|tecniche|strumenti|accordare|persiano|gioco)\b/u', $title );
                 if ( $is_foreign ) {
                     // Delete this orphan WPML record — the post itself stays but won't appear in EN list
                     $wpdb->delete( $wpdb->prefix . 'icl_translations', array( 'translation_id' => $row->translation_id ) );
