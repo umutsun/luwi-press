@@ -170,12 +170,19 @@ foreach ( $content_types as $pt => $color ) {
 
 		if ( $total > 0 ) {
 			foreach ( $target_langs as $lang ) {
-				$langs[ $lang ] = (int) $wpdb->get_var( $wpdb->prepare(
+				// Count only translations that belong to a trid with a real EN source
+				$count = (int) $wpdb->get_var( $wpdb->prepare(
 					"SELECT COUNT(DISTINCT t.element_id) FROM {$wpdb->prefix}icl_translations t
 					 WHERE t.element_type = %s AND t.language_code = %s
+					   AND t.source_language_code IS NOT NULL
+					   AND t.trid IN (
+					       SELECT trid FROM {$wpdb->prefix}icl_translations
+					       WHERE element_type = %s AND language_code = %s AND source_language_code IS NULL
+					   )
 					   AND t.element_id IN (SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status IN ('publish','draft','private'))",
-					$element_type, $lang, $pt
+					$element_type, $lang, $element_type, $default_lang, $pt
 				) );
+				$langs[ $lang ] = min( $count, $total ); // never exceed source count
 			}
 		}
 	} else {
