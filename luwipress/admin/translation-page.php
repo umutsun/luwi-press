@@ -686,6 +686,7 @@ $missing_count = $total_possible - $total_translated;
 						pfd.append('nonce', nonce);
 						queued.forEach(function(q) { pfd.append('post_ids[]', q.id); });
 
+						if (counterEl) counterEl.textContent = done + ' / ' + total + ' (' + queued.length + ' in background)';
 						if (statusEl) { statusEl.textContent = 'Waiting for ' + queued.length + ' background job(s)...'; statusEl.style.color = 'var(--n8n-blue, #2563eb)'; }
 
 						fetch(ajaxurl, { method: 'POST', body: pfd })
@@ -751,11 +752,11 @@ $missing_count = $total_possible - $total_translated;
 						var item = items[idx];
 						var pct  = Math.round((idx / total) * 100);
 
-						if (counterEl) counterEl.textContent = (idx + 1) + ' / ' + total;
-						if (statusEl) { statusEl.textContent = 'Translating...'; statusEl.style.color = ''; }
+						if (counterEl) counterEl.textContent = done + ' / ' + total + (queued.length > 0 ? ' (' + queued.length + ' in background)' : '');
+						if (statusEl) { statusEl.textContent = 'Sending ' + (idx + 1) + '/' + total + '...'; statusEl.style.color = ''; }
 						if (fillEl) fillEl.style.width = pct + '%';
 						if (itemEl) itemEl.textContent = item.title;
-						btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + (idx + 1) + '/' + total;
+						btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + done + '/' + total;
 
 						var fd = new FormData();
 						fd.append('action', 'luwipress_translate_single');
