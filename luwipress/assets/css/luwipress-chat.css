@@ -1,0 +1,240 @@
+/* LuwiPress Customer Chat Widget */
+.lp-chat-widget {
+    --lp-primary: #6366f1;
+    --lp-text: #ffffff;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 99999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+}
+.lp-chat-widget.lp-chat-left { right: auto; left: 20px; }
+
+/* Toggle Button */
+.lp-chat-toggle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--lp-primary);
+    color: var(--lp-text);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    transition: transform .2s, box-shadow .2s;
+}
+.lp-chat-toggle:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(0,0,0,.2);
+}
+
+/* Chat Window */
+.lp-chat-window {
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    width: 380px;
+    max-height: 520px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.12);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: scale(.8) translateY(20px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .3s ease, opacity .3s ease;
+    transform-origin: bottom right;
+}
+.lp-chat-widget.lp-chat-left .lp-chat-window {
+    right: auto;
+    left: 0;
+    transform-origin: bottom left;
+}
+.lp-chat-widget:not(.lp-chat-closed) .lp-chat-window {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+.lp-chat-widget:not(.lp-chat-closed) .lp-chat-toggle { display: none; }
+
+/* Header */
+.lp-chat-header {
+    background: var(--lp-primary);
+    color: var(--lp-text);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+.lp-chat-header-info { display: flex; flex-direction: column; }
+.lp-chat-title { font-weight: 600; font-size: 15px; }
+.lp-chat-subtitle { font-size: 12px; opacity: .85; }
+.lp-chat-header-actions { display: flex; gap: 8px; align-items: center; }
+.lp-chat-header-actions button {
+    background: none;
+    border: none;
+    color: var(--lp-text);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: .8;
+    transition: opacity .2s;
+}
+.lp-chat-header-actions button:hover { opacity: 1; background: rgba(255,255,255,.15); }
+.lp-chat-close-btn { font-size: 22px; line-height: 1; }
+
+/* Body */
+.lp-chat-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 300px;
+    max-height: 350px;
+    background: #f9fafb;
+}
+
+/* Messages */
+.lp-chat-msg { display: flex; flex-direction: column; max-width: 85%; }
+.lp-chat-msg-customer { align-self: flex-end; align-items: flex-end; }
+.lp-chat-msg-assistant { align-self: flex-start; align-items: flex-start; }
+.lp-chat-bubble { padding: 10px 14px; border-radius: 12px; word-break: break-word; }
+.lp-chat-msg-customer .lp-chat-bubble {
+    background: var(--lp-primary);
+    color: var(--lp-text);
+    border-bottom-right-radius: 4px;
+}
+.lp-chat-msg-assistant .lp-chat-bubble {
+    background: #e5e7eb;
+    color: #1f2937;
+    border-bottom-left-radius: 4px;
+}
+.lp-chat-bubble a { color: inherit; text-decoration: underline; }
+.lp-chat-msg-assistant .lp-chat-bubble a { color: var(--lp-primary); }
+.lp-chat-time { font-size: 11px; color: #9ca3af; margin-top: 4px; padding: 0 4px; }
+
+/* Typing indicator */
+.lp-chat-typing { display: flex; gap: 4px; padding: 12px 16px !important; }
+.lp-chat-typing span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #9ca3af;
+    animation: lp-typing 1.4s infinite;
+}
+.lp-chat-typing span:nth-child(2) { animation-delay: .2s; }
+.lp-chat-typing span:nth-child(3) { animation-delay: .4s; }
+@keyframes lp-typing {
+    0%, 60%, 100% { transform: translateY(0); opacity: .4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+}
+
+/* Input Area */
+.lp-chat-input-area {
+    display: flex;
+    padding: 12px;
+    gap: 8px;
+    border-top: 1px solid #e5e7eb;
+    background: #fff;
+    flex-shrink: 0;
+}
+.lp-chat-input {
+    flex: 1;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    outline: none;
+    font-family: inherit;
+    transition: border-color .2s;
+}
+.lp-chat-input:focus { border-color: var(--lp-primary); }
+.lp-chat-send-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: var(--lp-primary);
+    color: var(--lp-text);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity .2s;
+    flex-shrink: 0;
+}
+.lp-chat-send-btn:disabled { opacity: .4; cursor: not-allowed; }
+.lp-chat-send-btn:not(:disabled):hover { opacity: .9; }
+
+/* Footer */
+.lp-chat-footer {
+    text-align: center;
+    padding: 6px;
+    font-size: 11px;
+    color: #9ca3af;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+/* Channel choice */
+.lp-chat-channel-choice p { margin: 0 0 10px; }
+.lp-chat-channel-btn {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    margin: 0 4px 4px 0;
+    transition: opacity .2s;
+}
+.lp-chat-channel-btn:hover { opacity: .85; }
+.lp-chat-wa-btn { background: #25d366; color: #fff; }
+.lp-chat-tg-btn { background: #0088cc; color: #fff; }
+
+/* Inline escalation */
+.lp-chat-inline-escalate {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 6px 14px;
+    background: var(--lp-primary);
+    color: var(--lp-text);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+}
+.lp-chat-inline-escalate:hover { opacity: .9; }
+
+/* Mobile */
+@media (max-width: 480px) {
+    .lp-chat-widget { bottom: 0; right: 0; left: 0; }
+    .lp-chat-widget.lp-chat-left { left: 0; }
+    .lp-chat-toggle { position: fixed; bottom: 16px; right: 16px; }
+    .lp-chat-widget.lp-chat-left .lp-chat-toggle { right: auto; left: 16px; }
+    .lp-chat-window {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        left: 0;
+        width: 100%;
+        max-height: 85vh;
+        border-radius: 16px 16px 0 0;
+        transform-origin: bottom center;
+    }
+    .lp-chat-body { max-height: calc(85vh - 170px); }
+}

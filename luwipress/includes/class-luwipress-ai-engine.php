@@ -44,6 +44,7 @@ class LuwiPress_AI_Engine {
 		'translation-quality'    => 'openai',
 		'internal-linker'        => 'openai',
 		'open-claw'              => 'openai',
+		'customer-chat'          => 'openai',
 		'image-generation'       => 'openai',
 	);
 
@@ -61,6 +62,7 @@ class LuwiPress_AI_Engine {
 		'translation-pipeline'   => 4000,
 		'internal-linker'        => 1000,
 		'open-claw'              => 1000,
+		'customer-chat'          => 300,
 	);
 
 	// ─── PUBLIC API ───────────────────────────────────────────────

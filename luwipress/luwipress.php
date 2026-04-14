@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 2.0.6
+ * Version: 2.0.7
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '2.0.6');
+define('LUWIPRESS_VERSION', '2.0.7');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -114,6 +114,9 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-knowledge-graph.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-elementor.php';
 
+        // Customer-facing chat
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-customer-chat.php';
+
         // WebMCP server (MCP Streamable HTTP transport)
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-webmcp.php';
     }
@@ -128,6 +131,7 @@ class LuwiPress {
         // Create all database tables
         LuwiPress_Logger::create_table();
         LuwiPress_Token_Tracker::create_table();
+        LuwiPress_Customer_Chat::create_table();
 
         // Generate HMAC secret if not set
         LuwiPress_HMAC::ensure_secret();
@@ -184,6 +188,7 @@ class LuwiPress {
         LuwiPress_Open_Claw::get_instance();
         LuwiPress_CRM_Bridge::get_instance();
         LuwiPress_Knowledge_Graph::get_instance();
+        LuwiPress_Customer_Chat::get_instance();
 
         // Elementor integration (only if Elementor is active)
         if ( LuwiPress_Elementor::is_elementor_active() || is_admin() ) {
@@ -344,6 +349,10 @@ class LuwiPress {
         if ( method_exists( 'LuwiPress_Token_Tracker', 'cleanup' ) ) {
             LuwiPress_Token_Tracker::cleanup( $token_days );
         }
+        if ( method_exists( 'LuwiPress_Customer_Chat', 'cleanup' ) ) {
+            $chat_days = absint( get_option( 'luwipress_chat_retention_days', 90 ) );
+            LuwiPress_Customer_Chat::cleanup( $chat_days );
+        }
         LuwiPress_Logger::log( 'Daily cleanup completed', 'info' );
     }
 
@@ -356,6 +365,7 @@ class LuwiPress {
         if ( version_compare( $db_version, LUWIPRESS_VERSION, '<' ) ) {
             LuwiPress_Logger::create_table();
             LuwiPress_Token_Tracker::create_table();
+            LuwiPress_Customer_Chat::create_table();
             update_option( 'luwipress_db_version', LUWIPRESS_VERSION );
         }
     }
@@ -364,7 +374,43 @@ class LuwiPress {
      * Enqueue scripts
      */
     public function enqueue_scripts() {
-        // Frontend scripts if needed
+        if ( ! get_option( 'luwipress_chat_enabled', 0 ) ) {
+            return;
+        }
+        if ( is_admin() ) {
+            return;
+        }
+
+        wp_enqueue_style(
+            'luwipress-chat',
+            LUWIPRESS_PLUGIN_URL . 'assets/css/luwipress-chat.css',
+            array(),
+            LUWIPRESS_VERSION
+        );
+
+        wp_enqueue_script(
+            'luwipress-chat',
+            LUWIPRESS_PLUGIN_URL . 'assets/js/luwipress-chat.js',
+            array(),
+            LUWIPRESS_VERSION,
+            true
+        );
+
+        $config = array(
+            'rest_url'           => rest_url( 'luwipress/v1/chat/' ),
+            'nonce'              => is_user_logged_in() ? wp_create_nonce( 'wp_rest' ) : '',
+            'store_name'         => get_bloginfo( 'name' ),
+            'greeting'           => get_option( 'luwipress_chat_greeting', 'Hi! How can I help you today?' ),
+            'primary'            => get_option( 'luwipress_chat_color_primary', '#6366f1' ),
+            'text_color'         => get_option( 'luwipress_chat_color_text', '#ffffff' ),
+            'position'           => get_option( 'luwipress_chat_position', 'bottom-right' ),
+            'escalation_channel' => get_option( 'luwipress_chat_escalation_channel', 'whatsapp' ),
+            'whatsapp_number'    => get_option( 'luwipress_whatsapp_number', '' ),
+            'telegram_username'  => get_option( 'luwipress_telegram_username', '' ),
+            'is_logged_in'       => is_user_logged_in(),
+            'customer_name'      => is_user_logged_in() ? wp_get_current_user()->display_name : '',
+        );
+        wp_localize_script( 'luwipress-chat', 'lpChat', $config );
     }
     
     /**

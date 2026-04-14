@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 2.0.6
+Stable tag: 2.0.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -143,6 +143,21 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 * IMPROVED: Coverage calculation — only counts real translations linked to EN sources
 * IMPROVED: Fix Orphans tool detects EN-registered non-English posts
 * IMPROVED: MCP content tools bypass WPML language filter
+
+= 2.0.7 — Customer Chat Widget + WhatsApp/Telegram Escalation =
+* NEW: AI-powered customer chat widget (frontend, vanilla JS, <15KB)
+* NEW: RAG pipeline — FAQ short-circuit, product search via Knowledge Graph, store policy injection
+* NEW: Intent classification — product inquiry, shipping, returns, order status, stock check, escalation
+* NEW: WhatsApp/Telegram escalation via deep links — customer connects directly with team
+* NEW: Channel choice dialog when both WhatsApp and Telegram are configured
+* NEW: Customer Chat settings tab — greeting, colors, position, policies, budget, rate limiting
+* NEW: Separate daily AI budget for customer chat (independent from admin budget)
+* NEW: Rate limiting per visitor (30 messages/hour default, configurable)
+* NEW: Custom DB tables for conversations and messages (not wp_options)
+* NEW: GDPR compliance — auto-cleanup after 90 days, delete customer data endpoint
+* NEW: Session persistence via localStorage — conversation survives page navigation
+* NEW: Order status lookup for logged-in WooCommerce customers
+* NEW: Auto-escalation suggestion after configurable message count
 
 = 2.0.5 — Full Site X-Ray & WordPress Control =
 * NEW: Knowledge Graph — 8 new sections: posts, pages, taxonomies, media inventory, menus, product attributes, authors, order analytics

@@ -87,6 +87,20 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 	update_option( 'luwipress_whatsapp_number', sanitize_text_field( $_POST['luwipress_whatsapp_number'] ?? '' ) );
 	update_option( 'luwipress_whatsapp_admin_ids', sanitize_text_field( $_POST['luwipress_whatsapp_admin_ids'] ?? '' ) );
 
+	// Customer Chat
+	update_option( 'luwipress_chat_enabled', isset( $_POST['luwipress_chat_enabled'] ) ? 1 : 0 );
+	update_option( 'luwipress_chat_greeting', sanitize_textarea_field( $_POST['luwipress_chat_greeting'] ?? 'Hi! How can I help you today?' ) );
+	update_option( 'luwipress_chat_shipping_policy', sanitize_textarea_field( $_POST['luwipress_chat_shipping_policy'] ?? '' ) );
+	update_option( 'luwipress_chat_returns_policy', sanitize_textarea_field( $_POST['luwipress_chat_returns_policy'] ?? '' ) );
+	update_option( 'luwipress_chat_color_primary', sanitize_hex_color( $_POST['luwipress_chat_color_primary'] ?? '#6366f1' ) );
+	update_option( 'luwipress_chat_color_text', sanitize_hex_color( $_POST['luwipress_chat_color_text'] ?? '#ffffff' ) );
+	update_option( 'luwipress_chat_position', sanitize_text_field( $_POST['luwipress_chat_position'] ?? 'bottom-right' ) );
+	update_option( 'luwipress_chat_escalation_channel', sanitize_text_field( $_POST['luwipress_chat_escalation_channel'] ?? 'whatsapp' ) );
+	update_option( 'luwipress_telegram_username', sanitize_text_field( $_POST['luwipress_telegram_username'] ?? '' ) );
+	update_option( 'luwipress_chat_daily_budget', floatval( $_POST['luwipress_chat_daily_budget'] ?? 0.50 ) );
+	update_option( 'luwipress_chat_max_messages', absint( $_POST['luwipress_chat_max_messages'] ?? 10 ) );
+	update_option( 'luwipress_chat_rate_limit', absint( $_POST['luwipress_chat_rate_limit'] ?? 30 ) );
+
 	// Security
 	update_option( 'luwipress_security_headers', isset( $_POST['luwipress_security_headers'] ) ? 1 : 0 );
 	update_option( 'luwipress_ip_whitelist', sanitize_text_field( $_POST['luwipress_ip_whitelist'] ?? '' ) );
@@ -166,6 +180,9 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		</a>
 		<a href="?page=luwipress-settings&tab=open-claw" class="nav-tab <?php echo 'open-claw' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-superhero-alt"></span> <?php esc_html_e( 'Open Claw', 'luwipress' ); ?>
+		</a>
+		<a href="?page=luwipress-settings&tab=customer-chat" class="nav-tab <?php echo 'customer-chat' === $active_tab ? 'nav-tab-active' : ''; ?>">
+			<span class="dashicons dashicons-format-chat"></span> <?php esc_html_e( 'Customer Chat', 'luwipress' ); ?>
 		</a>
 		<a href="?page=luwipress-settings&tab=security" class="nav-tab <?php echo 'security' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-shield-alt"></span> <?php esc_html_e( 'Security', 'luwipress' ); ?>
@@ -885,6 +902,156 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 						<td>
 							<code>Authorization: Bearer &lt;your-api-token&gt;</code>
 							<p class="description"><?php esc_html_e( 'Use the API token from the Connection tab', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+		<!-- CUSTOMER CHAT -->
+		<div class="luwipress-tab-content <?php echo 'customer-chat' === $active_tab ? 'tab-active' : ''; ?>" id="tab-customer-chat">
+			<?php
+			$chat_enabled    = get_option( 'luwipress_chat_enabled', 0 );
+			$chat_greeting   = get_option( 'luwipress_chat_greeting', 'Hi! How can I help you today?' );
+			$chat_shipping   = get_option( 'luwipress_chat_shipping_policy', '' );
+			$chat_returns    = get_option( 'luwipress_chat_returns_policy', '' );
+			$chat_primary    = get_option( 'luwipress_chat_color_primary', '#6366f1' );
+			$chat_text_color = get_option( 'luwipress_chat_color_text', '#ffffff' );
+			$chat_position   = get_option( 'luwipress_chat_position', 'bottom-right' );
+			$chat_escalation = get_option( 'luwipress_chat_escalation_channel', 'whatsapp' );
+			$tg_username     = get_option( 'luwipress_telegram_username', '' );
+			$chat_budget     = get_option( 'luwipress_chat_daily_budget', 0.50 );
+			$chat_max_msgs   = get_option( 'luwipress_chat_max_messages', 10 );
+			$chat_rate       = get_option( 'luwipress_chat_rate_limit', 30 );
+			?>
+
+			<div class="luwipress-card" style="border-left:4px solid #6366f1;">
+				<h3><?php esc_html_e( 'Customer Chat Widget', 'luwipress' ); ?></h3>
+				<p class="description"><?php esc_html_e( 'AI-powered chat widget for your customers. Answers product questions, checks order status, and escalates to WhatsApp/Telegram when needed.', 'luwipress' ); ?></p>
+
+				<table class="form-table">
+					<tr>
+						<th><?php esc_html_e( 'Enable Chat Widget', 'luwipress' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="luwipress_chat_enabled" value="1" <?php checked( $chat_enabled, 1 ); ?>>
+								<?php esc_html_e( 'Show chat widget on frontend', 'luwipress' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_chat_greeting"><?php esc_html_e( 'Greeting Message', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="text" id="luwipress_chat_greeting" name="luwipress_chat_greeting"
+								value="<?php echo esc_attr( $chat_greeting ); ?>" class="regular-text">
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_chat_color_primary"><?php esc_html_e( 'Primary Color', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="color" id="luwipress_chat_color_primary" name="luwipress_chat_color_primary"
+								value="<?php echo esc_attr( $chat_primary ); ?>">
+							<input type="color" name="luwipress_chat_color_text"
+								value="<?php echo esc_attr( $chat_text_color ); ?>">
+							<span class="description"><?php esc_html_e( 'Primary / Text color', 'luwipress' ); ?></span>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_chat_position"><?php esc_html_e( 'Widget Position', 'luwipress' ); ?></label></th>
+						<td>
+							<select id="luwipress_chat_position" name="luwipress_chat_position">
+								<option value="bottom-right" <?php selected( $chat_position, 'bottom-right' ); ?>><?php esc_html_e( 'Bottom Right', 'luwipress' ); ?></option>
+								<option value="bottom-left" <?php selected( $chat_position, 'bottom-left' ); ?>><?php esc_html_e( 'Bottom Left', 'luwipress' ); ?></option>
+							</select>
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<div class="luwipress-card" style="border-left:4px solid #25d366;">
+				<h3><?php esc_html_e( 'Escalation — Connect to Team', 'luwipress' ); ?></h3>
+				<p class="description"><?php esc_html_e( 'When AI cannot answer or customer requests, they are redirected to your team via WhatsApp or Telegram.', 'luwipress' ); ?></p>
+
+				<table class="form-table">
+					<tr>
+						<th><label for="luwipress_chat_escalation_channel"><?php esc_html_e( 'Escalation Channel', 'luwipress' ); ?></label></th>
+						<td>
+							<select id="luwipress_chat_escalation_channel" name="luwipress_chat_escalation_channel">
+								<option value="whatsapp" <?php selected( $chat_escalation, 'whatsapp' ); ?>><?php esc_html_e( 'WhatsApp', 'luwipress' ); ?></option>
+								<option value="telegram" <?php selected( $chat_escalation, 'telegram' ); ?>><?php esc_html_e( 'Telegram', 'luwipress' ); ?></option>
+								<option value="both" <?php selected( $chat_escalation, 'both' ); ?>><?php esc_html_e( 'Both (customer chooses)', 'luwipress' ); ?></option>
+							</select>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_whatsapp_number"><?php esc_html_e( 'WhatsApp Number', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="text" id="luwipress_whatsapp_number_chat" name="luwipress_whatsapp_number"
+								value="<?php echo esc_attr( get_option( 'luwipress_whatsapp_number', '' ) ); ?>" class="regular-text"
+								placeholder="905xxxxxxxxx">
+							<p class="description"><?php esc_html_e( 'International format without + sign', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_telegram_username"><?php esc_html_e( 'Telegram Username', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="text" id="luwipress_telegram_username" name="luwipress_telegram_username"
+								value="<?php echo esc_attr( $tg_username ); ?>" class="regular-text"
+								placeholder="username">
+							<p class="description"><?php esc_html_e( 'Without @ sign. Used for t.me/username deep link.', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_chat_max_messages"><?php esc_html_e( 'Auto-Escalate After', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="number" id="luwipress_chat_max_messages" name="luwipress_chat_max_messages"
+								value="<?php echo esc_attr( $chat_max_msgs ); ?>" min="3" max="50" style="width:80px;">
+							<span class="description"><?php esc_html_e( 'messages (suggest connecting to team)', 'luwipress' ); ?></span>
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<div class="luwipress-card" style="border-left:4px solid #f59e0b;">
+				<h3><?php esc_html_e( 'Store Policies (RAG Context)', 'luwipress' ); ?></h3>
+				<p class="description"><?php esc_html_e( 'These texts are fed to the AI so it can answer shipping and return questions accurately.', 'luwipress' ); ?></p>
+
+				<table class="form-table">
+					<tr>
+						<th><label for="luwipress_chat_shipping_policy"><?php esc_html_e( 'Shipping Policy', 'luwipress' ); ?></label></th>
+						<td>
+							<textarea id="luwipress_chat_shipping_policy" name="luwipress_chat_shipping_policy"
+								rows="4" class="large-text"><?php echo esc_textarea( $chat_shipping ); ?></textarea>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_chat_returns_policy"><?php esc_html_e( 'Returns Policy', 'luwipress' ); ?></label></th>
+						<td>
+							<textarea id="luwipress_chat_returns_policy" name="luwipress_chat_returns_policy"
+								rows="4" class="large-text"><?php echo esc_textarea( $chat_returns ); ?></textarea>
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<div class="luwipress-card" style="border-left:4px solid #ef4444;">
+				<h3><?php esc_html_e( 'Budget & Rate Limiting', 'luwipress' ); ?></h3>
+
+				<table class="form-table">
+					<tr>
+						<th><label for="luwipress_chat_daily_budget"><?php esc_html_e( 'Daily AI Budget', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="number" id="luwipress_chat_daily_budget" name="luwipress_chat_daily_budget"
+								value="<?php echo esc_attr( $chat_budget ); ?>" min="0" max="100" step="0.10" style="width:100px;">
+							<span class="description"><?php esc_html_e( 'USD per day (0 = unlimited). Separate from main AI budget.', 'luwipress' ); ?></span>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_chat_rate_limit"><?php esc_html_e( 'Rate Limit', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="number" id="luwipress_chat_rate_limit" name="luwipress_chat_rate_limit"
+								value="<?php echo esc_attr( $chat_rate ); ?>" min="5" max="500" style="width:80px;">
+							<span class="description"><?php esc_html_e( 'messages per hour per visitor', 'luwipress' ); ?></span>
 						</td>
 					</tr>
 				</table>

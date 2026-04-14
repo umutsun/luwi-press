@@ -22,6 +22,8 @@ global $wpdb;
 $tables = array(
 	$wpdb->prefix . 'luwipress_token_usage',
 	$wpdb->prefix . 'luwipress_logs',
+	$wpdb->prefix . 'luwipress_chat_messages',
+	$wpdb->prefix . 'luwipress_chat_conversations',
 	$wpdb->prefix . 'luwipress_workflow_stats',  // legacy, may not exist
 	$wpdb->prefix . 'luwipress_jobs',            // legacy, may not exist
 );
