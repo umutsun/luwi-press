@@ -38,6 +38,8 @@ class LuwiPress_Translation {
         add_action('wp_ajax_luwipress_translate_single_term', [$this, 'ajax_translate_single_term']);
         add_action('wp_ajax_luwipress_retranslate_broken', [$this, 'ajax_retranslate_broken']);
         add_action('wp_ajax_luwipress_stop_translations', [$this, 'ajax_stop_translations']);
+        add_action('wp_ajax_luwipress_fix_excerpts', [$this, 'ajax_fix_excerpts']);
+        add_action('wp_ajax_luwipress_fix_orphan_translations', [$this, 'ajax_fix_orphan_translations']);
         add_action('wp_ajax_luwipress_sync_wpml_menus', [$this, 'ajax_sync_wpml_menus']);
     }
 
@@ -1116,12 +1118,12 @@ class LuwiPress_Translation {
         global $wpdb;
         $default_lang = apply_filters( 'wpml_default_language', get_locale() );
 
-        // Get all original products
-        $products = $wpdb->get_results( $wpdb->prepare(
-            "SELECT t.element_id AS product_id, t.trid
+        // Get all original posts/products/pages
+        $originals = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.element_id AS post_id, t.trid, p.post_type
              FROM {$wpdb->prefix}icl_translations t
              JOIN {$wpdb->posts} p ON t.element_id = p.ID
-             WHERE t.element_type = 'post_product'
+             WHERE t.element_type IN ('post_product', 'post_post', 'post_page')
                AND t.language_code = %s
                AND t.source_language_code IS NULL
                AND p.post_status = 'publish'",
@@ -1129,22 +1131,30 @@ class LuwiPress_Translation {
         ) );
 
         $fixed = 0;
-        foreach ( $products as $row ) {
-            // Get all translations of this product
+        foreach ( $originals as $row ) {
             $translations = $wpdb->get_results( $wpdb->prepare(
                 "SELECT element_id, language_code FROM {$wpdb->prefix}icl_translations
                  WHERE trid = %d AND language_code != %s AND element_id IS NOT NULL",
                 $row->trid, $default_lang
             ) );
 
+            // Determine which taxonomies to copy based on post type
+            $taxonomies = array();
+            if ( 'product' === $row->post_type ) {
+                $taxonomies = array( 'product_cat', 'product_tag' );
+            } elseif ( 'post' === $row->post_type ) {
+                $taxonomies = array( 'category', 'post_tag' );
+            }
+
             foreach ( $translations as $tr ) {
-                $this->copy_wpml_taxonomy_translations( $row->product_id, $tr->element_id, $tr->language_code, 'product_cat' );
-                $this->copy_wpml_taxonomy_translations( $row->product_id, $tr->element_id, $tr->language_code, 'product_tag' );
+                foreach ( $taxonomies as $tax ) {
+                    $this->copy_wpml_taxonomy_translations( $row->post_id, $tr->element_id, $tr->language_code, $tax );
+                }
                 $fixed++;
             }
         }
 
-        LuwiPress_Logger::log( 'Category assignments fixed for ' . $fixed . ' translated products', 'info' );
+        LuwiPress_Logger::log( 'Category assignments fixed for ' . $fixed . ' translated posts/products', 'info' );
         wp_send_json_success( array( 'fixed' => $fixed ) );
     }
 
@@ -2969,6 +2979,148 @@ class LuwiPress_Translation {
         wp_send_json_success( array(
             'stopped' => $stopped,
             'message' => sprintf( '%d translation(s) stopped. You can resume with Translate All.', $stopped ),
+        ) );
+    }
+
+    // ─── AJAX: Fix excerpts — extract from Elementor widget text ────────
+
+    public function ajax_fix_excerpts() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        global $wpdb;
+
+        // Find published posts/pages with empty excerpt that have _elementor_data
+        $posts = $wpdb->get_results(
+            "SELECT p.ID, p.post_type
+             FROM {$wpdb->posts} p
+             JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_elementor_data'
+             WHERE p.post_status = 'publish'
+               AND p.post_type IN ('post', 'page')
+               AND (p.post_excerpt = '' OR p.post_excerpt IS NULL)
+               AND pm.meta_value != ''
+             LIMIT 200"
+        );
+
+        $fixed = 0;
+        foreach ( $posts as $row ) {
+            $raw = get_post_meta( $row->ID, '_elementor_data', true );
+            if ( empty( $raw ) ) {
+                continue;
+            }
+
+            $data = json_decode( $raw, true );
+            if ( ! is_array( $data ) ) {
+                continue;
+            }
+
+            // Walk elements to find first text content
+            $excerpt = '';
+            $this->walk_for_excerpt( $data, $excerpt );
+
+            if ( ! empty( $excerpt ) ) {
+                wp_update_post( array(
+                    'ID'           => $row->ID,
+                    'post_excerpt' => $excerpt,
+                ) );
+                $fixed++;
+            }
+        }
+
+        LuwiPress_Logger::log( sprintf( 'Fix excerpts: %d posts updated', $fixed ), 'info' );
+        wp_send_json_success( array(
+            'fixed'   => $fixed,
+            'message' => sprintf( '%d excerpts extracted from Elementor content.', $fixed ),
+        ) );
+    }
+
+    private function walk_for_excerpt( $elements, &$excerpt ) {
+        if ( ! empty( $excerpt ) ) {
+            return;
+        }
+        foreach ( $elements as $el ) {
+            $settings = $el['settings'] ?? array();
+            // Check text-editor widget
+            foreach ( array( 'editor', 'ekit_heading_extra_title', 'description_text' ) as $field ) {
+                if ( ! empty( $settings[ $field ] ) && strlen( strip_tags( $settings[ $field ] ) ) > 50 ) {
+                    $excerpt = wp_trim_words( wp_strip_all_tags( $settings[ $field ] ), 30, '...' );
+                    return;
+                }
+            }
+            if ( ! empty( $el['elements'] ) ) {
+                $this->walk_for_excerpt( $el['elements'], $excerpt );
+            }
+        }
+    }
+
+    // ─── AJAX: Fix orphan translations — set correct source_language_code ─
+
+    public function ajax_fix_orphan_translations() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            wp_send_json_error( 'WPML not active' );
+        }
+
+        global $wpdb;
+        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+
+        // Find posts in non-default languages that have source_language_code IS NULL
+        // These appear as "original" posts in the wrong language
+        $orphans = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.translation_id, t.element_id, t.language_code, t.trid, t.element_type, p.post_title
+             FROM {$wpdb->prefix}icl_translations t
+             JOIN {$wpdb->posts} p ON t.element_id = p.ID
+             WHERE t.source_language_code IS NULL
+               AND t.language_code != %s
+               AND t.element_type LIKE 'post_%%'
+               AND p.post_type IN ('post', 'page', 'product')
+               AND p.post_status IN ('publish', 'draft', 'private')
+             LIMIT 200",
+            $default_lang
+        ) );
+
+        if ( empty( $orphans ) ) {
+            wp_send_json_success( array( 'fixed' => 0, 'message' => 'No orphan translations found.' ) );
+        }
+
+        $fixed = 0;
+        foreach ( $orphans as $row ) {
+            // Check if this trid has a proper source (default language post)
+            $has_source = $wpdb->get_var( $wpdb->prepare(
+                "SELECT element_id FROM {$wpdb->prefix}icl_translations
+                 WHERE trid = %d AND language_code = %s AND source_language_code IS NULL",
+                $row->trid, $default_lang
+            ) );
+
+            if ( $has_source ) {
+                // Fix: set source_language_code to default language
+                $wpdb->update(
+                    $wpdb->prefix . 'icl_translations',
+                    array( 'source_language_code' => $default_lang ),
+                    array( 'translation_id' => $row->translation_id ),
+                    array( '%s' ),
+                    array( '%d' )
+                );
+                $fixed++;
+            } else {
+                // No source exists — this IS the source, just in wrong language
+                // Log but don't fix (might be intentional)
+                LuwiPress_Logger::log( sprintf(
+                    'Orphan without source: #%d (%s, %s) trid=%d — "%s"',
+                    $row->element_id, $row->language_code, $row->element_type, $row->trid, $row->post_title
+                ), 'warning' );
+            }
+        }
+
+        LuwiPress_Logger::log( sprintf( 'Fix orphan translations: %d fixed', $fixed ), 'info' );
+        wp_send_json_success( array(
+            'fixed'   => $fixed,
+            'message' => sprintf( '%d orphan translations fixed (source_language_code set to %s).', $fixed, $default_lang ),
         ) );
     }
 }

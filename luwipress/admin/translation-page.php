@@ -641,6 +641,26 @@ if ( $is_wpml ) {
 				</button>
 				<span id="luwipress-sync-menus-result" class="tm-tool-result"></span>
 			</div>
+			<div class="tm-tool-card">
+				<div class="tm-tool-info">
+					<strong><?php esc_html_e( 'Fix Excerpts', 'luwipress' ); ?></strong>
+					<span><?php esc_html_e( 'Extracts excerpts from Elementor content for posts with empty excerpts. Fixes shortcode display in blog lists.', 'luwipress' ); ?></span>
+				</div>
+				<button type="button" id="luwipress-fix-excerpts" class="tm-btn tm-btn-secondary">
+					<span class="dashicons dashicons-editor-justify"></span> <?php esc_html_e( 'Fix Excerpts', 'luwipress' ); ?>
+				</button>
+				<span id="luwipress-fix-excerpts-result" class="tm-tool-result"></span>
+			</div>
+			<div class="tm-tool-card">
+				<div class="tm-tool-info">
+					<strong><?php esc_html_e( 'Fix Orphan Translations', 'luwipress' ); ?></strong>
+					<span><?php esc_html_e( 'Fixes non-English posts appearing as originals. Sets correct source language in WPML.', 'luwipress' ); ?></span>
+				</div>
+				<button type="button" id="luwipress-fix-orphans-lang" class="tm-btn tm-btn-secondary">
+					<span class="dashicons dashicons-admin-site-alt3"></span> <?php esc_html_e( 'Fix Orphans', 'luwipress' ); ?>
+				</button>
+				<span id="luwipress-fix-orphans-lang-result" class="tm-tool-result"></span>
+			</div>
 		</div>
 	</div>
 
@@ -1078,6 +1098,52 @@ if ( $is_wpml ) {
 					result.textContent = 'Request failed';
 					result.className = 'tm-tool-result result-err';
 				});
+			});
+		})();
+
+		// ─── Fix Excerpts ───
+		(function() {
+			var btn = document.getElementById('luwipress-fix-excerpts');
+			if (!btn) return;
+			btn.addEventListener('click', function() {
+				var result = document.getElementById('luwipress-fix-excerpts-result');
+				btn.disabled = true; btn.classList.add('tm-btn-loading');
+				result.textContent = '';
+				var fd = new FormData();
+				fd.append('action', 'luwipress_fix_excerpts');
+				fd.append('nonce', nonce);
+				fetch(ajaxurl, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					btn.disabled = false; btn.classList.remove('tm-btn-loading');
+					result.textContent = d.success ? d.data.message : (d.data || 'Error');
+					result.className = 'tm-tool-result ' + (d.success ? 'result-ok' : 'result-err');
+				})
+				.catch(function() { btn.disabled = false; btn.classList.remove('tm-btn-loading'); result.textContent = 'Failed'; result.className = 'tm-tool-result result-err'; });
+			});
+		})();
+
+		// ─── Fix Orphan Translations ───
+		(function() {
+			var btn = document.getElementById('luwipress-fix-orphans-lang');
+			if (!btn) return;
+			btn.addEventListener('click', function() {
+				if (!confirm('This will fix non-English posts that appear as originals in WPML. Continue?')) return;
+				var result = document.getElementById('luwipress-fix-orphans-lang-result');
+				btn.disabled = true; btn.classList.add('tm-btn-loading');
+				result.textContent = '';
+				var fd = new FormData();
+				fd.append('action', 'luwipress_fix_orphan_translations');
+				fd.append('nonce', nonce);
+				fetch(ajaxurl, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					btn.disabled = false; btn.classList.remove('tm-btn-loading');
+					result.textContent = d.success ? d.data.message : (d.data || 'Error');
+					result.className = 'tm-tool-result ' + (d.success ? 'result-ok' : 'result-err');
+					if (d.success && d.data.fixed > 0) setTimeout(function() { location.reload(); }, 2000);
+				})
+				.catch(function() { btn.disabled = false; btn.classList.remove('tm-btn-loading'); result.textContent = 'Failed'; result.className = 'tm-tool-result result-err'; });
 			});
 		})();
 	})();
