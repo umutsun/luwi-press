@@ -518,17 +518,28 @@ if ( $is_wpml ) {
 						$cron_key = $pt . '-' . $lang;
 						$active   = $active_cron_jobs[ $cron_key ] ?? null;
 						if ( $active && $active['count'] > 0 ) : ?>
-						<button type="button"
-							class="tm-btn tm-btn-sm tm-btn-active-cron"
-							disabled
-							data-lang="<?php echo esc_attr( $lang ); ?>"
-							data-post-type="<?php echo esc_attr( $pt ); ?>"
-							data-cron-ids="<?php echo esc_attr( implode( ',', $active['ids'] ) ); ?>"
-							data-progress-id="progress-<?php echo esc_attr( $cron_key ); ?>"
-							style="background:var(--n8n-blue, #2563eb);color:#fff;opacity:0.9;">
-							<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span>
-							<?php printf( '%d translating...', $active['count'] ); ?>
-						</button>
+						<span class="tm-btn-group" style="display:inline-flex;gap:4px;">
+							<button type="button"
+								class="tm-btn tm-btn-sm tm-btn-active-cron"
+								disabled
+								data-lang="<?php echo esc_attr( $lang ); ?>"
+								data-post-type="<?php echo esc_attr( $pt ); ?>"
+								data-cron-ids="<?php echo esc_attr( implode( ',', $active['ids'] ) ); ?>"
+								data-progress-id="progress-<?php echo esc_attr( $cron_key ); ?>"
+								style="background:var(--n8n-blue, #2563eb);color:#fff;opacity:0.9;">
+								<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span>
+								<?php printf( '%d translating...', $active['count'] ); ?>
+							</button>
+							<button type="button"
+								class="tm-btn tm-btn-sm tm-stop-cron-btn"
+								data-lang="<?php echo esc_attr( $lang ); ?>"
+								data-post-type="<?php echo esc_attr( $pt ); ?>"
+								data-cron-ids="<?php echo esc_attr( implode( ',', $active['ids'] ) ); ?>"
+								style="background:var(--n8n-error, #dc2626);color:#fff;"
+								title="<?php esc_attr_e( 'Stop background translations', 'luwipress' ); ?>">
+								<span class="dashicons dashicons-no"></span>
+							</button>
+						</span>
 						<?php elseif ( $missing > 0 ) : ?>
 						<button type="button"
 							class="tm-btn tm-btn-primary tm-btn-sm tm-translate-btn"
@@ -691,6 +702,33 @@ if ( $is_wpml ) {
 			// Start polling after 3s
 			setTimeout(pollActiveCron, 3000);
 		})();
+
+		// ─── Stop translation button ───
+		document.querySelectorAll('.tm-stop-cron-btn').forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				if (!confirm('Stop background translations? You can resume later with Translate All.')) return;
+				var ids = (btn.dataset.cronIds || '').split(',').filter(Boolean);
+				btn.disabled = true;
+				btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span>';
+
+				var fd = new FormData();
+				fd.append('action', 'luwipress_stop_translations');
+				fd.append('nonce', nonce);
+				ids.forEach(function(id) { fd.append('post_ids[]', id); });
+
+				fetch(ajaxurl, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					if (d.success) {
+						setTimeout(function() { location.reload(); }, 1000);
+					} else {
+						btn.disabled = false;
+						btn.innerHTML = '<span class="dashicons dashicons-no"></span>';
+					}
+				})
+				.catch(function() { btn.disabled = false; });
+			});
+		});
 
 		// ─── Helper: Update row stats (Done, Missing, Coverage bar) live ───
 		function updateRowStats(postType, lang, newDone, total) {

@@ -37,6 +37,7 @@ class LuwiPress_Translation {
         add_action('wp_ajax_luwipress_get_missing_terms', [$this, 'ajax_get_missing_terms']);
         add_action('wp_ajax_luwipress_translate_single_term', [$this, 'ajax_translate_single_term']);
         add_action('wp_ajax_luwipress_retranslate_broken', [$this, 'ajax_retranslate_broken']);
+        add_action('wp_ajax_luwipress_stop_translations', [$this, 'ajax_stop_translations']);
         add_action('wp_ajax_luwipress_sync_wpml_menus', [$this, 'ajax_sync_wpml_menus']);
     }
 
@@ -2928,5 +2929,46 @@ class LuwiPress_Translation {
                 'message' => 'All menus are in sync. If menus are still broken, go to WPML → Menu Sync manually.',
             ) );
         }
+    }
+
+    // ─── AJAX: Stop active cron translations ────────────────────────────
+
+    public function ajax_stop_translations() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        $post_ids = array_map( 'absint', (array) ( $_POST['post_ids'] ?? array() ) );
+        if ( empty( $post_ids ) ) {
+            wp_send_json_error( 'No post_ids' );
+        }
+
+        $stopped = 0;
+        foreach ( $post_ids as $pid ) {
+            $raw = get_post_meta( $pid, '_luwipress_translation_status', true );
+            if ( ! $raw ) {
+                continue;
+            }
+            $st = json_decode( $raw, true );
+            if ( $st && in_array( $st['status'] ?? '', array( 'queued', 'translating' ), true ) ) {
+                // Clear the status — cron job will still run but won't find queued status
+                delete_post_meta( $pid, '_luwipress_translation_status' );
+
+                // Unschedule the cron event if still pending
+                $lang = $st['language'] ?? '';
+                if ( $lang ) {
+                    wp_clear_scheduled_hook( 'luwipress_elementor_translate_single', array( $pid, $lang ) );
+                }
+                $stopped++;
+            }
+        }
+
+        LuwiPress_Logger::log( sprintf( 'Translation stopped: %d jobs cancelled', $stopped ), 'info' );
+
+        wp_send_json_success( array(
+            'stopped' => $stopped,
+            'message' => sprintf( '%d translation(s) stopped. You can resume with Translate All.', $stopped ),
+        ) );
     }
 }
