@@ -214,7 +214,7 @@ class LuwiPress_Translation {
         $default_lang = apply_filters( 'wpml_default_language', get_locale() );
         $element_type = 'post_' . $post_type;
 
-        // Get all original posts
+        // Get all original posts — exclude orphan trids (lonely EN entries that are actually translations)
         $originals = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID, p.post_title, t.trid
              FROM {$wpdb->posts} p
@@ -222,10 +222,21 @@ class LuwiPress_Translation {
              WHERE p.post_type = %s AND p.post_status = 'publish'
                AND t.element_type = %s AND t.language_code = %s
                AND t.source_language_code IS NULL
+               AND p.post_title != ''
              ORDER BY p.post_date DESC
              LIMIT %d",
             $post_type, $element_type, $default_lang, $limit * 2
         ));
+
+        // Filter out orphan sources — lonely trids with non-English titles
+        $originals = array_filter( $originals, function( $orig ) use ( $wpdb ) {
+            $trid_count = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations WHERE trid = %d", $orig->trid
+            ) );
+            if ( $trid_count > 1 ) return true; // Has translations — real source
+            // Lonely trid — check if title looks non-English
+            return ! preg_match( '/[àâäéèêëïîôùûüçñáíóúìòü]/u', mb_strtolower( $orig->post_title ) );
+        } );
 
         // Bulk-fetch all existing translations for these trids in one query
         $trids = wp_list_pluck( $originals, 'trid' );
@@ -3096,52 +3107,68 @@ class LuwiPress_Translation {
 
         global $wpdb;
         $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $fixed = 0;
 
-        // Find posts in non-default languages that have source_language_code IS NULL
-        // These appear as "original" posts in the wrong language
-        $orphans = $wpdb->get_results( $wpdb->prepare(
-            "SELECT t.translation_id, t.element_id, t.language_code, t.trid, t.element_type, p.post_title
+        // ── Type 1: Non-EN posts registered as originals (source_language_code IS NULL, lang != EN) ──
+        $type1 = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.translation_id, t.element_id, t.language_code, t.trid, p.post_title
              FROM {$wpdb->prefix}icl_translations t
              JOIN {$wpdb->posts} p ON t.element_id = p.ID
              WHERE t.source_language_code IS NULL
                AND t.language_code != %s
                AND t.element_type LIKE 'post_%%'
                AND p.post_type IN ('post', 'page', 'product')
-               AND p.post_status IN ('publish', 'draft', 'private')
              LIMIT 200",
             $default_lang
         ) );
-
-        if ( empty( $orphans ) ) {
-            wp_send_json_success( array( 'fixed' => 0, 'message' => 'No orphan translations found.' ) );
-        }
-
-        $fixed = 0;
-        foreach ( $orphans as $row ) {
-            // Check if this trid has a proper source (default language post)
+        foreach ( $type1 as $row ) {
             $has_source = $wpdb->get_var( $wpdb->prepare(
                 "SELECT element_id FROM {$wpdb->prefix}icl_translations
                  WHERE trid = %d AND language_code = %s AND source_language_code IS NULL",
                 $row->trid, $default_lang
             ) );
-
             if ( $has_source ) {
-                // Fix: set source_language_code to default language
-                $wpdb->update(
-                    $wpdb->prefix . 'icl_translations',
+                $wpdb->update( $wpdb->prefix . 'icl_translations',
                     array( 'source_language_code' => $default_lang ),
-                    array( 'translation_id' => $row->translation_id ),
-                    array( '%s' ),
-                    array( '%d' )
-                );
+                    array( 'translation_id' => $row->translation_id ) );
                 $fixed++;
-            } else {
-                // No source exists — this IS the source, just in wrong language
-                // Log but don't fix (might be intentional)
-                LuwiPress_Logger::log( sprintf(
-                    'Orphan without source: #%d (%s, %s) trid=%d — "%s"',
-                    $row->element_id, $row->language_code, $row->element_type, $row->trid, $row->post_title
-                ), 'warning' );
+            }
+        }
+
+        // ── Type 2: Posts registered as EN originals but their trid is a lonely group ──
+        // These are FR/IT/ES translations that got their own trid with language_code=EN
+        // Detect: EN original in a trid where NO other translations exist + title is non-English
+        $type2 = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.translation_id, t.element_id, t.trid, p.post_title, p.post_name
+             FROM {$wpdb->prefix}icl_translations t
+             JOIN {$wpdb->posts} p ON t.element_id = p.ID
+             WHERE t.language_code = %s
+               AND t.source_language_code IS NULL
+               AND t.element_type LIKE 'post_%%'
+               AND p.post_type IN ('post', 'page', 'product')
+               AND p.post_status = 'publish'
+             LIMIT 500",
+            $default_lang
+        ) );
+        foreach ( $type2 as $row ) {
+            // Count how many translations this trid has
+            $trid_count = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations WHERE trid = %d",
+                $row->trid
+            ) );
+            // If this trid has only 1 entry (just this post, no translations)
+            // AND the title looks non-English, it's likely an orphan
+            if ( $trid_count <= 1 ) {
+                $title = mb_strtolower( $row->post_title );
+                $is_foreign = preg_match( '/[àâäéèêëïîôùûüçñáíóúìòü]/', $title )
+                    || preg_match( '/\b(della|degli|delle|nella|sono|une|dans|pour|avec|entre|también|guía|cómo|del|alla|degli)\b/u', $title );
+                if ( $is_foreign ) {
+                    // Delete this orphan WPML record — the post itself stays but won't appear in EN list
+                    $wpdb->delete( $wpdb->prefix . 'icl_translations', array( 'translation_id' => $row->translation_id ) );
+                    $fixed++;
+                    LuwiPress_Logger::log( sprintf( 'Orphan fixed (Type 2): deleted WPML record for #%d "%s" (lonely EN trid=%d)',
+                        $row->element_id, mb_substr( $row->post_title, 0, 40 ), $row->trid ), 'info' );
+                }
             }
         }
 
