@@ -12,6 +12,28 @@ if ( ! is_dir( $src ) ) {
     die( "Source directory not found: $src\n" );
 }
 
+// ── Pre-build syntax check ──
+echo "Checking PHP syntax...\n";
+$lint_errors = 0;
+$lint_iter = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator( $src, RecursiveDirectoryIterator::SKIP_DOTS )
+);
+foreach ( $lint_iter as $lint_file ) {
+    if ( $lint_file->getExtension() !== 'php' ) continue;
+    $out = []; $code = 0;
+    exec( 'php -l ' . escapeshellarg( $lint_file->getRealPath() ) . ' 2>&1', $out, $code );
+    if ( $code !== 0 ) {
+        $lint_errors++;
+        $rel = str_replace( $src . DIRECTORY_SEPARATOR, '', $lint_file->getRealPath() );
+        echo "  FAIL: $rel\n";
+        foreach ( $out as $l ) { if ( stripos( $l, 'no syntax' ) === false ) echo "    $l\n"; }
+    }
+}
+if ( $lint_errors > 0 ) {
+    die( "\nBLOCKED: $lint_errors syntax error(s). Fix before building.\n" );
+}
+echo "  All PHP files OK.\n\n";
+
 if ( ! is_dir( dirname( $dst ) ) ) {
     mkdir( dirname( $dst ), 0755, true );
 }

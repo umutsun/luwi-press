@@ -614,7 +614,7 @@ if ( $is_wpml ) {
 			<div class="tm-tool-card">
 				<div class="tm-tool-info">
 					<strong><?php esc_html_e( 'Clean Orphan Translations', 'luwipress' ); ?></strong>
-					<span><?php esc_html_e( 'Removes WPML records with no matching original. Fixes inflated coverage.', 'luwipress' ); ?></span>
+					<span><?php esc_html_e( 'Scans for orphan WPML records (preview first, then confirm). Fixes inflated coverage.', 'luwipress' ); ?></span>
 				</div>
 				<button type="button" id="luwipress-clean-orphans" class="tm-btn tm-btn-danger">
 					<span class="dashicons dashicons-trash"></span> <?php esc_html_e( 'Clean', 'luwipress' ); ?>
@@ -1034,8 +1034,49 @@ if ( $is_wpml ) {
 		}
 		toolClick('luwipress-fix-categories', 'luwipress-fix-categories-result', 'luwipress_fix_category_assignments');
 		toolClick('luwipress-fix-images', 'luwipress-fix-images-result', 'luwipress_fix_translation_images');
-		toolClick('luwipress-clean-orphans', 'luwipress-clean-orphans-result', 'luwipress_clean_orphan_translations', null,
-			<?php echo wp_json_encode( __( 'This will delete orphan WPML translation records. Continue?', 'luwipress' ) ); ?>);
+		// Clean Orphans — dry-run first, then confirm
+		(function() {
+			var btn = document.getElementById('luwipress-clean-orphans');
+			if (!btn) return;
+			var result = document.getElementById('luwipress-clean-orphans-result');
+			var orphanNonce = <?php echo wp_json_encode( wp_create_nonce( 'luwipress_clean_orphans' ) ); ?>;
+			var confirmed = false;
+
+			btn.addEventListener('click', function() {
+				btn.disabled = true; btn.classList.add('tm-btn-loading');
+				result.textContent = '';
+
+				var fd = new FormData();
+				fd.append('action', 'luwipress_clean_orphan_translations');
+				fd.append('nonce', orphanNonce);
+				if (confirmed) fd.append('confirmed', '1');
+
+				fetch(ajaxurl, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					btn.disabled = false; btn.classList.remove('tm-btn-loading');
+					if (!d.success) { result.textContent = d.data || 'Error'; result.className = 'tm-tool-result result-err'; return; }
+					if (d.data.dry_run) {
+						// Show preview, change button to confirm
+						result.textContent = d.data.message;
+						result.className = 'tm-tool-result result-ok';
+						if (d.data.total > 0) {
+							btn.innerHTML = '<span class="dashicons dashicons-trash"></span> Confirm Clean (' + d.data.total + ')';
+							btn.style.background = 'var(--n8n-error, #dc2626)'; btn.style.color = '#fff';
+							confirmed = true;
+						}
+					} else {
+						result.textContent = d.data.message || (d.data.removed + ' cleaned');
+						result.className = 'tm-tool-result result-ok';
+						confirmed = false;
+						btn.innerHTML = '<span class="dashicons dashicons-trash"></span> Clean';
+						btn.style.background = ''; btn.style.color = '';
+						if (d.data.removed > 0) setTimeout(function() { location.reload(); }, 2000);
+					}
+				})
+				.catch(function() { btn.disabled = false; btn.classList.remove('tm-btn-loading'); result.textContent = 'Failed'; result.className = 'tm-tool-result result-err'; });
+			});
+		})();
 
 		// ─── Re-translate broken ───
 		(function() {

@@ -2464,6 +2464,8 @@ class LuwiPress_Translation {
             wp_send_json_error( 'WPML not active' );
         }
 
+        $dry_run = ! empty( $_POST['dry_run'] ) || empty( $_POST['confirmed'] );
+
         global $wpdb;
         $icl = $wpdb->prefix . 'icl_translations';
         $terms_removed = 0;
@@ -2483,14 +2485,13 @@ class LuwiPress_Translation {
         );
 
         foreach ( $orphan_terms as $row ) {
-            // Delete the orphan term itself (if it exists)
-            $taxonomy = str_replace( 'tax_', '', $row->element_type );
-            if ( term_exists( (int) $row->element_id, $taxonomy ) ) {
-                wp_delete_term( (int) $row->element_id, $taxonomy );
+            if ( ! $dry_run ) {
+                $taxonomy = str_replace( 'tax_', '', $row->element_type );
+                if ( term_exists( (int) $row->element_id, $taxonomy ) ) {
+                    wp_delete_term( (int) $row->element_id, $taxonomy );
+                }
+                $wpdb->delete( $icl, array( 'translation_id' => $row->translation_id ), array( '%d' ) );
             }
-
-            // Remove the icl_translations record
-            $wpdb->delete( $icl, array( 'translation_id' => $row->translation_id ), array( '%d' ) );
             $terms_removed++;
         }
 
@@ -2503,7 +2504,9 @@ class LuwiPress_Translation {
         );
 
         foreach ( $orphan_posts as $row ) {
-            $wpdb->delete( $icl, array( 'translation_id' => $row->translation_id ), array( '%d' ) );
+            if ( ! $dry_run ) {
+                $wpdb->delete( $icl, array( 'translation_id' => $row->translation_id ), array( '%d' ) );
+            }
             $posts_removed++;
         }
 
@@ -2516,11 +2519,24 @@ class LuwiPress_Translation {
         );
 
         foreach ( $orphan_term_records as $row ) {
-            $wpdb->delete( $icl, array( 'translation_id' => $row->translation_id ), array( '%d' ) );
+            if ( ! $dry_run ) {
+                $wpdb->delete( $icl, array( 'translation_id' => $row->translation_id ), array( '%d' ) );
+            }
             $terms_removed++;
         }
 
         $total = $terms_removed + $posts_removed;
+
+        if ( $dry_run ) {
+            wp_send_json_success( array(
+                'dry_run' => true,
+                'terms'   => $terms_removed,
+                'posts'   => $posts_removed,
+                'total'   => $total,
+                'message' => sprintf( 'Found %d orphans (%d terms, %d posts). Click again to clean.', $total, $terms_removed, $posts_removed ),
+            ) );
+            return;
+        }
 
         LuwiPress_Logger::log(
             sprintf( 'Orphan cleanup: %d terms, %d posts removed from icl_translations', $terms_removed, $posts_removed ),
