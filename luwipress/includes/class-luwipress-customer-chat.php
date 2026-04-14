@@ -499,22 +499,42 @@ class LuwiPress_Customer_Chat {
 	private function build_rag_context( $message, $intent, $conversation ) {
 		$context = array();
 
-		// Product search — keyword match against published products
+		// Load Knowledge Graph data for rich context
+		$kg_data = $this->get_kg_data();
+
+		// Product search — keyword match against KG product nodes
 		if ( in_array( $intent, array( 'product_inquiry', 'stock_check', 'general' ), true ) ) {
-			$products = $this->search_products( $message );
+			$products = $this->search_products_from_kg( $message, $kg_data );
 			if ( ! empty( $products ) ) {
 				$context['products'] = $products;
 			}
 		}
 
+		// Store overview — categories, total products (always include for general context)
+		if ( ! empty( $kg_data['summary'] ) ) {
+			$context['store_summary'] = array(
+				'total_products'   => $kg_data['summary']['total_products'] ?? 0,
+				'total_categories' => $kg_data['summary']['total_categories'] ?? 0,
+			);
+		}
+
+		// Category list for browsing suggestions
+		if ( ! empty( $kg_data['nodes']['categories'] ) ) {
+			$cats = array();
+			foreach ( array_slice( $kg_data['nodes']['categories'], 0, 10 ) as $cat ) {
+				$cats[] = $cat['name'] . ' (' . $cat['product_count'] . ')';
+			}
+			$context['categories'] = $cats;
+		}
+
 		// Store policies
-		if ( in_array( $intent, array( 'shipping', 'returns' ), true ) ) {
+		if ( in_array( $intent, array( 'shipping', 'returns', 'general' ), true ) ) {
 			$shipping = get_option( 'luwipress_chat_shipping_policy', '' );
 			$returns  = get_option( 'luwipress_chat_returns_policy', '' );
-			if ( $intent === 'shipping' && ! empty( $shipping ) ) {
+			if ( ! empty( $shipping ) ) {
 				$context['shipping_policy'] = $shipping;
 			}
-			if ( $intent === 'returns' && ! empty( $returns ) ) {
+			if ( ! empty( $returns ) ) {
 				$context['returns_policy'] = $returns;
 			}
 		}
@@ -528,51 +548,107 @@ class LuwiPress_Customer_Chat {
 	}
 
 	/**
-	 * Search published WooCommerce products by keyword overlap.
+	 * Get Knowledge Graph data (cached).
 	 *
-	 * @param string $query  The search query.
-	 * @param int    $limit  Maximum results to return.
-	 * @return array Matched products with id, name, price, stock, url.
+	 * @return array KG data with products, categories, summary.
 	 */
-	private function search_products( $query, $limit = 3 ) {
-		global $wpdb;
+	private function get_kg_data() {
+		$cache_key = 'luwipress_chat_kg_data';
+		$data = get_transient( $cache_key );
 
-		// Get cached products or query directly
-		$cache_key = 'luwipress_chat_products';
-		$products  = get_transient( $cache_key );
-
-		if ( false === $products ) {
-			$products = $wpdb->get_results(
-				"SELECT ID, post_title, post_name
-				 FROM {$wpdb->posts}
-				 WHERE post_type = 'product'
-				   AND post_status = 'publish'
-				 ORDER BY ID DESC
-				 LIMIT 2000"
-			);
-			set_transient( $cache_key, $products, HOUR_IN_SECONDS );
+		if ( false !== $data ) {
+			return $data;
 		}
 
-		if ( empty( $products ) ) {
+		// Fetch KG data directly via the class (no HTTP call)
+		if ( ! class_exists( 'LuwiPress_Knowledge_Graph' ) ) {
 			return array();
+		}
+
+		$kg      = LuwiPress_Knowledge_Graph::get_instance();
+		$request = new WP_REST_Request( 'GET', '/luwipress/v1/knowledge-graph' );
+		$request->set_param( 'section', 'products,categories' );
+
+		$response = $kg->handle_knowledge_graph( $request );
+		$data     = ( $response instanceof WP_REST_Response ) ? $response->get_data() : $response;
+
+		// Cache for 1 hour
+		set_transient( $cache_key, $data, HOUR_IN_SECONDS );
+
+		return $data;
+	}
+
+	/**
+	 * Search products from Knowledge Graph data with rich context.
+	 *
+	 * Searches title, SKU, and categories. Returns enriched product data
+	 * including description excerpt, price, stock, categories, and review info.
+	 *
+	 * @param string $query   The search query.
+	 * @param array  $kg_data Knowledge Graph data.
+	 * @param int    $limit   Maximum results.
+	 * @return array Matched products with full context.
+	 */
+	private function search_products_from_kg( $query, $kg_data, $limit = 5 ) {
+		if ( empty( $kg_data['nodes']['products'] ) ) {
+			return array();
+		}
+
+		$products = $kg_data['nodes']['products'];
+
+		// Build category name map for matching
+		$cat_map = array();
+		if ( ! empty( $kg_data['nodes']['categories'] ) ) {
+			foreach ( $kg_data['nodes']['categories'] as $cat ) {
+				$cat_map[ $cat['id'] ] = $cat['name'];
+			}
 		}
 
 		$keywords = array_filter( explode( ' ', mb_strtolower( $query ) ), function( $w ) {
-			return mb_strlen( $w ) >= 3;
+			return mb_strlen( $w ) >= 2;
 		} );
 		if ( empty( $keywords ) ) {
-			return array();
+			// If no keywords, return top 5 products by opportunity score (most complete)
+			usort( $products, function( $a, $b ) {
+				return ( $a['opportunity_score'] ?? 99 ) <=> ( $b['opportunity_score'] ?? 99 );
+			} );
+			$products = array_slice( $products, 0, $limit );
+			return $this->enrich_kg_products( $products, $cat_map );
 		}
 
 		$results = array();
 		foreach ( $products as $p ) {
-			$score    = 0;
-			$haystack = mb_strtolower( $p->post_title );
+			$score = 0;
+
+			// Search in title (highest weight)
+			$title = mb_strtolower( $p['name'] ?? '' );
 			foreach ( $keywords as $kw ) {
-				if ( mb_strpos( $haystack, $kw ) !== false ) {
-					$score++;
+				if ( mb_strpos( $title, $kw ) !== false ) {
+					$score += 3;
 				}
 			}
+
+			// Search in SKU
+			$sku = mb_strtolower( $p['sku'] ?? '' );
+			if ( ! empty( $sku ) ) {
+				foreach ( $keywords as $kw ) {
+					if ( mb_strpos( $sku, $kw ) !== false ) {
+						$score += 2;
+					}
+				}
+			}
+
+			// Search in category names
+			$cat_names = '';
+			foreach ( $p['categories'] ?? array() as $cat_id ) {
+				$cat_names .= ' ' . mb_strtolower( $cat_map[ $cat_id ] ?? '' );
+			}
+			foreach ( $keywords as $kw ) {
+				if ( mb_strpos( $cat_names, $kw ) !== false ) {
+					$score += 1;
+				}
+			}
+
 			if ( $score > 0 ) {
 				$results[] = array( 'product' => $p, 'score' => $score );
 			}
@@ -581,22 +657,54 @@ class LuwiPress_Customer_Chat {
 		usort( $results, function( $a, $b ) {
 			return $b['score'] - $a['score'];
 		} );
-		$top = array_slice( $results, 0, $limit );
 
+		$top = array_slice( $results, 0, $limit );
+		$matched = array_map( function( $r ) { return $r['product']; }, $top );
+
+		return $this->enrich_kg_products( $matched, $cat_map );
+	}
+
+	/**
+	 * Enrich KG product nodes with additional data for AI context.
+	 *
+	 * @param array $products KG product nodes.
+	 * @param array $cat_map  Category ID → name map.
+	 * @return array Enriched products.
+	 */
+	private function enrich_kg_products( $products, $cat_map ) {
 		$output = array();
-		foreach ( $top as $r ) {
-			$product_id = $r['product']->ID;
-			$price      = get_post_meta( $product_id, '_price', true );
-			$stock      = get_post_meta( $product_id, '_stock_status', true );
-			$output[]   = array(
-				'id'    => $product_id,
-				'name'  => $r['product']->post_title,
-				'price' => $price ? $price : 'N/A',
-				'stock' => $stock ? $stock : 'instock',
-				'url'   => get_permalink( $product_id ),
+		foreach ( $products as $p ) {
+			$product_id = $p['id'];
+
+			// Get description excerpt
+			$post = get_post( $product_id );
+			$description = '';
+			if ( $post ) {
+				$description = wp_trim_words( wp_strip_all_tags( $post->post_content ), 40 );
+			}
+
+			// Category names
+			$cat_names = array();
+			foreach ( $p['categories'] ?? array() as $cat_id ) {
+				if ( isset( $cat_map[ $cat_id ] ) ) {
+					$cat_names[] = $cat_map[ $cat_id ];
+				}
+			}
+
+			$currency = function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol() : '';
+
+			$output[] = array(
+				'id'          => $product_id,
+				'name'        => $p['name'],
+				'price'       => ( $p['price'] ?? 'N/A' ) . $currency,
+				'stock'       => $p['stock_status'] ?? 'instock',
+				'sku'         => $p['sku'] ?? '',
+				'categories'  => $cat_names,
+				'description' => $description,
+				'reviews'     => $p['reviews'] ?? array( 'count' => 0, 'avg_rating' => 0 ),
+				'url'         => get_permalink( $product_id ),
 			);
 		}
-
 		return $output;
 	}
 
@@ -649,14 +757,35 @@ class LuwiPress_Customer_Chat {
 		if ( $currency ) {
 			$prompt .= "Currency: {$currency}\n";
 		}
+
+		// Store overview
+		if ( ! empty( $context['store_summary'] ) ) {
+			$prompt .= "Store has {$context['store_summary']['total_products']} products in {$context['store_summary']['total_categories']} categories.\n";
+		}
+
+		// Categories
+		if ( ! empty( $context['categories'] ) ) {
+			$prompt .= "\nPRODUCT CATEGORIES: " . implode( ', ', $context['categories'] ) . "\n";
+		}
+
 		$prompt .= "\n";
 
-		// Add product context
+		// Add product context with rich details
 		if ( ! empty( $context['products'] ) ) {
 			$prompt .= "RELEVANT PRODUCTS:\n";
 			foreach ( $context['products'] as $p ) {
-				$stock_text = $p['stock'] === 'instock' ? 'In Stock' : 'Out of Stock';
-				$prompt .= "- {$p['name']} — {$p['price']} {$currency} — {$stock_text} — {$p['url']}\n";
+				$stock_text = ( $p['stock'] ?? 'instock' ) === 'instock' ? 'In Stock' : 'Out of Stock';
+				$prompt .= "- {$p['name']} — {$p['price']} — {$stock_text}\n";
+				if ( ! empty( $p['categories'] ) ) {
+					$prompt .= "  Categories: " . implode( ', ', $p['categories'] ) . "\n";
+				}
+				if ( ! empty( $p['description'] ) ) {
+					$prompt .= "  Description: {$p['description']}\n";
+				}
+				if ( ! empty( $p['reviews']['count'] ) && $p['reviews']['count'] > 0 ) {
+					$prompt .= "  Reviews: {$p['reviews']['count']} reviews, {$p['reviews']['avg_rating']}/5 rating\n";
+				}
+				$prompt .= "  Link: {$p['url']}\n";
 			}
 			$prompt .= "\n";
 		}
@@ -680,11 +809,12 @@ class LuwiPress_Customer_Chat {
 
 		$prompt .= "RULES:\n";
 		$prompt .= "- Be helpful, concise, and friendly\n";
-		$prompt .= "- Only share product information from the RELEVANT PRODUCTS list above\n";
+		$prompt .= "- Use ONLY the product information provided above — never invent products or prices\n";
+		$prompt .= "- When mentioning products, always include their link\n";
+		$prompt .= "- If asked about categories or browsing, suggest relevant categories from the list\n";
 		$prompt .= "- If you cannot answer confidently, suggest the customer speak with the team\n";
-		$prompt .= "- Never make up product information, prices, or availability\n";
 		$prompt .= "- Keep responses under 150 words\n";
-		$prompt .= "- When mentioning products, include their link\n";
+		$prompt .= "- Respond in the same language the customer uses\n";
 
 		return $prompt;
 	}
