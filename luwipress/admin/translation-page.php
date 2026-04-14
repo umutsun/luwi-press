@@ -604,7 +604,7 @@ if ( $is_wpml ) {
 			<div class="tm-tool-card">
 				<div class="tm-tool-info">
 					<strong><?php esc_html_e( 'Fix Translation Images', 'luwipress' ); ?></strong>
-					<span><?php esc_html_e( 'Copies original product images to all translated products.', 'luwipress' ); ?></span>
+					<span><?php esc_html_e( 'Copies featured images from originals to all translated posts, pages, and products.', 'luwipress' ); ?></span>
 				</div>
 				<button type="button" id="luwipress-fix-images" class="tm-btn tm-btn-secondary">
 					<span class="dashicons dashicons-format-image"></span> <?php esc_html_e( 'Fix', 'luwipress' ); ?>

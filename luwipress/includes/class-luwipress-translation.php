@@ -1171,20 +1171,25 @@ class LuwiPress_Translation {
         global $wpdb;
         $default_lang = apply_filters( 'wpml_default_language', get_locale() );
 
-        // Get all default-language products
-        $products = $wpdb->get_results( $wpdb->prepare(
-            "SELECT t.element_id AS product_id, t.trid
+        // Get all default-language posts, pages, and products
+        $originals = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.element_id AS post_id, t.trid, p.post_type
              FROM {$wpdb->prefix}icl_translations t
              JOIN {$wpdb->posts} p ON t.element_id = p.ID
-             WHERE t.element_type = 'post_product'
+             WHERE t.element_type IN ('post_product', 'post_post', 'post_page')
                AND t.language_code = %s
+               AND t.source_language_code IS NULL
                AND p.post_status = 'publish'",
             $default_lang
         ) );
 
         $fixed = 0;
-        foreach ( $products as $row ) {
-            // Find all translations of this product
+        foreach ( $originals as $row ) {
+            $source_thumb = get_post_thumbnail_id( $row->post_id );
+            if ( ! $source_thumb ) {
+                continue;
+            }
+
             $translations = $wpdb->get_results( $wpdb->prepare(
                 "SELECT element_id FROM {$wpdb->prefix}icl_translations
                  WHERE trid = %d AND language_code != %s AND element_id IS NOT NULL",
@@ -1192,8 +1197,15 @@ class LuwiPress_Translation {
             ) );
 
             foreach ( $translations as $tr ) {
-                $this->copy_product_images( $row->product_id, $tr->element_id );
-                $fixed++;
+                $tr_thumb = get_post_thumbnail_id( $tr->element_id );
+                if ( ! $tr_thumb || $tr_thumb !== $source_thumb ) {
+                    set_post_thumbnail( $tr->element_id, $source_thumb );
+                    $fixed++;
+                }
+                // Also copy product gallery for WC products
+                if ( 'product' === $row->post_type ) {
+                    $this->copy_product_images( $row->post_id, $tr->element_id );
+                }
             }
         }
 
