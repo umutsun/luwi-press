@@ -928,15 +928,19 @@ class LuwiPress_WebMCP {
         ), function ( $args ) {
             $post_id = intval( $args['id'] );
             $force   = ! empty( $args['force_delete'] );
-            $post    = get_post( $post_id );
+            // Switch WPML to all languages so we can find any post regardless of language
+            do_action( 'wpml_switch_language', 'all' );
+            $post = get_post( $post_id );
             if ( ! $post ) {
+                do_action( 'wpml_switch_language', apply_filters( 'wpml_default_language', 'en' ) );
                 throw new Exception( 'Post not found' );
             }
             $result = wp_delete_post( $post_id, $force );
+            do_action( 'wpml_switch_language', apply_filters( 'wpml_default_language', 'en' ) );
             if ( ! $result ) {
                 throw new Exception( 'Failed to delete post' );
             }
-            return array( 'id' => $post_id, 'deleted' => true, 'force' => $force );
+            return array( 'id' => $post_id, 'deleted' => true, 'force' => $force, 'title' => $post->post_title );
         } );
 
         $this->register_tool( 'content_opportunities', array(
@@ -2437,7 +2441,9 @@ class LuwiPress_WebMCP {
      */
     private function update_post_internal( $args ) {
         $post_id = intval( $args['id'] ?? 0 );
+        do_action( 'wpml_switch_language', 'all' );
         if ( ! $post_id || ! get_post( $post_id ) ) {
+            do_action( 'wpml_switch_language', apply_filters( 'wpml_default_language', 'en' ) );
             throw new Exception( 'Post not found' );
         }
 
@@ -2461,6 +2467,7 @@ class LuwiPress_WebMCP {
         }
 
         update_post_meta( $post_id, '_luwipress_last_updated_via', 'webmcp' );
+        do_action( 'wpml_switch_language', apply_filters( 'wpml_default_language', 'en' ) );
 
         return array(
             'id'      => $post_id,
