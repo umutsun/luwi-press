@@ -3999,6 +3999,7 @@ a:focus-visible {
 
 /* Spin animation for loading */
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes pulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
 
 /* ========================================
    Translation Live Progress

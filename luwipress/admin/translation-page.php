@@ -237,6 +237,34 @@ foreach ( $coverage as $c ) {
 }
 $overall_pct = $total_possible > 0 ? round( ( $total_translated / $total_possible ) * 100 ) : 0;
 $missing_count = $total_possible - $total_translated;
+
+// ── Detect active cron translations (queued or translating) ──
+$active_cron_jobs = array();
+if ( $is_wpml ) {
+	$cron_rows = $wpdb->get_results(
+		"SELECT pm.post_id, pm.meta_value
+		 FROM {$wpdb->postmeta} pm
+		 JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+		 WHERE pm.meta_key = '_luwipress_translation_status'
+		   AND p.post_status = 'publish'
+		 ORDER BY pm.meta_id DESC
+		 LIMIT 200"
+	);
+	foreach ( $cron_rows as $row ) {
+		$st = json_decode( $row->meta_value, true );
+		if ( $st && in_array( $st['status'] ?? '', array( 'queued', 'translating' ), true ) ) {
+			$lang = $st['language'] ?? '';
+			$post = get_post( $row->post_id );
+			$pt   = $post ? $post->post_type : 'post';
+			$key  = $pt . '-' . $lang;
+			if ( ! isset( $active_cron_jobs[ $key ] ) ) {
+				$active_cron_jobs[ $key ] = array( 'count' => 0, 'post_type' => $pt, 'language' => $lang, 'ids' => array() );
+			}
+			$active_cron_jobs[ $key ]['count']++;
+			$active_cron_jobs[ $key ]['ids'][] = $row->post_id;
+		}
+	}
+}
 ?>
 
 <div class="wrap n8n-tm">
@@ -486,7 +514,22 @@ $missing_count = $total_possible - $total_translated;
 						</div>
 					</td>
 					<td class="tm-col-action">
-						<?php if ( $missing > 0 ) : ?>
+						<?php
+						$cron_key = $pt . '-' . $lang;
+						$active   = $active_cron_jobs[ $cron_key ] ?? null;
+						if ( $active && $active['count'] > 0 ) : ?>
+						<button type="button"
+							class="tm-btn tm-btn-sm tm-btn-active-cron"
+							disabled
+							data-lang="<?php echo esc_attr( $lang ); ?>"
+							data-post-type="<?php echo esc_attr( $pt ); ?>"
+							data-cron-ids="<?php echo esc_attr( implode( ',', $active['ids'] ) ); ?>"
+							data-progress-id="progress-<?php echo esc_attr( $cron_key ); ?>"
+							style="background:var(--n8n-blue, #2563eb);color:#fff;opacity:0.9;">
+							<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span>
+							<?php printf( '%d translating...', $active['count'] ); ?>
+						</button>
+						<?php elseif ( $missing > 0 ) : ?>
 						<button type="button"
 							class="tm-btn tm-btn-primary tm-btn-sm tm-translate-btn"
 							data-lang="<?php echo esc_attr( $lang ); ?>"
@@ -501,15 +544,17 @@ $missing_count = $total_possible - $total_translated;
 						<?php endif; ?>
 					</td>
 				</tr>
-				<?php if ( $missing > 0 ) : ?>
-				<tr class="tm-progress-row" id="progress-<?php echo esc_attr( $pt . '-' . $lang ); ?>" style="display:none;">
+				<?php if ( $missing > 0 || ( $active && $active['count'] > 0 ) ) :
+					$show_progress = $active && $active['count'] > 0;
+				?>
+				<tr class="tm-progress-row" id="progress-<?php echo esc_attr( $pt . '-' . $lang ); ?>" style="<?php echo $show_progress ? '' : 'display:none;'; ?>">
 					<td colspan="5" class="tm-progress-cell">
 						<div class="tm-live-wrapper">
 							<div class="tm-live-header">
-								<span class="tm-live-counter">0 / <?php echo $missing; ?></span>
-								<span class="tm-live-status"><?php esc_html_e( 'Preparing...', 'luwipress' ); ?></span>
+								<span class="tm-live-counter"><?php echo $show_progress ? $active['count'] . ' in background' : '0 / ' . $missing; ?></span>
+								<span class="tm-live-status"><?php echo $show_progress ? esc_html__( 'Translating in background (~30s each)...', 'luwipress' ) : esc_html__( 'Preparing...', 'luwipress' ); ?></span>
 							</div>
-							<div class="tm-live-bar-full"><div class="tm-live-fill-full"></div></div>
+							<div class="tm-live-bar-full"><div class="tm-live-fill-full" <?php if ( $show_progress ) echo 'style="width:10%;background:var(--n8n-blue, #2563eb);animation:pulse 2s infinite;"'; ?>></div></div>
 							<div class="tm-live-item"></div>
 						</div>
 					</td>
@@ -591,6 +636,61 @@ $missing_count = $total_possible - $total_translated;
 	<script>
 	(function() {
 		var nonce = <?php echo wp_json_encode( wp_create_nonce( 'luwipress_translation_nonce' ) ); ?>;
+
+		// ─── Auto-poll active cron jobs on page load ───
+		(function() {
+			var cronBtns = document.querySelectorAll('.tm-btn-active-cron');
+			if (!cronBtns.length) return;
+
+			function pollActiveCron() {
+				var allIds = [];
+				cronBtns.forEach(function(btn) {
+					var ids = (btn.dataset.cronIds || '').split(',').filter(Boolean);
+					ids.forEach(function(id) { allIds.push(id); });
+				});
+				if (!allIds.length) { location.reload(); return; }
+
+				var fd = new FormData();
+				fd.append('action', 'luwipress_translation_progress');
+				fd.append('nonce', nonce);
+				allIds.forEach(function(id) { fd.append('post_ids[]', id); });
+
+				// Trigger cron
+				fetch(window.location.origin + '/wp-cron.php?doing_wp_cron=' + Date.now(), {mode:'no-cors'}).catch(function(){});
+
+				fetch(ajaxurl, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(r) {
+					if (!r.success || !r.data) { setTimeout(pollActiveCron, 10000); return; }
+					var stillActive = 0, justCompleted = 0;
+					r.data.forEach(function(st) {
+						if (st.status === 'completed') justCompleted++;
+						else if (st.status !== 'failed') stillActive++;
+					});
+					if (justCompleted > 0 && stillActive === 0) {
+						location.reload();
+					} else if (stillActive > 0) {
+						// Update buttons
+						cronBtns.forEach(function(btn) {
+							var progressEl = document.getElementById(btn.dataset.progressId);
+							if (progressEl) {
+								var statusEl = progressEl.querySelector('.tm-live-status');
+								var counterEl = progressEl.querySelector('.tm-live-counter');
+								if (statusEl) statusEl.textContent = stillActive + ' translating in background (~30s each)...';
+								if (counterEl) counterEl.textContent = justCompleted + ' done, ' + stillActive + ' remaining';
+							}
+						});
+						setTimeout(pollActiveCron, 10000);
+					} else {
+						location.reload();
+					}
+				})
+				.catch(function() { setTimeout(pollActiveCron, 15000); });
+			}
+
+			// Start polling after 3s
+			setTimeout(pollActiveCron, 3000);
+		})();
 
 		// ─── Helper: Update row stats (Done, Missing, Coverage bar) live ───
 		function updateRowStats(postType, lang, newDone, total) {
