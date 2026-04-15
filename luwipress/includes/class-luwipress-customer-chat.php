@@ -512,9 +512,12 @@ class LuwiPress_Customer_Chat {
 		// Load Knowledge Graph data for rich context
 		$kg_data = $this->get_kg_data();
 
-		// Product search — keyword match against KG product nodes
+		// Product search — BM25 first, fallback to KG keyword match
 		if ( in_array( $intent, array( 'product_inquiry', 'stock_check', 'general' ), true ) ) {
-			$products = $this->search_products_from_kg( $message, $kg_data );
+			$products = $this->search_products_bm25( $message );
+			if ( empty( $products ) ) {
+				$products = $this->search_products_from_kg( $message, $kg_data );
+			}
 			if ( ! empty( $products ) ) {
 				$context['products'] = $products;
 			}
@@ -679,6 +682,22 @@ class LuwiPress_Customer_Chat {
 		}
 
 		return array();
+	}
+
+	/**
+	 * BM25 ranked product search.
+	 */
+	private function search_products_bm25( $query, $limit = 5 ) {
+		if ( ! class_exists( 'LuwiPress_Search_Index' ) ) {
+			return array();
+		}
+
+		$index = LuwiPress_Search_Index::get_instance();
+		if ( ! $index->is_indexed() ) {
+			return array();
+		}
+
+		return $index->search( $query, $limit );
 	}
 
 	/**

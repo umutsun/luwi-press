@@ -711,6 +711,7 @@ class LuwiPress_WebMCP {
         $this->register_plugin_theme_tools();
         $this->register_menu_tools();
         $this->register_meta_tools();
+        $this->register_search_tools();
 
         /**
          * Allow third-party extensions to register additional MCP tools.
@@ -3912,6 +3913,60 @@ class LuwiPress_WebMCP {
             );
         }
         return $catalog;
+    }
+
+    /* ───────────────────── Search Tools ──────────────────────────── */
+
+    private function register_search_tools() {
+        if ( ! class_exists( 'LuwiPress_Search_Index' ) ) {
+            return;
+        }
+
+        $this->register_tool( 'search_products', array(
+            'description' => 'Search products using BM25 ranking — searches title, description, categories, tags, attributes, SKU, and FAQ content with relevance scoring',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'query' => array( 'type' => 'string', 'description' => 'Search query (required)' ),
+                    'limit' => array( 'type' => 'integer', 'description' => 'Max results (default 10)' ),
+                ),
+                'required' => array( 'query' ),
+            ),
+            'annotations' => array( 'title' => 'BM25 Product Search', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $index = LuwiPress_Search_Index::get_instance();
+            if ( ! $index->is_indexed() ) {
+                return array( 'error' => 'Search index not built yet. Run reindex first.', 'indexed' => false );
+            }
+            $results = $index->search( sanitize_text_field( $args['query'] ), absint( $args['limit'] ?? 10 ) );
+            return array( 'query' => $args['query'], 'results' => $results, 'count' => count( $results ) );
+        } );
+
+        $this->register_tool( 'search_reindex', array(
+            'description' => 'Rebuild the BM25 search index for all products — indexes title, description, categories, tags, attributes, SKU, and FAQ content',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Rebuild Search Index', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $index = LuwiPress_Search_Index::get_instance();
+            $count = $index->reindex_all();
+            $stats = $index->get_stats();
+            return array( 'reindexed' => $count, 'stats' => $stats );
+        } );
+
+        $this->register_tool( 'search_stats', array(
+            'description' => 'Get BM25 search index statistics — total documents, unique tokens, average document length',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Search Index Stats', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $index = LuwiPress_Search_Index::get_instance();
+            return $index->get_stats();
+        } );
     }
 
     /**

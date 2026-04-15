@@ -114,6 +114,9 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-knowledge-graph.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-elementor.php';
 
+        // BM25 search index
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-search-index.php';
+
         // Customer-facing chat
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-customer-chat.php';
 
@@ -132,6 +135,7 @@ class LuwiPress {
         LuwiPress_Logger::create_table();
         LuwiPress_Token_Tracker::create_table();
         LuwiPress_Customer_Chat::create_table();
+        LuwiPress_Search_Index::create_table();
 
         // Generate HMAC secret if not set
         LuwiPress_HMAC::ensure_secret();
@@ -188,6 +192,7 @@ class LuwiPress {
         LuwiPress_Open_Claw::get_instance();
         LuwiPress_CRM_Bridge::get_instance();
         LuwiPress_Knowledge_Graph::get_instance();
+        LuwiPress_Search_Index::get_instance();
         LuwiPress_Customer_Chat::get_instance();
 
         // Elementor integration (only if Elementor is active)
@@ -376,7 +381,16 @@ class LuwiPress {
             LuwiPress_Logger::create_table();
             LuwiPress_Token_Tracker::create_table();
             LuwiPress_Customer_Chat::create_table();
+            LuwiPress_Search_Index::create_table();
             update_option( 'luwipress_db_version', LUWIPRESS_VERSION );
+
+            // Auto-build BM25 index on first upgrade
+            if ( class_exists( 'LuwiPress_Search_Index' ) ) {
+                $idx = LuwiPress_Search_Index::get_instance();
+                if ( ! $idx->is_indexed() ) {
+                    $idx->reindex_all();
+                }
+            }
         }
     }
     
