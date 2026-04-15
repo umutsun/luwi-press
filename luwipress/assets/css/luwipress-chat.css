@@ -11,6 +11,7 @@
     line-height: 1.5;
 }
 .lp-chat-widget *, .lp-chat-widget *::before, .lp-chat-widget *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.lp-ico { font-style: normal; font-size: inherit; line-height: 1; display: inline-block; }
 .lp-chat-widget.lp-chat-left { right: auto; left: 20px; }
 
 /* Toggle — compact circle */
@@ -32,11 +33,9 @@
     transform: scale(1.1);
     box-shadow: 0 4px 16px rgba(0,0,0,.2);
 }
-.lp-chat-toggle svg {
-    width: 22px;
-    height: 22px;
-    fill: var(--lp-text) !important;
-    flex-shrink: 0;
+.lp-chat-toggle .lp-ico {
+    font-size: 22px;
+    color: var(--lp-text) !important;
 }
 
 /* Window */
@@ -97,10 +96,9 @@
     transition: background .15s;
 }
 .lp-chat-header-actions button:hover { background: rgba(255,255,255,.2); }
-.lp-chat-header-actions button svg {
-    width: 14px;
-    height: 14px;
-    fill: var(--lp-text) !important;
+.lp-chat-header-actions button .lp-ico {
+    font-size: 14px;
+    color: var(--lp-text) !important;
 }
 .lp-chat-close-btn { font-size: 16px; line-height: 1; color: var(--lp-text) !important; }
 
@@ -209,10 +207,9 @@
     transition: opacity .15s;
     flex-shrink: 0;
 }
-.lp-chat-send-btn svg {
-    width: 16px;
-    height: 16px;
-    fill: var(--lp-text) !important;
+.lp-chat-send-btn .lp-ico {
+    font-size: 16px;
+    color: var(--lp-text) !important;
 }
 .lp-chat-send-btn:disabled { opacity: .25; cursor: default; }
 .lp-chat-send-btn:not(:disabled):hover { opacity: .85; }

@@ -52,9 +52,7 @@
 
             widget.innerHTML =
                 '<button id="lp-chat-toggle" class="lp-chat-toggle" aria-label="Chat with us">' +
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">' +
-                        '<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"></path>' +
-                    '</svg>' +
+                    '<span class="lp-ico">&#9993;</span>' +
                 '</button>' +
                 '<div class="lp-chat-window">' +
                     '<div class="lp-chat-header">' +
@@ -64,9 +62,7 @@
                         '</div>' +
                         '<div class="lp-chat-header-actions">' +
                             '<button class="lp-chat-escalate-btn" title="Talk to our team">' +
-                                '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">' +
-                                    '<path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"></path>' +
-                                '</svg>' +
+                                '<span class="lp-ico">&#9742;</span>' +
                             '</button>' +
                             '<button class="lp-chat-close-btn" aria-label="Close chat">&times;</button>' +
                         '</div>' +
@@ -75,9 +71,7 @@
                     '<div class="lp-chat-input-area">' +
                         '<input type="text" id="lp-chat-input" class="lp-chat-input" placeholder="Type your question..." maxlength="1000" autocomplete="off">' +
                         '<button id="lp-chat-send" class="lp-chat-send-btn" disabled>' +
-                            '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">' +
-                                '<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>' +
-                            '</svg>' +
+                            '<span class="lp-ico">&#10148;</span>' +
                         '</button>' +
                     '</div>' +
                     '<div class="lp-chat-footer">' +
