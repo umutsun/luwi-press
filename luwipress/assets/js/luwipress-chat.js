@@ -52,7 +52,7 @@
 
             widget.innerHTML =
                 '<button id="lp-chat-toggle" class="lp-chat-toggle" aria-label="Chat with us">' +
-                    '<span class="lp-ico">&#9993;</span>' +
+                    '<span class="lp-ico">&#128172;</span>' +
                 '</button>' +
                 '<div class="lp-chat-window">' +
                     '<div class="lp-chat-header">' +
