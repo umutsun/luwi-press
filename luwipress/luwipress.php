@@ -218,12 +218,22 @@ class LuwiPress {
     public function add_admin_menu() {
         add_menu_page(
             'LuwiPress',
-            'Dashboard',
+            'LuwiPress',
             'manage_options',
             'luwipress',
             array($this, 'admin_page'),
             'dashicons-networking',
             30
+        );
+
+        // Rename first submenu from parent slug to "Dashboard"
+        add_submenu_page(
+            'luwipress',
+            'Dashboard',
+            'Dashboard',
+            'manage_options',
+            'luwipress',
+            array($this, 'admin_page')
         );
         
         add_submenu_page(
