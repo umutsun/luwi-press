@@ -29,6 +29,7 @@
     box-shadow: 0 2px 12px rgba(0,0,0,.12);
     transition: transform .2s ease, box-shadow .2s ease;
 }
+.lp-chat-toggle svg { fill: var(--lp-text); color: var(--lp-text); }
 .lp-chat-toggle:hover {
     transform: scale(1.08);
     box-shadow: 0 4px 20px rgba(0,0,0,.18);
@@ -92,6 +93,7 @@
     transition: background .15s;
 }
 .lp-chat-header-actions button:hover { background: rgba(255,255,255,.2); }
+.lp-chat-header-actions button svg { fill: var(--lp-text); color: var(--lp-text); }
 .lp-chat-close-btn { font-size: 18px; line-height: 1; }
 
 /* Body */
@@ -193,6 +195,7 @@
     transition: opacity .15s, transform .15s;
     flex-shrink: 0;
 }
+.lp-chat-send-btn svg { fill: var(--lp-text); color: var(--lp-text); }
 .lp-chat-send-btn:disabled { opacity: .3; cursor: default; }
 .lp-chat-send-btn:not(:disabled):hover { opacity: .85; transform: scale(1.05); }
 
