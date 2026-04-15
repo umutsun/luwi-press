@@ -97,20 +97,27 @@
 .lp-chat-subtitle { font-size: 10px; opacity: .7; }
 .lp-chat-header-actions { display: flex; gap: 4px; align-items: center; }
 .lp-chat-header-actions button {
-    background: rgba(255,255,255,.15);
-    border: none;
-    color: var(--lp-text);
+    background: rgba(255,255,255,.15) !important;
+    border: none !important;
+    color: var(--lp-text) !important;
     cursor: pointer;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
+    max-width: 26px !important;
+    max-height: 26px !important;
+    border-radius: 50% !important;
+    display: flex !important;
     align-items: center;
     justify-content: center;
     transition: background .15s;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1;
-    padding: 0;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden;
+    box-sizing: border-box !important;
 }
 .lp-chat-header-actions button:hover { background: rgba(255,255,255,.2); }
 .lp-chat-escalate-btn::before {

@@ -405,7 +405,8 @@ class LuwiPress {
             return;
         }
 
-        $chat_ver = LUWIPRESS_VERSION . '.' . filemtime( LUWIPRESS_PLUGIN_DIR . 'assets/js/luwipress-chat.js' );
+        $js_file  = LUWIPRESS_PLUGIN_DIR . 'assets/js/luwipress-chat.js';
+        $chat_ver = LUWIPRESS_VERSION . '.' . ( file_exists( $js_file ) ? filemtime( $js_file ) : time() );
         wp_enqueue_style(
             'luwipress-chat',
             LUWIPRESS_PLUGIN_URL . 'assets/css/luwipress-chat.css',
