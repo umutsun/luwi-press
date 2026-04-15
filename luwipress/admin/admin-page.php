@@ -172,6 +172,30 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 		</div>
 	</div>
 
+	<!-- ═══ AI COST BREAKDOWN ═══ -->
+	<div class="lp-middle" id="lp-breakdown-section" style="display:none;">
+		<div class="lp-card">
+			<div class="lp-card-header">
+				<h3><span class="dashicons dashicons-chart-bar"></span> <?php esc_html_e( 'Cost by Workflow', 'luwipress' ); ?></h3>
+				<span class="lp-card-badge"><?php esc_html_e( 'Last 30 days', 'luwipress' ); ?></span>
+			</div>
+			<table class="widefat striped" id="lp-workflow-table" style="margin:12px 0;">
+				<thead><tr><th><?php esc_html_e( 'Workflow', 'luwipress' ); ?></th><th><?php esc_html_e( 'Calls', 'luwipress' ); ?></th><th><?php esc_html_e( 'Input Tokens', 'luwipress' ); ?></th><th><?php esc_html_e( 'Output Tokens', 'luwipress' ); ?></th><th><?php esc_html_e( 'Cost', 'luwipress' ); ?></th></tr></thead>
+				<tbody></tbody>
+			</table>
+		</div>
+		<div class="lp-card">
+			<div class="lp-card-header">
+				<h3><span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e( 'Cost by Model', 'luwipress' ); ?></h3>
+				<span class="lp-card-badge"><?php esc_html_e( 'Last 30 days', 'luwipress' ); ?></span>
+			</div>
+			<table class="widefat striped" id="lp-model-table" style="margin:12px 0;">
+				<thead><tr><th><?php esc_html_e( 'Model', 'luwipress' ); ?></th><th><?php esc_html_e( 'Provider', 'luwipress' ); ?></th><th><?php esc_html_e( 'Calls', 'luwipress' ); ?></th><th><?php esc_html_e( 'Tokens', 'luwipress' ); ?></th><th><?php esc_html_e( 'Cost', 'luwipress' ); ?></th></tr></thead>
+				<tbody></tbody>
+			</table>
+		</div>
+	</div>
+
 	<!-- ═══ QUICK ACTIONS ═══ -->
 	<div class="lp-actions">
 		<?php

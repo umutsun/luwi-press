@@ -52,6 +52,23 @@
                 // Activity
                 lpRenderActivity(d.logs);
 
+                // Workflow & Model breakdown tables
+                if (d.workflow_breakdown && d.workflow_breakdown.length) {
+                    $('#lp-breakdown-section').show();
+                    var wfHtml = '';
+                    d.workflow_breakdown.forEach(function(w) {
+                        wfHtml += '<tr><td><code>' + w.workflow + '</code></td><td>' + w.calls.toLocaleString() + '</td><td>' + w.input_tokens.toLocaleString() + '</td><td>' + w.output_tokens.toLocaleString() + '</td><td><strong>$' + w.cost.toFixed(4) + '</strong></td></tr>';
+                    });
+                    $('#lp-workflow-table tbody').html(wfHtml);
+                }
+                if (d.model_breakdown && d.model_breakdown.length) {
+                    var mHtml = '';
+                    d.model_breakdown.forEach(function(m) {
+                        mHtml += '<tr><td><code>' + m.model + '</code></td><td>' + m.provider + '</td><td>' + m.calls.toLocaleString() + '</td><td>' + (m.input_tokens + m.output_tokens).toLocaleString() + '</td><td><strong>$' + m.cost.toFixed(4) + '</strong></td></tr>';
+                    });
+                    $('#lp-model-table tbody').html(mHtml);
+                }
+
                 // Translation coverage
                 if (d.trans_coverage) {
                     $.each(d.trans_coverage, function(lang, pct) {

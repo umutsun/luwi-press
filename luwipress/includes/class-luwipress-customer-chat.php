@@ -203,13 +203,23 @@ class LuwiPress_Customer_Chat {
 		// Update conversation timestamp
 		$this->touch_conversation( $conversation->id );
 
-		return rest_ensure_response( array(
+		$result = array(
 			'response'            => $response['content'],
 			'source'              => $response['source'],
 			'session_id'          => $session_id,
 			'message_count'       => $msg_count + 1,
 			'suggest_escalation'  => ( $msg_count + 1 ) >= $max_msgs,
-		) );
+		);
+
+		// Include cost/token info for transparency (visible in network tab)
+		if ( ! empty( $response['metadata'] ) ) {
+			$meta = json_decode( $response['metadata'], true );
+			if ( ! empty( $meta['tokens'] ) ) {
+				$result['tokens_used'] = $meta['tokens'];
+			}
+		}
+
+		return rest_ensure_response( $result );
 	}
 
 	/**

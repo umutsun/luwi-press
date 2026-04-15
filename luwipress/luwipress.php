@@ -218,7 +218,7 @@ class LuwiPress {
     public function add_admin_menu() {
         add_menu_page(
             'LuwiPress',
-            'LuwiPress',
+            'Dashboard',
             'manage_options',
             'luwipress',
             array($this, 'admin_page'),
@@ -679,21 +679,64 @@ class LuwiPress {
             }
         }
 
+        // Workflow/model breakdown (last 30 days)
+        $workflow_breakdown = array();
+        $model_breakdown    = array();
+        if ( class_exists( 'LuwiPress_Token_Tracker' ) ) {
+            global $wpdb;
+            $table = $wpdb->prefix . 'luwipress_token_usage';
+            if ( $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" ) === $table ) {
+                // By workflow
+                $wf_rows = $wpdb->get_results( $wpdb->prepare(
+                    "SELECT workflow, COUNT(*) AS calls, SUM(input_tokens) AS input_tok, SUM(output_tokens) AS output_tok, SUM(estimated_cost) AS cost
+                     FROM {$table} WHERE created_at >= %s GROUP BY workflow ORDER BY cost DESC",
+                    gmdate( 'Y-m-d', strtotime( '-30 days' ) )
+                ) );
+                foreach ( $wf_rows as $r ) {
+                    $workflow_breakdown[] = array(
+                        'workflow'      => $r->workflow,
+                        'calls'         => intval( $r->calls ),
+                        'input_tokens'  => intval( $r->input_tok ),
+                        'output_tokens' => intval( $r->output_tok ),
+                        'cost'          => round( floatval( $r->cost ), 4 ),
+                    );
+                }
+                // By model
+                $m_rows = $wpdb->get_results( $wpdb->prepare(
+                    "SELECT model, provider, COUNT(*) AS calls, SUM(input_tokens) AS input_tok, SUM(output_tokens) AS output_tok, SUM(estimated_cost) AS cost
+                     FROM {$table} WHERE created_at >= %s GROUP BY model, provider ORDER BY cost DESC",
+                    gmdate( 'Y-m-d', strtotime( '-30 days' ) )
+                ) );
+                foreach ( $m_rows as $r ) {
+                    $model_breakdown[] = array(
+                        'model'         => $r->model,
+                        'provider'      => $r->provider,
+                        'calls'         => intval( $r->calls ),
+                        'input_tokens'  => intval( $r->input_tok ),
+                        'output_tokens' => intval( $r->output_tok ),
+                        'cost'          => round( floatval( $r->cost ), 4 ),
+                    );
+                }
+            }
+        }
+
         wp_send_json_success( array(
-            'products'      => $total_products,
-            'revenue'       => $revenue_30d,
-            'orders'        => $orders_30d,
-            'ai_calls'      => $today_calls,
-            'ai_cost_today' => $today_cost,
-            'budget_pct'    => $limit_pct,
-            'daily_costs'   => $daily_costs,
-            'opportunities' => $opps,
-            'health_pct'    => $optimized_pct,
-            'health_thin'   => $opps['thin_content'] ?? 0,
-            'health_seo'    => $opps['missing_seo'] ?? 0,
-            'logs'          => $logs,
-            'trans_coverage' => $trans_coverage,
-            'currency'      => class_exists( 'WooCommerce' ) ? get_woocommerce_currency_symbol() : '$',
+            'products'           => $total_products,
+            'revenue'            => $revenue_30d,
+            'orders'             => $orders_30d,
+            'ai_calls'           => $today_calls,
+            'ai_cost_today'      => $today_cost,
+            'budget_pct'         => $limit_pct,
+            'daily_costs'        => $daily_costs,
+            'workflow_breakdown' => $workflow_breakdown,
+            'model_breakdown'    => $model_breakdown,
+            'opportunities'      => $opps,
+            'health_pct'         => $optimized_pct,
+            'health_thin'        => $opps['thin_content'] ?? 0,
+            'health_seo'         => $opps['missing_seo'] ?? 0,
+            'logs'               => $logs,
+            'trans_coverage'     => $trans_coverage,
+            'currency'           => class_exists( 'WooCommerce' ) ? get_woocommerce_currency_symbol() : '$',
         ) );
     }
 
