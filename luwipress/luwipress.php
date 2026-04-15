@@ -405,7 +405,7 @@ class LuwiPress {
             return;
         }
 
-        $chat_ver = LUWIPRESS_VERSION . '.3';
+        $chat_ver = LUWIPRESS_VERSION . '.6';
         wp_enqueue_style(
             'luwipress-chat',
             LUWIPRESS_PLUGIN_URL . 'assets/css/luwipress-chat.css',

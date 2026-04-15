@@ -14,28 +14,42 @@
 .lp-ico { font-style: normal; font-size: inherit; line-height: 1; display: inline-block; }
 .lp-chat-widget.lp-chat-left { right: auto; left: 20px; }
 
-/* Toggle — compact circle */
+/* Toggle — minimal pill */
 .lp-chat-toggle {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 20px;
     background: var(--lp-primary);
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    gap: 6px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.12);
     transition: transform .2s ease, box-shadow .2s ease;
     position: relative;
+    color: var(--lp-text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: .01em;
 }
 .lp-chat-toggle:hover {
-    transform: scale(1.1);
-    box-shadow: 0 4px 16px rgba(0,0,0,.2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0,0,0,.18);
 }
-.lp-chat-toggle .lp-ico {
-    font-size: 22px;
-    color: var(--lp-text) !important;
+.lp-chat-toggle::before {
+    content: '';
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+.lp-chat-toggle::after {
+    content: 'Chat';
 }
 
 /* Window */
@@ -96,9 +110,14 @@
     transition: background .15s;
 }
 .lp-chat-header-actions button:hover { background: rgba(255,255,255,.2); }
-.lp-chat-header-actions button .lp-ico {
-    font-size: 14px;
-    color: var(--lp-text) !important;
+.lp-chat-escalate-btn::before {
+    content: '';
+    display: block;
+    width: 14px;
+    height: 14px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 00-1.02.24l-2.2 2.2a15.05 15.05 0 01-6.59-6.58l2.2-2.21a1 1 0 00.24-1.02A11.36 11.36 0 018.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z'/%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
 }
 .lp-chat-close-btn { font-size: 16px; line-height: 1; color: var(--lp-text) !important; }
 
@@ -207,9 +226,14 @@
     transition: opacity .15s;
     flex-shrink: 0;
 }
-.lp-chat-send-btn .lp-ico {
-    font-size: 16px;
-    color: var(--lp-text) !important;
+.lp-chat-send-btn::before {
+    content: '';
+    display: block;
+    width: 16px;
+    height: 16px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M2.01 21L23 12 2.01 3 2 10l15 2-15 2z'/%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
 }
 .lp-chat-send-btn:disabled { opacity: .25; cursor: default; }
 .lp-chat-send-btn:not(:disabled):hover { opacity: .85; }
@@ -261,8 +285,8 @@
 @media (max-width: 480px) {
     .lp-chat-widget { bottom: 12px; right: 12px; }
     .lp-chat-widget.lp-chat-left { left: 12px; }
-    .lp-chat-toggle { width: 44px; height: 44px; }
-    .lp-chat-toggle svg { width: 20px; height: 20px; }
+    .lp-chat-toggle { height: 36px; padding: 0 12px; font-size: 12px; }
+    .lp-chat-toggle::before { width: 16px; height: 16px; }
     .lp-chat-window {
         position: fixed;
         bottom: 0; right: 0; left: 0;

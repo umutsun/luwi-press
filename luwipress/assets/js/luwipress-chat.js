@@ -51,9 +51,7 @@
             widget.style.setProperty('--lp-text', textColor);
 
             widget.innerHTML =
-                '<button id="lp-chat-toggle" class="lp-chat-toggle" aria-label="Chat with us">' +
-                    '<img src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'white\'%3E%3Cpath d=\'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z\'/%3E%3C/svg%3E" width="22" height="22" alt="Chat">' +
-                '</button>' +
+                '<button id="lp-chat-toggle" class="lp-chat-toggle" aria-label="Chat with us"></button>' +
                 '<div class="lp-chat-window">' +
                     '<div class="lp-chat-header">' +
                         '<div class="lp-chat-header-info">' +
@@ -61,18 +59,14 @@
                             '<span class="lp-chat-subtitle">AI Assistant</span>' +
                         '</div>' +
                         '<div class="lp-chat-header-actions">' +
-                            '<button class="lp-chat-escalate-btn" title="Talk to our team">' +
-                                '<img src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'white\'%3E%3Cpath d=\'M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15.05 15.05 0 0 1-6.59-6.58l2.2-2.21a1 1 0 0 0 .24-1.02A11.36 11.36 0 0 1 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z\'/%3E%3C/svg%3E" width="14" height="14" alt="Call">' +
-                            '</button>' +
+                            '<button class="lp-chat-escalate-btn" title="Talk to our team"></button>' +
                             '<button class="lp-chat-close-btn" aria-label="Close chat">&times;</button>' +
                         '</div>' +
                     '</div>' +
                     '<div class="lp-chat-body" id="lp-chat-body"></div>' +
                     '<div class="lp-chat-input-area">' +
                         '<input type="text" id="lp-chat-input" class="lp-chat-input" placeholder="Type your question..." maxlength="1000" autocomplete="off">' +
-                        '<button id="lp-chat-send" class="lp-chat-send-btn" disabled>' +
-                            '<img src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'white\'%3E%3Cpath d=\'M2.01 21L23 12 2.01 3 2 10l15 2-15 2z\'/%3E%3C/svg%3E" width="16" height="16" alt="Send">' +
-                        '</button>' +
+                        '<button id="lp-chat-send" class="lp-chat-send-btn" disabled></button>' +
                     '</div>' +
                     '<div class="lp-chat-footer">' +
                         '<span>Powered by LuwiPress</span>' +
