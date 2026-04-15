@@ -95,30 +95,33 @@
 .lp-chat-header-info { display: flex; flex-direction: column; }
 .lp-chat-title { font-weight: 600; font-size: 13px; }
 .lp-chat-subtitle { font-size: 10px; opacity: .7; }
-.lp-chat-header-actions { display: flex; gap: 2px; align-items: center; }
+.lp-chat-header-actions { display: flex; gap: 4px; align-items: center; }
 .lp-chat-header-actions button {
-    background: rgba(255,255,255,.1);
+    background: rgba(255,255,255,.15);
     border: none;
     color: var(--lp-text);
     cursor: pointer;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background .15s;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
 }
 .lp-chat-header-actions button:hover { background: rgba(255,255,255,.2); }
 .lp-chat-escalate-btn::before {
     content: '';
     display: inline-block;
-    width: 14px;
-    min-width: 14px;
-    height: 14px;
-    min-height: 14px;
+    width: 12px;
+    min-width: 12px;
+    height: 12px;
+    min-height: 12px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 00-1.02.24l-2.2 2.2a15.05 15.05 0 01-6.59-6.58l2.2-2.21a1 1 0 00.24-1.02A11.36 11.36 0 018.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z'/%3E%3C/svg%3E");
-    background-size: 14px 14px;
+    background-size: 12px 12px;
     background-repeat: no-repeat;
     background-position: center;
 }
@@ -136,8 +139,10 @@
     max-height: 280px;
     background: #fafafa;
 }
-.lp-chat-body::-webkit-scrollbar { width: 3px; }
-.lp-chat-body::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+.lp-chat-body { scrollbar-width: thin; scrollbar-color: #d1d5db transparent; }
+.lp-chat-body::-webkit-scrollbar { width: 4px; }
+.lp-chat-body::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+.lp-chat-body::-webkit-scrollbar-track { background: transparent; }
 
 /* Messages */
 .lp-chat-msg {
@@ -287,24 +292,30 @@
 }
 .lp-chat-inline-escalate:hover { opacity: .85; }
 
-/* Mobile */
-@media (max-width: 480px) {
-    .lp-chat-widget { bottom: 12px; right: 12px; }
-    .lp-chat-widget.lp-chat-left { left: 12px; }
+/* Mobile — full screen chat */
+@media (max-width: 600px) {
+    .lp-chat-widget { bottom: 14px; right: 14px; }
+    .lp-chat-widget.lp-chat-left { left: 14px; }
     .lp-chat-toggle { height: 36px; padding: 0 12px; font-size: 12px; }
-    .lp-chat-toggle::before { width: 16px; height: 16px; }
+    .lp-chat-toggle::before { width: 14px; height: 14px; min-width: 14px; min-height: 14px; background-size: 14px 14px; }
     .lp-chat-window {
         position: fixed;
-        bottom: 0; right: 0; left: 0;
+        top: 0; bottom: 0; right: 0; left: 0;
         width: 100%;
-        max-height: 80vh;
-        border-radius: 12px 12px 0 0;
+        max-height: 100vh;
+        max-height: 100dvh;
+        border-radius: 0;
         transform-origin: bottom center;
     }
-    .lp-chat-body { max-height: calc(80vh - 140px); }
+    .lp-chat-body {
+        flex: 1;
+        min-height: 0;
+        max-height: none;
+    }
+    .lp-chat-header { border-radius: 0; }
 }
 
 /* Avoid floating cart overlap — extra bottom spacing for right-side widgets */
-@media (min-width: 481px) {
+@media (min-width: 601px) {
     .lp-chat-widget:not(.lp-chat-left) { bottom: 80px; }
 }
