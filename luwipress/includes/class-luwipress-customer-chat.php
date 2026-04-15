@@ -600,13 +600,7 @@ class LuwiPress_Customer_Chat {
 	 * @return array Matched products with full context.
 	 */
 	private function search_products_from_kg( $query, $kg_data, $limit = 5 ) {
-		if ( empty( $kg_data['nodes']['products'] ) ) {
-			return array();
-		}
-
-		$products = $kg_data['nodes']['products'];
-
-		// Build category name map for matching
+		// Build category name map
 		$cat_map = array();
 		if ( ! empty( $kg_data['nodes']['categories'] ) ) {
 			foreach ( $kg_data['nodes']['categories'] as $cat ) {
@@ -617,61 +611,132 @@ class LuwiPress_Customer_Chat {
 		$keywords = array_filter( explode( ' ', mb_strtolower( $query ) ), function( $w ) {
 			return mb_strlen( $w ) >= 2;
 		} );
-		if ( empty( $keywords ) ) {
-			// If no keywords, return top 5 products by opportunity score (most complete)
+
+		// Try KG keyword match first
+		$results = array();
+		if ( ! empty( $kg_data['nodes']['products'] ) && ! empty( $keywords ) ) {
+			foreach ( $kg_data['nodes']['products'] as $p ) {
+				$score = 0;
+
+				// Search in title (highest weight)
+				$title = mb_strtolower( $p['name'] ?? '' );
+				foreach ( $keywords as $kw ) {
+					if ( mb_strpos( $title, $kw ) !== false ) {
+						$score += 3;
+					}
+				}
+
+				// Search in SKU
+				$sku = mb_strtolower( $p['sku'] ?? '' );
+				if ( ! empty( $sku ) ) {
+					foreach ( $keywords as $kw ) {
+						if ( mb_strpos( $sku, $kw ) !== false ) {
+							$score += 2;
+						}
+					}
+				}
+
+				// Search in category names
+				$cat_names = '';
+				foreach ( $p['categories'] ?? array() as $cat_id ) {
+					$cat_names .= ' ' . mb_strtolower( $cat_map[ $cat_id ] ?? '' );
+				}
+				foreach ( $keywords as $kw ) {
+					if ( mb_strpos( $cat_names, $kw ) !== false ) {
+						$score += 1;
+					}
+				}
+
+				if ( $score > 0 ) {
+					$results[] = array( 'product' => $p, 'score' => $score );
+				}
+			}
+		}
+
+		// If KG match found, return enriched results
+		if ( ! empty( $results ) ) {
+			usort( $results, function( $a, $b ) {
+				return $b['score'] - $a['score'];
+			} );
+			$top = array_slice( $results, 0, $limit );
+			$matched = array_map( function( $r ) { return $r['product']; }, $top );
+			return $this->enrich_kg_products( $matched, $cat_map );
+		}
+
+		// Fallback: WP_Query search (works with WPML translated titles + post content)
+		$wp_results = $this->search_products_wp( $query, $limit );
+		if ( ! empty( $wp_results ) ) {
+			return $wp_results;
+		}
+
+		// Last resort: return top products from KG
+		if ( ! empty( $kg_data['nodes']['products'] ) ) {
+			$products = $kg_data['nodes']['products'];
 			usort( $products, function( $a, $b ) {
 				return ( $a['opportunity_score'] ?? 99 ) <=> ( $b['opportunity_score'] ?? 99 );
 			} );
-			$products = array_slice( $products, 0, $limit );
-			return $this->enrich_kg_products( $products, $cat_map );
+			return $this->enrich_kg_products( array_slice( $products, 0, $limit ), $cat_map );
 		}
 
-		$results = array();
-		foreach ( $products as $p ) {
-			$score = 0;
+		return array();
+	}
 
-			// Search in title (highest weight)
-			$title = mb_strtolower( $p['name'] ?? '' );
-			foreach ( $keywords as $kw ) {
-				if ( mb_strpos( $title, $kw ) !== false ) {
-					$score += 3;
-				}
-			}
+	/**
+	 * Fallback product search using WP_Query (searches all languages, content, title).
+	 */
+	private function search_products_wp( $query, $limit = 5 ) {
+		$args = array(
+			'post_type'      => 'product',
+			'post_status'    => 'publish',
+			's'              => sanitize_text_field( $query ),
+			'posts_per_page' => $limit,
+		);
 
-			// Search in SKU
-			$sku = mb_strtolower( $p['sku'] ?? '' );
-			if ( ! empty( $sku ) ) {
-				foreach ( $keywords as $kw ) {
-					if ( mb_strpos( $sku, $kw ) !== false ) {
-						$score += 2;
-					}
-				}
-			}
-
-			// Search in category names
-			$cat_names = '';
-			foreach ( $p['categories'] ?? array() as $cat_id ) {
-				$cat_names .= ' ' . mb_strtolower( $cat_map[ $cat_id ] ?? '' );
-			}
-			foreach ( $keywords as $kw ) {
-				if ( mb_strpos( $cat_names, $kw ) !== false ) {
-					$score += 1;
-				}
-			}
-
-			if ( $score > 0 ) {
-				$results[] = array( 'product' => $p, 'score' => $score );
-			}
+		// Let WPML/Polylang search across all languages
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			do_action( 'wpml_switch_language', 'all' );
 		}
 
-		usort( $results, function( $a, $b ) {
-			return $b['score'] - $a['score'];
-		} );
+		$wp_query = new WP_Query( $args );
 
-		$top = array_slice( $results, 0, $limit );
-		$matched = array_map( function( $r ) { return $r['product']; }, $top );
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			do_action( 'wpml_switch_language', null );
+		}
 
-		return $this->enrich_kg_products( $matched, $cat_map );
+		if ( ! $wp_query->have_posts() ) {
+			return array();
+		}
+
+		$output = array();
+		foreach ( $wp_query->posts as $post ) {
+			$product_id = $post->ID;
+			$price      = get_post_meta( $product_id, '_price', true );
+			$stock      = get_post_meta( $product_id, '_stock_status', true );
+			$currency   = function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol() : '';
+
+			// Get categories
+			$terms = get_the_terms( $product_id, 'product_cat' );
+			$cat_names = array();
+			if ( $terms && ! is_wp_error( $terms ) ) {
+				foreach ( $terms as $term ) {
+					$cat_names[] = $term->name;
+				}
+			}
+
+			$output[] = array(
+				'id'          => $product_id,
+				'name'        => $post->post_title,
+				'price'       => ( $price ?: 'N/A' ) . $currency,
+				'stock'       => $stock ?: 'instock',
+				'sku'         => get_post_meta( $product_id, '_sku', true ) ?: '',
+				'categories'  => $cat_names,
+				'description' => wp_trim_words( wp_strip_all_tags( $post->post_content ), 40 ),
+				'reviews'     => array( 'count' => (int) $post->comment_count, 'avg_rating' => 0 ),
+				'url'         => get_permalink( $product_id ),
+			);
+		}
+
+		return $output;
 	}
 
 	/**
