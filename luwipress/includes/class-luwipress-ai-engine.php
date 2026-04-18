@@ -105,12 +105,41 @@ class LuwiPress_AI_Engine {
 	 */
 	public static function call_ai( $workflow, array $messages, array $options = array() ) {
 		$provider_name = $options['provider'] ?? self::get_workflow_provider( $workflow );
-		$provider      = self::get_provider( $provider_name );
+		$primary       = self::get_provider( $provider_name );
 
-		if ( is_wp_error( $provider ) ) {
-			return $provider;
+		// Primary unconfigured → attempt fallback chain immediately.
+		if ( is_wp_error( $primary ) ) {
+			$fallback = self::try_fallback_chain( $workflow, $messages, $options, $provider_name );
+			if ( ! is_wp_error( $fallback ) ) {
+				return $fallback;
+			}
+			self::log_error( $workflow, $primary );
+			return $primary;
 		}
 
+		$call_options = self::build_call_options( $primary, $workflow, $options );
+
+		$result = self::attempt_with_retry( $primary, $messages, $call_options, $workflow );
+
+		if ( is_wp_error( $result ) ) {
+			// Primary exhausted → try fallback chain if the error warrants it.
+			if ( self::should_fallback( $result ) ) {
+				$fallback = self::try_fallback_chain( $workflow, $messages, $options, $provider_name );
+				if ( ! is_wp_error( $fallback ) ) {
+					return $fallback;
+				}
+			}
+			self::log_error( $workflow, $result );
+			return $result;
+		}
+
+		return self::finalize_success( $workflow, $result );
+	}
+
+	/**
+	 * Build provider call options from workflow defaults + overrides.
+	 */
+	private static function build_call_options( $provider, $workflow, array $options ) {
 		$call_options = array(
 			'model'       => $options['model'] ?? $provider->get_default_model(),
 			'max_tokens'  => $options['max_tokens'] ?? self::get_workflow_max_tokens( $workflow ),
@@ -122,14 +151,153 @@ class LuwiPress_AI_Engine {
 			$call_options['json_mode'] = true;
 		}
 
-		$result = $provider->chat( $messages, $call_options );
+		return $call_options;
+	}
 
-		if ( is_wp_error( $result ) ) {
-			self::log_error( $workflow, $result );
-			return $result;
+	/**
+	 * Attempt a provider call with exponential backoff on retryable errors.
+	 *
+	 * Retry policy: 1 retry (2 attempts total) with 250ms backoff.
+	 * Only retries when the error is flagged retryable=true (429, 5xx, network).
+	 *
+	 * @param LuwiPress_AI_Provider $provider
+	 * @param array                 $messages
+	 * @param array                 $call_options
+	 * @param string                $workflow
+	 * @return array|WP_Error
+	 */
+	private static function attempt_with_retry( $provider, array $messages, array $call_options, $workflow ) {
+		$max_retries = (int) apply_filters( 'luwipress_ai_max_retries', 1 );
+		$last_error  = null;
+
+		for ( $attempt = 0; $attempt <= $max_retries; $attempt++ ) {
+			$result = $provider->chat( $messages, $call_options );
+
+			if ( ! is_wp_error( $result ) ) {
+				if ( $attempt > 0 ) {
+					self::log_retry_success( $workflow, $provider->get_name(), $attempt );
+				}
+				return $result;
+			}
+
+			$last_error = $result;
+
+			if ( $attempt === $max_retries || ! self::is_retryable_error( $result ) ) {
+				break;
+			}
+
+			// Exponential backoff: 250ms for first retry.
+			$backoff_ms = 250 * ( 2 ** $attempt );
+			usleep( $backoff_ms * 1000 );
 		}
 
-		// Record token usage.
+		return $last_error;
+	}
+
+	/**
+	 * Check WP_Error data for retryable flag set by providers.
+	 */
+	private static function is_retryable_error( WP_Error $error ) {
+		$data = $error->get_error_data();
+		return is_array( $data ) && ! empty( $data['retryable'] );
+	}
+
+	/**
+	 * Decide whether a primary failure justifies failing over to another provider.
+	 *
+	 * Fallback is skipped for client-side errors (400, 401, 403, 422) — those
+	 * will fail on every provider. Fallback is attempted for transient errors,
+	 * 404 (model deprecated), 429 (rate limited), and 5xx.
+	 */
+	private static function should_fallback( WP_Error $error ) {
+		$data = $error->get_error_data();
+
+		if ( ! is_array( $data ) || ! isset( $data['status_code'] ) ) {
+			return true; // Unknown shape (e.g. unconfigured provider) → fallback is safe.
+		}
+
+		$code = (int) $data['status_code'];
+
+		// Transport error (0) and retryable 5xx/429 → fallback.
+		if ( 0 === $code || $code >= 500 || 429 === $code ) {
+			return true;
+		}
+
+		// 404 on model endpoint usually means the model was deprecated.
+		if ( 404 === $code ) {
+			return true;
+		}
+
+		// 400 (bad prompt), 401 (auth), 403 (forbidden), 422 (unprocessable) → identical failure on fallback.
+		return false;
+	}
+
+	/**
+	 * Try each provider in the fallback chain once (no retry on fallback).
+	 *
+	 * @return array|WP_Error
+	 */
+	private static function try_fallback_chain( $workflow, array $messages, array $options, $primary_name ) {
+		$chain = self::get_fallback_chain( $primary_name );
+
+		if ( empty( $chain ) ) {
+			return new WP_Error( 'luwipress_no_fallback', __( 'Fallback disabled or no providers configured.', 'luwipress' ) );
+		}
+
+		$last_error = null;
+
+		foreach ( $chain as $fallback_name ) {
+			$fallback = self::get_provider( $fallback_name );
+			if ( is_wp_error( $fallback ) ) {
+				continue; // Not configured.
+			}
+
+			$call_options = self::build_call_options( $fallback, $workflow, array_diff_key( $options, array( 'model' => 1, 'provider' => 1 ) ) );
+
+			self::log_fallback_attempt( $workflow, $primary_name, $fallback_name );
+
+			$result = $fallback->chat( $messages, $call_options );
+
+			if ( ! is_wp_error( $result ) ) {
+				return self::finalize_success( $workflow, $result, true );
+			}
+
+			$last_error = $result;
+		}
+
+		return $last_error ?? new WP_Error( 'luwipress_fallback_exhausted', __( 'All fallback providers failed.', 'luwipress' ) );
+	}
+
+	/**
+	 * Build the ordered fallback chain for a given primary provider.
+	 *
+	 * Returns empty array when fallback is disabled via option or filter.
+	 */
+	private static function get_fallback_chain( $primary ) {
+		if ( ! get_option( 'luwipress_ai_fallback_enabled', true ) ) {
+			return array();
+		}
+
+		$chain = array_values( array_filter(
+			array( 'anthropic', 'openai', 'google' ),
+			static function ( $p ) use ( $primary ) {
+				return $p !== $primary;
+			}
+		) );
+
+		/**
+		 * Filter the fallback provider chain.
+		 *
+		 * @param array  $chain   Ordered provider names to try on failure.
+		 * @param string $primary The primary provider that failed.
+		 */
+		return apply_filters( 'luwipress_ai_fallback_chain', $chain, $primary );
+	}
+
+	/**
+	 * Record token usage and log success.
+	 */
+	private static function finalize_success( $workflow, array $result, $is_fallback = false ) {
 		if ( class_exists( 'LuwiPress_Token_Tracker' ) ) {
 			LuwiPress_Token_Tracker::record( array(
 				'workflow'      => $workflow,
@@ -137,13 +305,38 @@ class LuwiPress_AI_Engine {
 				'model'         => $result['model'],
 				'input_tokens'  => $result['input_tokens'],
 				'output_tokens' => $result['output_tokens'],
-				'execution_id'  => 'local-' . wp_generate_uuid4(),
+				'execution_id'  => ( $is_fallback ? 'fallback-' : 'local-' ) . wp_generate_uuid4(),
 			) );
 		}
 
 		self::log_success( $workflow, $result );
-
 		return $result;
+	}
+
+	/**
+	 * Log a retry-after-failure success.
+	 */
+	private static function log_retry_success( $workflow, $provider_name, $attempt ) {
+		if ( class_exists( 'LuwiPress_Logger' ) ) {
+			LuwiPress_Logger::log(
+				sprintf( 'AI retry succeeded: %s via %s (attempt %d)', $workflow, $provider_name, $attempt + 1 ),
+				'info',
+				array( 'workflow' => $workflow, 'provider' => $provider_name, 'attempt' => $attempt + 1 )
+			);
+		}
+	}
+
+	/**
+	 * Log a fallback attempt.
+	 */
+	private static function log_fallback_attempt( $workflow, $primary, $fallback ) {
+		if ( class_exists( 'LuwiPress_Logger' ) ) {
+			LuwiPress_Logger::log(
+				sprintf( 'AI fallback: %s primary=%s → fallback=%s', $workflow, $primary, $fallback ),
+				'warning',
+				array( 'workflow' => $workflow, 'primary' => $primary, 'fallback' => $fallback )
+			);
+		}
 	}
 
 	/**

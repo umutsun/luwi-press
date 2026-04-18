@@ -81,7 +81,8 @@ class LuwiPress_Provider_Anthropic implements LuwiPress_AI_Provider {
 		if ( is_wp_error( $response ) ) {
 			return new WP_Error(
 				'luwipress_api_error',
-				sprintf( __( 'Anthropic API request failed: %s', 'luwipress' ), $response->get_error_message() )
+				sprintf( __( 'Anthropic API request failed: %s', 'luwipress' ), $response->get_error_message() ),
+				array( 'status_code' => 0, 'retryable' => true, 'provider' => 'anthropic' )
 			);
 		}
 
@@ -93,12 +94,21 @@ class LuwiPress_Provider_Anthropic implements LuwiPress_AI_Provider {
 			$error_msg = $data['error']['message'] ?? $body_raw;
 			return new WP_Error(
 				'luwipress_api_error',
-				sprintf( __( 'Anthropic API error (%d): %s', 'luwipress' ), $status_code, $error_msg )
+				sprintf( __( 'Anthropic API error (%d): %s', 'luwipress' ), $status_code, $error_msg ),
+				array(
+					'status_code' => $status_code,
+					'retryable'   => ( 429 === $status_code ) || ( 529 === $status_code ) || ( $status_code >= 500 && $status_code < 600 ),
+					'provider'    => 'anthropic',
+				)
 			);
 		}
 
 		if ( empty( $data['content'][0]['text'] ) ) {
-			return new WP_Error( 'luwipress_empty_response', __( 'Anthropic returned an empty response.', 'luwipress' ) );
+			return new WP_Error(
+				'luwipress_empty_response',
+				__( 'Anthropic returned an empty response.', 'luwipress' ),
+				array( 'status_code' => $status_code, 'retryable' => true, 'provider' => 'anthropic' )
+			);
 		}
 
 		return array(
