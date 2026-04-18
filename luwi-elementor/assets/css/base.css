@@ -1,0 +1,967 @@
+/* ==========================================================================
+   Luwi Elementor — Base Stylesheet
+   Design tokens, CSS reset, typography, light/dark mode, accessibility.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Design Tokens (Light Mode — Default)
+   -------------------------------------------------------------------------- */
+:root {
+	/* Colors — "Luthier Artisan" palette from Google Stitch
+	   Inspired by burnished brass, aged wood, patina navy, crimson resin.
+	   Overridden by Customizer via inline <style> */
+	--luwi-primary: #735c00;          /* Burnished Gold — brand anchor */
+	--luwi-primary-hover: #574500;    /* Deeper gold on hover */
+	--luwi-primary-light: #D4AF37;    /* Polished brass — CTA glow, highlights */
+	--luwi-primary-bg: rgba(115, 92, 0, 0.07);
+	--luwi-primary-container: #ffe088; /* Gold container — light bg tint */
+	--luwi-accent: #545e76;           /* Patina Navy — secondary, grounding */
+	--luwi-accent-hover: #3c475d;
+
+	--luwi-text: #1b1c1c;            /* Near-black — on-surface */
+	--luwi-text-light: #4d4635;      /* On-surface-variant — warm muted */
+	--luwi-text-muted: #7f7663;      /* Outline — soft labels */
+	--luwi-text-inverse: #f3f0f0;    /* Inverse-on-surface */
+
+	--luwi-bg: #fcf9f8;              /* Surface — warm parchment */
+	--luwi-bg-alt: #f6f3f2;          /* Surface-container-low — section alt */
+	--luwi-surface: #ffffff;          /* Surface-container-lowest — cards */
+	--luwi-surface-hover: #f0eded;   /* Surface-container — hover/active */
+	--luwi-surface-dim: #dcd9d9;     /* Surface-dim — disabled, muted bg */
+	--luwi-border: #d0c5af;          /* Outline-variant — warm, NOT grey */
+	--luwi-border-light: #eae7e7;    /* Surface-container-high */
+
+	--luwi-success: #15803d;          /* Green-700 */
+	--luwi-error: #ba1a1a;            /* Stitch error token */
+	--luwi-warning: #b45309;          /* Amber-700 */
+	--luwi-info: #1d4ed8;             /* Blue-700 */
+	--luwi-sale: #a33b3e;             /* Crimson Resin — sale/urgent */
+
+	/* Typography */
+	--luwi-font-heading: 'Playfair Display', Georgia, serif;
+	--luwi-font-headline: 'Noto Serif', 'Playfair Display', Georgia, serif;
+	--luwi-font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--luwi-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+	--luwi-fs-xs: 0.75rem;
+	--luwi-fs-sm: 0.875rem;
+	--luwi-fs-base: 1rem;
+	--luwi-fs-lg: 1.125rem;
+	--luwi-fs-xl: 1.375rem;
+	--luwi-fs-2xl: 1.625rem;
+	--luwi-fs-3xl: 2.25rem;
+	--luwi-fs-4xl: 3rem;
+	--luwi-fs-5xl: 3.75rem;
+
+	--luwi-fw-light: 300;
+	--luwi-fw-normal: 400;
+	--luwi-fw-medium: 500;
+	--luwi-fw-semibold: 600;
+	--luwi-fw-bold: 700;
+
+	--luwi-lh-tight: 1.2;
+	--luwi-lh-snug: 1.35;
+	--luwi-lh-normal: 1.6;
+	--luwi-lh-relaxed: 1.75;
+
+	--luwi-ls-tight: -0.02em;
+	--luwi-ls-normal: 0;
+	--luwi-ls-wide: 0.05em;
+	--luwi-ls-wider: 0.1em;
+
+	/* Spacing */
+	--luwi-space-xs: 0.25rem;
+	--luwi-space-sm: 0.5rem;
+	--luwi-space-md: 1rem;
+	--luwi-space-lg: 1.5rem;
+	--luwi-space-xl: 2.5rem;
+	--luwi-space-2xl: 4rem;
+	--luwi-space-3xl: 6rem;
+	--luwi-space-4xl: 8rem;
+
+	/* Shadows */
+	--luwi-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+	--luwi-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+	--luwi-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
+	--luwi-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.12);
+	--luwi-shadow-hover: 0 12px 32px rgba(0, 0, 0, 0.14);
+	--luwi-shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.04);
+
+	/* Borders */
+	--luwi-radius-sm: 4px;
+	--luwi-radius-md: 8px;
+	--luwi-radius-lg: 16px;
+	--luwi-radius-xl: 24px;
+	--luwi-radius-full: 9999px;
+
+	/* Transitions — Stitch: "slow and heavy" easing */
+	--luwi-ease: cubic-bezier(0.23, 1, 0.32, 1);         /* Stitch default */
+	--luwi-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	--luwi-duration-fast: 150ms;
+	--luwi-duration-normal: 300ms;
+	--luwi-duration-slow: 500ms;                           /* Stitch hover duration */
+	--luwi-duration-image: 700ms;                          /* Stitch image transform */
+
+	/* Layout */
+	--luwi-container-sm: 720px;
+	--luwi-container-md: 960px;
+	--luwi-container-lg: 1200px;
+	--luwi-container-xl: 1400px;
+	--luwi-header-height: 72px;
+
+	/* Z-index scale */
+	--luwi-z-dropdown: 100;
+	--luwi-z-sticky: 200;
+	--luwi-z-overlay: 300;
+	--luwi-z-modal: 400;
+	--luwi-z-toast: 500;
+
+	/* Font scale from Customizer */
+	--luwi-font-scale: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   2. Dark Mode Tokens
+   -------------------------------------------------------------------------- */
+[data-color-mode="dark"] {
+	/* Stitch Luthier Artisan — Dark Mode (#1A1614 warm charcoal) */
+	--luwi-primary: #D4AF37;          /* Gold inverts to bright brass */
+	--luwi-primary-hover: #e9c349;    /* Lighter on dark bg */
+	--luwi-primary-light: #ffe088;    /* Primary-fixed — soft gold glow */
+	--luwi-primary-bg: rgba(212, 175, 55, 0.12);
+	--luwi-primary-container: #574500;
+	--luwi-accent: #bbc6e2;           /* Secondary-fixed-dim — soft navy */
+
+	--luwi-text: #dcd9d9;            /* Surface-dim from light = text in dark */
+	--luwi-text-light: #d0c5af;      /* Outline-variant — warm muted */
+	--luwi-text-muted: #7f7663;      /* Outline — stays similar */
+	--luwi-text-inverse: #1b1c1c;    /* On-surface from light mode */
+
+	--luwi-bg: #1A1614;              /* Stitch dark bg — warm charcoal, NOT black */
+	--luwi-bg-alt: #231f1b;          /* Slightly lighter warm dark */
+	--luwi-surface: #2a2522;         /* Card surface — warm dark */
+	--luwi-surface-hover: #352f2a;   /* Hover state */
+	--luwi-surface-dim: #1b1c1c;     /* Recessed elements */
+	--luwi-border: #4d4635;          /* On-surface-variant = warm dark border */
+	--luwi-border-light: #352f2c;
+
+	/* Ambient shadows — tinted warm charcoal, not pure black (Stitch: "Ambient Light") */
+	--luwi-shadow-sm: 0 2px 4px rgba(26, 22, 20, 0.15);
+	--luwi-shadow-md: 0 4px 12px rgba(26, 22, 20, 0.2);
+	--luwi-shadow-lg: 0 20px 40px rgba(26, 22, 20, 0.06);
+	--luwi-shadow-xl: 0 20px 50px rgba(26, 22, 20, 0.12);
+	--luwi-shadow-hover: 0 20px 40px rgba(26, 22, 20, 0.15);
+
+	color-scheme: dark;
+}
+
+/* Auto dark mode (fallback when JS unavailable) */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-color-mode="light"]) {
+		--luwi-primary: #D4AF37;
+		--luwi-primary-hover: #e9c349;
+		--luwi-primary-light: #ffe088;
+		--luwi-primary-bg: rgba(212, 175, 55, 0.12);
+		--luwi-primary-container: #574500;
+		--luwi-accent: #bbc6e2;
+
+		--luwi-text: #dcd9d9;
+		--luwi-text-light: #d0c5af;
+		--luwi-text-muted: #7f7663;
+		--luwi-text-inverse: #1b1c1c;
+
+		--luwi-bg: #1A1614;
+		--luwi-bg-alt: #231f1b;
+		--luwi-surface: #2a2522;
+		--luwi-surface-hover: #352f2a;
+		--luwi-surface-dim: #1b1c1c;
+		--luwi-border: #4d4635;
+		--luwi-border-light: #352f2c;
+
+		--luwi-shadow-sm: 0 1px 2px rgba(26, 22, 20, 0.4);
+		--luwi-shadow-md: 0 4px 12px rgba(26, 22, 20, 0.5);
+		--luwi-shadow-lg: 0 20px 40px rgba(26, 22, 20, 0.06);
+		--luwi-shadow-xl: 0 16px 48px rgba(26, 22, 20, 0.6);
+		--luwi-shadow-hover: 0 20px 40px rgba(26, 22, 20, 0.15);
+
+		color-scheme: dark;
+	}
+}
+
+/* --------------------------------------------------------------------------
+   3. High Contrast Mode
+   -------------------------------------------------------------------------- */
+[data-high-contrast="true"] {
+	--luwi-text: #000000;
+	--luwi-text-light: #333333;
+	--luwi-bg: #ffffff;
+	--luwi-surface: #ffffff;
+	--luwi-border: #000000;
+}
+
+[data-color-mode="dark"][data-high-contrast="true"] {
+	--luwi-text: #ffffff;
+	--luwi-text-light: #e0e0e0;
+	--luwi-bg: #000000;
+	--luwi-surface: #111111;
+	--luwi-border: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   4. CSS Reset (Modern Minimal)
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+}
+
+html {
+	font-size: var(--luwi-font-scale, 100%);
+	scroll-behavior: smooth;
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+body {
+	font-family: var(--luwi-font-body);
+	font-size: var(--luwi-fs-base);
+	font-weight: var(--luwi-fw-normal);
+	line-height: var(--luwi-lh-normal);
+	color: var(--luwi-text);
+	background-color: var(--luwi-bg);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+	display: block;
+	max-width: 100%;
+	height: auto;
+}
+
+input,
+button,
+textarea,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	cursor: pointer;
+	border: none;
+	background: none;
+}
+
+a {
+	color: var(--luwi-primary);
+	text-decoration: none;
+	transition: color var(--luwi-duration-fast) var(--luwi-ease);
+}
+
+a:hover {
+	color: var(--luwi-primary-hover);
+}
+
+p {
+	margin-bottom: var(--luwi-space-md);
+}
+
+p:last-child {
+	margin-bottom: 0;
+}
+
+ul,
+ol {
+	list-style: none;
+}
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   5. Typography
+   -------------------------------------------------------------------------- */
+h1, h2, h3, h4, h5, h6 {
+	font-family: var(--luwi-font-heading);
+	font-weight: var(--luwi-fw-semibold);
+	line-height: var(--luwi-lh-tight);
+	letter-spacing: var(--luwi-ls-tight);
+	color: var(--luwi-text);
+	margin-bottom: var(--luwi-space-md);
+}
+
+h1 { font-size: var(--luwi-fs-4xl); }
+h2 { font-size: var(--luwi-fs-3xl); }
+h3 { font-size: var(--luwi-fs-2xl); }
+h4 { font-size: var(--luwi-fs-xl); }
+h5 { font-size: var(--luwi-fs-lg); }
+h6 { font-size: var(--luwi-fs-base); font-weight: var(--luwi-fw-bold); }
+
+small {
+	font-size: var(--luwi-fs-sm);
+}
+
+/* Stitch No-Line Rule: tonal bg shift instead of border-left */
+blockquote {
+	background: linear-gradient(to right, var(--luwi-primary-bg), transparent 4px);
+	padding-left: var(--luwi-space-lg);
+	margin: var(--luwi-space-lg) 0;
+	font-style: italic;
+	color: var(--luwi-text-light);
+}
+
+code, pre {
+	font-family: var(--luwi-font-mono);
+	font-size: var(--luwi-fs-sm);
+}
+
+/* Stitch No-Line Rule: tonal surface shift, no border */
+pre {
+	background: var(--luwi-bg-alt);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	padding: var(--luwi-space-md);
+	overflow-x: auto;
+	box-shadow: var(--luwi-shadow-inner);
+}
+
+/* Stitch No-Line Rule: gradient fade separator instead of border */
+hr {
+	border: none;
+	height: 1px;
+	background: linear-gradient(to right, transparent, var(--luwi-border), transparent);
+	opacity: 0.4;
+	margin: var(--luwi-space-xl) 0;
+}
+
+/* --------------------------------------------------------------------------
+   6. Layout Utilities
+   -------------------------------------------------------------------------- */
+.luwi-container {
+	width: 100%;
+	max-width: var(--luwi-container-lg);
+	margin-left: auto;
+	margin-right: auto;
+	padding-left: var(--luwi-space-md);
+	padding-right: var(--luwi-space-md);
+}
+
+.luwi-container--wide {
+	max-width: var(--luwi-container-xl);
+}
+
+.luwi-container--narrow {
+	max-width: var(--luwi-container-md);
+}
+
+.luwi-section {
+	padding-top: var(--luwi-space-3xl);
+	padding-bottom: var(--luwi-space-3xl);
+}
+
+/* --------------------------------------------------------------------------
+   7. Buttons
+   -------------------------------------------------------------------------- */
+.luwi-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--luwi-space-sm);
+	padding: 0.75rem 1.5rem;
+	font-family: var(--luwi-font-body);
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-medium);
+	line-height: 1;
+	letter-spacing: var(--luwi-ls-wide);
+	text-transform: uppercase;
+	border-radius: var(--luwi-radius-md);
+	border: 2px solid transparent;
+	transition: all var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+/* Stitch: "Polished brass gradient glow" on primary CTA */
+.luwi-btn--primary {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: var(--luwi-text-inverse);
+	box-shadow: 0 4px 16px rgba(115, 92, 0, 0.2);
+}
+
+.luwi-btn--primary:hover {
+	background: linear-gradient(135deg, var(--luwi-primary-hover), var(--luwi-primary));
+	box-shadow: 0 8px 24px rgba(115, 92, 0, 0.3);
+	transform: translateY(-2px);
+}
+
+/* Stitch: "Ghost Border" at 20% opacity */
+.luwi-btn--outline {
+	background: transparent;
+	color: var(--luwi-text);
+	border-color: var(--luwi-border);
+}
+
+.luwi-btn--outline:hover {
+	background: var(--luwi-surface-hover);
+	border-color: var(--luwi-primary);
+	color: var(--luwi-primary);
+}
+
+.luwi-btn--accent {
+	background: var(--luwi-accent);
+	color: var(--luwi-text-inverse);
+}
+
+.luwi-btn--accent:hover {
+	background: var(--luwi-accent-hover);
+	box-shadow: var(--luwi-shadow-md);
+}
+
+.luwi-btn--sm {
+	padding: 0.5rem 1rem;
+	font-size: var(--luwi-fs-xs);
+}
+
+.luwi-btn--lg {
+	padding: 1rem 2rem;
+	font-size: var(--luwi-fs-base);
+}
+
+/* --------------------------------------------------------------------------
+   8. Cards
+   -------------------------------------------------------------------------- */
+/* Stitch "No-Line Rule": No explicit borders — tonal surface shift only */
+.luwi-card {
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	overflow: hidden;
+	box-shadow: var(--luwi-shadow-sm);
+	transition: box-shadow 500ms cubic-bezier(0.23, 1, 0.32, 1),
+		transform 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Stitch: "slow and heavy" hover lift — physical object weight */
+.luwi-card:hover {
+	box-shadow: var(--luwi-shadow-hover);
+	transform: translateY(-3px);
+}
+
+.luwi-card__image {
+	aspect-ratio: 1 / 1;
+	overflow: hidden;
+}
+
+.luwi-card__image img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform var(--luwi-duration-image) var(--luwi-ease);
+}
+
+.luwi-card:hover .luwi-card__image img {
+	transform: scale(1.05);
+}
+
+.luwi-card__body {
+	padding: var(--luwi-space-lg);
+}
+
+/* --------------------------------------------------------------------------
+   9. Forms
+   -------------------------------------------------------------------------- */
+.luwi-input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
+input[type="number"],
+textarea,
+select {
+	/* Stitch: Minimalist input — "Ghost Border" at 15% opacity */
+	width: 100%;
+	padding: 0.875rem 0;
+	font-size: var(--luwi-fs-base);
+	line-height: var(--luwi-lh-normal);
+	color: var(--luwi-text);
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--luwi-border);
+	border-radius: 0;
+	transition: border-color 500ms cubic-bezier(0.23, 1, 0.32, 1),
+		box-shadow 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Stitch: Soft primary glow on focus */
+.luwi-input:focus,
+input:focus,
+textarea:focus,
+select:focus {
+	outline: none;
+	border-bottom-color: var(--luwi-primary);
+	box-shadow: 0 2px 0 0 var(--luwi-primary);
+}
+
+/* Boxed variant for cart/checkout where bg fill is needed */
+.luwi-input--boxed,
+.woocommerce-form .input-text,
+.woocommerce-checkout .input-text {
+	padding: 0.875rem 1rem;
+	background: var(--luwi-surface-hover);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+}
+
+.luwi-input--boxed:focus,
+.woocommerce-form .input-text:focus,
+.woocommerce-checkout .input-text:focus {
+	box-shadow: 0 0 0 2px var(--luwi-primary-bg);
+	border-bottom: none;
+}
+
+label {
+	display: block;
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-medium);
+	margin-bottom: var(--luwi-space-xs);
+	color: var(--luwi-text);
+}
+
+/* --------------------------------------------------------------------------
+   10. Stitch Design Principles — Global Utilities
+   -------------------------------------------------------------------------- */
+
+/* Selection — Stitch: primary-container bg */
+::selection {
+	background: var(--luwi-primary-container);
+	color: var(--luwi-text-inverse);
+}
+
+/* Scrollbar — thin, warm-tinted */
+:root {
+	scrollbar-width: thin;
+	scrollbar-color: var(--luwi-border) transparent;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+	background: var(--luwi-border);
+	border-radius: var(--luwi-radius-full);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--luwi-text-muted); }
+
+/* Glassmorphism utility — Stitch: for floating headers, drawers, modals */
+.luwi-glass {
+	background: rgba(252, 249, 248, 0.7);
+	-webkit-backdrop-filter: blur(20px);
+	backdrop-filter: blur(20px);
+}
+
+[data-color-mode="dark"] .luwi-glass {
+	background: rgba(26, 22, 20, 0.7);
+}
+
+/* Stitch "No-Line" section separator — tonal bg shift */
+.luwi-section--alt {
+	background: var(--luwi-bg-alt);
+}
+
+/* Stitch: Editorial label — uppercase, wide tracking, small */
+.luwi-label {
+	font-family: var(--luwi-font-body);
+	font-size: 0.625rem;
+	font-weight: var(--luwi-fw-semibold);
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--luwi-text-muted);
+}
+
+/* Stitch: Headline font — for hero statements */
+.luwi-headline {
+	font-family: var(--luwi-font-headline);
+}
+
+/* Stitch: Ambient hover — slow, heavy, physical */
+.luwi-hover-lift {
+	transition: transform 500ms cubic-bezier(0.23, 1, 0.32, 1),
+		box-shadow 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.luwi-hover-lift:hover {
+	transform: translateY(-3px);
+	box-shadow: var(--luwi-shadow-hover);
+}
+
+/* Stitch: Image hover zoom */
+.luwi-img-zoom {
+	overflow: hidden;
+}
+
+.luwi-img-zoom img {
+	transition: transform var(--luwi-duration-image) var(--luwi-ease);
+}
+
+.luwi-img-zoom:hover img {
+	transform: scale(1.05);
+}
+
+/* Stitch: Lazy reveal animation */
+.luwi-reveal-pending {
+	opacity: 0;
+	transform: translateY(16px);
+}
+
+.luwi-revealed {
+	opacity: 1;
+	transform: translateY(0);
+	transition: opacity 600ms cubic-bezier(0.23, 1, 0.32, 1),
+		transform 600ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* --------------------------------------------------------------------------
+   11. Accessibility
+   -------------------------------------------------------------------------- */
+
+/* Skip link */
+.skip-link {
+	position: absolute;
+	top: -100%;
+	left: 0;
+	z-index: var(--luwi-z-toast);
+	padding: var(--luwi-space-sm) var(--luwi-space-md);
+	background: var(--luwi-primary);
+	color: var(--luwi-text-inverse);
+	font-weight: var(--luwi-fw-medium);
+	border-radius: 0 0 var(--luwi-radius-md) 0;
+}
+
+.skip-link:focus {
+	top: 0;
+}
+
+/* Screen reader only */
+.screen-reader-text {
+	position: absolute !important;
+	width: 1px !important;
+	height: 1px !important;
+	padding: 0 !important;
+	margin: -1px !important;
+	overflow: hidden !important;
+	clip: rect(0, 0, 0, 0) !important;
+	white-space: nowrap !important;
+	border: 0 !important;
+}
+
+.screen-reader-text:focus {
+	position: static !important;
+	width: auto !important;
+	height: auto !important;
+	overflow: visible !important;
+	clip: auto !important;
+	white-space: normal !important;
+	background: var(--luwi-surface);
+	padding: var(--luwi-space-sm) var(--luwi-space-md);
+	font-size: var(--luwi-fs-sm);
+	z-index: var(--luwi-z-toast);
+}
+
+/* Focus visible — keyboard only */
+:focus-visible {
+	outline: 2px solid var(--luwi-primary);
+	outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+	outline: none;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/* Manual reduced motion via Customizer */
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before,
+[data-reduce-motion="true"] *::after {
+	animation-duration: 0.01ms !important;
+	animation-iteration-count: 1 !important;
+	transition-duration: 0.01ms !important;
+}
+
+/* High contrast forced colors */
+@media (forced-colors: active) {
+	.luwi-btn {
+		border: 2px solid currentColor;
+	}
+
+	.luwi-card {
+		border: 1px solid currentColor;
+	}
+}
+
+/* --------------------------------------------------------------------------
+   11. Color Mode Toggle (UI Component)
+   -------------------------------------------------------------------------- */
+/* Stitch No-Line Rule: tonal surface shift instead of border */
+.luwi-color-mode-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	background: var(--luwi-surface-hover);
+	border: none;
+	border-radius: var(--luwi-radius-full);
+	cursor: pointer;
+	transition: background var(--luwi-duration-normal) var(--luwi-ease),
+		box-shadow var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.luwi-color-mode-toggle:hover {
+	background: var(--luwi-primary-bg);
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.luwi-color-mode-toggle__icon {
+	width: 20px;
+	height: 20px;
+	fill: var(--luwi-text);
+}
+
+/* Sun icon hidden in dark mode, moon hidden in light mode */
+[data-color-mode="dark"] .luwi-color-mode-toggle__sun { display: none; }
+[data-color-mode="light"] .luwi-color-mode-toggle__moon { display: none; }
+:root:not([data-color-mode]) .luwi-color-mode-toggle__moon { display: none; }
+
+/* --------------------------------------------------------------------------
+   12. WordPress Core Alignment Classes
+   -------------------------------------------------------------------------- */
+.alignwide {
+	max-width: var(--luwi-container-xl);
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.alignfull {
+	width: 100%;
+	max-width: none;
+}
+
+.aligncenter {
+	display: block;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.alignleft {
+	float: left;
+	margin-right: var(--luwi-space-lg);
+	margin-bottom: var(--luwi-space-md);
+}
+
+.alignright {
+	float: right;
+	margin-left: var(--luwi-space-lg);
+	margin-bottom: var(--luwi-space-md);
+}
+
+/* --------------------------------------------------------------------------
+   13. 404 Page — Stitch editorial error page
+   -------------------------------------------------------------------------- */
+.luwi-404 {
+	text-align: center;
+	padding: var(--luwi-space-3xl) var(--luwi-space-md);
+	max-width: var(--luwi-container-md);
+	margin: 0 auto;
+}
+
+.luwi-404__number {
+	font-family: var(--luwi-font-heading);
+	font-size: clamp(6rem, 15vw, 12rem);
+	font-weight: var(--luwi-fw-bold);
+	line-height: 1;
+	color: var(--luwi-primary);
+	opacity: 0.15;
+	margin-bottom: calc(-1 * var(--luwi-space-xl));
+	position: relative;
+	z-index: 0;
+}
+
+.luwi-404__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-3xl);
+	font-weight: var(--luwi-fw-semibold);
+	margin-bottom: var(--luwi-space-sm);
+	position: relative;
+	z-index: 1;
+}
+
+.luwi-404__text {
+	font-size: var(--luwi-fs-base);
+	color: var(--luwi-text-light);
+	line-height: var(--luwi-lh-relaxed);
+	max-width: 480px;
+	margin: 0 auto var(--luwi-space-xl);
+}
+
+.luwi-404__search {
+	max-width: 400px;
+	margin: 0 auto var(--luwi-space-xl);
+}
+
+.luwi-404__search .search-form {
+	display: flex;
+	gap: var(--luwi-space-sm);
+}
+
+.luwi-404__search .search-field {
+	flex: 1;
+}
+
+.luwi-404__search .search-submit {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: white;
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	padding: 0.75rem 1.5rem;
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	cursor: pointer;
+	transition: all var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.luwi-404__search .search-submit:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(115, 92, 0, 0.2);
+}
+
+.luwi-404__actions {
+	display: flex;
+	justify-content: center;
+	gap: var(--luwi-space-md);
+	flex-wrap: wrap;
+	margin-bottom: var(--luwi-space-3xl);
+}
+
+.luwi-404__products {
+	margin-top: var(--luwi-space-2xl);
+	padding-top: var(--luwi-space-2xl);
+	background: var(--luwi-bg-alt);
+	margin-left: calc(-1 * var(--luwi-space-md));
+	margin-right: calc(-1 * var(--luwi-space-md));
+	padding-left: var(--luwi-space-md);
+	padding-right: var(--luwi-space-md);
+	border-radius: var(--luwi-radius-xl) var(--luwi-radius-xl) 0 0;
+}
+
+.luwi-404__products-title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-xl);
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	margin-bottom: var(--luwi-space-lg);
+}
+
+.luwi-404__products-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: var(--luwi-space-md);
+	padding-bottom: var(--luwi-space-2xl);
+}
+
+.luwi-404__product {
+	text-decoration: none;
+	color: var(--luwi-text);
+}
+
+@media (max-width: 767px) {
+	.luwi-404__products-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	.luwi-404__number {
+		font-size: 6rem;
+	}
+}
+
+/* --------------------------------------------------------------------------
+   14. Back to Top Button
+   -------------------------------------------------------------------------- */
+.luwi-back-to-top {
+	position: fixed;
+	bottom: var(--luwi-space-lg);
+	right: var(--luwi-space-lg);
+	width: 44px;
+	height: 44px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--luwi-surface);
+	color: var(--luwi-text);
+	border: none;
+	border-radius: var(--luwi-radius-full);
+	box-shadow: var(--luwi-shadow-md);
+	cursor: pointer;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(16px);
+	transition: opacity var(--luwi-duration-slow) var(--luwi-ease),
+		visibility var(--luwi-duration-slow) var(--luwi-ease),
+		transform var(--luwi-duration-slow) var(--luwi-ease),
+		background var(--luwi-duration-normal) var(--luwi-ease);
+	z-index: var(--luwi-z-sticky);
+}
+
+.luwi-back-to-top.is-visible {
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0);
+}
+
+.luwi-back-to-top:hover {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: white;
+	box-shadow: 0 4px 16px rgba(115, 92, 0, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   15. Print Styles
+   -------------------------------------------------------------------------- */
+@media print {
+	body {
+		background: white;
+		color: black;
+		font-size: 12pt;
+	}
+
+	a { color: black; text-decoration: underline; }
+	.luwi-btn { border: 1px solid black; }
+	.no-print { display: none !important; }
+}

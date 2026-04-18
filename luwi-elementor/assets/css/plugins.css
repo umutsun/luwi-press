@@ -1,0 +1,305 @@
+/* ==========================================================================
+   Luwi Elementor — Friendly Plugin Compatibility Styles
+   Ensures visual harmony with LuwiPress and detected plugins.
+   Uses design tokens from base.css (Stitch "Luthier Artisan" palette).
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. LuwiPress Customer Chat Widget
+   Override chat widget colors to match Luwi Elementor palette.
+   -------------------------------------------------------------------------- */
+.luwipress-chat-widget {
+	--lp-primary: var(--luwi-primary);
+	--lp-text: var(--luwi-text-inverse);
+	font-family: var(--luwi-font-body);
+}
+
+/* Chat toggle button — match theme primary */
+.luwipress-chat-toggle {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light)) !important;
+	box-shadow: 0 4px 16px rgba(115, 92, 0, 0.25) !important;
+}
+
+/* Chat window — glassmorphism */
+.luwipress-chat-window {
+	border: none !important;
+	border-radius: var(--luwi-radius-lg) !important;
+	box-shadow: var(--luwi-shadow-xl) !important;
+	font-family: var(--luwi-font-body) !important;
+}
+
+.luwipress-chat-header {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light)) !important;
+	border-radius: var(--luwi-radius-lg) var(--luwi-radius-lg) 0 0 !important;
+}
+
+.luwipress-chat-send-btn {
+	background: var(--luwi-primary) !important;
+}
+
+/* --------------------------------------------------------------------------
+   2. WPML Language Switcher
+   Harmonize WPML switcher with Stitch nav style.
+   -------------------------------------------------------------------------- */
+/* Horizontal shortcode actions */
+.wpml-ls-statics-shortcode_actions {
+	list-style: none !important;
+	display: flex !important;
+	gap: var(--luwi-space-xs) !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	align-items: center !important;
+}
+
+.wpml-ls-statics-shortcode_actions li {
+	list-style: none !important;
+	margin: 0 !important;
+}
+
+.wpml-ls-statics-shortcode_actions a {
+	font-family: var(--luwi-font-body) !important;
+	font-size: var(--luwi-fs-xs) !important;
+	font-weight: var(--luwi-fw-medium) !important;
+	letter-spacing: 0.05em !important;
+	text-transform: uppercase !important;
+	color: var(--luwi-text-muted) !important;
+	padding: 4px 8px !important;
+	border-radius: var(--luwi-radius-sm) !important;
+	transition: all 300ms cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+.wpml-ls-statics-shortcode_actions a:hover,
+.wpml-ls-statics-shortcode_actions .wpml-ls-current-language a {
+	color: var(--luwi-primary) !important;
+	background: var(--luwi-primary-bg) !important;
+}
+
+/* WPML flag + text variant */
+.wpml-ls-flag {
+	border-radius: 2px !important;
+	margin-right: 4px !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. Rank Math / Yoast SEO
+   Style breadcrumbs and schema elements.
+   -------------------------------------------------------------------------- */
+/* Rank Math breadcrumbs */
+.rank-math-breadcrumb {
+	font-family: var(--luwi-font-body);
+	font-size: var(--luwi-fs-xs);
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--luwi-text-muted);
+	margin-bottom: var(--luwi-space-lg);
+}
+
+.rank-math-breadcrumb a {
+	color: var(--luwi-text-light);
+	transition: color 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.rank-math-breadcrumb a:hover {
+	color: var(--luwi-primary);
+}
+
+.rank-math-breadcrumb .separator {
+	margin: 0 var(--luwi-space-xs);
+	color: var(--luwi-border);
+}
+
+/* Yoast breadcrumbs — same treatment */
+.yoast-breadcrumb,
+#breadcrumbs {
+	font-family: var(--luwi-font-body);
+	font-size: var(--luwi-fs-xs);
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--luwi-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   4. Xoo WooCommerce Side Cart (Floating Cart)
+   Apply Stitch glassmorphism and palette.
+   -------------------------------------------------------------------------- */
+.xoo-wsc-container,
+.xoo-wsc-slider {
+	max-width: min(425px, 90vw) !important;
+}
+
+/* Cart drawer — glassmorphism */
+.xoo-wsc-modal {
+	background: rgba(0, 0, 0, 0.3) !important;
+	-webkit-backdrop-filter: blur(4px) !important;
+	backdrop-filter: blur(4px) !important;
+}
+
+.xoo-wsc-container {
+	background: var(--luwi-surface) !important;
+	box-shadow: var(--luwi-shadow-xl) !important;
+	font-family: var(--luwi-font-body) !important;
+}
+
+[data-color-mode="dark"] .xoo-wsc-container {
+	background: var(--luwi-surface) !important;
+}
+
+.xoo-wsc-header {
+	background: var(--luwi-bg-alt) !important;
+	border-bottom: none !important;
+	font-family: var(--luwi-font-heading) !important;
+}
+
+.xoo-wsc-footer .xoo-wsc-ft-btn-checkout {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light)) !important;
+	color: white !important;
+	border: none !important;
+	border-radius: var(--luwi-radius-md) !important;
+	text-transform: uppercase !important;
+	letter-spacing: 0.15em !important;
+	font-weight: 600 !important;
+}
+
+.xoo-wsc-footer .xoo-wsc-ft-btn-cart {
+	background: transparent !important;
+	color: var(--luwi-text) !important;
+	border: 1px solid var(--luwi-border) !important;
+	border-radius: var(--luwi-radius-md) !important;
+	text-transform: uppercase !important;
+	letter-spacing: 0.15em !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. Elementor Overrides
+   Ensure Elementor widgets respect Luwi Elementor design tokens.
+   -------------------------------------------------------------------------- */
+/* Elementor buttons — inherit Stitch gradient */
+.elementor-button {
+	font-family: var(--luwi-font-body);
+	letter-spacing: 0.1em;
+	transition: all 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Elementor heading widget */
+.elementor-widget-heading .elementor-heading-title {
+	font-family: var(--luwi-font-heading);
+}
+
+/* Elementor text editor — body font */
+.elementor-widget-text-editor {
+	font-family: var(--luwi-font-body);
+	line-height: var(--luwi-lh-normal);
+}
+
+/* Elementor CTA widget — Stitch hover */
+.elementor-cta {
+	transition: box-shadow 500ms cubic-bezier(0.23, 1, 0.32, 1),
+		transform 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.elementor-cta:hover {
+	box-shadow: var(--luwi-shadow-hover);
+	transform: translateY(-2px);
+}
+
+/* Elementor WC Products widget — match theme product cards */
+.elementor-wc-products ul.products li.product {
+	border: none;
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+/* Elementor nav menu — Stitch editorial style */
+.elementor-nav-menu a,
+.ekit-menu-nav-link {
+	font-family: var(--luwi-font-heading) !important;
+	font-size: 0.75rem !important;
+	letter-spacing: 0.15em !important;
+	text-transform: uppercase !important;
+	transition: color 500ms cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+/* --------------------------------------------------------------------------
+   6. FluentCRM / Mailchimp Form
+   Style subscription forms to match theme.
+   -------------------------------------------------------------------------- */
+.fluentcrm_form_wrapper,
+.mc4wp-form {
+	font-family: var(--luwi-font-body);
+}
+
+.fluentcrm_form_wrapper input[type="email"],
+.mc4wp-form input[type="email"] {
+	background: var(--luwi-surface-hover);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	padding: 0.875rem 1rem;
+	font-size: var(--luwi-fs-base);
+	color: var(--luwi-text);
+}
+
+.fluentcrm_form_wrapper input[type="email"]:focus,
+.mc4wp-form input[type="email"]:focus {
+	box-shadow: 0 0 0 2px var(--luwi-primary-bg);
+}
+
+.fluentcrm_form_wrapper button[type="submit"],
+.mc4wp-form button[type="submit"],
+.mc4wp-form input[type="submit"] {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: white;
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	padding: 0.875rem 2rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	transition: all 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* --------------------------------------------------------------------------
+   7. WP Rocket / LiteSpeed Cache
+   Ensure lazy-loaded images work with Luwi reveal animation.
+   -------------------------------------------------------------------------- */
+img[data-lazy-src],
+img.lazyloaded {
+	transition: opacity 400ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+img.lazyload {
+	opacity: 0;
+}
+
+img.lazyloaded {
+	opacity: 1;
+}
+
+/* --------------------------------------------------------------------------
+   8. AEO Schema Elements (LuwiPress FAQ/HowTo)
+   Style FAQ accordion and HowTo schema output.
+   -------------------------------------------------------------------------- */
+.luwipress-faq-schema .luwipress-faq-item {
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	margin-bottom: var(--luwi-space-sm);
+	box-shadow: var(--luwi-shadow-sm);
+	overflow: hidden;
+}
+
+.luwipress-faq-schema .luwipress-faq-question {
+	font-family: var(--luwi-font-heading);
+	font-weight: var(--luwi-fw-semibold);
+	padding: var(--luwi-space-md) var(--luwi-space-lg);
+	cursor: pointer;
+	transition: background 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.luwipress-faq-schema .luwipress-faq-question:hover {
+	background: var(--luwi-bg-alt);
+}
+
+.luwipress-faq-schema .luwipress-faq-answer {
+	padding: 0 var(--luwi-space-lg) var(--luwi-space-md);
+	color: var(--luwi-text-light);
+	line-height: var(--luwi-lh-relaxed);
+}

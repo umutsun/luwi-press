@@ -1,0 +1,518 @@
+/* ==========================================================================
+   Luwi Ruby — Personality Layer
+   Bold Luxe: Velvet theater, art deco, midnight champagne, sharp confidence.
+   Component-level overrides that can't be expressed through tokens alone.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Buttons — Solid ruby, champagne shimmer hover, sharp corners
+   -------------------------------------------------------------------------- */
+.luwi-btn--primary {
+	background: var(--luwi-primary);
+	color: var(--luwi-text-inverse);
+	box-shadow: 0 4px 16px rgba(155, 27, 48, 0.2);
+	border-radius: var(--luwi-radius-md);
+	position: relative;
+	overflow: hidden;
+}
+
+.luwi-btn--primary::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(135deg, transparent 40%, rgba(201, 169, 110, 0.15) 50%, transparent 60%);
+	transform: translateX(-100%);
+	transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luwi-btn--primary:hover {
+	background: var(--luwi-primary-hover);
+	box-shadow: 0 8px 28px rgba(155, 27, 48, 0.3);
+	transform: translateY(-1px);
+}
+
+.luwi-btn--primary:hover::after {
+	transform: translateX(100%);
+}
+
+.luwi-btn--accent {
+	background: var(--luwi-accent);
+	color: #1c1a1b;
+}
+
+.luwi-btn--accent:hover {
+	background: var(--luwi-accent-hover);
+	color: var(--luwi-text-inverse);
+}
+
+/* --------------------------------------------------------------------------
+   Cards — Champagne gold top-border, deep shadow, scale hover
+   -------------------------------------------------------------------------- */
+.luwi-card {
+	border: none;
+	border-top: 2px solid var(--luwi-accent);
+	box-shadow: var(--luwi-shadow-md);
+	transition: box-shadow 350ms cubic-bezier(0.16, 1, 0.3, 1),
+		transform 350ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luwi-card:hover {
+	box-shadow: var(--luwi-shadow-xl);
+	transform: scale(1.02);
+}
+
+/* --------------------------------------------------------------------------
+   Inputs — Floating-label style, thin bottom-border, ruby focus glow
+   -------------------------------------------------------------------------- */
+.luwi-input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
+input[type="number"],
+textarea,
+select {
+	padding: 1.25rem 0 0.5rem;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--luwi-border);
+	border-radius: 0;
+	transition: border-color 350ms cubic-bezier(0.16, 1, 0.3, 1),
+		box-shadow 350ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luwi-input:focus,
+input:focus,
+textarea:focus,
+select:focus {
+	outline: none;
+	border-bottom-color: var(--luwi-primary);
+	box-shadow: 0 2px 0 0 var(--luwi-primary),
+		0 4px 12px rgba(155, 27, 48, 0.1);
+}
+
+/* Floating label utility */
+.luwi-field {
+	position: relative;
+}
+
+.luwi-field label {
+	position: absolute;
+	top: 0;
+	left: 0;
+	font-size: var(--luwi-fs-xs);
+	font-weight: var(--luwi-fw-semibold);
+	letter-spacing: var(--luwi-ls-wide);
+	text-transform: uppercase;
+	color: var(--luwi-text-muted);
+	pointer-events: none;
+	transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --------------------------------------------------------------------------
+   Separators — None (theatrical scene change via bg-alt sections)
+   -------------------------------------------------------------------------- */
+hr {
+	border: none;
+	height: 0;
+	margin: 0;
+	opacity: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Blockquote — Dramatic ruby bar + italic serif
+   -------------------------------------------------------------------------- */
+blockquote {
+	background: transparent;
+	border-left: 3px solid var(--luwi-primary);
+	padding: var(--luwi-space-md) var(--luwi-space-lg);
+	font-family: var(--luwi-font-heading);
+	font-style: italic;
+	font-size: var(--luwi-fs-lg);
+	color: var(--luwi-text-light);
+}
+
+/* --------------------------------------------------------------------------
+   Glass — Cool blush blur
+   -------------------------------------------------------------------------- */
+.luwi-glass {
+	background: rgba(250, 248, 249, 0.7);
+}
+
+[data-color-mode="dark"] .luwi-glass {
+	background: rgba(24, 20, 26, 0.7);
+}
+
+/* --------------------------------------------------------------------------
+   Selection — Rose container
+   -------------------------------------------------------------------------- */
+::selection {
+	background: var(--luwi-primary-container);
+	color: var(--luwi-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Scrollbar — Plum-tinted
+   -------------------------------------------------------------------------- */
+:root {
+	scrollbar-color: var(--luwi-border) transparent;
+}
+
+/* --------------------------------------------------------------------------
+   Back to Top — Ruby solid, gold border on hover
+   -------------------------------------------------------------------------- */
+.luwi-back-to-top:hover {
+	background: var(--luwi-primary);
+	color: white;
+	box-shadow: 0 0 0 2px var(--luwi-accent),
+		0 4px 16px rgba(155, 27, 48, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   Hero Pattern — Full-bleed overlay with centered text
+   -------------------------------------------------------------------------- */
+.luwi-hero {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	min-height: 90vh;
+	padding: var(--luwi-space-4xl) var(--luwi-space-md);
+	overflow: hidden;
+}
+
+.luwi-hero__bg {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+}
+
+.luwi-hero__bg img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.luwi-hero__bg::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		to bottom,
+		rgba(24, 20, 26, 0.4) 0%,
+		rgba(24, 20, 26, 0.7) 60%,
+		rgba(24, 20, 26, 0.9) 100%
+	);
+}
+
+.luwi-hero__content {
+	position: relative;
+	z-index: 1;
+	max-width: 700px;
+}
+
+.luwi-hero__title {
+	font-family: var(--luwi-font-headline);
+	font-size: var(--luwi-fs-5xl);
+	font-weight: var(--luwi-fw-bold);
+	line-height: var(--luwi-lh-tight);
+	letter-spacing: var(--luwi-ls-tight);
+	color: #ffffff;
+	margin-bottom: var(--luwi-space-lg);
+}
+
+.luwi-hero__subtitle {
+	font-size: var(--luwi-fs-lg);
+	color: rgba(255, 255, 255, 0.8);
+	max-width: 540px;
+	margin: 0 auto var(--luwi-space-xl);
+	line-height: var(--luwi-lh-relaxed);
+}
+
+/* --------------------------------------------------------------------------
+   Label — Sharp, confident, gold accent
+   -------------------------------------------------------------------------- */
+.luwi-label {
+	font-size: 0.625rem;
+	font-weight: var(--luwi-fw-bold);
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--luwi-accent);
+}
+
+/* --------------------------------------------------------------------------
+   Shimmer Utility — Champagne gold shine animation
+   -------------------------------------------------------------------------- */
+@keyframes luwi-shimmer {
+	0% { transform: translateX(-100%); }
+	100% { transform: translateX(100%); }
+}
+
+.luwi-shimmer {
+	position: relative;
+	overflow: hidden;
+}
+
+.luwi-shimmer::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		105deg,
+		transparent 40%,
+		rgba(201, 169, 110, 0.12) 45%,
+		rgba(201, 169, 110, 0.2) 50%,
+		rgba(201, 169, 110, 0.12) 55%,
+		transparent 60%
+	);
+	animation: luwi-shimmer 3s ease-in-out infinite;
+}
+
+/* --------------------------------------------------------------------------
+   Dramatic Reveal — Scale + fade from below
+   -------------------------------------------------------------------------- */
+.luwi-reveal-pending {
+	opacity: 0;
+	transform: translateY(24px) scale(0.98);
+}
+
+.luwi-revealed {
+	opacity: 1;
+	transform: translateY(0) scale(1);
+	transition: opacity 500ms cubic-bezier(0.16, 1, 0.3, 1),
+		transform 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --------------------------------------------------------------------------
+   404 — Sharp corners, dramatic shadow
+   -------------------------------------------------------------------------- */
+.luwi-404__search .search-submit {
+	background: var(--luwi-primary);
+	border-radius: var(--luwi-radius-md);
+}
+
+.luwi-404__search .search-submit:hover {
+	box-shadow: 0 4px 12px rgba(155, 27, 48, 0.2);
+}
+
+/* --------------------------------------------------------------------------
+   Art Deco Accent Lines — Decorative utility
+   -------------------------------------------------------------------------- */
+.luwi-deco-line {
+	display: flex;
+	align-items: center;
+	gap: var(--luwi-space-md);
+}
+
+.luwi-deco-line::before,
+.luwi-deco-line::after {
+	content: '';
+	flex: 1;
+	height: 1px;
+	background: var(--luwi-accent);
+	opacity: 0.3;
+}
+
+/* --------------------------------------------------------------------------
+   WooCommerce Product Card — Art deco, sharp, dramatic
+   -------------------------------------------------------------------------- */
+.woocommerce ul.products li.product {
+	border-radius: var(--luwi-radius-sm);
+	border-top: 2px solid var(--luwi-accent);
+	box-shadow: var(--luwi-shadow-md);
+}
+
+.woocommerce ul.products li.product:hover {
+	box-shadow: var(--luwi-shadow-xl);
+	transform: scale(1.02);
+}
+
+.woocommerce ul.products li.product .button,
+.woocommerce ul.products li.product a.added_to_cart {
+	background: var(--luwi-primary);
+	border-radius: var(--luwi-radius-sm);
+	letter-spacing: 0.15em;
+	position: relative;
+	overflow: hidden;
+}
+
+.woocommerce ul.products li.product .button::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(135deg, transparent 40%, rgba(201, 169, 110, 0.15) 50%, transparent 60%);
+	transform: translateX(-100%);
+	transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.woocommerce ul.products li.product .button:hover::after {
+	transform: translateX(100%);
+}
+
+.woocommerce ul.products li.product .button:hover {
+	background: var(--luwi-primary-hover);
+}
+
+.woocommerce div.product form.cart .single_add_to_cart_button {
+	background: var(--luwi-primary);
+	border-radius: var(--luwi-radius-sm);
+	letter-spacing: 0.15em;
+	position: relative;
+	overflow: hidden;
+}
+
+.woocommerce div.product form.cart .single_add_to_cart_button::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(135deg, transparent 40%, rgba(201, 169, 110, 0.15) 50%, transparent 60%);
+	transform: translateX(-100%);
+	transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.woocommerce div.product form.cart .single_add_to_cart_button:hover {
+	background: var(--luwi-primary-hover);
+}
+
+.woocommerce div.product form.cart .single_add_to_cart_button:hover::after {
+	transform: translateX(100%);
+}
+
+.woocommerce span.onsale {
+	border-radius: 0;
+	background: var(--luwi-primary);
+	font-weight: var(--luwi-fw-bold);
+	letter-spacing: 0.2em;
+	padding: 6px 16px;
+}
+
+/* --------------------------------------------------------------------------
+   Navigation — Art deco, dramatic, confident
+   -------------------------------------------------------------------------- */
+.site-header {
+	border-bottom: 2px solid var(--luwi-accent);
+	background: var(--luwi-surface);
+}
+
+.site-header nav a {
+	font-size: var(--luwi-fs-xs);
+	font-weight: var(--luwi-fw-bold);
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--luwi-text-light);
+	transition: color var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.site-header nav a:hover {
+	color: var(--luwi-primary);
+}
+
+.site-header nav a[aria-current="page"] {
+	color: var(--luwi-primary);
+	border-bottom: 2px solid var(--luwi-primary);
+	padding-bottom: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Product Gallery — Sharp corners, dramatic
+   -------------------------------------------------------------------------- */
+.woocommerce div.product div.images img {
+	border-radius: var(--luwi-radius-sm);
+}
+
+.woocommerce div.product div.images .flex-control-thumbs li {
+	border-radius: var(--luwi-radius-sm);
+}
+
+.woocommerce div.product div.images .flex-control-thumbs li img.flex-active {
+	border-color: var(--luwi-accent);
+	box-shadow: 0 0 0 2px var(--luwi-accent);
+}
+
+/* --------------------------------------------------------------------------
+   Tabs — Sharp, champagne gold active indicator
+   -------------------------------------------------------------------------- */
+.woocommerce div.product .woocommerce-tabs ul.tabs li.active {
+	border-bottom: 3px solid var(--luwi-accent);
+}
+
+.woocommerce div.product .woocommerce-tabs ul.tabs li.active a {
+	color: var(--luwi-text);
+	font-weight: var(--luwi-fw-bold);
+}
+
+/* --------------------------------------------------------------------------
+   Cart — Dramatic surface
+   -------------------------------------------------------------------------- */
+.woocommerce .cart_totals {
+	background: var(--luwi-bg-alt);
+	border-radius: var(--luwi-radius-sm);
+	border-top: 2px solid var(--luwi-accent);
+	padding: var(--luwi-space-lg);
+}
+
+/* --------------------------------------------------------------------------
+   Checkout — Ruby dramatic
+   -------------------------------------------------------------------------- */
+.woocommerce-checkout #payment {
+	background: var(--luwi-bg-alt);
+	border-radius: var(--luwi-radius-sm);
+	border-top: 2px solid var(--luwi-accent);
+	border-bottom: none;
+	border-left: none;
+	border-right: none;
+}
+
+#place_order {
+	background: var(--luwi-primary) !important;
+	border-radius: var(--luwi-radius-sm) !important;
+	letter-spacing: 0.15em;
+	position: relative;
+	overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   Footer — Art deco, champagne gold accent line
+   -------------------------------------------------------------------------- */
+.site-footer {
+	border-top: 2px solid var(--luwi-accent);
+}
+
+.site-footer a {
+	color: var(--luwi-text-muted);
+}
+
+.site-footer a:hover {
+	color: var(--luwi-accent);
+}
+
+/* --------------------------------------------------------------------------
+   Art Deco Diamond Divider
+   -------------------------------------------------------------------------- */
+.luwi-deco-diamond {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--luwi-space-md);
+	padding: var(--luwi-space-lg) 0;
+}
+
+.luwi-deco-diamond::before,
+.luwi-deco-diamond::after {
+	content: '';
+	flex: 1;
+	height: 1px;
+	background: var(--luwi-accent);
+	opacity: 0.3;
+}
+
+.luwi-deco-diamond .diamond {
+	width: 8px;
+	height: 8px;
+	background: var(--luwi-accent);
+	transform: rotate(45deg);
+	opacity: 0.5;
+}

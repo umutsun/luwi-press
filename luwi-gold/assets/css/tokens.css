@@ -1,0 +1,209 @@
+/* ==========================================================================
+   Luwi Gold — Design Tokens
+   Personality: Artisan Heritage
+   Mood: Museum gallery, aged wood, luthier workshop, burnished brass
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Light Mode (Default)
+   -------------------------------------------------------------------------- */
+:root {
+	/* Colors — Burnished brass, aged wood, patina navy, crimson resin */
+	--luwi-primary: #735c00;
+	--luwi-primary-hover: #574500;
+	--luwi-primary-light: #D4AF37;
+	--luwi-primary-bg: rgba(115, 92, 0, 0.07);
+	--luwi-primary-container: #ffe088;
+	--luwi-accent: #545e76;
+	--luwi-accent-hover: #3c475d;
+
+	--luwi-text: #1b1c1c;
+	--luwi-text-light: #4d4635;
+	--luwi-text-muted: #7f7663;
+	--luwi-text-inverse: #f3f0f0;
+
+	--luwi-bg: #fcf9f8;
+	--luwi-bg-alt: #f6f3f2;
+	--luwi-surface: #ffffff;
+	--luwi-surface-hover: #f0eded;
+	--luwi-surface-dim: #dcd9d9;
+	--luwi-border: #d0c5af;
+	--luwi-border-light: #eae7e7;
+
+	--luwi-success: #15803d;
+	--luwi-error: #ba1a1a;
+	--luwi-warning: #b45309;
+	--luwi-info: #1d4ed8;
+	--luwi-sale: #a33b3e;
+
+	/* Typography — Editorial serif + clean sans */
+	--luwi-font-heading: 'Playfair Display', Georgia, serif;
+	--luwi-font-headline: 'Noto Serif', 'Playfair Display', Georgia, serif;
+	--luwi-font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--luwi-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+	/* Typography Scale (shared) */
+	--luwi-fs-xs: 0.75rem;
+	--luwi-fs-sm: 0.875rem;
+	--luwi-fs-base: 1rem;
+	--luwi-fs-lg: 1.125rem;
+	--luwi-fs-xl: 1.375rem;
+	--luwi-fs-2xl: 1.625rem;
+	--luwi-fs-3xl: 2.25rem;
+	--luwi-fs-4xl: 3rem;
+	--luwi-fs-5xl: 3.75rem;
+
+	--luwi-fw-light: 300;
+	--luwi-fw-normal: 400;
+	--luwi-fw-medium: 500;
+	--luwi-fw-semibold: 600;
+	--luwi-fw-bold: 700;
+
+	--luwi-lh-tight: 1.2;
+	--luwi-lh-snug: 1.35;
+	--luwi-lh-normal: 1.6;
+	--luwi-lh-relaxed: 1.75;
+
+	--luwi-ls-tight: -0.02em;
+	--luwi-ls-normal: 0;
+	--luwi-ls-wide: 0.05em;
+	--luwi-ls-wider: 0.1em;
+
+	/* Spacing (shared) */
+	--luwi-space-xs: 0.25rem;
+	--luwi-space-sm: 0.5rem;
+	--luwi-space-md: 1rem;
+	--luwi-space-lg: 1.5rem;
+	--luwi-space-xl: 2.5rem;
+	--luwi-space-2xl: 4rem;
+	--luwi-space-3xl: 6rem;
+	--luwi-space-4xl: 8rem;
+
+	/* Shadows — Warm amber-tinted, grounded */
+	--luwi-shadow-sm: 0 1px 2px rgba(115, 92, 0, 0.04);
+	--luwi-shadow-md: 0 4px 12px rgba(115, 92, 0, 0.06);
+	--luwi-shadow-lg: 0 8px 24px rgba(115, 92, 0, 0.1);
+	--luwi-shadow-xl: 0 16px 48px rgba(115, 92, 0, 0.12);
+	--luwi-shadow-hover: 0 12px 32px rgba(115, 92, 0, 0.14);
+	--luwi-shadow-inner: inset 0 2px 4px rgba(115, 92, 0, 0.04);
+
+	/* Shape — Crisp */
+	--luwi-radius-sm: 4px;
+	--luwi-radius-md: 8px;
+	--luwi-radius-lg: 16px;
+	--luwi-radius-xl: 24px;
+	--luwi-radius-full: 9999px;
+
+	/* Motion — "Slow and heavy" */
+	--luwi-ease: cubic-bezier(0.23, 1, 0.32, 1);
+	--luwi-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	--luwi-duration-fast: 150ms;
+	--luwi-duration-normal: 300ms;
+	--luwi-duration-slow: 500ms;
+	--luwi-duration-image: 700ms;
+
+	/* Layout (shared) */
+	--luwi-container-sm: 720px;
+	--luwi-container-md: 960px;
+	--luwi-container-lg: 1200px;
+	--luwi-container-xl: 1400px;
+	--luwi-header-height: 72px;
+
+	/* Z-index (shared) */
+	--luwi-z-dropdown: 100;
+	--luwi-z-sticky: 200;
+	--luwi-z-overlay: 300;
+	--luwi-z-modal: 400;
+	--luwi-z-toast: 500;
+
+	--luwi-font-scale: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Dark Mode
+   -------------------------------------------------------------------------- */
+[data-color-mode="dark"] {
+	--luwi-primary: #D4AF37;
+	--luwi-primary-hover: #e9c349;
+	--luwi-primary-light: #ffe088;
+	--luwi-primary-bg: rgba(212, 175, 55, 0.12);
+	--luwi-primary-container: #574500;
+	--luwi-accent: #bbc6e2;
+	--luwi-accent-hover: #8a9bc0;
+
+	--luwi-text: #dcd9d9;
+	--luwi-text-light: #d0c5af;
+	--luwi-text-muted: #7f7663;
+	--luwi-text-inverse: #1b1c1c;
+
+	--luwi-bg: #1A1614;
+	--luwi-bg-alt: #231f1b;
+	--luwi-surface: #2a2522;
+	--luwi-surface-hover: #352f2a;
+	--luwi-surface-dim: #1b1c1c;
+	--luwi-border: #4d4635;
+	--luwi-border-light: #352f2c;
+
+	--luwi-sale: #e05a5d;
+
+	--luwi-shadow-sm: 0 2px 4px rgba(26, 22, 20, 0.15);
+	--luwi-shadow-md: 0 4px 12px rgba(26, 22, 20, 0.2);
+	--luwi-shadow-lg: 0 20px 40px rgba(26, 22, 20, 0.06);
+	--luwi-shadow-xl: 0 20px 50px rgba(26, 22, 20, 0.12);
+	--luwi-shadow-hover: 0 20px 40px rgba(26, 22, 20, 0.15);
+
+	color-scheme: dark;
+}
+
+/* Auto dark mode fallback */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-color-mode="light"]) {
+		--luwi-primary: #D4AF37;
+		--luwi-primary-hover: #e9c349;
+		--luwi-primary-light: #ffe088;
+		--luwi-primary-bg: rgba(212, 175, 55, 0.12);
+		--luwi-primary-container: #574500;
+		--luwi-accent: #bbc6e2;
+		--luwi-accent-hover: #8a9bc0;
+
+		--luwi-text: #dcd9d9;
+		--luwi-text-light: #d0c5af;
+		--luwi-text-muted: #7f7663;
+		--luwi-text-inverse: #1b1c1c;
+
+		--luwi-bg: #1A1614;
+		--luwi-bg-alt: #231f1b;
+		--luwi-surface: #2a2522;
+		--luwi-surface-hover: #352f2a;
+		--luwi-surface-dim: #1b1c1c;
+		--luwi-border: #4d4635;
+		--luwi-border-light: #352f2c;
+
+		--luwi-sale: #e05a5d;
+
+		--luwi-shadow-sm: 0 1px 2px rgba(26, 22, 20, 0.4);
+		--luwi-shadow-md: 0 4px 12px rgba(26, 22, 20, 0.5);
+		--luwi-shadow-lg: 0 20px 40px rgba(26, 22, 20, 0.06);
+		--luwi-shadow-xl: 0 16px 48px rgba(26, 22, 20, 0.6);
+		--luwi-shadow-hover: 0 20px 40px rgba(26, 22, 20, 0.15);
+
+		color-scheme: dark;
+	}
+}
+
+/* High Contrast */
+[data-high-contrast="true"] {
+	--luwi-text: #000000;
+	--luwi-text-light: #333333;
+	--luwi-bg: #ffffff;
+	--luwi-surface: #ffffff;
+	--luwi-border: #000000;
+}
+
+[data-color-mode="dark"][data-high-contrast="true"] {
+	--luwi-text: #ffffff;
+	--luwi-text-light: #e0e0e0;
+	--luwi-bg: #000000;
+	--luwi-surface: #111111;
+	--luwi-border: #ffffff;
+}

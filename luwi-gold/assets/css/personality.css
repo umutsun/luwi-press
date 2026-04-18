@@ -1,0 +1,353 @@
+/* ==========================================================================
+   Luwi Gold — Personality Layer
+   Artisan Heritage: Museum gallery, burnished brass, editorial authority.
+   Component-level overrides that can't be expressed through tokens alone.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Buttons — Polished brass gradient glow
+   -------------------------------------------------------------------------- */
+.luwi-btn--primary {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: var(--luwi-text-inverse);
+	box-shadow: 0 4px 16px rgba(115, 92, 0, 0.2);
+}
+
+.luwi-btn--primary:hover {
+	background: linear-gradient(135deg, var(--luwi-primary-hover), var(--luwi-primary));
+	box-shadow: 0 8px 24px rgba(115, 92, 0, 0.3);
+	transform: translateY(-2px);
+}
+
+/* --------------------------------------------------------------------------
+   Cards — No-border, tonal shift, slow heavy lift
+   -------------------------------------------------------------------------- */
+.luwi-card {
+	border: none;
+	box-shadow: var(--luwi-shadow-sm);
+	transition: box-shadow 500ms cubic-bezier(0.23, 1, 0.32, 1),
+		transform 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.luwi-card:hover {
+	box-shadow: var(--luwi-shadow-hover);
+	transform: translateY(-3px);
+}
+
+/* --------------------------------------------------------------------------
+   Inputs — Underline minimalist, brass focus glow
+   -------------------------------------------------------------------------- */
+.luwi-input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
+input[type="number"],
+textarea,
+select {
+	padding: 0.875rem 0;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--luwi-border);
+	border-radius: 0;
+	transition: border-color 500ms cubic-bezier(0.23, 1, 0.32, 1),
+		box-shadow 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.luwi-input:focus,
+input:focus,
+textarea:focus,
+select:focus {
+	outline: none;
+	border-bottom-color: var(--luwi-primary);
+	box-shadow: 0 2px 0 0 var(--luwi-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Separators — Gradient fade (no solid lines)
+   -------------------------------------------------------------------------- */
+hr {
+	border: none;
+	height: 1px;
+	background: linear-gradient(to right, transparent, var(--luwi-border), transparent);
+	opacity: 0.4;
+}
+
+/* --------------------------------------------------------------------------
+   Blockquote — Tonal bg shift (no border-left)
+   -------------------------------------------------------------------------- */
+blockquote {
+	background: linear-gradient(to right, var(--luwi-primary-bg), transparent 4px);
+	border-left: none;
+	padding-left: var(--luwi-space-lg);
+}
+
+/* --------------------------------------------------------------------------
+   Glass — Warm parchment blur
+   -------------------------------------------------------------------------- */
+.luwi-glass {
+	background: rgba(252, 249, 248, 0.7);
+}
+
+[data-color-mode="dark"] .luwi-glass {
+	background: rgba(26, 22, 20, 0.7);
+}
+
+/* --------------------------------------------------------------------------
+   Selection — Gold container
+   -------------------------------------------------------------------------- */
+::selection {
+	background: var(--luwi-primary-container);
+	color: var(--luwi-text-inverse);
+}
+
+/* --------------------------------------------------------------------------
+   Scrollbar — Warm-tinted
+   -------------------------------------------------------------------------- */
+:root {
+	scrollbar-color: var(--luwi-border) transparent;
+}
+
+/* --------------------------------------------------------------------------
+   Back to Top — Brass gradient on hover
+   -------------------------------------------------------------------------- */
+.luwi-back-to-top:hover {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: white;
+	box-shadow: 0 4px 16px rgba(115, 92, 0, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   Hero Pattern — Centered editorial
+   -------------------------------------------------------------------------- */
+.luwi-hero {
+	text-align: center;
+	padding: var(--luwi-space-4xl) var(--luwi-space-md);
+}
+
+.luwi-hero__title {
+	font-family: var(--luwi-font-headline);
+	font-size: var(--luwi-fs-5xl);
+	font-weight: var(--luwi-fw-bold);
+	line-height: var(--luwi-lh-tight);
+	letter-spacing: var(--luwi-ls-tight);
+	margin-bottom: var(--luwi-space-lg);
+}
+
+.luwi-hero__subtitle {
+	font-size: var(--luwi-fs-lg);
+	color: var(--luwi-text-light);
+	max-width: 600px;
+	margin: 0 auto var(--luwi-space-xl);
+	line-height: var(--luwi-lh-relaxed);
+}
+
+/* --------------------------------------------------------------------------
+   Label — Editorial uppercase
+   -------------------------------------------------------------------------- */
+.luwi-label {
+	font-size: 0.625rem;
+	font-weight: var(--luwi-fw-semibold);
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--luwi-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   404 Search Submit — Brass gradient
+   -------------------------------------------------------------------------- */
+.luwi-404__search .search-submit:hover {
+	box-shadow: 0 4px 12px rgba(115, 92, 0, 0.2);
+}
+
+/* --------------------------------------------------------------------------
+   WooCommerce Product Card — Editorial gallery style
+   -------------------------------------------------------------------------- */
+.woocommerce ul.products li.product {
+	border-radius: var(--luwi-radius-md);
+}
+
+.woocommerce ul.products li.product .button,
+.woocommerce ul.products li.product a.added_to_cart {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	border-radius: var(--luwi-radius-md);
+	letter-spacing: 0.2em;
+}
+
+.woocommerce ul.products li.product .button:hover {
+	background: linear-gradient(135deg, var(--luwi-primary-hover), var(--luwi-primary));
+}
+
+.woocommerce div.product form.cart .single_add_to_cart_button {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	border-radius: var(--luwi-radius-md);
+	letter-spacing: 0.2em;
+}
+
+.woocommerce div.product form.cart .single_add_to_cart_button:hover {
+	background: linear-gradient(135deg, var(--luwi-primary-hover), var(--luwi-primary));
+}
+
+.woocommerce span.onsale {
+	border-radius: 0;
+	font-size: 0.5625rem;
+	letter-spacing: 0.25em;
+	padding: 5px 14px;
+}
+
+/* --------------------------------------------------------------------------
+   Navigation — Museum gallery feel: understated, precise
+   -------------------------------------------------------------------------- */
+.site-header {
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	border-bottom: none;
+	background: var(--luwi-surface);
+	box-shadow: 0 1px 0 var(--luwi-border-light);
+}
+
+/* Header inner: logo + nav + actions in a row */
+.site-header__inner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--luwi-space-lg);
+	height: 72px;
+}
+
+/* Site branding */
+.site-branding {
+	flex-shrink: 0;
+}
+
+.site-title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-lg);
+	font-weight: var(--luwi-fw-bold);
+	color: var(--luwi-text);
+	text-decoration: none;
+	letter-spacing: -0.02em;
+}
+
+.site-title:hover {
+	color: var(--luwi-primary);
+}
+
+/* Nav takes remaining space, centers itself */
+.main-navigation {
+	flex: 1;
+	display: flex;
+	justify-content: center;
+}
+
+.main-navigation ul#primary-menu {
+	display: flex;
+	align-items: center;
+	gap: var(--luwi-space-xl);
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.main-navigation ul#primary-menu li {
+	position: relative;
+}
+
+/* Menu toggle hidden on desktop */
+.menu-toggle {
+	display: none;
+}
+
+.site-header nav a,
+.main-navigation ul li a {
+	font-family: var(--luwi-font-body);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--luwi-text-muted);
+	text-decoration: none;
+	padding: 4px 0;
+	transition: color var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.site-header nav a:hover,
+.main-navigation ul li a:hover,
+.main-navigation ul li.current-menu-item a,
+.site-header nav a[aria-current="page"] {
+	color: var(--luwi-primary);
+}
+
+/* Actions (dark mode toggle etc.) */
+.site-header__actions {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	gap: var(--luwi-space-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Product Gallery — Brass-tinted active thumbnail
+   -------------------------------------------------------------------------- */
+.woocommerce div.product div.images .flex-control-thumbs li img.flex-active {
+	border-color: var(--luwi-primary-light);
+	box-shadow: 0 0 0 2px var(--luwi-primary-bg);
+}
+
+/* --------------------------------------------------------------------------
+   Tabs — Editorial underline style
+   -------------------------------------------------------------------------- */
+.woocommerce div.product .woocommerce-tabs ul.tabs li.active {
+	border-bottom-color: var(--luwi-primary);
+}
+
+.woocommerce div.product .woocommerce-tabs ul.tabs li.active a {
+	color: var(--luwi-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Cart — Warm parchment tonal table
+   -------------------------------------------------------------------------- */
+.woocommerce-cart .woocommerce-cart-form .shop_table td {
+	border-color: var(--luwi-border-light);
+}
+
+.woocommerce .cart_totals {
+	background: var(--luwi-bg-alt);
+	border-radius: var(--luwi-radius-lg);
+	padding: var(--luwi-space-lg);
+}
+
+/* --------------------------------------------------------------------------
+   Checkout — Clean editorial form
+   -------------------------------------------------------------------------- */
+.woocommerce-checkout #payment {
+	background: var(--luwi-bg-alt);
+	border-radius: var(--luwi-radius-md);
+	border: none;
+}
+
+#place_order {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light)) !important;
+	letter-spacing: 0.2em;
+}
+
+/* --------------------------------------------------------------------------
+   Footer — Gradient fade top border
+   -------------------------------------------------------------------------- */
+.site-footer {
+	border-top: none;
+	background: linear-gradient(to bottom, var(--luwi-border-light) 0%, var(--luwi-border-light) 1px, transparent 1px);
+}
+
+.site-footer,
+.site-footer a {
+	color: var(--luwi-text-muted);
+}
+
+.site-footer a:hover {
+	color: var(--luwi-primary-light);
+}

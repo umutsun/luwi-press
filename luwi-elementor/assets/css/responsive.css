@@ -1,0 +1,350 @@
+/* ==========================================================================
+   Luwi Elementor — Responsive Breakpoints
+   Aligned with Elementor default breakpoints.
+   Stitch "Luthier Artisan" design principles applied.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Fluid Typography (Desktop → Mobile)
+   Stitch: "display-lg (3.5rem) for hero statements"
+   -------------------------------------------------------------------------- */
+:root {
+	--luwi-fs-5xl: clamp(2.5rem, 5vw + 1rem, 3.75rem);
+	--luwi-fs-4xl: clamp(2rem, 4vw + 0.5rem, 3rem);
+	--luwi-fs-3xl: clamp(1.5rem, 3vw + 0.5rem, 2.25rem);
+}
+
+/* --------------------------------------------------------------------------
+   Tablet (768px - 1024px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+	:root {
+		--luwi-fs-4xl: 2.5rem;
+		--luwi-fs-3xl: 1.875rem;
+		--luwi-fs-2xl: 1.5rem;
+		--luwi-space-3xl: 4rem;
+		--luwi-space-2xl: 3rem;
+	}
+
+	.luwi-container {
+		padding-left: var(--luwi-space-lg);
+		padding-right: var(--luwi-space-lg);
+	}
+
+	/* Product grid: 2 columns on tablet */
+	.woocommerce ul.products {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	/* Posts grid: 2 columns */
+	.luwi-posts-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	/* Footer widgets: 2 columns */
+	.site-footer__widgets {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+
+/* --------------------------------------------------------------------------
+   Mobile (max-width: 767px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+	:root {
+		--luwi-fs-4xl: 2rem;
+		--luwi-fs-3xl: 1.5rem;
+		--luwi-fs-2xl: 1.25rem;
+		--luwi-fs-xl: 1.125rem;
+		--luwi-space-3xl: 3rem;
+		--luwi-space-2xl: 2rem;
+		--luwi-space-xl: 1.5rem;
+		--luwi-header-height: 60px;
+	}
+
+	.luwi-container {
+		padding-left: var(--luwi-space-md);
+		padding-right: var(--luwi-space-md);
+	}
+
+	/* Header — mobile layout */
+	.site-header__inner {
+		flex-wrap: wrap;
+	}
+
+	.main-navigation .menu {
+		display: none;
+	}
+
+	/* Stitch: Glassmorphism mobile menu overlay */
+	.main-navigation.is-open .menu {
+		display: flex;
+		flex-direction: column;
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(252, 249, 248, 0.85);
+		-webkit-backdrop-filter: blur(20px);
+		backdrop-filter: blur(20px);
+		z-index: var(--luwi-z-overlay);
+		padding: var(--luwi-space-4xl) var(--luwi-space-lg) var(--luwi-space-lg);
+		overflow-y: auto;
+	}
+
+	[data-color-mode="dark"] .main-navigation.is-open .menu {
+		background: rgba(26, 22, 20, 0.85);
+	}
+
+	/* Stitch "No-Line Rule": tonal bg shift instead of border */
+	.main-navigation.is-open .menu li {
+		border-bottom: none;
+		padding: var(--luwi-space-xs) 0;
+	}
+
+	.main-navigation.is-open .menu li:nth-child(even) {
+		background: var(--luwi-bg-alt);
+		border-radius: var(--luwi-radius-sm);
+		padding-left: var(--luwi-space-sm);
+	}
+
+	.main-navigation.is-open .menu li a {
+		display: block;
+		padding: var(--luwi-space-md) 0;
+		font-size: var(--luwi-fs-lg);
+		color: var(--luwi-text);
+	}
+
+	.menu-toggle {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		width: 32px;
+		height: 32px;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.menu-toggle__bar {
+		display: block;
+		width: 22px;
+		height: 2px;
+		background: var(--luwi-text);
+		border-radius: 2px;
+		transition: all var(--luwi-duration-fast) var(--luwi-ease);
+	}
+
+	/* Hamburger animation */
+	.main-navigation.is-open .menu-toggle__bar:nth-child(1) {
+		transform: rotate(45deg) translate(5px, 5px);
+	}
+	.main-navigation.is-open .menu-toggle__bar:nth-child(2) {
+		opacity: 0;
+	}
+	.main-navigation.is-open .menu-toggle__bar:nth-child(3) {
+		transform: rotate(-45deg) translate(5px, -5px);
+	}
+
+	/* Product grid: 2 columns on mobile */
+	.woocommerce ul.products {
+		grid-template-columns: repeat(2, 1fr);
+		gap: var(--luwi-space-sm);
+	}
+
+	/* Single column on very small */
+	.luwi-posts-grid {
+		grid-template-columns: 1fr;
+	}
+
+	/* Footer widgets: stack */
+	.site-footer__widgets {
+		grid-template-columns: 1fr;
+	}
+
+	/* WooCommerce tabs: stacked */
+	.woocommerce div.product .woocommerce-tabs ul.tabs {
+		flex-direction: column;
+		border-bottom: none;
+	}
+
+	/* Stitch No-Line Rule: tonal bg shift for active tab */
+	.woocommerce div.product .woocommerce-tabs ul.tabs li {
+		border-bottom: none;
+		margin-bottom: 0;
+	}
+
+	.woocommerce div.product .woocommerce-tabs ul.tabs li:nth-child(even) {
+		background: var(--luwi-bg-alt);
+		border-radius: var(--luwi-radius-sm);
+	}
+
+	.woocommerce div.product .woocommerce-tabs ul.tabs li.active {
+		background: var(--luwi-primary-bg);
+		border-radius: var(--luwi-radius-sm);
+	}
+
+	/* Cart table: responsive stack */
+	.woocommerce-cart .woocommerce table.shop_table thead {
+		display: none;
+	}
+
+	/* Stitch No-Line Rule: tonal shift between cart rows */
+	.woocommerce-cart .woocommerce table.shop_table tr {
+		display: flex;
+		flex-wrap: wrap;
+		padding: var(--luwi-space-md);
+		border-bottom: none;
+	}
+
+	.woocommerce-cart .woocommerce table.shop_table tr:nth-child(even) {
+		background: var(--luwi-bg-alt);
+		border-radius: var(--luwi-radius-md);
+	}
+
+	.woocommerce-cart .woocommerce table.shop_table td {
+		border: none;
+		padding: var(--luwi-space-xs);
+	}
+
+	/* 404 page */
+	.luwi-404 h1 {
+		font-size: 6rem;
+	}
+}
+
+/* --------------------------------------------------------------------------
+   Small Mobile (max-width: 479px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 479px) {
+	/* Product grid: 1 column on very small screens */
+	.woocommerce ul.products {
+		grid-template-columns: 1fr;
+	}
+
+	.woocommerce div.product form.cart .single_add_to_cart_button {
+		width: 100%;
+	}
+}
+
+/* --------------------------------------------------------------------------
+   Desktop (min-width: 1025px)
+   -------------------------------------------------------------------------- */
+@media (min-width: 1025px) {
+	/* Hide mobile menu toggle on desktop */
+	.menu-toggle {
+		display: none;
+	}
+
+	/* Header layout */
+	.site-header__inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		height: var(--luwi-header-height);
+	}
+
+	.main-navigation .menu {
+		display: flex;
+		gap: var(--luwi-space-lg);
+	}
+
+	.main-navigation .menu li a {
+		color: var(--luwi-text);
+		font-size: var(--luwi-fs-sm);
+		font-weight: var(--luwi-fw-medium);
+		letter-spacing: var(--luwi-ls-wide);
+		text-transform: uppercase;
+		transition: color var(--luwi-duration-fast) var(--luwi-ease);
+	}
+
+	.main-navigation .menu li a:hover,
+	.main-navigation .menu li.current-menu-item a {
+		color: var(--luwi-primary);
+	}
+
+	/* Posts grid */
+	.luwi-posts-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--luwi-space-lg);
+	}
+
+	/* Footer widgets */
+	.site-footer__widgets {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--luwi-space-xl);
+	}
+
+	/* Footer bottom */
+	.site-footer__bottom {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding-top: var(--luwi-space-lg);
+		margin-top: var(--luwi-space-xl);
+		border-top: 1px solid var(--luwi-border);
+	}
+
+	.site-footer__bottom ul {
+		display: flex;
+		gap: var(--luwi-space-lg);
+	}
+
+	/* Stitch: Glassmorphism sticky header — "Ambient Light" shadow */
+	.site-header--sticky {
+		position: sticky;
+		top: 0;
+		z-index: var(--luwi-z-sticky);
+		background: rgba(252, 249, 248, 0.8);
+		box-shadow: 0 20px 50px rgba(27, 28, 28, 0.04);
+		-webkit-backdrop-filter: blur(20px);
+		backdrop-filter: blur(20px);
+		transition: background 500ms cubic-bezier(0.23, 1, 0.32, 1),
+			box-shadow 500ms cubic-bezier(0.23, 1, 0.32, 1);
+	}
+
+	[data-color-mode="dark"] .site-header--sticky {
+		background: rgba(26, 22, 20, 0.8);
+	}
+
+	/* Stitch: Nav links — Playfair Display, tracking-widest, uppercase */
+	.main-navigation .menu li a {
+		font-family: var(--luwi-font-heading);
+		font-size: 0.75rem;
+		letter-spacing: 0.15em;
+		text-transform: uppercase;
+		color: var(--luwi-text-muted);
+		transition: color 500ms cubic-bezier(0.23, 1, 0.32, 1);
+	}
+
+	.main-navigation .menu li a:hover,
+	.main-navigation .menu li.current-menu-item a {
+		color: var(--luwi-primary);
+	}
+
+	/* Stitch: "Atelier" active nav — subtle bottom border */
+	.main-navigation .menu li.current-menu-item a {
+		border-bottom: 1px solid rgba(115, 92, 0, 0.2);
+		padding-bottom: 2px;
+	}
+
+	/* Stitch: Footer — No-Line Rule, tonal bg */
+	.site-footer__bottom {
+		border-top: none;
+		background: var(--luwi-bg-alt);
+		padding: var(--luwi-space-lg);
+		border-radius: var(--luwi-radius-lg) var(--luwi-radius-lg) 0 0;
+		margin-top: var(--luwi-space-xl);
+	}
+}
+
+/* --------------------------------------------------------------------------
+   Wide Desktop (min-width: 1400px)
+   -------------------------------------------------------------------------- */
+@media (min-width: 1400px) {
+	:root {
+		--luwi-fs-5xl: 4rem;
+	}
+}

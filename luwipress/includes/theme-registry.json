@@ -1,0 +1,104 @@
+{
+  "themes": {
+    "luwi-gold": {
+      "name": "Luwi Gold",
+      "slug": "luwi-gold",
+      "personality": "Artisan Heritage",
+      "version": "1.0.3",
+      "description": "Burnished brass tones, editorial serif typography, and museum-gallery elegance. Designed for artisan product stores that value craftsmanship and heritage.",
+      "zip_url": "https://github.com/umutsun/luwi-themes/releases/download/gold-v1.0.3/luwi-gold-v1.0.3.zip",
+      "preview_url": "",
+      "thumbnail": "",
+      "icon": "dashicons-star-filled",
+      "badge": "Free with LuwiPress",
+      "requires": {
+        "wp": "6.0",
+        "php": "7.4",
+        "plugins": ["elementor"],
+        "woocommerce": true
+      },
+      "demo_content": "demo-content/gold-pages.json",
+      "features": ["dark-mode", "woocommerce", "elementor", "wpml", "rtl"],
+      "palette": {
+        "primary": "#735c00",
+        "primary_light": "#D4AF37",
+        "accent": "#545e76",
+        "bg": "#fcf9f8",
+        "bg_dark": "#1A1614"
+      },
+      "fonts": {
+        "heading": "Playfair Display",
+        "body": "Inter"
+      },
+      "coming_soon": false
+    },
+    "luwi-emerald": {
+      "name": "Luwi Emerald",
+      "slug": "luwi-emerald",
+      "personality": "Botanical Modern",
+      "version": "1.0.0",
+      "description": "Deep forest greens, organic shapes, and breathing animations. Perfect for natural, artisan, and eco-conscious product stores.",
+      "zip_url": "https://github.com/umutsun/luwi-themes/releases/download/emerald-v1.0.0/luwi-emerald-v1.0.0.zip",
+      "preview_url": "",
+      "thumbnail": "",
+      "icon": "dashicons-palmtree",
+      "badge": "Free with LuwiPress",
+      "requires": {
+        "wp": "6.0",
+        "php": "7.4",
+        "plugins": ["elementor"],
+        "woocommerce": true
+      },
+      "demo_content": "demo-content/emerald-pages.json",
+      "features": ["dark-mode", "woocommerce", "elementor", "wpml", "rtl"],
+      "palette": {
+        "primary": "#1a5c2a",
+        "primary_light": "#4a9e5c",
+        "accent": "#b5654a",
+        "bg": "#f5faf6",
+        "bg_dark": "#0f1a12"
+      },
+      "fonts": {
+        "heading": "DM Serif Display",
+        "body": "Plus Jakarta Sans"
+      },
+      "coming_soon": false
+    },
+    "luwi-ruby": {
+      "name": "Luwi Ruby",
+      "slug": "luwi-ruby",
+      "personality": "Bold Luxe",
+      "version": "1.0.0",
+      "description": "Deep ruby reds, champagne gold accents, and dramatic art-deco confidence. Built for luxury, fashion, and high-end product stores.",
+      "zip_url": "https://github.com/umutsun/luwi-themes/releases/download/ruby-v1.0.0/luwi-ruby-v1.0.0.zip",
+      "preview_url": "",
+      "thumbnail": "",
+      "icon": "dashicons-diamond",
+      "badge": "Free with LuwiPress",
+      "requires": {
+        "wp": "6.0",
+        "php": "7.4",
+        "plugins": ["elementor"],
+        "woocommerce": true
+      },
+      "demo_content": "demo-content/ruby-pages.json",
+      "features": ["dark-mode", "woocommerce", "elementor", "wpml", "rtl"],
+      "palette": {
+        "primary": "#9b1b30",
+        "primary_light": "#e8475e",
+        "accent": "#c9a96e",
+        "bg": "#faf8f9",
+        "bg_dark": "#18141a"
+      },
+      "fonts": {
+        "heading": "Libre Baskerville",
+        "body": "Source Sans 3"
+      },
+      "coming_soon": false
+    }
+  },
+  "config": {
+    "base_url": "https://github.com/umutsun/luwi-themes/releases/download/",
+    "catalog_version": "2.0.0"
+  }
+}

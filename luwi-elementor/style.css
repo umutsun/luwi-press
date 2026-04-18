@@ -1,0 +1,18 @@
+/*
+Theme Name: Luwi Elementor
+Theme URI: https://luwipress.com/theme
+Author: LuwiPress
+Author URI: https://luwipress.com
+Description: Modern, minimal e-commerce WordPress theme designed for Elementor. Premium product showcase with light/dark mode, full WooCommerce support, WPML-ready, and seamless LuwiPress plugin integration. Built with accessibility (WCAG 2.1 AA) at its core.
+Version: 1.0.0
+Requires at least: 6.0
+Tested up to: 6.7
+Requires PHP: 7.4
+License: GNU General Public License v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: luwi-elementor
+Tags: e-commerce, woocommerce, elementor, one-column, two-columns, custom-colors, custom-logo, custom-menu, featured-images, full-width-template, rtl-language-support, theme-options, translation-ready, accessibility-ready
+WooCommerce: 8.0
+*/
+
+/* Theme CSS is loaded via assets/css/base.css — this file is header-only */

@@ -1,0 +1,846 @@
+{
+  "version": "1.1.0",
+  "theme": "luwi-ruby",
+  "pages": [
+    {
+      "slug": "home",
+      "title": "Home",
+      "template": "elementor_header_footer",
+      "is_homepage": true,
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "full_width",
+            "min_height": {
+              "size": 80,
+              "unit": "vh"
+            },
+            "background_background": "classic",
+            "background_color": "#faf8f9",
+            "padding": {
+              "top": "0",
+              "bottom": "0",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 100
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Crafted with Passion,\nDesigned for {{store_name}}",
+                    "header_size": "h1",
+                    "align": "center",
+                    "title_color": "#1c1a1b",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Libre Baskerville",
+                    "typography_font_size": {
+                      "size": 56,
+                      "unit": "px"
+                    },
+                    "typography_font_weight": "700",
+                    "typography_line_height": {
+                      "size": 1.15,
+                      "unit": "em"
+                    }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"text-align:center;font-size:18px;color:#4a3f44;max-width:560px;margin:0 auto;font-family:Source Sans 3,sans-serif;line-height:1.7;\">Discover our curated collection of premium instruments and accessories. Quality craftsmanship meets timeless design.</p>",
+                    "_margin": {
+                      "top": "0",
+                      "right": "0",
+                      "bottom": "32",
+                      "left": "0",
+                      "unit": "px"
+                    }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "button",
+                  "settings": {
+                    "text": "Explore Collection",
+                    "align": "center",
+                    "link": {
+                      "url": "/shop"
+                    },
+                    "background_color": "#9b1b30",
+                    "button_text_color": "#f5f0f2",
+                    "border_radius": {
+                      "size": 8
+                    },
+                    "typography_typography": "custom",
+                    "typography_font_family": "Inter",
+                    "typography_font_size": {
+                      "size": 14,
+                      "unit": "px"
+                    },
+                    "typography_font_weight": "500",
+                    "typography_letter_spacing": {
+                      "size": 1.5,
+                      "unit": "px"
+                    },
+                    "typography_text_transform": "uppercase",
+                    "text_padding": {
+                      "top": "16",
+                      "right": "40",
+                      "bottom": "16",
+                      "left": "40",
+                      "unit": "px"
+                    },
+                    "hover_color": "#f5f0f2",
+                    "button_background_hover_color": "#7a1526"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "background_background": "classic",
+            "background_color": "#f4f0f2",
+            "padding": {
+              "top": "80",
+              "bottom": "80",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 100
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Featured Products",
+                    "header_size": "h2",
+                    "align": "center",
+                    "title_color": "#1c1a1b",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Libre Baskerville",
+                    "typography_font_size": {
+                      "size": 36,
+                      "unit": "px"
+                    },
+                    "typography_font_weight": "600",
+                    "_margin": {
+                      "top": "0",
+                      "right": "0",
+                      "bottom": "40",
+                      "left": "0",
+                      "unit": "px"
+                    }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "shortcode",
+                  "settings": {
+                    "shortcode": "[products limit=\"4\" columns=\"4\" orderby=\"popularity\" order=\"DESC\"]"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "padding": {
+              "top": "60",
+              "bottom": "60",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 100
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Browse Categories",
+                    "header_size": "h2",
+                    "align": "center",
+                    "title_color": "#1c1a1b",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Libre Baskerville",
+                    "typography_font_size": {
+                      "size": 36,
+                      "unit": "px"
+                    },
+                    "typography_font_weight": "600",
+                    "_margin": {
+                      "top": "0",
+                      "right": "0",
+                      "bottom": "40",
+                      "left": "0",
+                      "unit": "px"
+                    }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "luwi-category-showcase",
+                  "settings": {
+                    "source": "auto",
+                    "count": 6,
+                    "columns": "3",
+                    "card_style": "overlay",
+                    "show_count": "yes"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "full_width",
+            "background_background": "classic",
+            "background_color": "#1c1a1b",
+            "padding": {
+              "top": "48",
+              "bottom": "48",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 100
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "luwi-trust-badges",
+                  "settings": {
+                    "badges": [
+                      {
+                        "badge_title": "Free Shipping",
+                        "badge_description": "On orders over $100",
+                        "badge_icon": {
+                          "library": "fa-solid",
+                          "value": "fas fa-shipping-fast"
+                        }
+                      },
+                      {
+                        "badge_title": "Secure Payment",
+                        "badge_description": "256-bit SSL encryption",
+                        "badge_icon": {
+                          "library": "fa-solid",
+                          "value": "fas fa-lock"
+                        }
+                      },
+                      {
+                        "badge_title": "15-Day Returns",
+                        "badge_description": "Money-back guarantee",
+                        "badge_icon": {
+                          "library": "fa-solid",
+                          "value": "fas fa-undo"
+                        }
+                      },
+                      {
+                        "badge_title": "Expert Support",
+                        "badge_description": "Instrument specialists",
+                        "badge_icon": {
+                          "library": "fa-solid",
+                          "value": "fas fa-headset"
+                        }
+                      }
+                    ],
+                    "layout": "row",
+                    "show_dividers": ""
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "about",
+      "title": "About Us",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "padding": {
+              "top": "80",
+              "bottom": "80",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 50
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#7a6d73;margin-bottom:16px;font-family:Source Sans 3,sans-serif;\">Our Story</p>",
+                    "_margin": {
+                      "top": "0",
+                      "right": "0",
+                      "bottom": "0",
+                      "left": "0",
+                      "unit": "px"
+                    }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Crafting Excellence Since Day One",
+                    "header_size": "h1",
+                    "title_color": "#1c1a1b",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Libre Baskerville",
+                    "typography_font_size": {
+                      "size": 42,
+                      "unit": "px"
+                    },
+                    "typography_font_weight": "700",
+                    "typography_line_height": {
+                      "size": 1.2,
+                      "unit": "em"
+                    }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:16px;line-height:1.75;color:#4a3f44;font-family:Source Sans 3,sans-serif;\">We believe in quality craftsmanship and timeless design. Every product in our collection is carefully selected to bring you the very best.</p><p style=\"font-size:16px;line-height:1.75;color:#4a3f44;font-family:Source Sans 3,sans-serif;\">Our journey began with a simple idea: make premium products accessible to everyone. Today, we continue that mission with the same passion and dedication.</p>"
+                  },
+                  "elements": []
+                }
+              ]
+            },
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 50
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "image",
+                  "settings": {
+                    "image": {
+                      "url": ""
+                    },
+                    "image_size": "large"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "contact",
+      "title": "Contact",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "padding": {
+              "top": "80",
+              "bottom": "80",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 50
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#7a6d73;margin-bottom:16px;font-family:Source Sans 3,sans-serif;\">Get in Touch</p>"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "We'd Love to Hear From You",
+                    "header_size": "h1",
+                    "title_color": "#1c1a1b",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Libre Baskerville",
+                    "typography_font_size": {
+                      "size": 42,
+                      "unit": "px"
+                    },
+                    "typography_font_weight": "700"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:16px;line-height:1.75;color:#4a3f44;font-family:Source Sans 3,sans-serif;\">Have a question about our products or a custom order? Send us a message and we'll respond within 24 hours.</p>"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "icon-list",
+                  "settings": {
+                    "icon_list": [
+                      {
+                        "text": "{{store_email}}",
+                        "selected_icon": {
+                          "library": "fa-solid",
+                          "value": "fas fa-envelope"
+                        }
+                      },
+                      {
+                        "text": "{{store_phone}}",
+                        "selected_icon": {
+                          "library": "fa-solid",
+                          "value": "fas fa-phone"
+                        }
+                      },
+                      {
+                        "text": "{{store_address}}",
+                        "selected_icon": {
+                          "library": "fa-solid",
+                          "value": "fas fa-map-marker-alt"
+                        }
+                      }
+                    ],
+                    "icon_color": "#9b1b30",
+                    "text_color": "#1c1a1b"
+                  },
+                  "elements": []
+                }
+              ]
+            },
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 50
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "shortcode",
+                  "settings": {
+                    "shortcode": "[wpforms id=\"0\"]"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "faq",
+      "title": "FAQ",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "content_width": {
+              "size": 800,
+              "unit": "px"
+            },
+            "padding": {
+              "top": "80",
+              "bottom": "80",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 100
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#7a6d73;margin-bottom:16px;font-family:Source Sans 3,sans-serif;\">Support</p>"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Frequently Asked Questions",
+                    "header_size": "h1",
+                    "align": "center",
+                    "title_color": "#1c1a1b",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Libre Baskerville",
+                    "typography_font_size": {
+                      "size": 42,
+                      "unit": "px"
+                    },
+                    "typography_font_weight": "700",
+                    "_margin": {
+                      "top": "0",
+                      "right": "0",
+                      "bottom": "40",
+                      "left": "0",
+                      "unit": "px"
+                    }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "toggle",
+                  "settings": {
+                    "tabs": [
+                      {
+                        "tab_title": "How long does shipping take?",
+                        "tab_content": "Standard shipping takes 5–7 business days. Express shipping is available for 2–3 business days delivery."
+                      },
+                      {
+                        "tab_title": "What is your return policy?",
+                        "tab_content": "We offer a 30-day return policy on all unused items in their original packaging. Contact us to initiate a return."
+                      },
+                      {
+                        "tab_title": "Do you ship internationally?",
+                        "tab_content": "Yes! We ship to most countries worldwide. International shipping times vary by destination."
+                      },
+                      {
+                        "tab_title": "How can I track my order?",
+                        "tab_content": "Once your order ships, you’ll receive a tracking number via email. You can also check your order status in your account."
+                      },
+                      {
+                        "tab_title": "What payment methods do you accept?",
+                        "tab_content": "We accept all major credit cards, PayPal, Apple Pay, and Google Pay. All payments are securely processed."
+                      }
+                    ],
+                    "border_color": "#eae4e7",
+                    "title_color": "#1c1a1b",
+                    "tab_active_color": "#9b1b30"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "blog",
+      "title": "Blog",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "padding": {
+              "top": "80",
+              "bottom": "40",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 100
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#7a6d73;margin-bottom:16px;font-family:Source Sans 3,sans-serif;\">Journal</p>"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Stories & Insights",
+                    "header_size": "h1",
+                    "align": "center",
+                    "title_color": "#1c1a1b",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Libre Baskerville",
+                    "typography_font_size": {
+                      "size": 42,
+                      "unit": "px"
+                    },
+                    "typography_font_weight": "700"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"text-align:center;font-size:16px;color:#4a3f44;max-width:560px;margin:0 auto 40px;font-family:Source Sans 3,sans-serif;line-height:1.7;\">Discover tips, guides, and stories from our workshop.</p>"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "padding": {
+              "top": "0",
+              "bottom": "80",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 100
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "posts",
+                  "settings": {
+                    "skin": "classic",
+                    "columns": "3",
+                    "posts_per_page": 6,
+                    "show_image": "yes",
+                    "masonry": "",
+                    "thumbnail_size": "medium_large",
+                    "show_title": "yes",
+                    "show_excerpt": "yes",
+                    "excerpt_length": "20",
+                    "show_date": "yes",
+                    "show_read_more": "yes",
+                    "read_more_text": "Read More",
+                    "pagination_type": "numbers"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "terms-conditions",
+      "title": "Terms & Conditions",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "content_width": {
+              "size": 800,
+              "unit": "px"
+            },
+            "padding": {
+              "top": "60",
+              "bottom": "60",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 100
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Terms & Conditions",
+                    "header_size": "h1",
+                    "title_color": "#1c1a1b",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Libre Baskerville",
+                    "typography_font_size": {
+                      "size": 36,
+                      "unit": "px"
+                    },
+                    "typography_font_weight": "700"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<div style=\"font-family:Source Sans 3,sans-serif;font-size:15px;line-height:1.8;color:#4a3f44;\"><p>Please read these terms and conditions carefully before using our website or making a purchase.</p><h3 style=\"font-family:'Libre Baskerville',serif;color:#1c1a1b;margin-top:32px;\">General Terms</h3><p>By accessing and placing an order with our store, you confirm that you are in agreement with and bound by the terms and conditions below.</p><h3 style=\"font-family:'Libre Baskerville',serif;color:#1c1a1b;margin-top:32px;\">Products</h3><p>All products are subject to availability. We reserve the right to discontinue any product at any time.</p><h3 style=\"font-family:'Libre Baskerville',serif;color:#1c1a1b;margin-top:32px;\">Pricing</h3><p>Prices are subject to change without notice. We make every effort to provide accurate pricing information.</p></div>"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "privacy-policy",
+      "title": "Privacy Policy",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "content_width": {
+              "size": 800,
+              "unit": "px"
+            },
+            "padding": {
+              "top": "60",
+              "bottom": "60",
+              "unit": "px"
+            }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": {
+                "_column_size": 100
+              },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Privacy Policy",
+                    "header_size": "h1",
+                    "title_color": "#1c1a1b",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Libre Baskerville",
+                    "typography_font_size": {
+                      "size": 36,
+                      "unit": "px"
+                    },
+                    "typography_font_weight": "700"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<div style=\"font-family:Source Sans 3,sans-serif;font-size:15px;line-height:1.8;color:#4a3f44;\"><p>Your privacy is important to us. This policy explains how we collect, use, and protect your personal information.</p><h3 style=\"font-family:'Libre Baskerville',serif;color:#1c1a1b;margin-top:32px;\">Information We Collect</h3><p>We collect information you provide when placing an order, creating an account, or contacting us — including name, email, shipping address, and payment details.</p><h3 style=\"font-family:'Libre Baskerville',serif;color:#1c1a1b;margin-top:32px;\">How We Use Your Information</h3><p>We use your data to process orders, communicate with you, and improve our services. We never sell your personal information to third parties.</p><h3 style=\"font-family:'Libre Baskerville',serif;color:#1c1a1b;margin-top:32px;\">Cookies</h3><p>We use cookies to enhance your browsing experience and analyze site traffic. You can manage cookie preferences in your browser settings.</p></div>"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "menus": {
+    "primary": {
+      "name": "Main Menu",
+      "items": [
+        {
+          "title": "Home",
+          "page_slug": "home"
+        },
+        {
+          "title": "Shop",
+          "url": "/shop"
+        },
+        {
+          "title": "About",
+          "page_slug": "about"
+        },
+        {
+          "title": "Blog",
+          "page_slug": "blog"
+        },
+        {
+          "title": "FAQ",
+          "page_slug": "faq"
+        },
+        {
+          "title": "Contact",
+          "page_slug": "contact"
+        }
+      ]
+    }
+  },
+  "settings": {
+    "show_on_front": "page",
+    "page_on_front": "home",
+    "page_for_posts": "blog"
+  }
+}

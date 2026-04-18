@@ -1,0 +1,955 @@
+/* ==========================================================================
+   Luwi Widgets — Elementor Custom Widget Styles
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Trust Badges
+   -------------------------------------------------------------------------- */
+.luwi-trust-badges {
+	display: flex;
+	justify-content: center;
+	gap: var(--luwi-space-xl);
+	padding: var(--luwi-space-lg) 0;
+}
+
+.luwi-trust-badges--grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: var(--luwi-space-lg);
+}
+
+.luwi-trust-badge {
+	display: flex;
+	align-items: center;
+	gap: var(--luwi-space-md);
+	text-align: left;
+}
+
+/* Stitch No-Line Rule: tonal bg shift instead of border divider */
+.luwi-trust-badges--dividers .luwi-trust-badge:not(:last-child) {
+	padding-right: var(--luwi-space-xl);
+	border-right: none;
+	background: linear-gradient(to right, transparent 95%, var(--luwi-border-light) 100%);
+}
+
+.luwi-trust-badges--grid.luwi-trust-badges--dividers .luwi-trust-badge {
+	border-right: none;
+	padding-right: 0;
+}
+
+.luwi-trust-badge__icon {
+	flex-shrink: 0;
+	font-size: 1.75rem;
+	color: var(--luwi-primary);
+	width: 48px;
+	height: 48px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--luwi-primary-bg);
+	border-radius: var(--luwi-radius-full);
+}
+
+.luwi-trust-badge__icon i,
+.luwi-trust-badge__icon svg {
+	width: 24px;
+	height: 24px;
+}
+
+.luwi-trust-badge__title {
+	display: block;
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-semibold);
+	color: var(--luwi-text);
+	letter-spacing: var(--luwi-ls-wide);
+	text-transform: uppercase;
+}
+
+.luwi-trust-badge__desc {
+	display: block;
+	font-size: var(--luwi-fs-xs);
+	color: var(--luwi-text-light);
+	margin-top: 2px;
+}
+
+@media (max-width: 767px) {
+	.luwi-trust-badges--row {
+		flex-wrap: wrap;
+		gap: var(--luwi-space-md);
+	}
+	.luwi-trust-badges--dividers .luwi-trust-badge {
+		border-right: none;
+		padding-right: 0;
+	}
+}
+
+/* --------------------------------------------------------------------------
+   Color Mode Toggle
+   -------------------------------------------------------------------------- */
+/* Stitch No-Line Rule: surface shift, no border */
+.luwi-color-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	background: var(--luwi-surface-hover);
+	border: none;
+	border-radius: var(--luwi-radius-full);
+	cursor: pointer;
+	color: var(--luwi-text);
+	transition: background var(--luwi-duration-normal) var(--luwi-ease),
+		box-shadow var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.luwi-color-toggle:hover {
+	background: var(--luwi-primary-bg);
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.luwi-color-toggle svg {
+	width: 20px;
+	height: 20px;
+}
+
+/* Sun visible in light, moon visible in dark */
+[data-color-mode="dark"] .luwi-color-toggle__sun,
+:root:not([data-color-mode]) .luwi-color-toggle__moon {
+	display: none;
+}
+
+[data-color-mode="light"] .luwi-color-toggle__moon,
+[data-color-mode="dark"] .luwi-color-toggle__moon {
+	display: block;
+}
+
+[data-color-mode="light"] .luwi-color-toggle__sun {
+	display: block;
+}
+
+[data-color-mode="dark"] .luwi-color-toggle__sun {
+	display: none;
+}
+
+/* Pill style */
+.luwi-color-toggle--pill {
+	width: auto;
+	padding: 6px 16px;
+	gap: 8px;
+	font-size: var(--luwi-fs-xs);
+	border-radius: var(--luwi-radius-full);
+}
+
+/* --------------------------------------------------------------------------
+   Countdown Timer
+   -------------------------------------------------------------------------- */
+.luwi-countdown {
+	text-align: center;
+}
+
+.luwi-countdown__label {
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wider);
+	color: var(--luwi-text-light);
+	margin-bottom: var(--luwi-space-md);
+}
+
+.luwi-countdown__timer {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--luwi-space-sm);
+}
+
+/* Stitch No-Line Rule: surface elevation, no border */
+.luwi-countdown__block {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	min-width: 72px;
+	padding: var(--luwi-space-md);
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.luwi-countdown__number {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-3xl);
+	font-weight: var(--luwi-fw-bold);
+	line-height: 1;
+	color: var(--luwi-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.luwi-countdown__unit {
+	font-size: var(--luwi-fs-xs);
+	font-weight: var(--luwi-fw-medium);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	color: var(--luwi-text-muted);
+	margin-top: 4px;
+}
+
+.luwi-countdown__sep {
+	font-size: var(--luwi-fs-2xl);
+	font-weight: var(--luwi-fw-bold);
+	color: var(--luwi-text-muted);
+	line-height: 1;
+	margin-bottom: 20px;
+}
+
+@media (max-width: 479px) {
+	.luwi-countdown__block {
+		min-width: 56px;
+		padding: var(--luwi-space-sm);
+	}
+	.luwi-countdown__number {
+		font-size: var(--luwi-fs-2xl);
+	}
+}
+
+/* --------------------------------------------------------------------------
+   Category Showcase
+   -------------------------------------------------------------------------- */
+.luwi-category-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: var(--luwi-space-lg);
+}
+
+.luwi-category-card {
+	position: relative;
+	display: block;
+	border-radius: var(--luwi-radius-lg);
+	overflow: hidden;
+	text-decoration: none;
+	color: var(--luwi-text);
+	transition: box-shadow var(--luwi-duration-normal) var(--luwi-ease),
+		transform var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.luwi-category-card:hover {
+	box-shadow: var(--luwi-shadow-hover);
+	transform: translateY(-3px);
+}
+
+/* Overlay style */
+.luwi-category-card--overlay {
+	aspect-ratio: 4 / 3;
+}
+
+.luwi-category-card--overlay .luwi-category-card__image {
+	position: absolute;
+	inset: 0;
+}
+
+.luwi-category-card--overlay .luwi-category-card__image img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.luwi-category-card--overlay:hover .luwi-category-card__image img {
+	transform: scale(1.08);
+}
+
+.luwi-category-card--overlay .luwi-category-card__content {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	padding: var(--luwi-space-lg);
+	background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+	color: white;
+}
+
+.luwi-category-card--overlay .luwi-category-card__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-xl);
+	font-weight: var(--luwi-fw-semibold);
+	color: white;
+	margin: 0;
+}
+
+.luwi-category-card--overlay .luwi-category-card__count {
+	font-size: var(--luwi-fs-xs);
+	color: rgba(255, 255, 255, 0.8);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+}
+
+/* Below style — Stitch No-Line Rule: shadow elevation, no border */
+.luwi-category-card--below {
+	background: var(--luwi-surface);
+	border: none;
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.luwi-category-card--below .luwi-category-card__image {
+	aspect-ratio: 1 / 1;
+	overflow: hidden;
+}
+
+.luwi-category-card--below .luwi-category-card__image img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.luwi-category-card--below:hover .luwi-category-card__image img {
+	transform: scale(1.05);
+}
+
+.luwi-category-card--below .luwi-category-card__content {
+	padding: var(--luwi-space-md);
+	text-align: center;
+}
+
+.luwi-category-card--below .luwi-category-card__title {
+	font-family: var(--luwi-font-body);
+	font-size: var(--luwi-fs-base);
+	font-weight: var(--luwi-fw-semibold);
+	margin: 0;
+}
+
+.luwi-category-card--below .luwi-category-card__count {
+	font-size: var(--luwi-fs-xs);
+	color: var(--luwi-text-muted);
+}
+
+/* Minimal style — Stitch No-Line Rule: surface shift, no border */
+.luwi-category-card--minimal {
+	padding: var(--luwi-space-lg);
+	background: var(--luwi-bg-alt);
+	border: none;
+	text-align: center;
+	border-radius: var(--luwi-radius-lg);
+}
+
+.luwi-category-card--minimal .luwi-category-card__title {
+	font-family: var(--luwi-font-body);
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-medium);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	margin: 0;
+}
+
+@media (max-width: 767px) {
+	.luwi-category-grid {
+		grid-template-columns: repeat(2, 1fr);
+		gap: var(--luwi-space-sm);
+	}
+}
+
+/* --------------------------------------------------------------------------
+   Widget Placeholder (Editor)
+   -------------------------------------------------------------------------- */
+.luwi-widget-placeholder {
+	padding: var(--luwi-space-xl);
+	text-align: center;
+	color: var(--luwi-text-muted);
+	background: var(--luwi-bg-alt);
+	border: 2px dashed var(--luwi-border);
+	border-radius: var(--luwi-radius-md);
+	font-size: var(--luwi-fs-sm);
+}
+
+/* --------------------------------------------------------------------------
+   LuwiPress Upsell Notice (Editor Only)
+   -------------------------------------------------------------------------- */
+.luwi-widget-upsell {
+	display: flex;
+	align-items: center;
+	gap: var(--luwi-space-sm);
+	margin-top: var(--luwi-space-sm);
+	padding: var(--luwi-space-sm) var(--luwi-space-md);
+	background: var(--luwi-primary-bg);
+	border-radius: var(--luwi-radius-sm);
+	font-size: var(--luwi-fs-xs);
+	color: var(--luwi-primary);
+}
+
+.luwi-widget-upsell__icon {
+	font-size: var(--luwi-fs-base);
+}
+
+/* ==========================================================================
+   Stitch Reference Components — Converted from HTML templates
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Product Card (Luwi Product Card Widget)
+   Stitch "Featured Curations" — ana_sayfa reference
+   -------------------------------------------------------------------------- */
+.luwi-product-grid {
+	display: grid;
+	gap: var(--luwi-space-lg);
+}
+
+.luwi-product-card {
+	position: relative;
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	overflow: hidden;
+	box-shadow: var(--luwi-shadow-sm);
+	transition: box-shadow var(--luwi-duration-slow) var(--luwi-ease),
+		transform var(--luwi-duration-slow) var(--luwi-ease);
+	text-decoration: none;
+	color: var(--luwi-text);
+	display: block;
+}
+
+.luwi-product-card:hover {
+	box-shadow: var(--luwi-shadow-hover);
+	transform: translateY(-3px);
+}
+
+/* Stitch: Square image container with zoom on hover */
+.luwi-product-card__image {
+	position: relative;
+	aspect-ratio: 1 / 1;
+	overflow: hidden;
+	background: var(--luwi-bg-alt);
+}
+
+.luwi-product-card__image img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform var(--luwi-duration-image) var(--luwi-ease);
+}
+
+.luwi-product-card:hover .luwi-product-card__image img {
+	transform: scale(1.1);
+}
+
+/* Stitch: Sale badge — crimson resin pill */
+.luwi-product-card__badge {
+	position: absolute;
+	top: var(--luwi-space-sm);
+	left: var(--luwi-space-sm);
+	padding: 4px 12px;
+	background: var(--luwi-sale);
+	color: white;
+	font-size: 0.625rem;
+	font-weight: var(--luwi-fw-bold);
+	letter-spacing: var(--luwi-ls-wider);
+	text-transform: uppercase;
+	border-radius: var(--luwi-radius-sm);
+	z-index: 2;
+}
+
+/* Stitch: "New" badge — burnished gold */
+.luwi-product-card__badge--new {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+}
+
+/* Quick-view overlay — glassmorphism */
+.luwi-product-card__quick-view {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(252, 249, 248, 0.6);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	opacity: 0;
+	transition: opacity var(--luwi-duration-slow) var(--luwi-ease);
+	z-index: 3;
+}
+
+[data-color-mode="dark"] .luwi-product-card__quick-view {
+	background: rgba(26, 22, 20, 0.6);
+}
+
+.luwi-product-card:hover .luwi-product-card__quick-view {
+	opacity: 1;
+}
+
+.luwi-product-card__quick-view-btn {
+	padding: 0.75rem 1.5rem;
+	background: var(--luwi-surface);
+	color: var(--luwi-text);
+	font-size: var(--luwi-fs-xs);
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wider);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	box-shadow: var(--luwi-shadow-md);
+	cursor: pointer;
+	transition: transform var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.luwi-product-card__quick-view-btn:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--luwi-shadow-lg);
+}
+
+/* Card body */
+.luwi-product-card__body {
+	padding: var(--luwi-space-md);
+}
+
+/* Stitch: Playfair Display product title */
+.luwi-product-card__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-base);
+	font-weight: var(--luwi-fw-semibold);
+	line-height: var(--luwi-lh-snug);
+	color: var(--luwi-text);
+	margin: 0 0 var(--luwi-space-xs);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+/* Stitch: Price in primary gold */
+.luwi-product-card__price {
+	font-size: var(--luwi-fs-lg);
+	font-weight: var(--luwi-fw-semibold);
+	color: var(--luwi-primary);
+	margin: 0;
+}
+
+.luwi-product-card__price del {
+	color: var(--luwi-text-muted);
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-normal);
+	margin-right: var(--luwi-space-xs);
+}
+
+.luwi-product-card__price ins {
+	text-decoration: none;
+	color: var(--luwi-sale);
+	font-weight: var(--luwi-fw-bold);
+}
+
+/* Stitch: Category label above title */
+.luwi-product-card__category {
+	font-size: 0.625rem;
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wider);
+	color: var(--luwi-text-muted);
+	margin-bottom: var(--luwi-space-xs);
+}
+
+/* Stitch: Star rating */
+.luwi-product-card__rating {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-top: var(--luwi-space-xs);
+	color: var(--luwi-primary-light);
+	font-size: var(--luwi-fs-sm);
+}
+
+.luwi-product-card__rating-count {
+	color: var(--luwi-text-muted);
+	font-size: var(--luwi-fs-xs);
+	margin-left: var(--luwi-space-xs);
+}
+
+/* Stitch: Gradient CTA button */
+.luwi-product-card__cta {
+	display: block;
+	width: 100%;
+	padding: 0.75rem;
+	margin-top: var(--luwi-space-sm);
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: white;
+	font-size: var(--luwi-fs-xs);
+	font-weight: var(--luwi-fw-semibold);
+	text-align: center;
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wider);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	box-shadow: 0 4px 12px rgba(115, 92, 0, 0.15);
+	cursor: pointer;
+	transition: all var(--luwi-duration-slow) var(--luwi-ease);
+	text-decoration: none;
+}
+
+.luwi-product-card__cta:hover {
+	background: linear-gradient(135deg, var(--luwi-primary-hover), var(--luwi-primary));
+	box-shadow: 0 6px 20px rgba(115, 92, 0, 0.25);
+	transform: translateY(-1px);
+	color: white;
+}
+
+/* --- Overlay card variant (image with text on top) --- */
+.luwi-product-card--overlay .luwi-product-card__image {
+	aspect-ratio: 4 / 5;
+}
+
+.luwi-product-card--overlay .luwi-product-card__body {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	padding: var(--luwi-space-lg);
+	background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+	color: white;
+	z-index: 2;
+}
+
+.luwi-product-card--overlay .luwi-product-card__title,
+.luwi-product-card--overlay .luwi-product-card__price {
+	color: white;
+}
+
+.luwi-product-card--overlay .luwi-product-card__category {
+	color: rgba(255, 255, 255, 0.7);
+}
+
+/* --- Responsive product grid --- */
+@media (max-width: 767px) {
+	.luwi-product-grid {
+		grid-template-columns: repeat(2, 1fr) !important;
+		gap: var(--luwi-space-sm);
+	}
+
+	.luwi-product-card__body {
+		padding: var(--luwi-space-sm);
+	}
+
+	.luwi-product-card__title {
+		font-size: var(--luwi-fs-sm);
+	}
+}
+
+@media (max-width: 479px) {
+	.luwi-product-grid {
+		grid-template-columns: 1fr !important;
+	}
+}
+
+/* --------------------------------------------------------------------------
+   Stitch: Hero Section Utilities
+   From ana_sayfa reference — for Elementor page building
+   -------------------------------------------------------------------------- */
+.luwi-hero {
+	position: relative;
+	min-height: 700px;
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+}
+
+.luwi-hero__bg {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+}
+
+.luwi-hero__bg img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0.9;
+	transform: scale(1.05);
+}
+
+/* Stitch: gradient overlay — warm surface fade */
+.luwi-hero__overlay {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(to right, var(--luwi-bg), rgba(252, 249, 248, 0.4), transparent);
+	z-index: 1;
+}
+
+[data-color-mode="dark"] .luwi-hero__overlay {
+	background: linear-gradient(to right, var(--luwi-bg), rgba(26, 22, 20, 0.4), transparent);
+}
+
+.luwi-hero__content {
+	position: relative;
+	z-index: 2;
+	max-width: 600px;
+	padding: var(--luwi-space-2xl) 0;
+}
+
+/* Stitch: Hero display heading — 3.5rem, asymmetric */
+.luwi-hero__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-5xl);
+	font-weight: var(--luwi-fw-bold);
+	line-height: 1.1;
+	letter-spacing: var(--luwi-ls-tight);
+	color: var(--luwi-text);
+	margin-bottom: var(--luwi-space-lg);
+}
+
+.luwi-hero__subtitle {
+	font-family: var(--luwi-font-body);
+	font-size: var(--luwi-fs-lg);
+	font-weight: var(--luwi-fw-light);
+	line-height: var(--luwi-lh-relaxed);
+	color: var(--luwi-text-light);
+	margin-bottom: var(--luwi-space-xl);
+	max-width: 480px;
+}
+
+.luwi-hero__actions {
+	display: flex;
+	gap: var(--luwi-space-md);
+	flex-wrap: wrap;
+}
+
+@media (max-width: 767px) {
+	.luwi-hero {
+		min-height: 500px;
+	}
+
+	.luwi-hero__title {
+		font-size: var(--luwi-fs-3xl);
+	}
+
+	.luwi-hero__overlay {
+		background: linear-gradient(to top, var(--luwi-bg) 30%, transparent);
+	}
+
+	[data-color-mode="dark"] .luwi-hero__overlay {
+		background: linear-gradient(to top, var(--luwi-bg) 30%, transparent);
+	}
+
+	.luwi-hero__content {
+		align-self: flex-end;
+	}
+}
+
+/* --------------------------------------------------------------------------
+   Stitch: Journal/Blog Teaser Grid
+   From ana_sayfa reference — editorial scrapbook feel
+   -------------------------------------------------------------------------- */
+.luwi-journal-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: var(--luwi-space-lg);
+}
+
+.luwi-journal-card {
+	position: relative;
+	display: block;
+	aspect-ratio: 16 / 9;
+	border-radius: var(--luwi-radius-lg);
+	overflow: hidden;
+	text-decoration: none;
+}
+
+.luwi-journal-card img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	filter: grayscale(100%);
+	transition: filter var(--luwi-duration-image) var(--luwi-ease),
+		transform var(--luwi-duration-image) var(--luwi-ease);
+}
+
+.luwi-journal-card:hover img {
+	filter: grayscale(0);
+	transform: scale(1.05);
+}
+
+.luwi-journal-card__content {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	padding: var(--luwi-space-xl);
+	background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+	color: white;
+}
+
+.luwi-journal-card__label {
+	font-size: 0.625rem;
+	font-weight: var(--luwi-fw-semibold);
+	letter-spacing: var(--luwi-ls-wider);
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.7);
+	margin-bottom: var(--luwi-space-xs);
+}
+
+.luwi-journal-card__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-xl);
+	font-weight: var(--luwi-fw-semibold);
+	color: white;
+	margin: 0;
+	line-height: var(--luwi-lh-snug);
+}
+
+@media (max-width: 767px) {
+	.luwi-journal-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* --------------------------------------------------------------------------
+   Stitch: Bento Grid Layout
+   From r_n_detay "Texture Grid" and hesab_m "Account Summary"
+   -------------------------------------------------------------------------- */
+.luwi-bento {
+	display: grid;
+	grid-template-columns: repeat(12, 1fr);
+	gap: var(--luwi-space-md);
+}
+
+.luwi-bento__item {
+	border-radius: var(--luwi-radius-lg);
+	overflow: hidden;
+	position: relative;
+}
+
+.luwi-bento__item--8 { grid-column: span 8; }
+.luwi-bento__item--6 { grid-column: span 6; }
+.luwi-bento__item--4 { grid-column: span 4; }
+.luwi-bento__item--3 { grid-column: span 3; }
+.luwi-bento__item--full { grid-column: 1 / -1; }
+
+/* Stitch: Glass overlay on bento images */
+.luwi-bento__overlay {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	padding: var(--luwi-space-lg);
+	background: rgba(26, 22, 20, 0.7);
+	-webkit-backdrop-filter: blur(20px);
+	backdrop-filter: blur(20px);
+	opacity: 0;
+	transition: opacity var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.luwi-bento__item:hover .luwi-bento__overlay {
+	opacity: 1;
+}
+
+.luwi-bento__item img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0.8;
+	transition: transform 2000ms var(--luwi-ease),
+		opacity var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.luwi-bento__item:hover img {
+	transform: scale(1.1);
+	opacity: 1;
+}
+
+@media (max-width: 767px) {
+	.luwi-bento {
+		grid-template-columns: repeat(4, 1fr);
+	}
+
+	.luwi-bento__item--8,
+	.luwi-bento__item--6 { grid-column: 1 / -1; }
+	.luwi-bento__item--4,
+	.luwi-bento__item--3 { grid-column: span 2; }
+}
+
+/* --------------------------------------------------------------------------
+   Stitch: Editorial Section Label
+   Uppercase, wide-tracked label above sections
+   -------------------------------------------------------------------------- */
+.luwi-section-label {
+	font-family: var(--luwi-font-body);
+	font-size: 0.625rem;
+	font-weight: var(--luwi-fw-semibold);
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--luwi-text-muted);
+	margin-bottom: var(--luwi-space-md);
+}
+
+/* --------------------------------------------------------------------------
+   Stitch: Spec Table (from r_n_detay product details)
+   Technical specs — label/value pairs, no lines
+   -------------------------------------------------------------------------- */
+.luwi-spec-list {
+	display: grid;
+	gap: 0;
+}
+
+.luwi-spec-list__item {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	padding: var(--luwi-space-sm) 0;
+}
+
+.luwi-spec-list__item:nth-child(even) {
+	background: var(--luwi-bg-alt);
+	border-radius: var(--luwi-radius-sm);
+	padding-left: var(--luwi-space-sm);
+	padding-right: var(--luwi-space-sm);
+}
+
+.luwi-spec-list__label {
+	font-size: 0.6875rem;
+	font-weight: var(--luwi-fw-medium);
+	letter-spacing: var(--luwi-ls-wider);
+	text-transform: uppercase;
+	color: var(--luwi-text-muted);
+}
+
+.luwi-spec-list__value {
+	font-weight: var(--luwi-fw-medium);
+	color: var(--luwi-text);
+}
+
+/* --------------------------------------------------------------------------
+   Stitch: Trust Section (from sepetim cart trust badges)
+   Centered 3-column with icons
+   -------------------------------------------------------------------------- */
+.luwi-trust-section {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: var(--luwi-space-lg);
+	padding: var(--luwi-space-xl) 0;
+	text-align: center;
+}
+
+.luwi-trust-section__item {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--luwi-space-sm);
+}
+
+.luwi-trust-section__icon {
+	font-size: var(--luwi-fs-3xl);
+	color: var(--luwi-primary);
+}
+
+.luwi-trust-section__title {
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-semibold);
+}
+
+.luwi-trust-section__desc {
+	font-size: var(--luwi-fs-xs);
+	color: var(--luwi-text-muted);
+	line-height: var(--luwi-lh-relaxed);
+}
+
+@media (max-width: 767px) {
+	.luwi-trust-section {
+		grid-template-columns: 1fr;
+	}
+}

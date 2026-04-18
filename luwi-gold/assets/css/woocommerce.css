@@ -1,0 +1,1736 @@
+/* ==========================================================================
+   Luwi Elementor — WooCommerce Component Styles
+   Overrides default WC styling with design tokens.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Product Card (Archive/Shop Grid)
+   -------------------------------------------------------------------------- */
+.woocommerce ul.products {
+	display: grid;
+	grid-template-columns: repeat(var(--luwi-shop-columns, 3), 1fr);
+	gap: var(--luwi-space-lg);
+	margin: 0;
+	padding: 0;
+}
+
+/* "No-Line Rule": tonal surface shift, no borders */
+.woocommerce ul.products li.product {
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	overflow: hidden;
+	box-shadow: var(--luwi-shadow-sm);
+	transition: box-shadow var(--luwi-duration-slow) var(--luwi-ease),
+		transform var(--luwi-duration-slow) var(--luwi-ease);
+	margin: 0;
+	padding: 0;
+	position: relative;
+}
+
+/* "slow and heavy" hover — physical object weight */
+.woocommerce ul.products li.product:hover {
+	box-shadow: var(--luwi-shadow-hover);
+	transform: translateY(-3px);
+}
+
+.woocommerce ul.products li.product a img {
+	width: 100%;
+	aspect-ratio: 1 / 1;
+	object-fit: cover;
+	transition: transform var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.woocommerce ul.products li.product:hover a img {
+	transform: scale(1.05);
+}
+
+.woocommerce ul.products li.product .woocommerce-loop-product__link {
+	display: block;
+	overflow: hidden;
+}
+
+/* Loop card body — content padding */
+.woocommerce ul.products li.product .luwi-product-loop-card__body {
+	padding: var(--luwi-space-md);
+}
+
+/* Category label in loop card */
+.woocommerce ul.products li.product .luwi-product-card__category {
+	display: block;
+	font-size: 0.625rem;
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wider);
+	color: var(--luwi-text-muted);
+	margin-bottom: var(--luwi-space-xs);
+}
+
+/* Playfair Display for product titles — editorial feel */
+.woocommerce ul.products li.product .woocommerce-loop-product__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-base);
+	font-weight: var(--luwi-fw-semibold);
+	color: var(--luwi-text);
+	padding: var(--luwi-space-md) var(--luwi-space-md) var(--luwi-space-xs);
+	margin: 0;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   2. Price
+   -------------------------------------------------------------------------- */
+.woocommerce ul.products li.product .price,
+.woocommerce div.product p.price {
+	color: var(--luwi-text);
+	font-size: var(--luwi-fs-lg);
+	font-weight: var(--luwi-fw-semibold);
+	padding: 0 var(--luwi-space-md);
+	margin-bottom: var(--luwi-space-sm);
+}
+
+.woocommerce ul.products li.product .price del {
+	color: var(--luwi-text-muted);
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-normal);
+}
+
+.woocommerce ul.products li.product .price ins {
+	color: var(--luwi-sale);
+	text-decoration: none;
+	font-weight: var(--luwi-fw-bold);
+}
+
+/* --------------------------------------------------------------------------
+   3. Sale Badge
+   -------------------------------------------------------------------------- */
+.woocommerce span.onsale {
+	position: absolute;
+	top: var(--luwi-space-sm);
+	left: var(--luwi-space-sm);
+	min-width: auto;
+	min-height: auto;
+	padding: 4px 12px;
+	background: var(--luwi-sale);
+	color: white;
+	font-size: var(--luwi-fs-xs);
+	font-weight: var(--luwi-fw-bold);
+	letter-spacing: var(--luwi-ls-wide);
+	text-transform: uppercase;
+	border-radius: var(--luwi-radius-sm);
+	line-height: 1.4;
+	z-index: 1;
+}
+
+/* --------------------------------------------------------------------------
+   4. Add to Cart Button
+   -------------------------------------------------------------------------- */
+/* "Polished brass" gradient CTA */
+.woocommerce ul.products li.product .button,
+.woocommerce ul.products li.product a.added_to_cart {
+	display: block;
+	width: calc(100% - var(--luwi-space-md) * 2);
+	margin: var(--luwi-space-sm) var(--luwi-space-md) var(--luwi-space-md);
+	padding: 0.75rem 1rem;
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: white;
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-semibold);
+	text-align: center;
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	box-shadow: var(--luwi-shadow-md);
+	transition: all var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.woocommerce ul.products li.product .button:hover {
+	background: linear-gradient(135deg, var(--luwi-primary-hover), var(--luwi-primary));
+	box-shadow: var(--luwi-shadow-hover);
+	transform: translateY(-1px);
+}
+
+/* Single product — large "Add to Collection" CTA */
+.woocommerce div.product form.cart .single_add_to_cart_button {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: white;
+	font-size: var(--luwi-fs-base);
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	padding: 1.125rem 3rem;
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	box-shadow: var(--luwi-shadow-md);
+	transition: all var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.woocommerce div.product form.cart .single_add_to_cart_button:hover {
+	background: linear-gradient(135deg, var(--luwi-primary-hover), var(--luwi-primary));
+	box-shadow: var(--luwi-shadow-lg);
+	transform: translateY(-2px);
+}
+
+/* "Request Private Viewing" secondary button — ghost border at 20% */
+.woocommerce div.product form.cart .single_add_to_cart_button + .button,
+.woocommerce div.product .product_meta + .button {
+	background: var(--luwi-surface-hover);
+	color: var(--luwi-text);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	padding: 1rem 2.5rem;
+	font-size: var(--luwi-fs-sm);
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	box-shadow: inset 0 0 0 1px var(--luwi-primary-bg);
+	transition: all var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.woocommerce div.product form.cart .single_add_to_cart_button + .button:hover {
+	background: var(--luwi-surface-hover);
+	border-color: var(--luwi-primary);
+}
+
+/* Quantity input — tonal bg, ghost border at 15% opacity */
+.woocommerce .quantity .qty {
+	width: 80px;
+	padding: 0.75rem;
+	text-align: center;
+	background: var(--luwi-surface-hover);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Quantity +/- buttons */
+.woocommerce .quantity {
+	display: inline-flex;
+	align-items: center;
+	gap: 0;
+	background: var(--luwi-surface-hover);
+	border-radius: var(--luwi-radius-md);
+	overflow: hidden;
+}
+
+.woocommerce .quantity .luwi-qty-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	background: transparent;
+	border: none;
+	color: var(--luwi-text);
+	font-size: var(--luwi-fs-lg);
+	cursor: pointer;
+	transition: background var(--luwi-duration-normal) var(--luwi-ease);
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.woocommerce .quantity .luwi-qty-btn:hover {
+	background: var(--luwi-primary-bg);
+	color: var(--luwi-primary);
+}
+
+/* --------------------------------------------------------------------------
+   5. Product Gallery (Single Product)
+   -------------------------------------------------------------------------- */
+.woocommerce div.product div.images {
+	margin-bottom: var(--luwi-space-xl);
+}
+
+.woocommerce div.product div.images img {
+	border-radius: var(--luwi-radius-lg);
+}
+
+.woocommerce div.product div.images .flex-control-thumbs {
+	display: flex;
+	gap: var(--luwi-space-sm);
+	margin-top: var(--luwi-space-sm);
+}
+
+.woocommerce div.product div.images .flex-control-thumbs li {
+	flex: 0 0 auto;
+	border-radius: var(--luwi-radius-sm);
+	overflow: hidden;
+	border: 2px solid transparent;
+	transition: border-color var(--luwi-duration-fast) var(--luwi-ease);
+}
+
+.woocommerce div.product div.images .flex-control-thumbs li img.flex-active {
+	border-color: var(--luwi-primary);
+}
+
+/* --------------------------------------------------------------------------
+   6. Tabs (Single Product)
+   -------------------------------------------------------------------------- */
+.woocommerce div.product .woocommerce-tabs {
+	margin-top: var(--luwi-space-2xl);
+}
+
+/* tab bar — subtle tonal base line */
+.woocommerce div.product .woocommerce-tabs ul.tabs {
+	display: flex;
+	gap: 0;
+	border-bottom: none;
+	background: linear-gradient(to bottom, transparent calc(100% - 2px), var(--luwi-border-light) 100%);
+	padding: 0;
+	margin: 0 0 var(--luwi-space-lg);
+	list-style: none;
+}
+
+.woocommerce div.product .woocommerce-tabs ul.tabs::before,
+.woocommerce div.product .woocommerce-tabs ul.tabs::after {
+	display: none;
+}
+
+.woocommerce div.product .woocommerce-tabs ul.tabs li {
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	margin: 0;
+	margin-bottom: -2px;
+	padding: 0;
+}
+
+.woocommerce div.product .woocommerce-tabs ul.tabs li a {
+	display: block;
+	padding: var(--luwi-space-sm) var(--luwi-space-lg);
+	color: var(--luwi-text-light);
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-medium);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+}
+
+.woocommerce div.product .woocommerce-tabs ul.tabs li.active {
+	border-bottom-color: var(--luwi-primary);
+}
+
+.woocommerce div.product .woocommerce-tabs ul.tabs li.active a {
+	color: var(--luwi-primary);
+}
+
+/* --------------------------------------------------------------------------
+   7. Breadcrumbs
+   -------------------------------------------------------------------------- */
+.woocommerce .woocommerce-breadcrumb {
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-text-muted);
+	margin-bottom: var(--luwi-space-lg);
+}
+
+.woocommerce .woocommerce-breadcrumb a {
+	color: var(--luwi-text-light);
+}
+
+.woocommerce .woocommerce-breadcrumb a:hover {
+	color: var(--luwi-primary);
+}
+
+/* --------------------------------------------------------------------------
+   8. Star Rating
+   -------------------------------------------------------------------------- */
+/* Gold star rating — burnished brass */
+.woocommerce .star-rating {
+	color: var(--luwi-primary-light);
+}
+
+/* --------------------------------------------------------------------------
+   9. Pagination
+   -------------------------------------------------------------------------- */
+.woocommerce nav.woocommerce-pagination ul {
+	display: flex;
+	justify-content: center;
+	gap: var(--luwi-space-xs);
+	border: none;
+	margin-top: var(--luwi-space-xl);
+}
+
+.woocommerce nav.woocommerce-pagination ul li {
+	border: none;
+}
+
+/* No-Line Rule: tonal surface, no border on pagination */
+.woocommerce nav.woocommerce-pagination ul li a,
+.woocommerce nav.woocommerce-pagination ul li span.current {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 40px;
+	height: 40px;
+	padding: 0 var(--luwi-space-sm);
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	font-size: var(--luwi-fs-sm);
+	box-shadow: var(--luwi-shadow-sm);
+	transition: all var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.woocommerce nav.woocommerce-pagination ul li span.current {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: white;
+	box-shadow: var(--luwi-shadow-md);
+}
+
+.woocommerce nav.woocommerce-pagination ul li a:hover {
+	background: var(--luwi-primary-bg);
+	color: var(--luwi-primary);
+	transform: translateY(-1px);
+}
+
+/* --------------------------------------------------------------------------
+   10. Cart
+   -------------------------------------------------------------------------- */
+/* "No-Line Rule": cart table — tonal surface, no border */
+.woocommerce-cart .woocommerce table.shop_table {
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	overflow: hidden;
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.woocommerce-cart .woocommerce table.shop_table th {
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	color: var(--luwi-text-light);
+	background: var(--luwi-bg-alt);
+	padding: var(--luwi-space-md);
+}
+
+/* No-Line Rule: subtle tonal shift between rows */
+.woocommerce-cart .woocommerce table.shop_table td {
+	padding: var(--luwi-space-md);
+	border-top: none;
+}
+
+.woocommerce-cart .woocommerce table.shop_table tr:nth-child(even) td {
+	background: var(--luwi-bg-alt);
+}
+
+/* --------------------------------------------------------------------------
+   11. Checkout
+   -------------------------------------------------------------------------- */
+.woocommerce-checkout .woocommerce form .form-row label {
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-medium);
+}
+
+/* Boxed input — tonal bg fill, ghost border */
+.woocommerce-checkout .woocommerce form .form-row .input-text {
+	background: var(--luwi-surface-hover);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	padding: 0.75rem 1rem;
+}
+
+.woocommerce-checkout .woocommerce form .form-row .input-text:focus {
+	box-shadow: 0 0 0 2px var(--luwi-primary-bg);
+	outline: none;
+}
+
+/* "Proceed to Checkout" — polished brass gradient */
+.woocommerce #payment #place_order,
+.woocommerce .checkout-button,
+.woocommerce-cart .wc-proceed-to-checkout a.checkout-button {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: white;
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	padding: 1.125rem 2rem;
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	width: 100%;
+	box-shadow: var(--luwi-shadow-md);
+	transition: all var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.woocommerce #payment #place_order:hover,
+.woocommerce .checkout-button:hover,
+.woocommerce-cart .wc-proceed-to-checkout a.checkout-button:hover {
+	background: linear-gradient(135deg, var(--luwi-primary-hover), var(--luwi-primary));
+	box-shadow: var(--luwi-shadow-lg);
+	transform: translateY(-2px);
+}
+
+/* --------------------------------------------------------------------------
+   12. My Account
+   -------------------------------------------------------------------------- */
+/* My Account nav — tonal surface, no border */
+.woocommerce-account .woocommerce-MyAccount-navigation {
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	overflow: hidden;
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.woocommerce-account .woocommerce-MyAccount-navigation ul {
+	margin: 0;
+	padding: 0;
+}
+
+/* No-Line Rule: tonal shift separators */
+.woocommerce-account .woocommerce-MyAccount-navigation ul li a {
+	display: block;
+	padding: var(--luwi-space-md) var(--luwi-space-lg);
+	color: var(--luwi-text);
+	border-bottom: none;
+	transition: background var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.woocommerce-account .woocommerce-MyAccount-navigation ul li:nth-child(even) a {
+	background: var(--luwi-bg-alt);
+}
+
+.woocommerce-account .woocommerce-MyAccount-navigation ul li a:hover,
+.woocommerce-account .woocommerce-MyAccount-navigation ul li.is-active a {
+	background: var(--luwi-primary-bg);
+	color: var(--luwi-primary);
+}
+
+/* --------------------------------------------------------------------------
+   13. Notices
+   -------------------------------------------------------------------------- */
+/* No-Line Rule: gradient left accent instead of hard border */
+.woocommerce-message,
+.woocommerce-info,
+.woocommerce-error {
+	border-radius: var(--luwi-radius-md);
+	padding: var(--luwi-space-md) var(--luwi-space-lg);
+	border: none;
+	position: relative;
+	overflow: hidden;
+}
+
+.woocommerce-message::after,
+.woocommerce-info::after,
+.woocommerce-error::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	bottom: 0;
+	width: 4px;
+}
+
+/* Tonal notice backgrounds — surface shift */
+.woocommerce-message {
+	background: var(--luwi-bg-alt);
+}
+
+.woocommerce-message::after {
+	background: linear-gradient(to bottom, var(--luwi-success), transparent);
+}
+
+.woocommerce-info {
+	background: var(--luwi-bg-alt);
+}
+
+.woocommerce-info::after {
+	background: linear-gradient(to bottom, var(--luwi-info), transparent);
+}
+
+.woocommerce-error {
+	background: var(--luwi-bg-alt);
+}
+
+.woocommerce-error::after {
+	background: linear-gradient(to bottom, var(--luwi-error), transparent);
+}
+
+.woocommerce-message::before,
+.woocommerce-info::before {
+	color: var(--luwi-success);
+}
+
+/* --------------------------------------------------------------------------
+   14. Cart Page Layout (from sepetim reference)
+   8-column main + 4-column sticky sidebar
+   -------------------------------------------------------------------------- */
+.woocommerce-cart .woocommerce {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: var(--luwi-space-xl);
+}
+
+@media (min-width: 1025px) {
+	.woocommerce-cart .woocommerce {
+		grid-template-columns: 2fr 1fr;
+		align-items: start;
+	}
+
+	/* Sticky order summary sidebar */
+	.woocommerce-cart .cart-collaterals {
+		position: sticky;
+		top: calc(var(--luwi-header-height) + var(--luwi-space-lg));
+	}
+}
+
+/* Cart item — horizontal card layout */
+.woocommerce-cart .woocommerce table.shop_table .product-thumbnail img {
+	width: 120px;
+	height: 120px;
+	aspect-ratio: 4 / 5;
+	object-fit: cover;
+	border-radius: var(--luwi-radius-md);
+}
+
+/* Cart totals — glassmorphic panel */
+.woocommerce-cart .cart_totals {
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	padding: var(--luwi-space-lg);
+	box-shadow: var(--luwi-shadow-md);
+}
+
+.woocommerce-cart .cart_totals h2 {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-xl);
+	font-weight: var(--luwi-fw-semibold);
+	letter-spacing: var(--luwi-ls-wide);
+	text-transform: uppercase;
+	margin-bottom: var(--luwi-space-lg);
+}
+
+.woocommerce-cart .cart_totals table {
+	border: none;
+}
+
+.woocommerce-cart .cart_totals table th {
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-text-light);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	font-weight: var(--luwi-fw-medium);
+	padding: var(--luwi-space-sm) 0;
+	border: none;
+}
+
+.woocommerce-cart .cart_totals table td {
+	text-align: right;
+	font-weight: var(--luwi-fw-semibold);
+	padding: var(--luwi-space-sm) 0;
+	border: none;
+}
+
+/* Order total — prominent */
+.woocommerce-cart .cart_totals .order-total th,
+.woocommerce-cart .cart_totals .order-total td {
+	font-size: var(--luwi-fs-xl);
+	font-family: var(--luwi-font-heading);
+	padding-top: var(--luwi-space-md);
+}
+
+/* --------------------------------------------------------------------------
+   15. Single Product Layout (from r_n_detay reference)
+   Asymmetric 7:5 grid — gallery left, info right
+   -------------------------------------------------------------------------- */
+@media (min-width: 1025px) {
+	.woocommerce div.product {
+		display: grid;
+		grid-template-columns: 7fr 5fr;
+		gap: var(--luwi-space-2xl);
+		align-items: start;
+	}
+
+	/* Sticky product info panel */
+	.woocommerce div.product .summary {
+		position: sticky;
+		top: calc(var(--luwi-header-height) + var(--luwi-space-lg));
+	}
+}
+
+/* Product title — large editorial serif */
+.woocommerce div.product .product_title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-3xl);
+	font-weight: var(--luwi-fw-bold);
+	line-height: var(--luwi-lh-tight);
+	letter-spacing: var(--luwi-ls-tight);
+	margin-bottom: var(--luwi-space-md);
+}
+
+/* Product meta — editorial label style */
+.woocommerce div.product .product_meta {
+	font-size: var(--luwi-fs-xs);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wider);
+	color: var(--luwi-text-muted);
+	margin-top: var(--luwi-space-lg);
+	padding-top: var(--luwi-space-lg);
+	background: linear-gradient(to right, var(--luwi-border-light) 40%, transparent);
+	background-size: 100% 1px;
+	background-repeat: no-repeat;
+	background-position: top;
+}
+
+.woocommerce div.product .product_meta > span {
+	display: block;
+	margin-bottom: var(--luwi-space-xs);
+}
+
+/* Product short description — relaxed body */
+.woocommerce div.product .woocommerce-product-details__short-description {
+	font-size: var(--luwi-fs-base);
+	line-height: var(--luwi-lh-relaxed);
+	color: var(--luwi-text-light);
+	margin-bottom: var(--luwi-space-lg);
+}
+
+/* Related products section */
+.woocommerce div.product .related.products {
+	grid-column: 1 / -1;
+	margin-top: var(--luwi-space-3xl);
+	padding-top: var(--luwi-space-2xl);
+	background: var(--luwi-bg-alt);
+	margin-left: calc(-1 * var(--luwi-space-md));
+	margin-right: calc(-1 * var(--luwi-space-md));
+	padding-left: var(--luwi-space-md);
+	padding-right: var(--luwi-space-md);
+	border-radius: var(--luwi-radius-xl) var(--luwi-radius-xl) 0 0;
+}
+
+.woocommerce div.product .related.products > h2 {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-2xl);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	margin-bottom: var(--luwi-space-xl);
+}
+
+/* --------------------------------------------------------------------------
+   16. Coupon/Gift Code Input
+   -------------------------------------------------------------------------- */
+.woocommerce-cart .coupon .input-text,
+.woocommerce-checkout .woocommerce-form-coupon .input-text {
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--luwi-primary-bg);
+	border-radius: 0;
+	padding: 0.75rem 0;
+	font-size: var(--luwi-fs-sm);
+}
+
+.woocommerce-cart .coupon .input-text:focus,
+.woocommerce-checkout .woocommerce-form-coupon .input-text:focus {
+	border-bottom-color: var(--luwi-primary);
+	box-shadow: 0 2px 0 0 var(--luwi-primary);
+	outline: none;
+}
+
+.woocommerce-cart .coupon .button,
+.woocommerce-checkout .woocommerce-form-coupon .button {
+	background: var(--luwi-surface-hover);
+	color: var(--luwi-text);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-medium);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	padding: 0.75rem 1.5rem;
+	transition: all var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.woocommerce-cart .coupon .button:hover {
+	background: var(--luwi-primary-bg);
+	color: var(--luwi-primary);
+}
+
+/* ==========================================================================
+   17. Shop Page Layout (archive-product.php)
+   ========================================================================== */
+.luwi-shop-page {
+	padding-top: var(--luwi-space-xl);
+	padding-bottom: var(--luwi-space-3xl);
+}
+
+.luwi-shop-header {
+	margin-bottom: var(--luwi-space-2xl);
+}
+
+.luwi-shop-header__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-4xl);
+	font-weight: var(--luwi-fw-bold);
+	line-height: var(--luwi-lh-tight);
+	margin-bottom: var(--luwi-space-sm);
+}
+
+.luwi-shop-layout {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: var(--luwi-space-xl);
+}
+
+@media (min-width: 1025px) {
+	.luwi-shop-layout {
+		grid-template-columns: 260px 1fr;
+	}
+}
+
+/* Sidebar — tonal surface card */
+.luwi-shop-sidebar {
+	position: sticky;
+	top: calc(var(--luwi-header-height) + var(--luwi-space-lg));
+	align-self: start;
+}
+
+.luwi-shop-sidebar .widget {
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	padding: var(--luwi-space-lg);
+	margin-bottom: var(--luwi-space-md);
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.luwi-shop-sidebar .widget-title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	margin-bottom: var(--luwi-space-md);
+}
+
+/* Ordering bar — editorial label style */
+.woocommerce .woocommerce-ordering,
+.woocommerce .woocommerce-result-count {
+	font-size: var(--luwi-fs-xs);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	color: var(--luwi-text-muted);
+}
+
+.woocommerce .woocommerce-ordering select {
+	background: var(--luwi-surface-hover);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	padding: 0.5rem 1rem;
+	font-size: var(--luwi-fs-xs);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	cursor: pointer;
+}
+
+/* ==========================================================================
+   18. Cart Page Layout (cart/cart.php — sepetim)
+   ========================================================================== */
+.luwi-cart-items {
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	padding: var(--luwi-space-lg);
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.luwi-cart-items__heading {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-2xl);
+	font-weight: var(--luwi-fw-semibold);
+	margin-bottom: var(--luwi-space-lg);
+}
+
+/* Horizontal cart item card */
+.luwi-cart-item {
+	display: flex;
+	gap: var(--luwi-space-lg);
+	padding: var(--luwi-space-md) 0;
+	transition: background var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.luwi-cart-item:nth-child(even) {
+	background: var(--luwi-bg-alt);
+	border-radius: var(--luwi-radius-md);
+	padding-left: var(--luwi-space-md);
+	padding-right: var(--luwi-space-md);
+}
+
+.luwi-cart-item__image {
+	flex-shrink: 0;
+	width: 120px;
+}
+
+.luwi-cart-item__image img {
+	width: 100%;
+	aspect-ratio: 4 / 5;
+	object-fit: cover;
+	border-radius: var(--luwi-radius-md);
+}
+
+.luwi-cart-item__details {
+	flex: 1;
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: var(--luwi-space-md);
+}
+
+.luwi-cart-item__name {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-lg);
+	font-weight: var(--luwi-fw-semibold);
+	margin-bottom: var(--luwi-space-xs);
+}
+
+.luwi-cart-item__name a {
+	color: var(--luwi-text);
+}
+
+.luwi-cart-item__name a:hover {
+	color: var(--luwi-primary);
+}
+
+.luwi-cart-item__price {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-base);
+	color: var(--luwi-primary);
+	margin-top: var(--luwi-space-xs);
+}
+
+.luwi-cart-item__actions {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: var(--luwi-space-sm);
+}
+
+.luwi-cart-item__subtotal {
+	font-weight: var(--luwi-fw-semibold);
+	font-size: var(--luwi-fs-lg);
+}
+
+.luwi-cart-item__remove {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	background: var(--luwi-surface-hover);
+	border-radius: var(--luwi-radius-full);
+	color: var(--luwi-text-muted);
+	font-size: var(--luwi-fs-lg);
+	text-decoration: none;
+	transition: all var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.luwi-cart-item__remove:hover {
+	background: rgba(163, 59, 62, 0.1);
+	color: var(--luwi-sale);
+}
+
+.luwi-cart-actions {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding-top: var(--luwi-space-lg);
+	margin-top: var(--luwi-space-md);
+	flex-wrap: wrap;
+	gap: var(--luwi-space-md);
+}
+
+.luwi-cart-coupon {
+	display: flex;
+	gap: var(--luwi-space-sm);
+}
+
+@media (max-width: 767px) {
+	.luwi-cart-item {
+		flex-direction: column;
+		gap: var(--luwi-space-sm);
+	}
+
+	.luwi-cart-item__image {
+		width: 80px;
+	}
+
+	.luwi-cart-item__details {
+		flex-direction: column;
+	}
+
+	.luwi-cart-item__actions {
+		flex-direction: row;
+		align-items: center;
+	}
+}
+
+/* ==========================================================================
+   19. Empty Cart (cart/cart-empty.php)
+   ========================================================================== */
+.luwi-empty-state {
+	text-align: center;
+	padding: var(--luwi-space-4xl) var(--luwi-space-md);
+	max-width: 480px;
+	margin: 0 auto;
+}
+
+.luwi-empty-state__icon {
+	color: var(--luwi-text-muted);
+	margin-bottom: var(--luwi-space-lg);
+	opacity: 0.4;
+}
+
+.luwi-empty-state__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-3xl);
+	font-weight: var(--luwi-fw-semibold);
+	margin-bottom: var(--luwi-space-sm);
+}
+
+.luwi-empty-state__text {
+	font-size: var(--luwi-fs-base);
+	color: var(--luwi-text-light);
+	line-height: var(--luwi-lh-relaxed);
+	margin-bottom: var(--luwi-space-xl);
+}
+
+/* ==========================================================================
+   20. Mini Cart (cart/mini-cart.php)
+   ========================================================================== */
+.luwi-mini-cart__list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.luwi-mini-cart__item {
+	display: flex;
+	gap: var(--luwi-space-sm);
+	padding: var(--luwi-space-sm) 0;
+	position: relative;
+}
+
+.luwi-mini-cart__item:nth-child(even) {
+	background: var(--luwi-bg-alt);
+	border-radius: var(--luwi-radius-sm);
+	padding-left: var(--luwi-space-sm);
+	padding-right: var(--luwi-space-sm);
+}
+
+.luwi-mini-cart__thumb {
+	flex-shrink: 0;
+	width: 60px;
+}
+
+.luwi-mini-cart__thumb img {
+	width: 100%;
+	aspect-ratio: 1 / 1;
+	object-fit: cover;
+	border-radius: var(--luwi-radius-sm);
+}
+
+.luwi-mini-cart__info {
+	flex: 1;
+	min-width: 0;
+}
+
+.luwi-mini-cart__name {
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-medium);
+	display: block;
+	margin-bottom: 2px;
+}
+
+.luwi-mini-cart__name a {
+	color: var(--luwi-text);
+}
+
+.luwi-mini-cart__info .quantity {
+	font-size: var(--luwi-fs-xs);
+	color: var(--luwi-text-muted);
+}
+
+.luwi-mini-cart__remove {
+	position: absolute;
+	top: var(--luwi-space-sm);
+	right: var(--luwi-space-xs);
+	width: 24px;
+	height: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-text-muted);
+	border-radius: var(--luwi-radius-full);
+	transition: all var(--luwi-duration-fast) var(--luwi-ease);
+}
+
+.luwi-mini-cart__remove:hover {
+	color: var(--luwi-sale);
+	background: rgba(163, 59, 62, 0.1);
+}
+
+.luwi-mini-cart__footer {
+	padding-top: var(--luwi-space-md);
+	margin-top: var(--luwi-space-sm);
+}
+
+.luwi-mini-cart__total {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	margin-bottom: var(--luwi-space-md);
+}
+
+.luwi-mini-cart__total-label {
+	font-size: var(--luwi-fs-sm);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	color: var(--luwi-text-light);
+}
+
+.luwi-mini-cart__total-amount {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-xl);
+	font-weight: var(--luwi-fw-bold);
+}
+
+.luwi-mini-cart__empty {
+	text-align: center;
+	padding: var(--luwi-space-xl);
+	color: var(--luwi-text-muted);
+}
+
+/* ==========================================================================
+   21. Checkout Page (checkout/form-checkout.php)
+   ========================================================================== */
+.luwi-checkout__columns {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: var(--luwi-space-xl);
+}
+
+@media (min-width: 1025px) {
+	.luwi-checkout__columns {
+		grid-template-columns: 3fr 2fr;
+		align-items: start;
+	}
+}
+
+.luwi-checkout__section {
+	margin-bottom: var(--luwi-space-xl);
+}
+
+.luwi-checkout__section-title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-xl);
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	margin-bottom: var(--luwi-space-lg);
+}
+
+/* Sticky order review sidebar */
+.luwi-checkout__sidebar {
+	position: sticky;
+	top: calc(var(--luwi-header-height) + var(--luwi-space-lg));
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	padding: var(--luwi-space-lg);
+	box-shadow: var(--luwi-shadow-md);
+}
+
+.luwi-checkout__review table {
+	border: none;
+}
+
+.luwi-checkout__review table th,
+.luwi-checkout__review table td {
+	padding: var(--luwi-space-sm) 0;
+	border: none;
+	font-size: var(--luwi-fs-sm);
+}
+
+.luwi-checkout__review table th {
+	color: var(--luwi-text-light);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	font-weight: var(--luwi-fw-medium);
+}
+
+.luwi-checkout__review .order-total th,
+.luwi-checkout__review .order-total td {
+	font-size: var(--luwi-fs-xl);
+	font-family: var(--luwi-font-heading);
+	font-weight: var(--luwi-fw-bold);
+	padding-top: var(--luwi-space-md);
+}
+
+/* Payment methods — No-Line Rule */
+#payment {
+	background: transparent;
+	border: none;
+	border-radius: 0;
+}
+
+#payment .payment_methods {
+	padding: 0;
+	border: none;
+	list-style: none;
+}
+
+#payment .payment_methods li {
+	background: var(--luwi-bg-alt);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	padding: var(--luwi-space-md);
+	margin-bottom: var(--luwi-space-sm);
+}
+
+#payment .payment_box {
+	background: transparent;
+	color: var(--luwi-text-light);
+	font-size: var(--luwi-fs-sm);
+	padding: var(--luwi-space-sm) 0 0;
+}
+
+#payment .payment_box::before {
+	display: none;
+}
+
+/* ==========================================================================
+   22. Thank You Page (checkout/thankyou.php)
+   ========================================================================== */
+.luwi-thankyou {
+	max-width: 640px;
+	margin: 0 auto;
+	padding: var(--luwi-space-2xl) var(--luwi-space-md);
+	text-align: center;
+}
+
+.luwi-thankyou__header {
+	margin-bottom: var(--luwi-space-2xl);
+}
+
+.luwi-thankyou__icon {
+	color: var(--luwi-success);
+	margin-bottom: var(--luwi-space-md);
+}
+
+.luwi-thankyou__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-3xl);
+	font-weight: var(--luwi-fw-semibold);
+	margin-bottom: var(--luwi-space-sm);
+}
+
+.luwi-thankyou__text {
+	font-size: var(--luwi-fs-base);
+	color: var(--luwi-text-light);
+	line-height: var(--luwi-lh-relaxed);
+}
+
+.luwi-thankyou__details {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: var(--luwi-space-md);
+	text-align: left;
+	background: var(--luwi-surface);
+	border-radius: var(--luwi-radius-lg);
+	padding: var(--luwi-space-lg);
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.luwi-thankyou__detail-label {
+	display: block;
+	font-size: 0.625rem;
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wider);
+	color: var(--luwi-text-muted);
+	margin-bottom: 2px;
+}
+
+.luwi-thankyou__detail-value {
+	font-size: var(--luwi-fs-base);
+}
+
+@media (max-width: 479px) {
+	.luwi-thankyou__details {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ==========================================================================
+   23. My Account Dashboard (myaccount/dashboard.php — hesab_m)
+   ========================================================================== */
+.luwi-dashboard__welcome {
+	display: flex;
+	align-items: center;
+	gap: var(--luwi-space-lg);
+	margin-bottom: var(--luwi-space-2xl);
+}
+
+.luwi-dashboard__avatar-img {
+	width: 80px;
+	height: 80px;
+	border-radius: var(--luwi-radius-full);
+	object-fit: cover;
+	box-shadow: var(--luwi-shadow-md);
+}
+
+.luwi-dashboard__name {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-2xl);
+	font-weight: var(--luwi-fw-semibold);
+	margin-bottom: 0;
+}
+
+.luwi-dashboard__email {
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-text-muted);
+	margin: 0;
+}
+
+/* Bento card grid */
+.luwi-dashboard__grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: var(--luwi-space-md);
+	margin-bottom: var(--luwi-space-2xl);
+}
+
+@media (min-width: 768px) {
+	.luwi-dashboard__grid {
+		grid-template-columns: repeat(4, 1fr);
+	}
+}
+
+.luwi-dashboard__card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	padding: var(--luwi-space-lg);
+	box-shadow: var(--luwi-shadow-sm);
+	text-decoration: none;
+	color: var(--luwi-text);
+	transition: box-shadow var(--luwi-duration-slow) var(--luwi-ease),
+		transform var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.luwi-dashboard__card:hover {
+	box-shadow: var(--luwi-shadow-hover);
+	transform: translateY(-3px);
+	color: var(--luwi-text);
+}
+
+.luwi-dashboard__card-icon {
+	color: var(--luwi-primary);
+	margin-bottom: var(--luwi-space-sm);
+}
+
+.luwi-dashboard__card-title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-semibold);
+	margin: 0 0 var(--luwi-space-xs);
+}
+
+.luwi-dashboard__card-desc {
+	font-size: var(--luwi-fs-xs);
+	color: var(--luwi-text-muted);
+	margin: 0;
+}
+
+/* Recent orders */
+.luwi-dashboard__recent {
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	padding: var(--luwi-space-lg);
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.luwi-dashboard__recent-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	margin-bottom: var(--luwi-space-lg);
+}
+
+.luwi-dashboard__recent-title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-lg);
+	font-weight: var(--luwi-fw-semibold);
+	margin: 0;
+}
+
+.luwi-dashboard__recent-link {
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-primary);
+}
+
+.luwi-dashboard__order {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: var(--luwi-space-md) 0;
+	transition: background var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.luwi-dashboard__order:nth-child(even) {
+	background: var(--luwi-bg-alt);
+	border-radius: var(--luwi-radius-sm);
+	padding-left: var(--luwi-space-sm);
+	padding-right: var(--luwi-space-sm);
+}
+
+.luwi-dashboard__order-number {
+	font-size: var(--luwi-fs-sm);
+	font-weight: var(--luwi-fw-semibold);
+}
+
+.luwi-dashboard__order-date {
+	font-size: var(--luwi-fs-xs);
+	color: var(--luwi-text-muted);
+	margin-left: var(--luwi-space-sm);
+}
+
+.luwi-dashboard__order-meta {
+	display: flex;
+	align-items: center;
+	gap: var(--luwi-space-md);
+}
+
+.luwi-dashboard__order-status {
+	font-size: 0.625rem;
+	font-weight: var(--luwi-fw-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wider);
+	padding: 2px 10px;
+	border-radius: var(--luwi-radius-full);
+	background: var(--luwi-bg-alt);
+	color: var(--luwi-text-muted);
+}
+
+.luwi-dashboard__order-status--completed,
+.luwi-dashboard__order-status--processing {
+	background: rgba(21, 128, 61, 0.1);
+	color: var(--luwi-success);
+}
+
+.luwi-dashboard__order-status--on-hold,
+.luwi-dashboard__order-status--pending {
+	background: rgba(180, 83, 9, 0.1);
+	color: var(--luwi-warning);
+}
+
+.luwi-dashboard__order-status--cancelled,
+.luwi-dashboard__order-status--refunded,
+.luwi-dashboard__order-status--failed {
+	background: rgba(186, 26, 26, 0.1);
+	color: var(--luwi-error);
+}
+
+.luwi-dashboard__order-total {
+	font-weight: var(--luwi-fw-semibold);
+}
+
+/* ==========================================================================
+   24. Login / Register (myaccount/form-login.php)
+   ========================================================================== */
+.luwi-auth {
+	max-width: 900px;
+	margin: var(--luwi-space-2xl) auto;
+	padding: 0 var(--luwi-space-md);
+}
+
+.luwi-auth__columns {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: var(--luwi-space-xl);
+}
+
+@media (min-width: 768px) {
+	.luwi-auth__columns {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.luwi-auth__columns--single {
+		grid-template-columns: 1fr;
+		max-width: 480px;
+		margin: 0 auto;
+	}
+}
+
+.luwi-auth__card {
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	padding: var(--luwi-space-xl);
+	box-shadow: var(--luwi-shadow-md);
+}
+
+.luwi-auth__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-2xl);
+	font-weight: var(--luwi-fw-semibold);
+	margin-bottom: var(--luwi-space-lg);
+}
+
+.luwi-auth__row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.luwi-auth__forgot {
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-primary);
+}
+
+.luwi-auth__note {
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-text-muted);
+	line-height: var(--luwi-lh-relaxed);
+}
+
+/* Full-width button variant */
+.luwi-btn--full {
+	width: 100%;
+	justify-content: center;
+}
+
+/* ==========================================================================
+   25. Orders List (myaccount/orders.php)
+   ========================================================================== */
+.luwi-orders__item {
+	background: var(--luwi-surface);
+	border: none;
+	border-radius: var(--luwi-radius-lg);
+	padding: var(--luwi-space-lg);
+	margin-bottom: var(--luwi-space-md);
+	box-shadow: var(--luwi-shadow-sm);
+	transition: box-shadow var(--luwi-duration-slow) var(--luwi-ease);
+}
+
+.luwi-orders__item:hover {
+	box-shadow: var(--luwi-shadow-md);
+}
+
+.luwi-orders__header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-bottom: var(--luwi-space-sm);
+}
+
+.luwi-orders__id strong {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-base);
+}
+
+.luwi-orders__date {
+	display: block;
+	font-size: var(--luwi-fs-xs);
+	color: var(--luwi-text-muted);
+	margin-top: 2px;
+}
+
+.luwi-orders__meta {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: var(--luwi-space-sm);
+}
+
+.luwi-orders__count {
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-text-light);
+}
+
+.luwi-orders__total {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-lg);
+}
+
+.luwi-orders__actions {
+	display: flex;
+	gap: var(--luwi-space-sm);
+	flex-wrap: wrap;
+}
+
+.luwi-orders__action {
+	font-size: var(--luwi-fs-xs);
+	font-weight: var(--luwi-fw-medium);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+	padding: 0.375rem 1rem;
+	border-radius: var(--luwi-radius-md);
+	background: var(--luwi-surface-hover);
+	color: var(--luwi-text);
+	text-decoration: none;
+	transition: all var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.luwi-orders__action:hover {
+	background: var(--luwi-primary-bg);
+	color: var(--luwi-primary);
+}
+
+.luwi-orders__action--pay {
+	background: linear-gradient(135deg, var(--luwi-primary), var(--luwi-primary-light));
+	color: white;
+}
+
+.luwi-orders__action--pay:hover {
+	box-shadow: var(--luwi-shadow-md);
+	color: white;
+}
+
+/* ==========================================================================
+   26. View Order (myaccount/view-order.php)
+   ========================================================================== */
+.luwi-view-order__header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-bottom: var(--luwi-space-xl);
+}
+
+.luwi-view-order__date {
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-text-muted);
+	margin: var(--luwi-space-xs) 0 0;
+}
+
+.luwi-view-order__notes {
+	margin-top: var(--luwi-space-xl);
+}
+
+.luwi-view-order__notes h3 {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-lg);
+	margin-bottom: var(--luwi-space-md);
+}
+
+.luwi-view-order__notes-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.luwi-view-order__note {
+	padding: var(--luwi-space-md);
+	margin-bottom: var(--luwi-space-sm);
+	background: var(--luwi-surface);
+	border-radius: var(--luwi-radius-md);
+	box-shadow: var(--luwi-shadow-sm);
+}
+
+.luwi-view-order__note-date {
+	font-size: var(--luwi-fs-xs);
+	color: var(--luwi-text-muted);
+	text-transform: uppercase;
+	letter-spacing: var(--luwi-ls-wide);
+}
+
+.luwi-view-order__note-content p:last-child {
+	margin-bottom: 0;
+}
+
+/* ==========================================================================
+   27. Edit Account / Edit Address
+   ========================================================================== */
+.luwi-edit-account__title,
+.luwi-edit-address__title {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-2xl);
+	font-weight: var(--luwi-fw-semibold);
+	margin-bottom: var(--luwi-space-xl);
+}
+
+.luwi-edit-account__row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--luwi-space-md);
+}
+
+@media (max-width: 767px) {
+	.luwi-edit-account__row {
+		grid-template-columns: 1fr;
+	}
+}
+
+.luwi-edit-account__password {
+	margin-top: var(--luwi-space-xl);
+	padding-top: var(--luwi-space-xl);
+	border: none;
+}
+
+.luwi-edit-account__password legend {
+	font-family: var(--luwi-font-heading);
+	font-size: var(--luwi-fs-lg);
+	font-weight: var(--luwi-fw-semibold);
+	margin-bottom: var(--luwi-space-md);
+}
+
+/* ==========================================================================
+   28. Payment Methods (checkout/payment.php)
+   ========================================================================== */
+.luwi-payment__methods {
+	list-style: none;
+	padding: 0;
+	margin: 0 0 var(--luwi-space-lg);
+}
+
+.luwi-payment__methods > li {
+	background: var(--luwi-bg-alt);
+	border: none;
+	border-radius: var(--luwi-radius-md);
+	padding: var(--luwi-space-md);
+	margin-bottom: var(--luwi-space-sm);
+	transition: background var(--luwi-duration-normal) var(--luwi-ease);
+}
+
+.luwi-payment__methods > li:hover {
+	background: var(--luwi-surface-hover);
+}
+
+.luwi-payment__methods > li label {
+	font-weight: var(--luwi-fw-medium);
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: var(--luwi-space-sm);
+}
+
+.luwi-payment__methods > li img {
+	max-height: 28px;
+	width: auto;
+}
+
+.luwi-payment .payment_box {
+	background: transparent;
+	padding: var(--luwi-space-sm) 0 0;
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-text-light);
+}
+
+.luwi-payment .payment_box::before {
+	display: none;
+}
+
+/* Terms checkbox */
+.woocommerce-terms-and-conditions-wrapper {
+	margin-bottom: var(--luwi-space-md);
+	font-size: var(--luwi-fs-sm);
+	color: var(--luwi-text-light);
+}

@@ -1,0 +1,207 @@
+/* ==========================================================================
+   Luwi Emerald — Design Tokens
+   Personality: Botanical Modern
+   Mood: Greenhouse garden, morning dew, artisan herbs, organic textures
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Light Mode (Default)
+   -------------------------------------------------------------------------- */
+:root {
+	/* Colors — Deep forest, sage, terracotta, mint */
+	--luwi-primary: #1a5c2a;
+	--luwi-primary-hover: #0f4420;
+	--luwi-primary-light: #4a9e5c;
+	--luwi-primary-bg: rgba(26, 92, 42, 0.07);
+	--luwi-primary-container: #c8ecd0;
+	--luwi-accent: #b5654a;
+	--luwi-accent-hover: #8f4a35;
+
+	--luwi-text: #1a1c1a;
+	--luwi-text-light: #3d4a3f;
+	--luwi-text-muted: #6b7a6d;
+	--luwi-text-inverse: #f0f5f1;
+
+	--luwi-bg: #f5faf6;
+	--luwi-bg-alt: #eef5f0;
+	--luwi-surface: #ffffff;
+	--luwi-surface-hover: #e8f0ea;
+	--luwi-surface-dim: #d4ddd6;
+	--luwi-border: #b8cdb9;
+	--luwi-border-light: #dce8dd;
+
+	--luwi-success: #15803d;
+	--luwi-error: #ba1a1a;
+	--luwi-warning: #b45309;
+	--luwi-info: #1d4ed8;
+	--luwi-sale: #c0392b;
+
+	/* Typography — Modern serif + geometric sans */
+	--luwi-font-heading: 'DM Serif Display', Georgia, serif;
+	--luwi-font-headline: 'DM Serif Display', Georgia, serif;
+	--luwi-font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--luwi-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+	/* Typography Scale (shared) */
+	--luwi-fs-xs: 0.75rem;
+	--luwi-fs-sm: 0.875rem;
+	--luwi-fs-base: 1rem;
+	--luwi-fs-lg: 1.125rem;
+	--luwi-fs-xl: 1.375rem;
+	--luwi-fs-2xl: 1.625rem;
+	--luwi-fs-3xl: 2.25rem;
+	--luwi-fs-4xl: 3rem;
+	--luwi-fs-5xl: 3.75rem;
+
+	--luwi-fw-light: 300;
+	--luwi-fw-normal: 400;
+	--luwi-fw-medium: 500;
+	--luwi-fw-semibold: 600;
+	--luwi-fw-bold: 700;
+
+	--luwi-lh-tight: 1.2;
+	--luwi-lh-snug: 1.35;
+	--luwi-lh-normal: 1.6;
+	--luwi-lh-relaxed: 1.75;
+
+	--luwi-ls-tight: -0.02em;
+	--luwi-ls-normal: 0;
+	--luwi-ls-wide: 0.05em;
+	--luwi-ls-wider: 0.1em;
+
+	/* Spacing (shared) */
+	--luwi-space-xs: 0.25rem;
+	--luwi-space-sm: 0.5rem;
+	--luwi-space-md: 1rem;
+	--luwi-space-lg: 1.5rem;
+	--luwi-space-xl: 2.5rem;
+	--luwi-space-2xl: 4rem;
+	--luwi-space-3xl: 6rem;
+	--luwi-space-4xl: 8rem;
+
+	/* Shadows — Green-tinted, soft neumorphic, diffused */
+	--luwi-shadow-sm: 0 1px 3px rgba(26, 92, 42, 0.05);
+	--luwi-shadow-md: 0 4px 14px rgba(26, 92, 42, 0.07);
+	--luwi-shadow-lg: 0 10px 30px rgba(26, 92, 42, 0.1);
+	--luwi-shadow-xl: 0 20px 50px rgba(26, 92, 42, 0.12);
+	--luwi-shadow-hover: 0 14px 36px rgba(26, 92, 42, 0.14);
+	--luwi-shadow-inner: inset 0 2px 4px rgba(26, 92, 42, 0.04);
+
+	/* Shape — Organic */
+	--luwi-radius-sm: 8px;
+	--luwi-radius-md: 12px;
+	--luwi-radius-lg: 20px;
+	--luwi-radius-xl: 32px;
+	--luwi-radius-full: 9999px;
+
+	/* Motion — "Breathing" */
+	--luwi-ease: cubic-bezier(0.4, 0, 0.2, 1);
+	--luwi-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	--luwi-duration-fast: 150ms;
+	--luwi-duration-normal: 280ms;
+	--luwi-duration-slow: 400ms;
+	--luwi-duration-image: 600ms;
+
+	/* Layout (shared) */
+	--luwi-container-sm: 720px;
+	--luwi-container-md: 960px;
+	--luwi-container-lg: 1200px;
+	--luwi-container-xl: 1400px;
+	--luwi-header-height: 72px;
+
+	/* Z-index (shared) */
+	--luwi-z-dropdown: 100;
+	--luwi-z-sticky: 200;
+	--luwi-z-overlay: 300;
+	--luwi-z-modal: 400;
+	--luwi-z-toast: 500;
+
+	--luwi-font-scale: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Dark Mode
+   -------------------------------------------------------------------------- */
+[data-color-mode="dark"] {
+	--luwi-primary: #4a9e5c;
+	--luwi-primary-hover: #6abb7b;
+	--luwi-primary-light: #7fd48f;
+	--luwi-primary-bg: rgba(74, 158, 92, 0.12);
+	--luwi-primary-container: #0f4420;
+	--luwi-accent: #d4927a;
+	--luwi-accent-hover: #c07a62;
+
+	--luwi-text: #dce0dc;
+	--luwi-text-light: #b8c4ba;
+	--luwi-text-muted: #6b7a6d;
+	--luwi-text-inverse: #1a1c1a;
+
+	--luwi-bg: #0f1a12;
+	--luwi-bg-alt: #172119;
+	--luwi-surface: #1e2d22;
+	--luwi-surface-hover: #2a3d2e;
+	--luwi-surface-dim: #141e16;
+	--luwi-border: #3a5040;
+	--luwi-border-light: #2a3d2e;
+
+	--luwi-sale: #e06050;
+
+	--luwi-shadow-sm: 0 2px 4px rgba(15, 26, 18, 0.2);
+	--luwi-shadow-md: 0 4px 14px rgba(15, 26, 18, 0.25);
+	--luwi-shadow-lg: 0 10px 30px rgba(15, 26, 18, 0.15);
+	--luwi-shadow-xl: 0 20px 50px rgba(15, 26, 18, 0.2);
+	--luwi-shadow-hover: 0 14px 36px rgba(15, 26, 18, 0.25);
+
+	color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-color-mode="light"]) {
+		--luwi-primary: #4a9e5c;
+		--luwi-primary-hover: #6abb7b;
+		--luwi-primary-light: #7fd48f;
+		--luwi-primary-bg: rgba(74, 158, 92, 0.12);
+		--luwi-primary-container: #0f4420;
+		--luwi-accent: #d4927a;
+		--luwi-accent-hover: #c07a62;
+
+		--luwi-text: #dce0dc;
+		--luwi-text-light: #b8c4ba;
+		--luwi-text-muted: #6b7a6d;
+		--luwi-text-inverse: #1a1c1a;
+
+		--luwi-bg: #0f1a12;
+		--luwi-bg-alt: #172119;
+		--luwi-surface: #1e2d22;
+		--luwi-surface-hover: #2a3d2e;
+		--luwi-surface-dim: #141e16;
+		--luwi-border: #3a5040;
+		--luwi-border-light: #2a3d2e;
+
+		--luwi-sale: #e06050;
+
+		--luwi-shadow-sm: 0 2px 4px rgba(15, 26, 18, 0.4);
+		--luwi-shadow-md: 0 4px 14px rgba(15, 26, 18, 0.5);
+		--luwi-shadow-lg: 0 10px 30px rgba(15, 26, 18, 0.15);
+		--luwi-shadow-xl: 0 20px 50px rgba(15, 26, 18, 0.6);
+		--luwi-shadow-hover: 0 14px 36px rgba(15, 26, 18, 0.25);
+
+		color-scheme: dark;
+	}
+}
+
+[data-high-contrast="true"] {
+	--luwi-text: #000000;
+	--luwi-text-light: #333333;
+	--luwi-bg: #ffffff;
+	--luwi-surface: #ffffff;
+	--luwi-border: #000000;
+}
+
+[data-color-mode="dark"][data-high-contrast="true"] {
+	--luwi-text: #ffffff;
+	--luwi-text-light: #e0e0e0;
+	--luwi-bg: #000000;
+	--luwi-surface: #111111;
+	--luwi-border: #ffffff;
+}

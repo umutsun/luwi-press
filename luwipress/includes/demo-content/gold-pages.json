@@ -1,0 +1,743 @@
+{
+  "version": "1.2.0",
+  "theme": "luwi-gold",
+  "pages": [
+    {
+      "slug": "home",
+      "title": "Home",
+      "template": "elementor_header_footer",
+      "is_homepage": true,
+      "elementor_data": [
+
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "full_width",
+            "height": "min-height",
+            "custom_height": { "size": 88, "unit": "vh" },
+            "background_background": "classic",
+            "background_color": "#faf7f4",
+            "padding": { "top": "120", "bottom": "100", "unit": "px", "isLinked": false },
+            "padding_mobile": { "top": "80", "bottom": "60", "unit": "px", "isLinked": false },
+            "content_position": "middle"
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 100 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:3px;color:#7f7663;font-family:Inter,sans-serif;font-weight:600;margin:0 0 20px;\">— Premium WooCommerce Store —</p>",
+                    "_margin": { "top": "0", "right": "0", "bottom": "0", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Crafted with Passion,\nDesigned for {{store_name}}",
+                    "header_size": "h1",
+                    "align": "center",
+                    "title_color": "#1b1c1c",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Playfair Display",
+                    "typography_font_size": { "size": 64, "unit": "px" },
+                    "typography_font_size_tablet": { "size": 44, "unit": "px" },
+                    "typography_font_size_mobile": { "size": 32, "unit": "px" },
+                    "typography_font_weight": "700",
+                    "typography_line_height": { "size": 1.1, "unit": "em" },
+                    "_margin": { "top": "0", "right": "0", "bottom": "24", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"text-align:center;font-size:19px;color:#5a5240;max-width:580px;margin:0 auto;font-family:Inter,sans-serif;line-height:1.75;font-weight:300;\">Discover our curated collection of premium products. Quality craftsmanship meets timeless design — explore pieces that tell a story.</p>",
+                    "_margin": { "top": "0", "right": "0", "bottom": "44", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "button",
+                  "settings": {
+                    "text": "Explore Collection",
+                    "align": "center",
+                    "link": { "url": "/shop" },
+                    "background_color": "#735c00",
+                    "button_text_color": "#f9f6f2",
+                    "border_radius": { "size": 4, "unit": "px" },
+                    "typography_typography": "custom",
+                    "typography_font_family": "Inter",
+                    "typography_font_size": { "size": 13, "unit": "px" },
+                    "typography_font_weight": "600",
+                    "typography_letter_spacing": { "size": 2, "unit": "px" },
+                    "typography_text_transform": "uppercase",
+                    "text_padding": { "top": "18", "right": "48", "bottom": "18", "left": "48", "unit": "px" },
+                    "hover_color": "#f9f6f2",
+                    "button_background_hover_color": "#574500"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        },
+
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "background_background": "classic",
+            "background_color": "#f4f0eb",
+            "padding": { "top": "90", "bottom": "90", "unit": "px", "isLinked": false },
+            "padding_mobile": { "top": "60", "bottom": "60", "unit": "px", "isLinked": false }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 100 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:3px;color:#7f7663;font-family:Inter,sans-serif;font-weight:600;margin:0 0 12px;\">— Bestsellers —</p>",
+                    "_margin": { "top": "0", "right": "0", "bottom": "0", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Featured Products",
+                    "header_size": "h2",
+                    "align": "center",
+                    "title_color": "#1b1c1c",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Playfair Display",
+                    "typography_font_size": { "size": 40, "unit": "px" },
+                    "typography_font_size_mobile": { "size": 28, "unit": "px" },
+                    "typography_font_weight": "700",
+                    "_margin": { "top": "0", "right": "0", "bottom": "48", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "shortcode",
+                  "settings": {
+                    "shortcode": "[products limit=\"4\" columns=\"4\" orderby=\"popularity\" order=\"DESC\"]"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "button",
+                  "settings": {
+                    "text": "View All Products",
+                    "align": "center",
+                    "link": { "url": "/shop" },
+                    "button_type": "outline",
+                    "background_color": "transparent",
+                    "button_text_color": "#735c00",
+                    "border_color": "#735c00",
+                    "border_width": { "top": "2", "right": "2", "bottom": "2", "left": "2", "unit": "px" },
+                    "border_radius": { "size": 4, "unit": "px" },
+                    "typography_typography": "custom",
+                    "typography_font_family": "Inter",
+                    "typography_font_size": { "size": 13, "unit": "px" },
+                    "typography_font_weight": "600",
+                    "typography_letter_spacing": { "size": 1.5, "unit": "px" },
+                    "typography_text_transform": "uppercase",
+                    "text_padding": { "top": "14", "right": "40", "bottom": "14", "left": "40", "unit": "px" },
+                    "_margin": { "top": "48", "right": "0", "bottom": "0", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        },
+
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "background_background": "classic",
+            "background_color": "#ffffff",
+            "padding": { "top": "90", "bottom": "90", "unit": "px", "isLinked": false },
+            "padding_mobile": { "top": "60", "bottom": "60", "unit": "px", "isLinked": false }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 100 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:3px;color:#7f7663;font-family:Inter,sans-serif;font-weight:600;margin:0 0 12px;\">— Shop by Category —</p>",
+                    "_margin": { "top": "0", "right": "0", "bottom": "0", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Browse Categories",
+                    "header_size": "h2",
+                    "align": "center",
+                    "title_color": "#1b1c1c",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Playfair Display",
+                    "typography_font_size": { "size": 40, "unit": "px" },
+                    "typography_font_size_mobile": { "size": 28, "unit": "px" },
+                    "typography_font_weight": "700",
+                    "_margin": { "top": "0", "right": "0", "bottom": "48", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "luwi-category-showcase",
+                  "settings": {
+                    "source": "auto",
+                    "count": 3,
+                    "columns": "3",
+                    "card_style": "below",
+                    "show_count": "yes"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        },
+
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "background_background": "classic",
+            "background_color": "#faf7f4",
+            "padding": { "top": "90", "bottom": "90", "unit": "px", "isLinked": false }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 50 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:11px;text-transform:uppercase;letter-spacing:3px;color:#7f7663;font-family:Inter,sans-serif;font-weight:600;margin:0 0 16px;\">Our Story</p>",
+                    "_margin": { "top": "0", "right": "0", "bottom": "0", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Quality You Can Feel",
+                    "header_size": "h2",
+                    "title_color": "#1b1c1c",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Playfair Display",
+                    "typography_font_size": { "size": 42, "unit": "px" },
+                    "typography_font_weight": "700",
+                    "typography_line_height": { "size": 1.2, "unit": "em" },
+                    "_margin": { "top": "0", "right": "0", "bottom": "24", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:17px;line-height:1.8;color:#4d4635;font-family:Inter,sans-serif;font-weight:300;margin:0 0 16px;\">Every piece in our collection is handpicked for its exceptional quality and timeless character. We believe great products are born from passion and refined by expertise.</p><p style=\"font-size:17px;line-height:1.8;color:#4d4635;font-family:Inter,sans-serif;font-weight:300;\">Our journey started with a simple commitment: bring the world's finest craftsmanship directly to you, without compromise.</p>"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "button",
+                  "settings": {
+                    "text": "Our Story",
+                    "link": { "url": "/about" },
+                    "background_color": "#735c00",
+                    "button_text_color": "#f9f6f2",
+                    "border_radius": { "size": 4, "unit": "px" },
+                    "typography_typography": "custom",
+                    "typography_font_family": "Inter",
+                    "typography_font_size": { "size": 13, "unit": "px" },
+                    "typography_font_weight": "600",
+                    "typography_letter_spacing": { "size": 1.5, "unit": "px" },
+                    "typography_text_transform": "uppercase",
+                    "text_padding": { "top": "16", "right": "36", "bottom": "16", "left": "36", "unit": "px" },
+                    "_margin": { "top": "32", "right": "0", "bottom": "0", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                }
+              ]
+            },
+            {
+              "elType": "column",
+              "settings": { "_column_size": 50 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "shortcode",
+                  "settings": {
+                    "shortcode": "[products limit=\"2\" columns=\"2\" orderby=\"date\" order=\"DESC\" class=\"luwi-mini-grid\"]"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        },
+
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "full_width",
+            "background_background": "classic",
+            "background_color": "#1b1c1c",
+            "padding": { "top": "60", "bottom": "60", "unit": "px", "isLinked": false },
+            "padding_mobile": { "top": "40", "bottom": "40", "unit": "px", "isLinked": false }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 100 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "luwi-trust-badges",
+                  "settings": {
+                    "badges": [
+                      {
+                        "badge_title": "Free Shipping",
+                        "badge_description": "On orders over $100",
+                        "badge_icon": { "library": "fa-solid", "value": "fas fa-shipping-fast" }
+                      },
+                      {
+                        "badge_title": "Secure Payment",
+                        "badge_description": "256-bit SSL encryption",
+                        "badge_icon": { "library": "fa-solid", "value": "fas fa-lock" }
+                      },
+                      {
+                        "badge_title": "15-Day Returns",
+                        "badge_description": "Money-back guarantee",
+                        "badge_icon": { "library": "fa-solid", "value": "fas fa-undo" }
+                      },
+                      {
+                        "badge_title": "Expert Support",
+                        "badge_description": "Dedicated specialists",
+                        "badge_icon": { "library": "fa-solid", "value": "fas fa-headset" }
+                      }
+                    ],
+                    "layout": "row",
+                    "show_dividers": "",
+                    "icon_color": "#D4AF37"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+
+      ]
+    },
+    {
+      "slug": "about",
+      "title": "About Us",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "background_background": "classic",
+            "background_color": "#faf7f4",
+            "padding": { "top": "100", "bottom": "100", "unit": "px", "isLinked": false }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 50 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:11px;text-transform:uppercase;letter-spacing:3px;color:#7f7663;font-family:Inter,sans-serif;font-weight:600;margin:0 0 16px;\">Our Story</p>"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Crafting Excellence\nSince Day One",
+                    "header_size": "h1",
+                    "title_color": "#1b1c1c",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Playfair Display",
+                    "typography_font_size": { "size": 48, "unit": "px" },
+                    "typography_font_weight": "700",
+                    "typography_line_height": { "size": 1.15, "unit": "em" },
+                    "_margin": { "top": "0", "right": "0", "bottom": "28", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:17px;line-height:1.8;color:#4d4635;font-family:Inter,sans-serif;font-weight:300;margin:0 0 16px;\">We believe in quality craftsmanship and timeless design. Every product in our collection is carefully selected to bring you the very best.</p><p style=\"font-size:17px;line-height:1.8;color:#4d4635;font-family:Inter,sans-serif;font-weight:300;\">Our journey began with a simple idea: make premium products accessible to everyone. Today, we continue that mission with the same passion and dedication.</p>"
+                  },
+                  "elements": []
+                }
+              ]
+            },
+            {
+              "elType": "column",
+              "settings": { "_column_size": 50 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "image",
+                  "settings": {
+                    "image": { "url": "" },
+                    "image_size": "large"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "contact",
+      "title": "Contact",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "padding": { "top": "100", "bottom": "100", "unit": "px", "isLinked": false }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 50 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:11px;text-transform:uppercase;letter-spacing:3px;color:#7f7663;font-family:Inter,sans-serif;font-weight:600;margin:0 0 16px;\">Get in Touch</p>"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "We'd Love to\nHear From You",
+                    "header_size": "h1",
+                    "title_color": "#1b1c1c",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Playfair Display",
+                    "typography_font_size": { "size": 48, "unit": "px" },
+                    "typography_font_weight": "700",
+                    "typography_line_height": { "size": 1.15, "unit": "em" },
+                    "_margin": { "top": "0", "right": "0", "bottom": "28", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:17px;line-height:1.8;color:#4d4635;font-family:Inter,sans-serif;font-weight:300;\">Have a question about our products or a custom order? Send us a message and we'll respond within 24 hours.</p>"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "icon-list",
+                  "settings": {
+                    "icon_list": [
+                      {
+                        "text": "{{store_email}}",
+                        "selected_icon": { "library": "fa-solid", "value": "fas fa-envelope" }
+                      },
+                      {
+                        "text": "{{store_phone}}",
+                        "selected_icon": { "library": "fa-solid", "value": "fas fa-phone" }
+                      },
+                      {
+                        "text": "{{store_address}}",
+                        "selected_icon": { "library": "fa-solid", "value": "fas fa-map-marker-alt" }
+                      }
+                    ],
+                    "icon_color": "#735c00",
+                    "text_color": "#1b1c1c",
+                    "_margin": { "top": "32", "right": "0", "bottom": "0", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                }
+              ]
+            },
+            {
+              "elType": "column",
+              "settings": { "_column_size": 50 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "shortcode",
+                  "settings": { "shortcode": "[wpforms id=\"0\"]" },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "faq",
+      "title": "FAQ",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "padding": { "top": "100", "bottom": "100", "unit": "px", "isLinked": false }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 100 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:3px;color:#7f7663;font-family:Inter,sans-serif;font-weight:600;margin:0 0 12px;\">Help Center</p>"
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Frequently Asked Questions",
+                    "header_size": "h1",
+                    "align": "center",
+                    "title_color": "#1b1c1c",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Playfair Display",
+                    "typography_font_size": { "size": 48, "unit": "px" },
+                    "typography_font_weight": "700",
+                    "_margin": { "top": "0", "right": "0", "bottom": "60", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "accordion",
+                  "settings": {
+                    "tabs": [
+                      {
+                        "tab_title": "What is your shipping policy?",
+                        "tab_content": "We offer free shipping on orders over $100. Standard shipping takes 3–5 business days. Express 1–2 day shipping is available at checkout."
+                      },
+                      {
+                        "tab_title": "How do I return a product?",
+                        "tab_content": "We accept returns within 15 days of delivery. Items must be unused and in original packaging. Contact our support team to initiate a return."
+                      },
+                      {
+                        "tab_title": "Do you ship internationally?",
+                        "tab_content": "Yes, we ship to over 50 countries. International shipping rates and times vary by destination and are calculated at checkout."
+                      },
+                      {
+                        "tab_title": "How can I track my order?",
+                        "tab_content": "Once your order ships, you'll receive a confirmation email with a tracking number. You can also track your order from your account dashboard."
+                      },
+                      {
+                        "tab_title": "Are your products authentic?",
+                        "tab_content": "Absolutely. Every item is sourced directly from verified craftspeople and manufacturers. We personally test and approve each product before it enters our collection."
+                      }
+                    ],
+                    "title_html_tag": "h3"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "blog",
+      "title": "Blog",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "padding": { "top": "100", "bottom": "100", "unit": "px", "isLinked": false }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 100 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "From Our Journal",
+                    "header_size": "h1",
+                    "align": "center",
+                    "title_color": "#1b1c1c",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Playfair Display",
+                    "typography_font_size": { "size": 48, "unit": "px" },
+                    "typography_font_weight": "700",
+                    "_margin": { "top": "0", "right": "0", "bottom": "60", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "posts",
+                  "settings": {
+                    "posts_per_page": "6",
+                    "columns": "3",
+                    "show_excerpt": "yes",
+                    "show_read_more": "yes",
+                    "read_more_text": "Read More"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "terms-conditions",
+      "title": "Terms & Conditions",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "padding": { "top": "100", "bottom": "100", "unit": "px", "isLinked": false }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 100 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Terms & Conditions",
+                    "header_size": "h1",
+                    "title_color": "#1b1c1c",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Playfair Display",
+                    "typography_font_size": { "size": 48, "unit": "px" },
+                    "typography_font_weight": "700",
+                    "_margin": { "top": "0", "right": "0", "bottom": "40", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:16px;line-height:1.8;color:#4d4635;font-family:Inter,sans-serif;\">Please read these Terms and Conditions carefully before using our website. By accessing our site, you agree to be bound by these terms.</p>"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "privacy-policy",
+      "title": "Privacy Policy",
+      "template": "elementor_header_footer",
+      "elementor_data": [
+        {
+          "elType": "section",
+          "settings": {
+            "layout": "boxed",
+            "padding": { "top": "100", "bottom": "100", "unit": "px", "isLinked": false }
+          },
+          "elements": [
+            {
+              "elType": "column",
+              "settings": { "_column_size": 100 },
+              "elements": [
+                {
+                  "elType": "widget",
+                  "widgetType": "heading",
+                  "settings": {
+                    "title": "Privacy Policy",
+                    "header_size": "h1",
+                    "title_color": "#1b1c1c",
+                    "typography_typography": "custom",
+                    "typography_font_family": "Playfair Display",
+                    "typography_font_size": { "size": 48, "unit": "px" },
+                    "typography_font_weight": "700",
+                    "_margin": { "top": "0", "right": "0", "bottom": "40", "left": "0", "unit": "px" }
+                  },
+                  "elements": []
+                },
+                {
+                  "elType": "widget",
+                  "widgetType": "text-editor",
+                  "settings": {
+                    "editor": "<p style=\"font-size:16px;line-height:1.8;color:#4d4635;font-family:Inter,sans-serif;\">We respect your privacy. This policy explains what data we collect, how we use it, and your rights regarding your personal information.</p>"
+                  },
+                  "elements": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
