@@ -75,6 +75,22 @@
     --radius-lg: 14px;
     --radius-xl: 20px;
     --radius-full: 9999px;
+
+    /* ── Semantic Backgrounds ── */
+    --lp-info: #2563eb;
+    --lp-info-bg: #eff6ff;
+    --lp-primary-hover: #4f46e5;
+    --lp-primary-active: #4338ca;
+    --lp-success-light: #dcfce7;
+
+    /* ── Extended Neutrals ── */
+    --lp-gray-50: #f9fafb;
+    --lp-gray-100: #f3f4f6;
+    --lp-gray-200: #e5e7eb;
+    --lp-gray-300: #d1d5db;
+    --lp-gray-700: #374151;
+    --lp-gray-800: #1f2937;
+    --lp-gray-900: #111827;
 }
 
 /* ========================================
@@ -317,7 +333,7 @@ a:focus-visible {
     font-size: 28px;
     width: 28px;
     height: 28px;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
 }
 
 .stat-number {
@@ -382,6 +398,14 @@ a:focus-visible {
 .luwipress-card:hover {
     box-shadow: var(--lp-shadow-md);
 }
+
+/* Card accent variants — semantic left-border */
+.luwipress-card--primary  { border-left: 3px solid var(--lp-primary); }
+.luwipress-card--success  { border-left: 3px solid var(--lp-success); }
+.luwipress-card--info     { border-left: 3px solid var(--lp-info, #6366f1); }
+.luwipress-card--warning  { border-left: 3px solid var(--lp-warning); }
+.luwipress-card--error    { border-left: 3px solid var(--lp-error); }
+.luwipress-card--muted    { background: var(--lp-surface-secondary); }
 
 .luwipress-card h2 {
     font-size: 16px;
@@ -453,13 +477,13 @@ a:focus-visible {
 }
 
 .badge-active {
-    background: #dcfce7;
+    background: var(--lp-success-light);
     color: var(--lp-success);
 }
 
 .badge-inactive {
     background: var(--lp-border-light);
-    color: #9ca3af;
+    color: var(--lp-gray-light);
 }
 
 .module-description {
@@ -501,7 +525,7 @@ a:focus-visible {
     font-weight: 600;
     padding: 10px 12px;
     border-bottom: 2px solid var(--lp-border);
-    color: #374151;
+    color: var(--lp-gray-dark);
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -514,7 +538,7 @@ a:focus-visible {
 }
 
 .luwipress-table tbody tr:hover {
-    background: #f9fafb;
+    background: var(--lp-gray-50);
 }
 
 /* Log Levels */
@@ -581,7 +605,7 @@ a:focus-visible {
     font-weight: 500;
     text-decoration: none;
     background: var(--lp-border-light);
-    color: #374151;
+    color: var(--lp-gray-dark);
     transition: background 0.2s;
 }
 
@@ -613,14 +637,14 @@ a:focus-visible {
 }
 
 /* Logs table columns */
-.luwipress-logs-table .column-id { width: 50px; color: #9ca3af; }
+.luwipress-logs-table .column-id { width: 50px; color: var(--lp-gray-light); }
 .luwipress-logs-table .column-time { width: 100px; }
 .luwipress-logs-table .column-level { width: 80px; }
 .luwipress-logs-table .column-context { width: 60px; text-align: center; }
 .luwipress-logs-table .column-ip { width: 120px; }
 
 .log-date { display: block; font-size: 12px; }
-.log-time-detail { display: block; font-size: 11px; color: #9ca3af; }
+.log-time-detail { display: block; font-size: 11px; color: var(--lp-gray-light); }
 
 /* Pagination */
 .luwipress-pagination {
@@ -640,7 +664,7 @@ a:focus-visible {
     font-size: 13px;
     text-decoration: none;
     background: var(--lp-border-light);
-    color: #374151;
+    color: var(--lp-gray-dark);
 }
 
 .luwipress-pagination .page-number.current {
@@ -656,7 +680,7 @@ a:focus-visible {
 .luwipress-empty-state {
     text-align: center;
     padding: 60px 20px;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
 }
 
 .luwipress-empty-state .dashicons {
@@ -667,11 +691,11 @@ a:focus-visible {
 }
 
 .luwipress-empty-state h3 {
-    color: #374151;
+    color: var(--lp-gray-dark);
     margin-bottom: 8px;
 }
 
-.luwipress-empty { color: #9ca3af; font-style: italic; }
+.luwipress-empty { color: var(--lp-gray-light); font-style: italic; }
 
 /* Maintenance */
 .luwipress-maintenance-actions {
@@ -723,7 +747,7 @@ a:focus-visible {
     border: none;
     font-size: 24px;
     cursor: pointer;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
     padding: 0;
     line-height: 1;
 }
@@ -801,7 +825,7 @@ a:focus-visible {
 }
 
 .luwipress-info-box {
-    background: #eff6ff;
+    background: var(--lp-info-bg);
     border: 1px solid #bfdbfe;
     border-radius: var(--radius-sm);
     padding: 12px 16px;
@@ -813,7 +837,7 @@ a:focus-visible {
 }
 
 .luwipress-info-box .dashicons {
-    color: #3b82f6;
+    color: var(--lp-info);
 }
 
 .luwipress-feature-list {
@@ -843,7 +867,7 @@ a:focus-visible {
 
 .lang-tag {
     display: inline-block;
-    background: #eff6ff;
+    background: var(--lp-info-bg);
     color: #1d4ed8;
     padding: 2px 8px;
     border-radius: 3px;
@@ -919,7 +943,7 @@ a:focus-visible {
 }
 
 .endpoint-group {
-    background: #f9fafb;
+    background: var(--lp-gray-50);
     border: 1px solid var(--lp-border);
     border-radius: var(--radius-sm);
     padding: 12px 16px;
@@ -954,7 +978,7 @@ a:focus-visible {
 .luwipress-version {
     font-size: 12px;
     font-weight: 400;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
     background: var(--lp-border-light);
     padding: 2px 8px;
     border-radius: 10px;
@@ -972,7 +996,7 @@ a:focus-visible {
 }
 
 .luwipress-detected-card {
-    background: #f9fafb;
+    background: var(--lp-gray-50);
     border: 1px solid var(--lp-border);
     border-radius: 8px;
     padding: 14px;
@@ -981,7 +1005,7 @@ a:focus-visible {
 
 .luwipress-detected-card.detected-active {
     background: var(--lp-surface);
-    border-color: #d1d5db;
+    border-color: var(--lp-gray-300);
 }
 
 .luwipress-detected-card.detected-active:hover {
@@ -1017,14 +1041,14 @@ a:focus-visible {
 .detected-plugin-name {
     font-size: 15px;
     font-weight: 600;
-    color: #111827;
+    color: var(--lp-gray-900);
     margin-bottom: 4px;
 }
 
 .detected-version {
     font-size: 11px;
     font-weight: 400;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
 }
 
 .detected-how {
@@ -1072,7 +1096,7 @@ a:focus-visible {
     font-size: 24px;
     width: 24px;
     height: 24px;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
 }
 
 .opp-seo .opp-icon .dashicons { color: var(--lp-error); }
@@ -1086,7 +1110,7 @@ a:focus-visible {
     font-size: 22px;
     font-weight: 700;
     line-height: 1.1;
-    color: #111827;
+    color: var(--lp-gray-900);
 }
 
 .opp-label {
@@ -1128,7 +1152,7 @@ a:focus-visible {
    ======================================== */
 
 .lang-tag.lang-default {
-    background: #dcfce7;
+    background: var(--lp-success-light);
     color: var(--lp-success);
     font-weight: 600;
 }
@@ -1169,7 +1193,7 @@ a:focus-visible {
 .luwipress-provider-option input[type="radio"]:checked + .provider-card,
 .luwipress-provider-option.provider-selected .provider-card {
     border-color: var(--lp-primary);
-    background: #eef2ff;
+    background: var(--lp-primary-50);
     box-shadow: 0 2px 12px rgba(99, 102, 241, 0.15);
 }
 
@@ -1249,8 +1273,8 @@ a:focus-visible {
 }
 
 .capability-row.capability-luwipress {
-    background: #eef2ff;
-    color: #4338ca;
+    background: var(--lp-primary-50);
+    color: var(--lp-primary-active);
 }
 
 .capability-badge {
@@ -1292,7 +1316,7 @@ a:focus-visible {
 
 /* Workflow badge */
 .badge-workflow {
-    background: #eef2ff;
+    background: var(--lp-primary-50);
     color: var(--lp-primary);
 }
 
@@ -1316,7 +1340,7 @@ a:focus-visible {
 .luwipress-footer {
     text-align: center;
     padding: 16px;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
     font-size: 12px;
 }
 
@@ -1370,7 +1394,7 @@ a:focus-visible {
 
 .claw-model-label {
     font-size: 12px;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
 }
 
 /* Messages area */
@@ -1401,7 +1425,7 @@ a:focus-visible {
     width: 48px;
     height: 48px;
     color: var(--lp-primary);
-    background: #eef2ff;
+    background: var(--lp-primary-50);
     padding: 16px;
     border-radius: 50%;
 }
@@ -1435,15 +1459,15 @@ a:focus-visible {
     border-radius: 20px;
     background: var(--lp-surface);
     font-size: 13px;
-    color: #374151;
+    color: var(--lp-gray-dark);
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .claw-suggestion:hover {
     border-color: var(--lp-primary);
-    background: #eef2ff;
-    color: #4338ca;
+    background: var(--lp-primary-50);
+    color: var(--lp-primary-active);
 }
 
 .claw-suggestion .dashicons {
@@ -1492,7 +1516,7 @@ a:focus-visible {
 }
 
 .claw-assistant .claw-avatar {
-    background: #eef2ff;
+    background: var(--lp-primary-50);
     color: var(--lp-primary);
 }
 
@@ -1518,7 +1542,7 @@ a:focus-visible {
 
 .claw-assistant .claw-bubble {
     background: var(--lp-border-light);
-    color: #111827;
+    color: var(--lp-gray-900);
     border-bottom-left-radius: 4px;
 }
 
@@ -1557,7 +1581,7 @@ a:focus-visible {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #9ca3af;
+    background: var(--lp-gray-light);
     animation: claw-bounce 1.4s ease-in-out infinite;
 }
 
@@ -1594,7 +1618,7 @@ a:focus-visible {
 }
 
 .claw-confirm-btn:hover {
-    background: #4f46e5;
+    background: var(--lp-primary-hover);
 }
 
 .claw-cancel-btn {
@@ -1618,7 +1642,7 @@ a:focus-visible {
     text-align: left;
     font-weight: 600;
     padding: 6px 10px;
-    border-bottom: 2px solid #d1d5db;
+    border-bottom: 2px solid var(--lp-gray-300);
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -1684,7 +1708,7 @@ a:focus-visible {
 }
 
 .claw-send-btn:not(:disabled):hover {
-    background: #4f46e5;
+    background: var(--lp-primary-hover);
 }
 
 .claw-send-btn .dashicons {
@@ -1697,7 +1721,7 @@ a:focus-visible {
     text-align: right;
     margin-top: 6px;
     font-size: 11px;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
 }
 
 .claw-input-hints kbd {
@@ -1729,7 +1753,7 @@ a:focus-visible {
     font-size: 13px;
     font-weight: 600;
     margin: 0 0 12px;
-    color: #374151;
+    color: var(--lp-gray-dark);
 }
 
 .claw-sidebar-section h4 .dashicons {
@@ -1755,7 +1779,7 @@ a:focus-visible {
     border-radius: var(--radius-sm);
     background: var(--lp-surface);
     font-size: 12px;
-    color: #374151;
+    color: var(--lp-gray-dark);
     cursor: pointer;
     text-align: left;
     transition: all 0.2s;
@@ -1763,15 +1787,15 @@ a:focus-visible {
 
 .claw-action-btn:hover {
     border-color: var(--lp-primary);
-    background: #eef2ff;
-    color: #4338ca;
+    background: var(--lp-primary-50);
+    color: var(--lp-primary-active);
 }
 
 .claw-action-btn .dashicons {
     font-size: 16px;
     width: 16px;
     height: 16px;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
 }
 
 .claw-action-btn:hover .dashicons {
@@ -1811,7 +1835,7 @@ a:focus-visible {
 .claw-conv-id {
     font-family: monospace;
     font-size: 11px;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
     word-break: break-all;
 }
 
@@ -1902,7 +1926,7 @@ a:focus-visible {
 }
 
 .opp-link:hover {
-    color: #4338ca;
+    color: var(--lp-primary-active);
     text-decoration: underline;
 }
 
@@ -1960,7 +1984,7 @@ a:focus-visible {
 }
 
 .activity-item:hover {
-    background: #f9fafb;
+    background: var(--lp-gray-50);
 }
 
 .activity-item:last-child {
@@ -1984,7 +2008,7 @@ a:focus-visible {
 }
 
 .activity-icon-info {
-    background: #dcfce7;
+    background: var(--lp-success-light);
     color: var(--lp-success);
 }
 
@@ -2012,7 +2036,7 @@ a:focus-visible {
 .activity-message {
     display: block;
     font-size: 13px;
-    color: #111827;
+    color: var(--lp-gray-900);
     line-height: 1.4;
     word-break: break-word;
 }
@@ -2020,7 +2044,7 @@ a:focus-visible {
 .activity-time {
     display: block;
     font-size: 11px;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
     margin-top: 2px;
 }
 
@@ -2033,7 +2057,7 @@ a:focus-visible {
 .activity-empty {
     padding: 20px;
     text-align: center;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
     font-style: italic;
 }
 
@@ -2096,8 +2120,8 @@ a:focus-visible {
 .luwipress-toast-warning { border-left: 4px solid #eab308; }
 .luwipress-toast-warning .dashicons { color: #eab308; }
 
-.luwipress-toast-info { border-left: 4px solid #3b82f6; }
-.luwipress-toast-info .dashicons { color: #3b82f6; }
+.luwipress-toast-info { border-left: 4px solid var(--lp-info); }
+.luwipress-toast-info .dashicons { color: var(--lp-info); }
 
 .toast-message {
     flex: 1;
@@ -2107,14 +2131,14 @@ a:focus-visible {
     background: none;
     border: none;
     font-size: 16px;
-    color: #9ca3af;
+    color: var(--lp-gray-light);
     cursor: pointer;
     padding: 0;
     line-height: 1;
 }
 
 .toast-close:hover {
-    color: #374151;
+    color: var(--lp-gray-dark);
 }
 
 /* ========================================
@@ -2148,7 +2172,7 @@ a:focus-visible {
 }
 
 .claw-retry-btn:hover {
-    background: #eef2ff;
+    background: var(--lp-primary-50);
     border-color: var(--lp-primary);
 }
 
@@ -2168,13 +2192,13 @@ a:focus-visible {
 }
 
 .claw-status-active {
-    background: #dcfce7;
+    background: var(--lp-success-light);
     color: var(--lp-success);
 }
 
 .claw-status-inactive {
     background: var(--lp-border-light);
-    color: #9ca3af;
+    color: var(--lp-gray-light);
 }
 
 .claw-configure-link {
@@ -2331,6 +2355,35 @@ a:focus-visible {
     background: var(--lp-primary);
     color: #fff;
 }
+/* View switch */
+.kg-view-switch {
+    display: flex;
+    gap: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--lp-border);
+    background: var(--lp-surface);
+}
+.kg-view-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    background: transparent;
+    color: var(--lp-gray);
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+.kg-view-btn:not(:last-child) { border-right: 1px solid var(--lp-border); }
+.kg-view-btn:hover { background: var(--lp-bg); color: var(--lp-text); }
+.kg-view-btn.active {
+    background: var(--lp-primary);
+    color: #fff;
+}
+.kg-view-btn svg { flex-shrink: 0; }
 
 /* Stats bar */
 .kg-stats {
@@ -2668,7 +2721,7 @@ a:focus-visible {
     font-size: 11px;
     font-weight: 600;
 }
-.kg-chip-ok { background: #dcfce7; color: #15803d; }
+.kg-chip-ok { background: var(--lp-success-light); color: #15803d; }
 .kg-chip-miss { background: #fee2e2; color: #b91c1c; }
 
 /* Language chips */
@@ -2679,7 +2732,7 @@ a:focus-visible {
     font-size: 11px;
     font-weight: 700;
 }
-.kg-lc-completed { background: #dcfce7; color: #15803d; }
+.kg-lc-completed { background: var(--lp-success-light); color: #15803d; }
 .kg-lc-missing { background: #fee2e2; color: #b91c1c; }
 .kg-lc-processing { background: #fef3c7; color: #92400e; }
 
@@ -3056,6 +3109,11 @@ a:focus-visible {
     width: 44px; height: 44px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
+.lp-hero-icon--primary { background: var(--lp-primary); }
+.lp-hero-icon--success { background: var(--lp-success); }
+.lp-hero-icon--warning { background: var(--lp-warning); }
+.lp-hero-icon--error   { background: var(--lp-error); }
+.lp-hero-icon--blue    { background: var(--lp-blue); }
 .lp-hero-icon .dashicons { color: #fff; font-size: 22px; width: 22px; height: 22px; }
 .lp-hero-body { display: flex; flex-direction: column; min-width: 0; }
 .lp-hero-num {

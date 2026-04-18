@@ -31,6 +31,7 @@ class LuwiPress_Elementor {
     private function __construct() {
         add_action( 'rest_api_init', array( $this, 'register_endpoints' ) );
         add_action( 'wp_head', array( $this, 'output_global_css' ), 99 );
+        add_action( 'wp_head', array( $this, 'enqueue_google_fonts' ), 1 );
 
         // Background job: translate Elementor pages one at a time via wp_cron
         add_action( 'luwipress_elementor_translate_single', array( $this, 'cron_translate_single' ), 10, 2 );
@@ -382,6 +383,90 @@ class LuwiPress_Elementor {
         register_rest_route( $ns, '/elementor/kit', array(
             'methods'             => 'GET',
             'callback'            => array( $this, 'rest_get_kit_info' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        // Force flush all Elementor CSS files
+        register_rest_route( $ns, '/elementor/flush-css', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_flush_css' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        // Elementor CSS print method — set to 'internal' to eliminate FOUC
+        register_rest_route( $ns, '/elementor/print-method', array(
+            array(
+                'methods'             => 'GET',
+                'callback'            => array( $this, 'rest_get_print_method' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+            array(
+                'methods'             => 'POST',
+                'callback'            => array( $this, 'rest_set_print_method' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+        ) );
+
+        // Google Fonts URL — output as <link> in wp_head (avoids @import in Kit CSS)
+        register_rest_route( $ns, '/elementor/google-fonts', array(
+            array(
+                'methods'             => 'GET',
+                'callback'            => array( $this, 'rest_get_google_fonts' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+            array(
+                'methods'             => 'POST',
+                'callback'            => array( $this, 'rest_set_google_fonts' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+        ) );
+
+        // Reorder top-level sections by providing new order
+        register_rest_route( $ns, '/elementor/reorder-sections', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_reorder_sections' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        // Find and replace text/styles across pages
+        register_rest_route( $ns, '/elementor/find-replace', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_find_replace' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        // Sync page structure to WPML translations (preserving translated texts)
+        register_rest_route( $ns, '/elementor/sync-structure', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_sync_structure' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        // Global design tokens (colors, typography) from Elementor Kit
+        register_rest_route( $ns, '/elementor/css-vars', array(
+            array(
+                'methods'             => 'GET',
+                'callback'            => array( $this, 'rest_get_css_vars' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+            array(
+                'methods'             => 'POST',
+                'callback'            => array( $this, 'rest_set_css_vars' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+        ) );
+
+        // List saved Elementor templates
+        register_rest_route( $ns, '/elementor/templates', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'rest_list_templates' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        // Apply saved template to a page
+        register_rest_route( $ns, '/elementor/apply-template', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_apply_template' ),
             'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
         ) );
     }
@@ -871,10 +956,11 @@ class LuwiPress_Elementor {
         // Fallback: if no widget title found, translate the source post title via AI
         $source_post = get_post( $post_id );
         if ( empty( $translated_title ) && $source_post && ! empty( $source_post->post_title ) ) {
-            $ai_title = LuwiPress_AI_Engine::dispatch( 'title-translation', LuwiPress_AI_Engine::build_messages(
-                sprintf( 'Translate this title from %s to %s. Return ONLY the translated title, nothing else: "%s"',
-                    $source_name, $target_name, $source_post->post_title )
-            ), array( 'max_tokens' => 256 ) );
+            $ai_title = LuwiPress_AI_Engine::dispatch( 'title-translation', LuwiPress_AI_Engine::build_messages( array(
+                'system' => 'You are a translator. Return ONLY the translated text, nothing else.',
+                'user'   => sprintf( 'Translate this title from %s to %s: "%s"',
+                    $source_name, $target_name, $source_post->post_title ),
+            ) ), array( 'max_tokens' => 256 ) );
             if ( ! is_wp_error( $ai_title ) && ! empty( trim( $ai_title ) ) ) {
                 $translated_title = strip_tags( trim( $ai_title, " \t\n\r\"'." ) );
             } else {
@@ -1255,9 +1341,36 @@ class LuwiPress_Elementor {
         // Clear global CSS cache (Kit CSS, global widgets, etc.)
         \Elementor\Plugin::$instance->files_manager->clear_cache();
 
-        // Always regenerate Kit CSS
+        // Delete Kit CSS file directly — Elementor Global_CSS handles Kit differently
         $kit_id = $this->get_kit_id();
         if ( $kit_id ) {
+            // Delete the Kit post CSS meta
+            delete_post_meta( $kit_id, '_elementor_css' );
+            delete_post_meta( $kit_id, '_elementor_page_assets' );
+
+            // Use Global_CSS class if available (Elementor 3.x+)
+            if ( class_exists( '\Elementor\Core\Files\CSS\Global_CSS' ) ) {
+                try {
+                    $global_css = new \Elementor\Core\Files\CSS\Global_CSS( 'global.css' );
+                    $global_css->update();
+                } catch ( \Throwable $e ) {
+                    LuwiPress_Logger::log( 'Global CSS update error: ' . $e->getMessage(), 'debug' );
+                }
+            }
+
+            // Also delete the physical Kit CSS file
+            $upload_dir = wp_upload_dir();
+            $kit_css_file = $upload_dir['basedir'] . '/elementor/css/post-' . $kit_id . '.css';
+            if ( file_exists( $kit_css_file ) ) {
+                @unlink( $kit_css_file );
+            }
+            // Also the global.css
+            $global_css_file = $upload_dir['basedir'] . '/elementor/css/global.css';
+            if ( file_exists( $global_css_file ) ) {
+                @unlink( $global_css_file );
+            }
+
+            // Regenerate Kit CSS as a post
             $this->regenerate_css( $kit_id );
         }
 
@@ -1291,14 +1404,86 @@ class LuwiPress_Elementor {
         ) );
     }
 
+    /* ── Flush CSS (delete all Elementor CSS files) ── */
+
+    public function rest_flush_css( $request ) {
+        $upload_dir = wp_upload_dir();
+        $css_dir    = $upload_dir['basedir'] . '/elementor/css/';
+        $deleted    = array();
+
+        if ( is_dir( $css_dir ) ) {
+            $files = glob( $css_dir . '*.css' );
+            foreach ( $files as $file ) {
+                if ( @unlink( $file ) ) {
+                    $deleted[] = basename( $file );
+                }
+            }
+        }
+
+        // Also clear WP options that Elementor uses for CSS caching
+        delete_option( '_elementor_global_css' );
+        delete_option( 'elementor-custom-breakpoints-files' );
+
+        // Clear all post meta CSS caches
+        global $wpdb;
+        $wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key IN ('_elementor_css', '_elementor_page_assets')" );
+
+        // Clear Elementor files manager if available
+        if ( class_exists( '\Elementor\Plugin' ) ) {
+            try {
+                \Elementor\Plugin::$instance->files_manager->clear_cache();
+            } catch ( \Throwable $e ) {
+                // Silently continue
+            }
+        }
+
+        // Also purge page cache (LiteSpeed, WP Rocket, etc.)
+        if ( class_exists( 'LiteSpeed\Purge' ) ) {
+            // Purge HTML cache
+            do_action( 'litespeed_purge_all' );
+            // Purge CSS/JS optimization (combined/minified files) — separate cache
+            do_action( 'litespeed_purge_css_js' );
+            // Delete physical LiteSpeed CSS/JS optimize files
+            $ls_dirs = array(
+                WP_CONTENT_DIR . '/litespeed/css/',
+                WP_CONTENT_DIR . '/litespeed/js/',
+                WP_CONTENT_DIR . '/cache/litespeed/css/',
+                WP_CONTENT_DIR . '/cache/litespeed/js/',
+            );
+            foreach ( $ls_dirs as $ls_dir ) {
+                if ( is_dir( $ls_dir ) ) {
+                    $ls_files = glob( $ls_dir . '*.css' ) ?: array();
+                    foreach ( $ls_files as $lf ) { @unlink( $lf ); }
+                    $ls_files = glob( $ls_dir . '*.js' ) ?: array();
+                    foreach ( $ls_files as $lf ) { @unlink( $lf ); }
+                }
+            }
+        } elseif ( function_exists( 'rocket_clean_domain' ) ) {
+            rocket_clean_domain();
+        } elseif ( function_exists( 'w3tc_flush_all' ) ) {
+            w3tc_flush_all();
+        }
+
+        LuwiPress_Logger::log( 'Elementor CSS flush: deleted ' . count( $deleted ) . ' files + page cache purged', 'info' );
+
+        return rest_ensure_response( array(
+            'status'  => 'flushed',
+            'deleted' => $deleted,
+            'count'   => count( $deleted ),
+        ) );
+    }
+
     /* ── Global CSS (Kit custom_css) ── */
 
     public function rest_get_global_css( $request ) {
         $kit_id = $this->get_kit_id();
-        $css    = '';
-        $source = 'none';
 
-        if ( $kit_id ) {
+        // Primary: read from our inline option
+        $css    = get_option( 'luwipress_kit_css', '' );
+        $source = ! empty( $css ) ? 'luwipress_inline' : 'none';
+
+        // Fallback: read from Elementor Kit meta (legacy)
+        if ( empty( $css ) && $kit_id ) {
             $kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
             if ( is_array( $kit_settings ) && ! empty( $kit_settings['custom_css'] ) ) {
                 $css    = $kit_settings['custom_css'];
@@ -1321,31 +1506,37 @@ class LuwiPress_Elementor {
             return new WP_Error( 'missing_params', 'css required', array( 'status' => 400 ) );
         }
 
-        $css    = wp_strip_all_tags( $css );
+        $css = wp_strip_all_tags( $css );
+
+        // Append to existing if requested
+        if ( $append ) {
+            $existing = get_option( 'luwipress_kit_css', '' );
+            if ( ! empty( $existing ) ) {
+                $css = $existing . "\n" . $css;
+            }
+        }
+
+        // PRIMARY: store in our own option — output inline via output_global_css()
+        update_option( 'luwipress_kit_css', $css );
+
+        // SECONDARY: clear Elementor Kit's custom_css to prevent @import regeneration
         $kit_id = $this->get_kit_id();
-
-        if ( ! $kit_id ) {
-            return new WP_Error( 'no_kit', 'Elementor active kit not found', array( 'status' => 404 ) );
+        if ( $kit_id ) {
+            $kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
+            if ( ! is_array( $kit_settings ) ) {
+                $kit_settings = array();
+            }
+            $kit_settings['custom_css'] = '';
+            update_post_meta( $kit_id, '_elementor_page_settings', $kit_settings );
         }
 
-        $kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
-        if ( ! is_array( $kit_settings ) ) {
-            $kit_settings = array();
-        }
-
-        if ( $append && ! empty( $kit_settings['custom_css'] ) ) {
-            $css = $kit_settings['custom_css'] . "\n" . $css;
-        }
-
-        $kit_settings['custom_css'] = $css;
-        update_post_meta( $kit_id, '_elementor_page_settings', $kit_settings );
         $this->flush_elementor_css();
 
-        LuwiPress_Logger::log( 'Elementor Kit CSS updated (kit #' . $kit_id . ', ' . strlen( $css ) . ' bytes)', 'info' );
+        LuwiPress_Logger::log( 'Kit CSS saved inline (luwipress_kit_css option, ' . strlen( $css ) . ' bytes)', 'info' );
 
         return rest_ensure_response( array(
             'status' => 'updated',
-            'source' => 'elementor_kit',
+            'source' => 'luwipress_inline',
             'kit_id' => $kit_id,
             'length' => strlen( $css ),
         ) );
@@ -1416,16 +1607,585 @@ class LuwiPress_Elementor {
         ) );
     }
 
-    /* ── wp_head fallback — only if Kit has no custom_css ── */
-
+    /**
+     * Output LuwiPress Kit CSS as inline <style> in wp_head.
+     *
+     * CSS stored in `luwipress_kit_css` option is ALWAYS output inline — no
+     * external file, no LiteSpeed combiner interference, no FOUC.
+     * Priority 99 keeps it after Elementor's own generated CSS so our rules win.
+     */
     public function output_global_css() {
-        $kit_id = $this->get_kit_id();
-        if ( $kit_id ) {
-            $kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
-            if ( is_array( $kit_settings ) && ! empty( $kit_settings['custom_css'] ) ) {
-                return; // Elementor Kit handles CSS output natively
+        $css = get_option( 'luwipress_kit_css', '' );
+        if ( empty( $css ) ) {
+            return;
+        }
+        echo "\n<style id=\"luwipress-kit-css\">\n" . $css . "\n</style>\n";
+    }
+
+    /**
+     * Output Google Fonts as a proper <link> tag at priority 1 of wp_head.
+     * This avoids the CSS @import-in-middle-of-file browser bug where @import
+     * placed after other rules in Elementor's generated post-{kit}.css is ignored.
+     */
+    public function enqueue_google_fonts() {
+        $url = get_option( 'luwipress_google_fonts_url', '' );
+        if ( empty( $url ) ) {
+            return;
+        }
+        $url = esc_url( $url );
+        echo '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n";
+        echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
+        echo '<link rel="stylesheet" href="' . $url . '">' . "\n";
+    }
+
+    public function rest_get_google_fonts( $request ) {
+        return rest_ensure_response( array(
+            'url' => get_option( 'luwipress_google_fonts_url', '' ),
+        ) );
+    }
+
+    public function rest_set_google_fonts( $request ) {
+        $url = sanitize_text_field( $request->get_param( 'url' ) ?? '' );
+        update_option( 'luwipress_google_fonts_url', $url );
+        return rest_ensure_response( array(
+            'status' => 'updated',
+            'url'    => $url,
+        ) );
+    }
+
+    public function rest_get_print_method( $request ) {
+        return rest_ensure_response( array(
+            'method' => get_option( 'elementor_css_print_method', 'external' ),
+        ) );
+    }
+
+    public function rest_set_print_method( $request ) {
+        $method = sanitize_text_field( $request->get_param( 'method' ) ?? 'internal' );
+        if ( ! in_array( $method, array( 'internal', 'external' ), true ) ) {
+            return new WP_Error( 'invalid_method', 'method must be internal or external', array( 'status' => 400 ) );
+        }
+        update_option( 'elementor_css_print_method', $method );
+        return rest_ensure_response( array(
+            'status' => 'updated',
+            'method' => $method,
+        ) );
+    }
+
+    /* ──────────── Reorder top-level sections ──────────── */
+
+    public function rest_reorder_sections( $request ) {
+        $post_id = intval( $request->get_param( 'post_id' ) );
+        $order   = $request->get_param( 'order' );
+
+        if ( ! $post_id || ! is_array( $order ) || empty( $order ) ) {
+            return new WP_Error( 'missing_params', 'post_id and order array required', array( 'status' => 400 ) );
+        }
+        $order = array_map( 'sanitize_text_field', $order );
+        if ( count( $order ) !== count( array_unique( $order ) ) ) {
+            return new WP_Error( 'duplicate_ids', 'order contains duplicate IDs', array( 'status' => 400 ) );
+        }
+
+        $result = $this->reorder_sections( $post_id, $order );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+        return rest_ensure_response( $result );
+    }
+
+    public function reorder_sections( $post_id, array $order ) {
+        $data = $this->get_elementor_data( $post_id );
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+
+        $top_map = array();
+        foreach ( $data as $element ) {
+            $id = $element['id'] ?? '';
+            if ( $id ) {
+                $top_map[ $id ] = $element;
             }
         }
+
+        $missing = array_diff( $order, array_keys( $top_map ) );
+        $extra   = array_diff( array_keys( $top_map ), $order );
+        if ( ! empty( $missing ) || ! empty( $extra ) ) {
+            return new WP_Error( 'order_mismatch', 'order IDs do not match top-level elements', array(
+                'status'      => 400,
+                'missing_ids' => array_values( $missing ),
+                'extra_ids'   => array_values( $extra ),
+            ) );
+        }
+
+        $snapshot = $this->create_snapshot( $post_id, 'Pre-reorder backup' );
+        $snapshot_id = is_wp_error( $snapshot ) ? '' : ( $snapshot['snapshot_id'] ?? '' );
+
+        $new_data = array();
+        foreach ( $order as $id ) {
+            $new_data[] = $top_map[ $id ];
+        }
+
+        $saved = $this->save_elementor_data( $post_id, $new_data );
+        if ( is_wp_error( $saved ) ) {
+            return $saved;
+        }
+
+        LuwiPress_Logger::log( sprintf( 'Reordered %d sections on post #%d', count( $order ), $post_id ), 'info' );
+
+        return array(
+            'status'        => 'reordered',
+            'post_id'       => $post_id,
+            'section_count' => count( $order ),
+            'new_order'     => $order,
+            'snapshot_id'   => $snapshot_id,
+        );
+    }
+
+    /* ──────────── Find and Replace across pages ──────────── */
+
+    public function rest_find_replace( $request ) {
+        $post_ids  = $request->get_param( 'post_ids' );
+        $post_type = sanitize_text_field( $request->get_param( 'post_type' ) ?? '' );
+        $find      = $request->get_param( 'find' );
+        $replace   = $request->get_param( 'replace' );
+        $scope     = sanitize_text_field( $request->get_param( 'scope' ) ?? 'text' );
+        $is_regex  = (bool) $request->get_param( 'is_regex' );
+        $dry_run   = (bool) $request->get_param( 'dry_run' );
+        $style_key = sanitize_text_field( $request->get_param( 'style_key' ) ?? '' );
+
+        if ( $find === null || $find === '' ) {
+            return new WP_Error( 'missing_params', 'find parameter required', array( 'status' => 400 ) );
+        }
+        if ( $replace === null ) {
+            return new WP_Error( 'missing_params', 'replace parameter required', array( 'status' => 400 ) );
+        }
+        if ( ! in_array( $scope, array( 'text', 'styles', 'both' ), true ) ) {
+            return new WP_Error( 'invalid_scope', 'scope must be text, styles, or both', array( 'status' => 400 ) );
+        }
+        if ( $is_regex ) {
+            // @ suppresses preg warning to evaluate pattern validity
+            if ( @preg_match( $find, '' ) === false ) {
+                return new WP_Error( 'invalid_regex', 'find is not a valid regex pattern', array( 'status' => 400 ) );
+            }
+        }
+
+        $ids = $this->resolve_post_ids( $post_ids, $post_type );
+        if ( is_wp_error( $ids ) ) {
+            return $ids;
+        }
+
+        $results = array();
+        $total_replacements = 0;
+        $pages_modified = 0;
+
+        foreach ( $ids as $pid ) {
+            $res = $this->find_replace_on_post( $pid, $find, $replace, $scope, $is_regex, $dry_run, $style_key );
+            if ( is_wp_error( $res ) ) {
+                $results[ $pid ] = array( 'status' => 'error', 'message' => $res->get_error_message() );
+                continue;
+            }
+            $results[ $pid ] = $res;
+            $total_replacements += $res['replacements'] ?? 0;
+            if ( ! empty( $res['replacements'] ) ) {
+                $pages_modified++;
+            }
+        }
+
+        return rest_ensure_response( array(
+            'status'             => 'completed',
+            'dry_run'            => $dry_run,
+            'find'               => $find,
+            'replace'            => $replace,
+            'scope'              => $scope,
+            'results'            => $results,
+            'total_replacements' => $total_replacements,
+            'pages_modified'     => $pages_modified,
+        ) );
+    }
+
+    private function find_replace_on_post( $post_id, $find, $replace, $scope, $is_regex, $dry_run, $style_key = '' ) {
+        $data = $this->get_elementor_data( $post_id );
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+
+        $count = 0;
+        $do_text   = in_array( $scope, array( 'text', 'both' ), true );
+        $do_styles = in_array( $scope, array( 'styles', 'both' ), true );
+
+        $this->walk_elements_modify( $data, function( &$element ) use ( $find, $replace, $is_regex, $do_text, $do_styles, $style_key, &$count ) {
+            if ( ! isset( $element['settings'] ) || ! is_array( $element['settings'] ) ) {
+                return;
+            }
+
+            $widget_type = $element['widgetType'] ?? '';
+            $el_type     = $element['elType'] ?? '';
+
+            // Text scope: replace in known text fields
+            if ( $do_text && $el_type === 'widget' && $widget_type ) {
+                $text_fields = $this->extract_widget_texts( $widget_type, $element['settings'] );
+                foreach ( $text_fields as $key => $value ) {
+                    if ( ! is_string( $value ) ) {
+                        continue;
+                    }
+                    $new = $is_regex
+                        ? preg_replace( $find, $replace, $value, -1, $n )
+                        : str_replace( $find, $replace, $value, $n );
+                    if ( $n > 0 && $new !== null ) {
+                        $element['settings'][ $key ] = $new;
+                        $count += $n;
+                    }
+                }
+            }
+
+            // Styles scope: replace in scalar string settings (colors, font names, sizes, etc.)
+            if ( $do_styles ) {
+                foreach ( $element['settings'] as $key => $value ) {
+                    if ( ! is_string( $value ) ) {
+                        continue;
+                    }
+                    if ( $style_key !== '' && $key !== $style_key ) {
+                        continue;
+                    }
+                    $new = $is_regex
+                        ? preg_replace( $find, $replace, $value, -1, $n )
+                        : str_replace( $find, $replace, $value, $n );
+                    if ( $n > 0 && $new !== null ) {
+                        $element['settings'][ $key ] = $new;
+                        $count += $n;
+                    }
+                }
+            }
+        } );
+
+        if ( $count > 0 && ! $dry_run ) {
+            $this->create_snapshot( $post_id, 'Pre-find-replace backup' );
+            $saved = $this->save_elementor_data( $post_id, $data );
+            if ( is_wp_error( $saved ) ) {
+                return $saved;
+            }
+        }
+
+        return array(
+            'replacements' => $count,
+            'status'       => $count > 0 ? ( $dry_run ? 'would_update' : 'updated' ) : 'no_changes',
+        );
+    }
+
+    /* ──────────── Sync page structure to WPML translations ──────────── */
+
+    public function rest_sync_structure( $request ) {
+        $source_id     = intval( $request->get_param( 'source_id' ) );
+        $target_ids    = $request->get_param( 'target_ids' );
+        $preserve_text = $request->get_param( 'preserve_text' );
+        $preserve_text = ( $preserve_text === null ) ? true : (bool) $preserve_text;
+
+        if ( ! $source_id ) {
+            return new WP_Error( 'missing_params', 'source_id required', array( 'status' => 400 ) );
+        }
+
+        $source_data = $this->get_elementor_data( $source_id );
+        if ( is_wp_error( $source_data ) ) {
+            return $source_data;
+        }
+
+        if ( ! is_array( $target_ids ) || empty( $target_ids ) ) {
+            $translations = $this->get_translation_ids( $source_id );
+            $target_ids   = array_values( $translations );
+        }
+        $target_ids = array_map( 'intval', $target_ids );
+        $target_ids = array_filter( $target_ids, function( $tid ) use ( $source_id ) {
+            return $tid > 0 && $tid !== $source_id;
+        } );
+
+        if ( empty( $target_ids ) ) {
+            return new WP_Error( 'no_targets', 'No translation targets found', array( 'status' => 400 ) );
+        }
+
+        $results = array();
+        foreach ( $target_ids as $target_id ) {
+            $res = $this->sync_structure_to_target( $source_id, $target_id, $source_data, $preserve_text );
+            if ( is_wp_error( $res ) ) {
+                $results[ $target_id ] = array( 'status' => 'error', 'message' => $res->get_error_message() );
+                continue;
+            }
+            $results[ $target_id ] = $res;
+        }
+
+        return rest_ensure_response( array(
+            'status'    => 'completed',
+            'source_id' => $source_id,
+            'results'   => $results,
+        ) );
+    }
+
+    private function sync_structure_to_target( $source_id, $target_id, array $source_data, $preserve_text ) {
+        // Build text map from target BEFORE overwriting
+        $text_map = array();
+        if ( $preserve_text ) {
+            $target_data = $this->get_elementor_data( $target_id );
+            if ( ! is_wp_error( $target_data ) ) {
+                $text_map = $this->build_text_map_by_position( $target_data );
+            }
+        }
+
+        // Snapshot target
+        $snapshot = $this->create_snapshot( $target_id, 'Pre-structure-sync backup' );
+        $snapshot_id = is_wp_error( $snapshot ) ? '' : ( $snapshot['snapshot_id'] ?? '' );
+
+        // Deep clone source with new IDs
+        $cloned = $this->deep_clone_tree( $source_data );
+
+        // Re-apply target's texts at matching positions
+        $preserved = 0;
+        if ( $preserve_text && ! empty( $text_map ) ) {
+            $preserved = $this->apply_text_map_to_tree( $cloned, $text_map );
+        }
+
+        // Save
+        $saved = $this->save_elementor_data( $target_id, $cloned );
+        if ( is_wp_error( $saved ) ) {
+            return $saved;
+        }
+
+        LuwiPress_Logger::log( sprintf( 'Synced structure #%d -> #%d (%d texts preserved)', $source_id, $target_id, $preserved ), 'info' );
+
+        return array(
+            'status'           => 'synced',
+            'sections_synced'  => count( $cloned ),
+            'texts_preserved'  => $preserved,
+            'snapshot_id'      => $snapshot_id,
+        );
+    }
+
+    /* ──────────── CSS Vars (design tokens) ──────────── */
+
+    public function rest_get_css_vars( $request ) {
+        $kit_id = $this->get_kit_id();
+        if ( ! $kit_id ) {
+            return new WP_Error( 'no_kit', 'Elementor kit not found', array( 'status' => 404 ) );
+        }
+        $kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
+        if ( ! is_array( $kit_settings ) ) {
+            $kit_settings = array();
+        }
+
+        return rest_ensure_response( array(
+            'kit_id'                => $kit_id,
+            'system_colors'         => $kit_settings['system_colors']       ?? array(),
+            'custom_colors'         => $kit_settings['custom_colors']       ?? array(),
+            'system_typography'     => $kit_settings['system_typography']   ?? array(),
+            'custom_typography'     => $kit_settings['custom_typography']   ?? array(),
+            'default_generic_fonts' => $kit_settings['default_generic_fonts'] ?? '',
+        ) );
+    }
+
+    public function rest_set_css_vars( $request ) {
+        $kit_id = $this->get_kit_id();
+        if ( ! $kit_id ) {
+            return new WP_Error( 'no_kit', 'Elementor kit not found', array( 'status' => 404 ) );
+        }
+
+        $system_colors     = $request->get_param( 'system_colors' );
+        $custom_colors     = $request->get_param( 'custom_colors' );
+        $system_typography = $request->get_param( 'system_typography' );
+        $custom_typography = $request->get_param( 'custom_typography' );
+
+        if ( ! is_array( $system_colors ) && ! is_array( $custom_colors ) &&
+             ! is_array( $system_typography ) && ! is_array( $custom_typography ) ) {
+            return new WP_Error( 'missing_params', 'Provide at least one token array', array( 'status' => 400 ) );
+        }
+
+        $kit_settings = get_post_meta( $kit_id, '_elementor_page_settings', true );
+        if ( ! is_array( $kit_settings ) ) {
+            $kit_settings = array();
+        }
+
+        $this->create_snapshot( $kit_id, 'Pre-css-vars-update backup' );
+
+        $colors_updated = 0;
+        $colors_added   = 0;
+        $typo_updated   = 0;
+        $typo_added     = 0;
+
+        if ( is_array( $system_colors ) ) {
+            list( $kit_settings['system_colors'], $u, $a ) = $this->upsert_token_array( $kit_settings['system_colors'] ?? array(), $system_colors );
+            $colors_updated += $u;
+            $colors_added   += $a;
+        }
+        if ( is_array( $custom_colors ) ) {
+            // Ensure new custom colors get an _id
+            foreach ( $custom_colors as &$c ) {
+                if ( is_array( $c ) && empty( $c['_id'] ) ) {
+                    $c['_id'] = $this->generate_element_id();
+                }
+            }
+            unset( $c );
+            list( $kit_settings['custom_colors'], $u, $a ) = $this->upsert_token_array( $kit_settings['custom_colors'] ?? array(), $custom_colors );
+            $colors_updated += $u;
+            $colors_added   += $a;
+        }
+        if ( is_array( $system_typography ) ) {
+            list( $kit_settings['system_typography'], $u, $a ) = $this->upsert_token_array( $kit_settings['system_typography'] ?? array(), $system_typography );
+            $typo_updated += $u;
+            $typo_added   += $a;
+        }
+        if ( is_array( $custom_typography ) ) {
+            foreach ( $custom_typography as &$t ) {
+                if ( is_array( $t ) && empty( $t['_id'] ) ) {
+                    $t['_id'] = $this->generate_element_id();
+                }
+            }
+            unset( $t );
+            list( $kit_settings['custom_typography'], $u, $a ) = $this->upsert_token_array( $kit_settings['custom_typography'] ?? array(), $custom_typography );
+            $typo_updated += $u;
+            $typo_added   += $a;
+        }
+
+        update_post_meta( $kit_id, '_elementor_page_settings', $kit_settings );
+        $this->flush_elementor_css();
+
+        LuwiPress_Logger::log( sprintf( 'CSS vars updated: %d colors, %d typography', $colors_updated + $colors_added, $typo_updated + $typo_added ), 'info' );
+
+        return rest_ensure_response( array(
+            'status'             => 'updated',
+            'kit_id'             => $kit_id,
+            'colors_updated'     => $colors_updated,
+            'colors_added'       => $colors_added,
+            'typography_updated' => $typo_updated,
+            'typography_added'   => $typo_added,
+        ) );
+    }
+
+    /* ──────────── Templates ──────────── */
+
+    public function rest_list_templates( $request ) {
+        $type     = sanitize_text_field( $request->get_param( 'type' ) ?? '' );
+        $per_page = min( 100, max( 1, intval( $request->get_param( 'per_page' ) ?? 50 ) ) );
+        $page     = max( 1, intval( $request->get_param( 'page' ) ?? 1 ) );
+        $search   = sanitize_text_field( $request->get_param( 'search' ) ?? '' );
+
+        $args = array(
+            'post_type'      => 'elementor_library',
+            'post_status'    => 'publish',
+            'posts_per_page' => $per_page,
+            'paged'          => $page,
+            'orderby'        => 'modified',
+            'order'          => 'DESC',
+        );
+        if ( $type ) {
+            $args['tax_query'] = array( array(
+                'taxonomy' => 'elementor_library_type',
+                'field'    => 'slug',
+                'terms'    => $type,
+            ) );
+        }
+        if ( $search ) {
+            $args['s'] = $search;
+        }
+
+        $query = new WP_Query( $args );
+        $templates = array();
+
+        foreach ( $query->posts as $post ) {
+            $template_type = get_post_meta( $post->ID, '_elementor_template_type', true );
+            $thumbnail     = get_the_post_thumbnail_url( $post->ID, 'medium' ) ?: '';
+            $has_data      = ! empty( get_post_meta( $post->ID, '_elementor_data', true ) );
+
+            $templates[] = array(
+                'id'                 => $post->ID,
+                'title'              => $post->post_title,
+                'type'               => $template_type ?: 'page',
+                'date_modified'      => mysql2date( 'c', $post->post_modified ),
+                'thumbnail'          => $thumbnail,
+                'has_elementor_data' => $has_data,
+            );
+        }
+
+        return rest_ensure_response( array(
+            'templates'    => $templates,
+            'total'        => intval( $query->found_posts ),
+            'pages'        => intval( $query->max_num_pages ),
+            'current_page' => $page,
+        ) );
+    }
+
+    public function rest_apply_template( $request ) {
+        $post_id     = intval( $request->get_param( 'post_id' ) );
+        $template_id = intval( $request->get_param( 'template_id' ) );
+        $position    = intval( $request->get_param( 'position' ) ?? -1 );
+        $replace_all = (bool) $request->get_param( 'replace_all' );
+
+        if ( ! $post_id || ! $template_id ) {
+            return new WP_Error( 'missing_params', 'post_id and template_id required', array( 'status' => 400 ) );
+        }
+
+        $result = $this->apply_template( $post_id, $template_id, $position, $replace_all );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+        return rest_ensure_response( $result );
+    }
+
+    public function apply_template( $post_id, $template_id, $position = -1, $replace_all = false ) {
+        $target_post = get_post( $post_id );
+        if ( ! $target_post ) {
+            return new WP_Error( 'not_found', 'Target post not found', array( 'status' => 404 ) );
+        }
+
+        $template_post = get_post( $template_id );
+        if ( ! $template_post || $template_post->post_type !== 'elementor_library' ) {
+            return new WP_Error( 'template_not_found', 'Template not found', array( 'status' => 404 ) );
+        }
+
+        $template_data = $this->get_elementor_data( $template_id );
+        if ( is_wp_error( $template_data ) ) {
+            return new WP_Error( 'template_empty', 'Template has no Elementor data', array( 'status' => 404 ) );
+        }
+
+        // Read existing target data (may be empty)
+        $raw = get_post_meta( $post_id, '_elementor_data', true );
+        $target_data = is_string( $raw ) && $raw !== '' ? json_decode( $raw, true ) : array();
+        if ( ! is_array( $target_data ) ) {
+            $target_data = array();
+        }
+
+        $snapshot = $this->create_snapshot( $post_id, 'Pre-apply-template backup' );
+        $snapshot_id = is_wp_error( $snapshot ) ? '' : ( $snapshot['snapshot_id'] ?? '' );
+
+        // Clone template with fresh IDs
+        $cloned = $this->deep_clone_tree( $template_data );
+
+        if ( $replace_all ) {
+            $new_data = $cloned;
+        } else {
+            if ( $position < 0 || $position >= count( $target_data ) ) {
+                $new_data = array_merge( $target_data, $cloned );
+            } else {
+                $new_data = $target_data;
+                array_splice( $new_data, $position, 0, $cloned );
+            }
+        }
+
+        $saved = $this->save_elementor_data( $post_id, $new_data );
+        if ( is_wp_error( $saved ) ) {
+            return $saved;
+        }
+
+        // Ensure edit mode is builder
+        update_post_meta( $post_id, '_elementor_edit_mode', 'builder' );
+
+        LuwiPress_Logger::log( sprintf( 'Applied template #%d -> post #%d at position %d', $template_id, $post_id, $position ), 'info' );
+
+        return array(
+            'status'            => 'applied',
+            'post_id'           => $post_id,
+            'template_id'       => $template_id,
+            'template_title'    => $template_post->post_title,
+            'elements_inserted' => count( $cloned ),
+            'position'          => $position,
+            'total_sections'    => count( $new_data ),
+            'snapshot_id'       => $snapshot_id,
+        );
     }
 
     /* ──────────── Page-level Custom CSS ──────────── */
@@ -2138,14 +2898,10 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
 
             LuwiPress_Logger::log( 'Elementor WPML translation updated: #' . $translated_id, 'info' );
         } else {
-            // Create new translation post (title will be updated after AI translation)
-            $translated_id = wp_insert_post( array(
-                'post_title'   => $source_post->post_title,
-                'post_name'    => sanitize_title( $source_post->post_title ) . '-' . $language,
-                'post_content' => '',
-                'post_type'    => $post_type,
-                'post_status'  => $source_post->post_status,
-                'post_author'  => $source_post->post_author,
+            // ── Create new translation post via centralized method ──
+            $translation = LuwiPress_Translation::get_instance();
+            $translated_id = $translation->create_translation_post( $source_id, $language, array(
+                'title' => $source_post->post_title,
             ) );
 
             if ( is_wp_error( $translated_id ) ) {
@@ -2168,46 +2924,6 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
             if ( $page_settings ) {
                 update_post_meta( $translated_id, '_elementor_page_settings', $page_settings );
             }
-
-            // Register with WPML
-            do_action( 'wpml_set_element_language_details', array(
-                'element_id'           => $translated_id,
-                'element_type'         => $element_type,
-                'trid'                 => $trid,
-                'language_code'        => $language,
-                'source_language_code' => $default_lang,
-            ) );
-
-            // SQL fallback verification (same pattern as LuwiPress_Translation)
-            global $wpdb;
-            $linked = $wpdb->get_var( $wpdb->prepare(
-                "SELECT translation_id FROM {$wpdb->prefix}icl_translations
-                 WHERE element_id = %d AND element_type = %s",
-                $translated_id,
-                $element_type
-            ) );
-
-            if ( ! $linked ) {
-                $wpdb->insert(
-                    $wpdb->prefix . 'icl_translations',
-                    array(
-                        'element_type'         => $element_type,
-                        'element_id'           => $translated_id,
-                        'trid'                 => $trid,
-                        'language_code'        => $language,
-                        'source_language_code' => $default_lang,
-                    ),
-                    array( '%s', '%d', '%d', '%s', '%s' )
-                );
-
-                LuwiPress_Logger::log(
-                    sprintf( 'WPML SQL fallback: Elementor post #%d registered (trid=%d, lang=%s)', $translated_id, $trid, $language ),
-                    'warning'
-                );
-            }
-
-            // Force publish
-            wp_update_post( array( 'ID' => $translated_id, 'post_status' => 'publish' ) );
 
             $this->regenerate_css( $translated_id );
 
@@ -3123,7 +3839,7 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
      *
      * @param int    $post_id Post ID.
      * @param string $label   Optional label/reason for the snapshot.
-     * @return array Snapshot info.
+     * @return array|WP_Error Snapshot info or error.
      */
     public function create_snapshot( $post_id, $label = '' ) {
         $raw = get_post_meta( $post_id, '_elementor_data', true );
@@ -3604,6 +4320,171 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
      */
     private function generate_element_id() {
         return substr( md5( wp_generate_uuid4() ), 0, 7 );
+    }
+
+    /**
+     * Deep clone the entire top-level _elementor_data array with fresh IDs.
+     *
+     * @param array $data Top-level elementor data.
+     * @return array Cloned data with new element IDs throughout.
+     */
+    private function deep_clone_tree( array $data ) {
+        $cloned = array();
+        foreach ( $data as $element ) {
+            if ( is_array( $element ) ) {
+                $cloned[] = $this->deep_clone_element( $element );
+            }
+        }
+        return $cloned;
+    }
+
+    /**
+     * Build a map of position_path => widget texts from an Elementor tree.
+     * Position paths look like "/0/0/2" — section index / column index / widget index.
+     *
+     * @param array  $elements Elementor elements array.
+     * @param string $prefix   Parent path prefix.
+     * @return array Map of path => [widget_type, texts].
+     */
+    private function build_text_map_by_position( array $elements, $prefix = '' ) {
+        $map = array();
+        foreach ( $elements as $idx => $element ) {
+            if ( ! is_array( $element ) ) {
+                continue;
+            }
+            $path = $prefix . '/' . $idx;
+            $el_type   = $element['elType'] ?? '';
+            $widget_type = $element['widgetType'] ?? '';
+
+            if ( $el_type === 'widget' && $widget_type ) {
+                $texts = $this->extract_widget_texts( $widget_type, $element['settings'] ?? array() );
+                if ( ! empty( $texts ) ) {
+                    $map[ $path ] = array(
+                        'widget_type' => $widget_type,
+                        'texts'       => $texts,
+                    );
+                }
+            }
+
+            if ( ! empty( $element['elements'] ) && is_array( $element['elements'] ) ) {
+                $child_map = $this->build_text_map_by_position( $element['elements'], $path );
+                $map = array_merge( $map, $child_map );
+            }
+        }
+        return $map;
+    }
+
+    /**
+     * Apply a position-based text map back onto a cloned tree.
+     * Only overrides texts where widget_type matches at the same position.
+     *
+     * @param array  $elements Tree to modify (by reference).
+     * @param array  $text_map Position path => [widget_type, texts].
+     * @param string $prefix   Parent path prefix.
+     * @return int Count of text fields preserved.
+     */
+    private function apply_text_map_to_tree( array &$elements, array $text_map, $prefix = '' ) {
+        $count = 0;
+        foreach ( $elements as $idx => &$element ) {
+            if ( ! is_array( $element ) ) {
+                continue;
+            }
+            $path = $prefix . '/' . $idx;
+            $el_type   = $element['elType'] ?? '';
+            $widget_type = $element['widgetType'] ?? '';
+
+            if ( $el_type === 'widget' && $widget_type && isset( $text_map[ $path ] ) ) {
+                $saved = $text_map[ $path ];
+                if ( ( $saved['widget_type'] ?? '' ) === $widget_type && ! empty( $saved['texts'] ) ) {
+                    if ( ! isset( $element['settings'] ) || ! is_array( $element['settings'] ) ) {
+                        $element['settings'] = array();
+                    }
+                    foreach ( $saved['texts'] as $key => $value ) {
+                        $element['settings'][ $key ] = $value;
+                        $count++;
+                    }
+                }
+            }
+
+            if ( ! empty( $element['elements'] ) && is_array( $element['elements'] ) ) {
+                $count += $this->apply_text_map_to_tree( $element['elements'], $text_map, $path );
+            }
+        }
+        unset( $element );
+        return $count;
+    }
+
+    /**
+     * Resolve target post IDs from either explicit IDs or post_type query.
+     *
+     * @param array|null $post_ids  Explicit post IDs.
+     * @param string     $post_type Post type to query (when post_ids empty).
+     * @param int        $limit     Max posts when querying by type.
+     * @return array|WP_Error Array of post IDs or error.
+     */
+    private function resolve_post_ids( $post_ids, $post_type = '', $limit = 100 ) {
+        if ( is_array( $post_ids ) && ! empty( $post_ids ) ) {
+            return array_map( 'intval', $post_ids );
+        }
+
+        if ( empty( $post_type ) ) {
+            return new WP_Error( 'missing_params', 'Either post_ids or post_type required', array( 'status' => 400 ) );
+        }
+
+        $query = new WP_Query( array(
+            'post_type'      => sanitize_key( $post_type ),
+            'post_status'    => 'publish',
+            'posts_per_page' => $limit,
+            'fields'         => 'ids',
+            'meta_query'     => array(
+                array(
+                    'key'     => '_elementor_data',
+                    'compare' => 'EXISTS',
+                ),
+            ),
+            'no_found_rows'  => true,
+        ) );
+
+        if ( empty( $query->posts ) ) {
+            return new WP_Error( 'no_elementor_pages', 'No Elementor pages found for this post type', array( 'status' => 404 ) );
+        }
+
+        return array_map( 'intval', $query->posts );
+    }
+
+    /**
+     * Upsert entries into a token array (for css-vars).
+     *
+     * @param array  $existing Existing token array.
+     * @param array  $updates  Updates to apply.
+     * @param string $key_field Field to match by (e.g., '_id').
+     * @return array [$new_array, $updated_count, $added_count]
+     */
+    private function upsert_token_array( array $existing, array $updates, $key_field = '_id' ) {
+        $updated = 0;
+        $added   = 0;
+
+        foreach ( $updates as $update ) {
+            if ( ! is_array( $update ) || empty( $update[ $key_field ] ) ) {
+                continue;
+            }
+            $id = $update[ $key_field ];
+            $found = false;
+            foreach ( $existing as $i => $item ) {
+                if ( ( $item[ $key_field ] ?? '' ) === $id ) {
+                    $existing[ $i ] = array_merge( $item, $update );
+                    $updated++;
+                    $found = true;
+                    break;
+                }
+            }
+            if ( ! $found ) {
+                $existing[] = $update;
+                $added++;
+            }
+        }
+
+        return array( $existing, $updated, $added );
     }
 
     /* ──────────────────── Static Helpers ─────────────────────────────── */

@@ -146,14 +146,19 @@ class LuwiPress_AI_Content {
             return $result;
         }
 
-        // Mark product as "enrichment in progress"
-        update_post_meta($product_id, '_luwipress_enrich_status', 'processing');
-        update_post_meta($product_id, '_luwipress_enrich_requested', current_time('mysql'));
-
         LuwiPress_Logger::log('Product enrichment triggered', 'info', array(
             'product_id' => $product_id,
             'product_title' => $product->get_name(),
         ));
+
+        // Local mode returns the callback result directly (synchronous)
+        if ( is_array( $result ) || $result instanceof WP_REST_Response ) {
+            return $result;
+        }
+
+        // Webhook mode: result is just success indicator, actual data comes via callback
+        update_post_meta($product_id, '_luwipress_enrich_status', 'processing');
+        update_post_meta($product_id, '_luwipress_enrich_requested', current_time('mysql'));
 
         return array(
             'success'    => true,

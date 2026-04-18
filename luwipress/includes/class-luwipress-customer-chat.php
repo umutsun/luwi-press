@@ -845,12 +845,18 @@ class LuwiPress_Customer_Chat {
 		$store_name = get_bloginfo( 'name' );
 		$store_url  = get_site_url();
 		$currency   = function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : '';
+		$tone       = get_option( 'luwipress_chat_tone', 'friendly' );
+		$custom_instructions = get_option( 'luwipress_chat_custom_instructions', '' );
 
 		$prompt = "You are the customer support assistant for {$store_name}.\n";
 		$prompt .= "Store: {$store_url}\n";
 		if ( $currency ) {
 			$prompt .= "Currency: {$currency}\n";
 		}
+
+		// Tone / personality
+		$tone_instructions = $this->get_tone_instructions( $tone );
+		$prompt .= "\nPERSONALITY: {$tone_instructions}\n";
 
 		// Store overview
 		if ( ! empty( $context['store_summary'] ) ) {
@@ -902,7 +908,6 @@ class LuwiPress_Customer_Chat {
 		}
 
 		$prompt .= "RULES:\n";
-		$prompt .= "- Be helpful, concise, and friendly\n";
 		$prompt .= "- Use ONLY the product information provided above — never invent products or prices\n";
 		$prompt .= "- When mentioning products, always include their link\n";
 		$prompt .= "- If asked about categories or browsing, suggest relevant categories from the list\n";
@@ -910,7 +915,30 @@ class LuwiPress_Customer_Chat {
 		$prompt .= "- Keep responses under 150 words\n";
 		$prompt .= "- Respond in the same language the customer uses\n";
 
+		if ( ! empty( $custom_instructions ) ) {
+			$prompt .= "\nADDITIONAL INSTRUCTIONS:\n{$custom_instructions}\n";
+		}
+
 		return $prompt;
+	}
+
+	/**
+	 * Get tone instructions for the system prompt.
+	 *
+	 * @param string $tone Tone key from settings.
+	 * @return string Tone instruction text.
+	 */
+	private function get_tone_instructions( $tone ) {
+		$tones = array(
+			'friendly'     => 'You are warm, approachable, and enthusiastic. Use a conversational tone with occasional emojis. Make customers feel welcome and valued.',
+			'professional' => 'You are polite, formal, and precise. Use complete sentences and proper grammar. Maintain a respectful business tone throughout.',
+			'casual'       => 'You are laid-back, fun, and relatable. Keep it light and use casual language. Feel free to use humor when appropriate.',
+			'expert'       => 'You are a knowledgeable specialist. Share insights about instrument craftsmanship, materials, and playing techniques. Be authoritative but approachable.',
+			'luxury'       => 'You are refined and elegant. Emphasize quality, craftsmanship, and exclusivity. Use sophisticated language befitting a premium shopping experience.',
+			'custom'       => get_option( 'luwipress_chat_custom_instructions', '' ),
+		);
+
+		return $tones[ $tone ] ?? $tones['friendly'];
 	}
 
 	/**

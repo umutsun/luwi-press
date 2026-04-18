@@ -34,6 +34,21 @@ if ( $lint_errors > 0 ) {
 }
 echo "  All PHP files OK.\n\n";
 
+// ── PHPStan static analysis (if vendor/ exists) ──
+$phpstan = __DIR__ . '/vendor/bin/phpstan';
+if ( file_exists( $phpstan ) ) {
+    echo "Running PHPStan...\n";
+    $stan_out = []; $stan_code = 0;
+    exec( 'php -d memory_limit=2G ' . escapeshellarg( $phpstan ) . ' analyse --no-progress --memory-limit=2G 2>&1', $stan_out, $stan_code );
+    if ( $stan_code !== 0 ) {
+        echo implode( "\n", $stan_out ) . "\n";
+        die( "\nBLOCKED: PHPStan found new errors. Fix before building.\n" );
+    }
+    echo "  PHPStan OK.\n\n";
+} else {
+    echo "Skipping PHPStan (run 'composer install' to enable).\n\n";
+}
+
 if ( ! is_dir( dirname( $dst ) ) ) {
     mkdir( dirname( $dst ), 0755, true );
 }

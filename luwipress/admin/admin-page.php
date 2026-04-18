@@ -94,6 +94,30 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			$pills[] = array( 'ok', 'dashicons-performance', ucwords( str_replace( '-', ' ', $cache['plugin'] ) ) );
 		}
 
+		// Analytics (GTM / GA4)
+		$analytics = $environment['analytics'] ?? array();
+		if ( ! empty( $analytics['plugin'] ) && 'none' !== $analytics['plugin'] ) {
+			$pills[] = array( 'ok', 'dashicons-chart-bar', ucwords( str_replace( '-', ' ', $analytics['plugin'] ) ) );
+		}
+
+		// Google Ads
+		$gads = $environment['google_ads'] ?? array();
+		if ( ! empty( $gads['plugin'] ) && 'none' !== $gads['plugin'] ) {
+			$pills[] = array( 'ok', 'dashicons-megaphone', ucwords( str_replace( '-', ' ', $gads['plugin'] ) ) );
+		}
+
+		// Meta Ads (Facebook/Instagram Pixel)
+		$meta = $environment['meta_ads'] ?? array();
+		if ( ! empty( $meta['plugin'] ) && 'none' !== $meta['plugin'] ) {
+			$pills[] = array( 'ok', 'dashicons-share', ucwords( str_replace( '-', ' ', $meta['plugin'] ) ) );
+		}
+
+		// Product Feed
+		$feed = $environment['product_feed'] ?? array();
+		if ( ! empty( $feed['plugin'] ) && 'none' !== $feed['plugin'] ) {
+			$pills[] = array( 'ok', 'dashicons-rss', ucwords( str_replace( '-', ' ', $feed['plugin'] ) ) );
+		}
+
 		foreach ( $pills as $p ) :
 			$cls = 'ok' === $p[0] ? 'pill-ok' : ( 'err' === $p[0] ? 'pill-err' : 'pill-neutral' );
 		?>
@@ -107,7 +131,7 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 	<!-- ═══ HERO STATS (AJAX loaded with animated counters) ═══ -->
 	<div class="lp-hero" id="lp-hero">
 		<div class="lp-hero-card" data-key="products">
-			<div class="lp-hero-icon" style="background:#6366f1;"><span class="dashicons dashicons-cart"></span></div>
+			<div class="lp-hero-icon lp-hero-icon--primary"><span class="dashicons dashicons-cart"></span></div>
 			<div class="lp-hero-body">
 				<span class="lp-hero-num lp-skeleton">—</span>
 				<span class="lp-hero-label"><?php esc_html_e( 'Products', 'luwipress' ); ?></span>
@@ -115,7 +139,7 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			<span class="lp-hero-trend" data-key="products_trend"></span>
 		</div>
 		<div class="lp-hero-card" data-key="revenue">
-			<div class="lp-hero-icon" style="background:#16a34a;"><span class="dashicons dashicons-chart-line"></span></div>
+			<div class="lp-hero-icon lp-hero-icon--success"><span class="dashicons dashicons-chart-line"></span></div>
 			<div class="lp-hero-body">
 				<span class="lp-hero-num lp-skeleton">—</span>
 				<span class="lp-hero-label"><?php esc_html_e( 'Revenue (30d)', 'luwipress' ); ?></span>
@@ -123,7 +147,7 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			<span class="lp-hero-trend" data-key="revenue_trend"></span>
 		</div>
 		<div class="lp-hero-card" data-key="ai_calls">
-			<div class="lp-hero-icon" style="background:#f59e0b;"><span class="dashicons dashicons-admin-generic"></span></div>
+			<div class="lp-hero-icon lp-hero-icon--warning"><span class="dashicons dashicons-admin-generic"></span></div>
 			<div class="lp-hero-body">
 				<span class="lp-hero-num lp-skeleton">—</span>
 				<span class="lp-hero-label"><?php esc_html_e( 'AI Calls (today)', 'luwipress' ); ?></span>
@@ -131,7 +155,7 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			<span class="lp-hero-trend" data-key="ai_calls_trend"></span>
 		</div>
 		<div class="lp-hero-card" data-key="budget">
-			<div class="lp-hero-icon" style="background:#dc2626;"><span class="dashicons dashicons-shield"></span></div>
+			<div class="lp-hero-icon lp-hero-icon--error"><span class="dashicons dashicons-shield"></span></div>
 			<div class="lp-hero-body">
 				<span class="lp-hero-num lp-skeleton">—</span>
 				<span class="lp-hero-label"><?php esc_html_e( 'Budget Used', 'luwipress' ); ?></span>

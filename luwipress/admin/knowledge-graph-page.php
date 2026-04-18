@@ -35,11 +35,15 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
 					<?php esc_html_e( 'Refresh', 'luwipress' ); ?>
 				</button>
-				<div class="kg-filter-group">
-					<button type="button" class="kg-filter active" data-filter="all"><?php esc_html_e( 'All', 'luwipress' ); ?></button>
-					<button type="button" class="kg-filter" data-filter="product"><?php esc_html_e( 'Products', 'luwipress' ); ?></button>
-					<button type="button" class="kg-filter" data-filter="category"><?php esc_html_e( 'Categories', 'luwipress' ); ?></button>
-					<button type="button" class="kg-filter" data-filter="language"><?php esc_html_e( 'Languages', 'luwipress' ); ?></button>
+				<div class="kg-view-switch">
+					<button type="button" class="kg-view-btn active" data-view="product">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+						<?php esc_html_e( 'Products', 'luwipress' ); ?>
+					</button>
+					<button type="button" class="kg-view-btn" data-view="post">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+						<?php esc_html_e( 'Posts', 'luwipress' ); ?>
+					</button>
 				</div>
 			</div>
 		</div>
@@ -50,6 +54,10 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 		<div class="kg-stat kg-stat-skeleton">
 			<div class="kg-stat-value" data-counter="total_products">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Products', 'luwipress' ); ?></div>
+		</div>
+		<div class="kg-stat kg-stat-skeleton">
+			<div class="kg-stat-value" data-counter="total_posts">—</div>
+			<div class="kg-stat-label"><?php esc_html_e( 'Posts', 'luwipress' ); ?></div>
 		</div>
 		<div class="kg-stat kg-stat-skeleton">
 			<div class="kg-stat-value" data-counter="seo_coverage">—</div>
@@ -87,6 +95,7 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 		<!-- Legend -->
 		<div class="kg-legend">
 			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-primary)"></span> Product</div>
+			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:#8b5cf6"></span> Post</div>
 			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-warning)"></span> Category</div>
 			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-blue)"></span> Language</div>
 			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-success)"></span> SEO Complete</div>
@@ -147,7 +156,7 @@ function fetchGraph(cb) {
 		headers['Authorization'] = 'Bearer ' + CONFIG.apiToken;
 	}
 
-	fetch(CONFIG.apiUrl + '?sections=products,categories,translation,store,opportunities,design_audit', {
+	fetch(CONFIG.apiUrl + '?sections=products,categories,translation,store,opportunities,design_audit,posts', {
 		headers: headers,
 		credentials: 'same-origin'
 	})
@@ -162,8 +171,12 @@ function fetchGraph(cb) {
 	});
 }
 
+// ── Current view state ──
+var _kgCurrentView = 'product'; // 'product' or 'post'
+
 // ── Build D3 Graph ──
-function buildGraph(data) {
+function buildGraph(data, viewFilter) {
+	viewFilter = viewFilter || _kgCurrentView || 'product';
 	var container = document.getElementById('kg-graph-container');
 	var svg = d3.select('#kg-svg');
 	var width = container.clientWidth;
@@ -190,7 +203,39 @@ function buildGraph(data) {
 	var productNodes  = (data.nodes && data.nodes.products)  ? data.nodes.products  : (data.product_nodes  || []);
 	var categoryNodes = (data.nodes && data.nodes.categories) ? data.nodes.categories : (data.category_nodes || []);
 	var languageNodes = (data.nodes && data.nodes.languages) ? data.nodes.languages : (data.language_nodes || []);
+	var postNodes     = (data.nodes && data.nodes.posts) ? data.nodes.posts : [];
 	var graphEdges    = data.edges || [];
+
+	// Apply view filter — only show one content type at a time
+	if (viewFilter === 'product') {
+		postNodes = [];
+	} else if (viewFilter === 'post') {
+		productNodes = [];
+		categoryNodes = [];
+		// Build post-specific language nodes from post translation data
+		var postLangStats = {};
+		postNodes.forEach(function(p) {
+			var trans = p.translation || {};
+			Object.keys(trans).forEach(function(lang) {
+				if (!postLangStats[lang]) postLangStats[lang] = { translated: 0, missing: 0 };
+				if (trans[lang] === 'completed') postLangStats[lang].translated++;
+				else postLangStats[lang].missing++;
+			});
+		});
+		// Replace language nodes with post-specific ones
+		languageNodes = Object.keys(postLangStats).map(function(lang) {
+			var s = postLangStats[lang];
+			var total = s.translated + s.missing;
+			return {
+				id: 'lang_' + lang,
+				code: lang,
+				name: lang.toUpperCase(),
+				coverage_pct: total > 0 ? Math.round(s.translated / total * 100) : 0,
+				products_translated: s.translated,
+				products_missing: s.missing
+			};
+		});
+	}
 
 	// Products
 	(productNodes).forEach(function(p) {
@@ -239,6 +284,59 @@ function buildGraph(data) {
 		nodeMap[node.id] = node;
 	});
 
+	// Posts
+	(postNodes).forEach(function(p) {
+		var score = 0;
+		if (!p.seo || !p.seo.has_title) score += 15;
+		if (!p.seo || !p.seo.has_description) score += 15;
+		if (!p.has_featured_image) score += 10;
+		if (p.is_stale) score += 10;
+		if (p.word_count < 300) score += 10;
+		// Add translation score
+		var trans = p.translation || {};
+		var missingLangs = [];
+		Object.keys(trans).forEach(function(l) { if (trans[l] !== 'completed') { score += 5; missingLangs.push(l); } });
+
+		var node = {
+			id: 'post:' + p.id,
+			type: 'post',
+			label: p.title,
+			radius: 5 + Math.min(score / 5, 10),
+			score: score,
+			seo: p.seo || {},
+			translation: trans,
+			data: p
+		};
+		nodes.push(node);
+		nodeMap[node.id] = node;
+
+		// Link to post categories
+		var catNameMap = {};
+		(p.category_names || []).forEach(function(c) { catNameMap[c.id] = c.name; });
+		(p.categories || []).forEach(function(catId) {
+			var catKey = 'post_category:' + catId;
+			if (!nodeMap[catKey]) {
+				var catName = catNameMap[catId] || ('Category #' + catId);
+				var catNode = { id: catKey, type: 'category', label: catName, radius: 12, productCount: 0, data: { name: catName, id: catId } };
+				nodes.push(catNode);
+				nodeMap[catKey] = catNode;
+			}
+			edges.push({ source: node.id, target: catKey, type: 'belongs_to' });
+		});
+
+		// Link to language nodes (translation edges)
+		Object.keys(trans).forEach(function(lang) {
+			var langKey = 'lang_' + lang;
+			if (nodeMap[langKey]) {
+				edges.push({
+					source: node.id,
+					target: langKey,
+					type: trans[lang] === 'completed' ? 'translated_to' : 'missing_translation'
+				});
+			}
+		});
+	});
+
 	// Edges
 	(graphEdges).forEach(function(e) {
 		if (nodeMap[e.source] && nodeMap[e.target]) {
@@ -254,6 +352,11 @@ function buildGraph(data) {
 	function nodeColor(d) {
 		if (d.type === 'category') return '#f59e0b';
 		if (d.type === 'language') return '#2563eb';
+		if (d.type === 'post') {
+			if (d.seo && d.seo.has_title && d.seo.has_description) return '#7c3aed';
+			if (d.score > 20) return '#dc2626';
+			return '#8b5cf6';
+		}
 		if (d.type === 'product') {
 			if (d.seo && d.seo.has_title && d.seo.has_description && d.enrichment && d.enrichment.status === 'completed') return '#16a34a';
 			if (d.score > 30) return '#dc2626';
@@ -269,21 +372,24 @@ function buildGraph(data) {
 		return '#e5e7eb60';
 	}
 
-	// Force simulation
+	// ── Force simulation ──
 	var simulation = d3.forceSimulation(nodes)
 		.force('link', d3.forceLink(edges).id(function(d){ return d.id; }).distance(function(d){
-			if (d.type === 'belongs_to') return 60;
-			if (d.type === 'translated_to' || d.type === 'missing_translation') return 120;
-			return 80;
+			if (d.type === 'belongs_to') return 50;
+			if (d.type === 'translated_to' || d.type === 'missing_translation') return 90;
+			return 60;
+		}).strength(function(d){
+			if (d.type === 'belongs_to') return 0.6;
+			return 0.3;
 		}))
 		.force('charge', d3.forceManyBody().strength(function(d){
-			if (d.type === 'category') return -300;
-			if (d.type === 'language') return -500;
-			return -80;
+			if (d.type === 'category') return -250;
+			if (d.type === 'language') return -400;
+			return -60;
 		}))
 		.force('center', d3.forceCenter(width / 2, height / 2))
-		.force('collision', d3.forceCollide().radius(function(d){ return d.radius + 4; }))
-		.alphaDecay(0.02);
+		.force('collision', d3.forceCollide().radius(function(d){ return d.radius + 3; }).strength(0.7))
+		.alphaDecay(0.025);
 
 	// Zoom
 	var g = svg.append('g');
@@ -470,24 +576,7 @@ function buildGraph(data) {
 		svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
 	};
 
-	// Filter buttons
-	document.querySelectorAll('.kg-filter').forEach(function(btn) {
-		btn.addEventListener('click', function() {
-			document.querySelectorAll('.kg-filter').forEach(function(b){ b.classList.remove('active'); });
-			btn.classList.add('active');
-			var filterType = btn.dataset.filter;
-
-			node.transition().duration(300)
-				.style('opacity', function(d) {
-					return (filterType === 'all' || d.type === filterType) ? 1 : 0.08;
-				});
-			link.transition().duration(300)
-				.style('opacity', function(d) {
-					if (filterType === 'all') return 1;
-					return (d.source.type === filterType || d.target.type === filterType) ? 0.6 : 0.05;
-				});
-		});
-	});
+	// View switch is handled outside buildGraph — see initViewSwitch()
 
 	// Store references for resize
 	window._kgSimulation = simulation;
@@ -608,6 +697,84 @@ function showDetailPanel(d) {
 		if (p.permalink) h += '<a href="' + p.permalink + '" target="_blank" class="kg-btn kg-btn-outline">View</a>';
 		h += '</div>';
 
+	} else if (d.type === 'post') {
+		var p = d.data;
+		var trans = p.translation || {};
+		var langKeys = Object.keys(trans);
+
+		// Health calc — include translations
+		var total = 0, done = 0;
+		total += 2; done += (p.seo && p.seo.has_title ? 1 : 0) + (p.seo && p.seo.has_description ? 1 : 0);
+		total += 1; done += (p.has_featured_image ? 1 : 0);
+		total += 1; done += (p.word_count >= 300 ? 1 : 0);
+		total += 1; done += (!p.is_stale ? 1 : 0);
+		total += langKeys.length;
+		langKeys.forEach(function(l) { if (trans[l] === 'completed') done++; });
+		var healthPct = total > 0 ? Math.round(done / total * 100) : 0;
+		var healthCls = healthPct >= 80 ? 'good' : healthPct >= 40 ? 'warn' : 'bad';
+
+		h += '<div class="kg-p-type-badge" style="background:#8b5cf6;color:#fff">Blog Post</div>';
+		h += '<h3 class="kg-p-name">' + escHtml(p.title) + '</h3>';
+		h += '<div class="kg-p-meta">#' + p.id + ' &middot; ' + (p.author_name || '') + ' &middot; ~' + (p.word_count || 0) + ' words</div>';
+
+		h += '<div class="kg-p-health kg-h-' + healthCls + '">';
+		h += '<div class="kg-p-health-bar" style="width:' + healthPct + '%"></div>';
+		h += '<span class="kg-p-health-label">Health ' + healthPct + '%</span></div>';
+
+		h += '<div class="kg-p-chips">';
+		h += statusChip(p.seo && p.seo.has_title, 'Title');
+		h += statusChip(p.seo && p.seo.has_description, 'Meta Desc');
+		h += statusChip(p.seo && p.seo.has_focus_kw, 'Keyword');
+		h += statusChip(p.has_featured_image, 'Image');
+		h += statusChip(p.word_count >= 300, 'Content');
+		h += statusChip(!p.is_stale, 'Fresh');
+		langKeys.forEach(function(lang) {
+			h += statusChip(trans[lang] === 'completed', lang.toUpperCase());
+		});
+		h += '</div>';
+
+		// Recommendations
+		var recs = [];
+		if (!p.seo || !p.seo.has_title || !p.seo.has_description) {
+			var miss = [];
+			if (!p.seo || !p.seo.has_title) miss.push('title');
+			if (!p.seo || !p.seo.has_description) miss.push('description');
+			recs.push({ p: 'high', l: 'Add SEO Meta', d: 'Missing ' + miss.join(' & ') });
+		}
+		var missingPostLangs = [];
+		langKeys.forEach(function(l) { if (trans[l] !== 'completed') missingPostLangs.push(l); });
+		if (missingPostLangs.length) {
+			recs.push({a:'translate', l:'Translate ' + missingPostLangs.map(function(x){return x.toUpperCase();}).join(', '), d:missingPostLangs.length + ' language' + (missingPostLangs.length>1?'s':''), p:'medium', langs:missingPostLangs.join(',')});
+		}
+		if (!p.has_featured_image) recs.push({ p: 'medium', l: 'Add Featured Image', d: 'Improves social sharing & SEO' });
+		if (p.word_count < 300) recs.push({ p: 'medium', l: 'Expand Content', d: 'Only ~' + p.word_count + ' words — aim for 600+' });
+		if (p.is_stale) recs.push({ p: 'low', l: 'Refresh Content', d: 'Last updated ' + p.days_since_modified + ' days ago' });
+
+		var pri = {high:0,medium:1,low:2};
+		recs.sort(function(a,b){ return (pri[a.p]||9)-(pri[b.p]||9); });
+
+		if (recs.length > 0) {
+			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
+			recs.forEach(function(r) {
+				if (r.a) {
+					var extra = r.langs ? ",'" + r.langs + "'" : '';
+					h += '<button class="kg-rec kg-rec-' + r.p + '" onclick="kgAction(\'' + r.a + '\',' + p.id + ',this' + extra + ')">';
+				} else {
+					h += '<div class="kg-rec kg-rec-' + r.p + '">';
+				}
+				h += '<span class="kg-rec-dot"></span>';
+				h += '<span class="kg-rec-body"><strong>' + r.l + '</strong><br><small>' + r.d + '</small></span>';
+				h += r.a ? '</button>' : '</div>';
+			});
+			h += '</div>';
+		} else {
+			h += '<div class="kg-p-allgood">All optimizations complete</div>';
+		}
+
+		h += '<div class="kg-p-footer">';
+		h += '<a href="/wp-admin/post.php?post=' + p.id + '&action=edit" target="_blank" class="kg-btn kg-btn-primary">Edit Post</a>';
+		h += '</div>';
+
 	} else if (d.type === 'category') {
 		var c = d.data;
 
@@ -644,6 +811,42 @@ function showDetailPanel(d) {
 			h += progressBar(l.toUpperCase(), c.translation_pct[l] || 0);
 		});
 		h += '</div>';
+
+		// ── Category Recommendations ──
+		var catRecs = [];
+		if (cSeo < 50) {
+			catRecs.push({ p: 'high', l: 'Improve SEO Coverage', d: 'Only ' + cSeo + '% of products have SEO meta — enrich products in this category' });
+		} else if (cSeo < 80) {
+			catRecs.push({ p: 'medium', l: 'Complete SEO Coverage', d: cSeo + '% covered — a few products still missing SEO meta' });
+		}
+		if (cEnrich < 50) {
+			catRecs.push({ p: 'high', l: 'AI Enrich Products', d: 'Only ' + cEnrich + '% enriched — generate descriptions, FAQ, schema' });
+		} else if (cEnrich < 80) {
+			catRecs.push({ p: 'medium', l: 'Complete Enrichment', d: cEnrich + '% enriched — finish remaining products' });
+		}
+		Object.keys(c.translation_pct || {}).forEach(function(l) {
+			var tp = c.translation_pct[l] || 0;
+			if (tp < 80) {
+				catRecs.push({ p: 'high', l: 'Translate to ' + l.toUpperCase(), d: 'Only ' + tp + '% translated — ' + Math.round(c.product_count * (100 - tp) / 100) + ' products missing' });
+			} else if (tp < 100) {
+				catRecs.push({ p: 'medium', l: 'Complete ' + l.toUpperCase() + ' Translation', d: tp + '% done — almost there' });
+			}
+		});
+
+		if (catRecs.length > 0) {
+			var pri = {high:0,medium:1,low:2};
+			catRecs.sort(function(a,b){ return (pri[a.p]||9)-(pri[b.p]||9); });
+			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
+			catRecs.forEach(function(r) {
+				h += '<div class="kg-rec kg-rec-' + r.p + '">';
+				h += '<span class="kg-rec-dot"></span>';
+				h += '<span class="kg-rec-body"><strong>' + r.l + '</strong><br><small>' + r.d + '</small></span>';
+				h += '</div>';
+			});
+			h += '</div>';
+		} else {
+			h += '<div class="kg-p-allgood">All optimizations complete for this category</div>';
+		}
 
 	} else if (d.type === 'language') {
 		var l = d.data;
@@ -788,6 +991,7 @@ function updateStats(data) {
 	var designSummary = designAudit.summary || {};
 	var stats = {
 		total_products: summary.total_products || 0,
+		total_posts: summary.total_posts || 0,
 		seo_coverage: summary.seo_coverage || 0,
 		enrichment_coverage: summary.enrichment_coverage || 0,
 		opportunity_score_total: summary.opportunity_score_total || 0,
@@ -859,6 +1063,21 @@ function bindDesignHealthClick(data) {
 	});
 }
 
+// ── View Switch ──
+function initViewSwitch() {
+	document.querySelectorAll('.kg-view-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			document.querySelectorAll('.kg-view-btn').forEach(function(b){ b.classList.remove('active'); });
+			btn.classList.add('active');
+			_kgCurrentView = btn.dataset.view;
+			if (_kgData) {
+				buildGraph(_kgData, _kgCurrentView);
+			}
+		});
+	});
+}
+
+initViewSwitch();
 init();
 
 })();
@@ -884,7 +1103,10 @@ function kgAction(action, productId, btn, langs) {
 		body = { product_id: productId };
 	} else if (action === 'translate') {
 		endpoint = 'translation/request';
-		body = { product_id: productId, target_languages: langs ? langs.split(',') : [] };
+		body = { post_id: productId, target_languages: langs ? langs.split(',') : [] };
+	} else if (action === 'translate_lang') {
+		endpoint = 'translation/batch';
+		body = { post_type: 'product', languages: langs ? [langs] : [], limit: 50 };
 	}
 
 	fetch(lpKgRestUrl + endpoint, {
@@ -895,14 +1117,86 @@ function kgAction(action, productId, btn, langs) {
 	})
 	.then(function(r) { return r.json(); })
 	.then(function(data) {
-		btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> Done';
+		var isQueued = data && (data.status === 'processing' || data.status === 'queued');
+		btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> ' + (isQueued ? 'Queued' : 'Done');
 		btn.classList.add('kg-action-done');
-		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 3000);
+
+		// Refresh the panel after a delay to show updated state
+		var refreshDelay = isQueued ? 8000 : 2000;
+		setTimeout(function() {
+			btn.disabled = false;
+			btn.innerHTML = originalText;
+			btn.classList.remove('kg-action-done');
+			// Re-fetch graph data and re-open the same product panel
+			kgRefreshAndReopen(productId, action === 'translate_lang' ? 'language' : null, langs);
+		}, refreshDelay);
 	})
 	.catch(function(err) {
 		btn.innerHTML = '<span style="color:var(--lp-error);">Failed</span>';
 		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
 	});
+}
+
+function kgRefreshAndReopen(nodeId, nodeType, langCode) {
+	var headers = { 'X-WP-Nonce': lpKgNonce };
+	var apiToken = <?php echo wp_json_encode( $api_token ); ?>;
+	if (apiToken) headers['Authorization'] = 'Bearer ' + apiToken;
+
+	fetch(<?php echo wp_json_encode( $rest_url ); ?> + '?sections=products,categories,translation,store,opportunities,design_audit,posts&fresh=1', {
+		headers: headers,
+		credentials: 'same-origin'
+	})
+	.then(function(r) { return r.json(); })
+	.then(function(data) {
+		if (!data || !data.nodes) return;
+		window._kgData = data;
+		updateStats(data);
+		buildGraph(data);
+		bindDesignHealthClick(data);
+
+		// Re-open the detail panel for the same node
+		if (nodeType === 'language' && langCode) {
+			// Find the language node
+			var allNodes = [];
+			var pNodes = data.nodes.products || [];
+			var cNodes = data.nodes.categories || [];
+			var lNodes = data.nodes.languages || [];
+			lNodes.forEach(function(l) {
+				if (l.code === langCode) {
+					showDetailPanel({ type: 'language', id: l.id || ('lang_' + l.code), label: l.code.toUpperCase(), coverage: l.coverage_pct, data: l, radius: 16 });
+				}
+			});
+		} else if (nodeId) {
+			// Find the product/post node in the new data
+			var items = (data.nodes.products || []).concat(data.nodes.posts || []);
+			for (var i = 0; i < items.length; i++) {
+				if (items[i].id === nodeId) {
+					var p = items[i];
+					var type = p.type || (p.word_count !== undefined ? 'post' : 'product');
+					var fakeNode = buildNodeFromData(p, type);
+					showDetailPanel(fakeNode);
+					break;
+				}
+			}
+		}
+	});
+}
+
+function buildNodeFromData(p, type) {
+	if (type === 'post') {
+		var score = 0;
+		if (!p.seo || !p.seo.has_title) score += 15;
+		if (!p.seo || !p.seo.has_description) score += 15;
+		if (!p.has_featured_image) score += 10;
+		if (p.is_stale) score += 10;
+		return { id: 'post:' + p.id, type: 'post', label: p.title, score: score, seo: p.seo || {}, data: p, radius: 5 };
+	}
+	// product
+	return {
+		id: 'product:' + p.id, type: 'product', label: p.name, radius: 8,
+		score: p.opportunity_score || 0, seo: p.seo, enrichment: p.enrichment,
+		aeo: p.aeo, translation: p.translation, reviews: p.reviews, data: p
+	};
 }
 </script>
 </content>

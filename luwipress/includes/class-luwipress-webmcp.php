@@ -3620,6 +3620,200 @@ class LuwiPress_WebMCP {
             return array( 'plugin' => $plugin, 'deactivated' => true );
         } );
 
+        // ── Plugin Search (WordPress.org repository) ──
+
+        $this->register_tool( 'plugins_search', array(
+            'description' => 'Search WordPress.org plugin repository by keyword',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'search'   => array( 'type' => 'string', 'description' => 'Search keyword (required)' ),
+                    'per_page' => array( 'type' => 'integer', 'description' => 'Results per page (default 10, max 30)' ),
+                ),
+                'required' => array( 'search' ),
+            ),
+            'annotations' => array( 'title' => 'Search Plugins (WP.org)', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => true ),
+        ), function ( $args ) {
+            if ( ! function_exists( 'plugins_api' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
+            }
+            $per_page = min( absint( $args['per_page'] ?? 10 ), 30 );
+            $response = plugins_api( 'query_plugins', array(
+                'search'   => sanitize_text_field( $args['search'] ),
+                'per_page' => $per_page,
+                'fields'   => array(
+                    'short_description' => true,
+                    'icons'             => false,
+                    'banners'           => false,
+                    'sections'          => false,
+                    'tested'            => true,
+                    'active_installs'   => true,
+                    'rating'            => true,
+                ),
+            ) );
+            if ( is_wp_error( $response ) ) {
+                throw new Exception( $response->get_error_message() );
+            }
+            $results = array();
+            foreach ( $response->plugins as $p ) {
+                $results[] = array(
+                    'name'              => $p->name,
+                    'slug'              => $p->slug,
+                    'version'           => $p->version,
+                    'author'            => wp_strip_all_tags( $p->author ),
+                    'rating'            => $p->rating,
+                    'active_installs'   => $p->active_installs,
+                    'tested'            => $p->tested ?? null,
+                    'short_description' => $p->short_description,
+                );
+            }
+            return array( 'query' => $args['search'], 'results' => $results, 'total' => $response->info['results'] ?? count( $results ) );
+        } );
+
+        // ── Plugin Install (from WordPress.org by slug) ──
+
+        $this->register_tool( 'plugins_install', array(
+            'description' => 'Install a plugin from WordPress.org by slug (does NOT activate — use plugins_activate after)',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'slug' => array( 'type' => 'string', 'description' => 'Plugin slug from WordPress.org e.g. "google-listings-and-ads" (required)' ),
+                ),
+                'required' => array( 'slug' ),
+            ),
+            'annotations' => array( 'title' => 'Install Plugin', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => true ),
+        ), function ( $args ) {
+            if ( ! function_exists( 'plugins_api' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
+            }
+            require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+
+            $slug = sanitize_text_field( $args['slug'] );
+
+            // Check if already installed
+            if ( ! function_exists( 'get_plugins' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            }
+            $installed = get_plugins();
+            foreach ( $installed as $file => $data ) {
+                if ( strpos( $file, $slug . '/' ) === 0 || $file === $slug . '.php' ) {
+                    return array( 'slug' => $slug, 'installed' => true, 'already_installed' => true, 'plugin_file' => $file );
+                }
+            }
+
+            // Fetch plugin info from WP.org
+            $api = plugins_api( 'plugin_information', array( 'slug' => $slug, 'fields' => array( 'sections' => false ) ) );
+            if ( is_wp_error( $api ) ) {
+                throw new Exception( 'Plugin not found on WordPress.org: ' . $api->get_error_message() );
+            }
+
+            // Install
+            $skin     = new WP_Ajax_Upgrader_Skin();
+            $upgrader = new Plugin_Upgrader( $skin );
+            $result   = $upgrader->install( $api->download_link );
+
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( $result->get_error_message() );
+            }
+            if ( ! $result ) {
+                $errors = $skin->get_errors();
+                $msg    = is_wp_error( $errors ) ? $errors->get_error_message() : 'Installation failed — check filesystem permissions';
+                throw new Exception( $msg );
+            }
+
+            // Find the installed plugin file
+            $plugin_file = $upgrader->plugin_info();
+
+            LuwiPress_Logger::log( "Plugin installed via WebMCP: {$slug}", 'info', 'webmcp' );
+
+            return array( 'slug' => $slug, 'installed' => true, 'plugin_file' => $plugin_file, 'name' => $api->name, 'version' => $api->version );
+        } );
+
+        // ── Plugin Delete (uninstall) ──
+
+        $this->register_tool( 'plugins_delete', array(
+            'description' => 'Delete (uninstall) an inactive plugin. Plugin must be deactivated first.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'plugin' => array( 'type' => 'string', 'description' => 'Plugin file path e.g. "akismet/akismet.php" (required)' ),
+                ),
+                'required' => array( 'plugin' ),
+            ),
+            'annotations' => array( 'title' => 'Delete Plugin', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! function_exists( 'get_plugins' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            }
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+
+            $plugin = sanitize_text_field( $args['plugin'] );
+
+            if ( is_plugin_active( $plugin ) ) {
+                throw new Exception( 'Cannot delete an active plugin — deactivate it first' );
+            }
+
+            $all = get_plugins();
+            if ( ! isset( $all[ $plugin ] ) ) {
+                throw new Exception( "Plugin '{$plugin}' not found" );
+            }
+
+            $result = delete_plugins( array( $plugin ) );
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( $result->get_error_message() );
+            }
+
+            LuwiPress_Logger::log( "Plugin deleted via WebMCP: {$plugin}", 'warning', 'webmcp' );
+
+            return array( 'plugin' => $plugin, 'deleted' => true );
+        } );
+
+        // ── Plugin Update ──
+
+        $this->register_tool( 'plugins_update', array(
+            'description' => 'Update an installed plugin to its latest version from WordPress.org',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'plugin' => array( 'type' => 'string', 'description' => 'Plugin file path e.g. "akismet/akismet.php" (required)' ),
+                ),
+                'required' => array( 'plugin' ),
+            ),
+            'annotations' => array( 'title' => 'Update Plugin', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => true ),
+        ), function ( $args ) {
+            require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            if ( ! function_exists( 'get_plugins' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            }
+
+            $plugin = sanitize_text_field( $args['plugin'] );
+
+            $all = get_plugins();
+            if ( ! isset( $all[ $plugin ] ) ) {
+                throw new Exception( "Plugin '{$plugin}' not found" );
+            }
+
+            $old_version = $all[ $plugin ]['Version'];
+
+            $skin     = new WP_Ajax_Upgrader_Skin();
+            $upgrader = new Plugin_Upgrader( $skin );
+            $result   = $upgrader->upgrade( $plugin );
+
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( $result->get_error_message() );
+            }
+
+            // Re-read to get new version
+            $updated  = get_plugins();
+            $new_ver  = isset( $updated[ $plugin ] ) ? $updated[ $plugin ]['Version'] : $old_version;
+
+            LuwiPress_Logger::log( "Plugin updated via WebMCP: {$plugin} ({$old_version} → {$new_ver})", 'info', 'webmcp' );
+
+            return array( 'plugin' => $plugin, 'old_version' => $old_version, 'new_version' => $new_ver, 'updated' => $old_version !== $new_ver );
+        } );
+
         $this->register_tool( 'themes_list', array(
             'description' => 'List installed themes with active status',
             'inputSchema' => array(

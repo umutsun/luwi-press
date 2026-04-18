@@ -208,7 +208,7 @@ class LuwiPress_Knowledge_Graph {
 
 		// Blog posts
 		if ( in_array( 'posts', $sections, true ) ) {
-			$response['nodes']['posts'] = $this->build_post_nodes( $seo_meta_keys );
+			$response['nodes']['posts'] = $this->build_post_nodes( $seo_meta_keys, $target_languages );
 		}
 
 		// Static pages
@@ -518,6 +518,63 @@ class LuwiPress_Knowledge_Graph {
 			$map[ $pid ] = array();
 			foreach ( $target_languages as $lang ) {
 				$map[ $pid ][ $lang ] = in_array( $lang, $existing_langs, true ) ? 'completed' : 'missing';
+			}
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Generic WPML translation status loader for any element type.
+	 * Returns: [ element_id => [ lang => true ] ] for existing translations.
+	 */
+	private function load_wpml_status_for_type( $element_ids, $target_languages, $element_type = 'post_post' ) {
+		global $wpdb;
+		$map = array();
+
+		if ( empty( $element_ids ) || empty( $target_languages ) ) {
+			return $map;
+		}
+
+		$id_ph = implode( ',', array_fill( 0, count( $element_ids ), '%d' ) );
+		$params = array_merge( array( $element_type ), $element_ids );
+
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT element_id, trid FROM {$wpdb->prefix}icl_translations
+			 WHERE element_type = %s AND element_id IN ($id_ph)",
+			...$params
+		) );
+
+		$trid_map = array();
+		foreach ( $rows as $row ) {
+			$trid_map[ $row->element_id ] = $row->trid;
+		}
+
+		$trids = array_unique( array_values( $trid_map ) );
+		if ( empty( $trids ) ) {
+			return $map;
+		}
+
+		$trid_ph = implode( ',', array_fill( 0, count( $trids ), '%d' ) );
+		$params = array_merge( $trids, array( $element_type ) );
+		$trans_rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT trid, language_code FROM {$wpdb->prefix}icl_translations
+			 WHERE trid IN ($trid_ph) AND element_type = %s",
+			...$params
+		) );
+
+		$trid_langs = array();
+		foreach ( $trans_rows as $tr ) {
+			$trid_langs[ $tr->trid ][ $tr->language_code ] = true;
+		}
+
+		foreach ( $element_ids as $eid ) {
+			$trid = $trid_map[ $eid ] ?? null;
+			$existing = $trid ? ( $trid_langs[ $trid ] ?? array() ) : array();
+			foreach ( $target_languages as $lang ) {
+				if ( isset( $existing[ $lang ] ) ) {
+					$map[ $eid ][ $lang ] = true;
+				}
 			}
 		}
 
@@ -1455,7 +1512,7 @@ class LuwiPress_Knowledge_Graph {
 
 	// ─── POSTS & PAGES ─────────────────────────────────────────────────
 
-	private function build_post_nodes( $seo_meta_keys ) {
+	private function build_post_nodes( $seo_meta_keys, $target_languages = array() ) {
 		global $wpdb;
 
 		// For WPML: only original posts
@@ -1515,6 +1572,12 @@ class LuwiPress_Knowledge_Graph {
 			$thumb_ids[ $tr->post_id ] = absint( $tr->meta_value );
 		}
 
+		// Bulk load WPML translation status for posts
+		$wpml_map = array();
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) && ! empty( $target_languages ) ) {
+			$wpml_map = $this->load_wpml_status_for_type( $post_ids, $target_languages, 'post_post' );
+		}
+
 		// Collect author IDs
 		$author_ids = array_unique( wp_list_pluck( $posts, 'post_author' ) );
 		$author_map = array();
@@ -1543,11 +1606,21 @@ class LuwiPress_Knowledge_Graph {
 			}
 
 			$content_length = absint( $p->content_length );
-			$word_count     = intval( $content_length / 5 ); // rough estimate
+			$word_count     = intval( $content_length / 5 );
 			$days_since_mod = max( 0, round( ( time() - strtotime( $p->post_modified ) ) / DAY_IN_SECONDS ) );
 
-			$category_ids = wp_list_pluck( $terms['categories'] ?? array(), 'id' );
-			$tag_ids      = wp_list_pluck( $terms['tags'] ?? array(), 'id' );
+			$category_ids  = wp_list_pluck( $terms['categories'] ?? array(), 'id' );
+			$tag_ids       = wp_list_pluck( $terms['tags'] ?? array(), 'id' );
+			$category_list = array();
+			foreach ( $terms['categories'] ?? array() as $cat ) {
+				$category_list[] = array( 'id' => $cat['id'], 'name' => $cat['name'] );
+			}
+
+			// Translation status per language
+			$translation = array();
+			foreach ( $target_languages as $lang ) {
+				$translation[ $lang ] = isset( $wpml_map[ $id ][ $lang ] ) ? 'completed' : 'missing';
+			}
 
 			$nodes[] = array(
 				'id'                  => $id,
@@ -1560,6 +1633,7 @@ class LuwiPress_Knowledge_Graph {
 				'word_count'          => $word_count,
 				'days_since_modified' => $days_since_mod,
 				'categories'          => $category_ids,
+				'category_names'      => $category_list,
 				'tags'                => $tag_ids,
 				'comment_count'       => absint( $p->comment_count ),
 				'has_featured_image'  => isset( $thumb_ids[ $id ] ),
@@ -1568,6 +1642,7 @@ class LuwiPress_Knowledge_Graph {
 					'has_description' => $has_seo_desc,
 					'has_focus_kw'    => $has_focus_kw,
 				),
+				'translation'         => $translation,
 				'is_stale'            => $days_since_mod > 90,
 			);
 		}
@@ -2087,7 +2162,6 @@ class LuwiPress_Knowledge_Graph {
 			foreach ( $p['tags'] as $tag_id ) {
 				$edges[] = array( 'source' => $source, 'target' => 'post_tag:' . $tag_id, 'type' => 'tagged_with' );
 			}
-			$edges[] = array( 'source' => $source, 'target' => 'author:' . $p['author_id'], 'type' => 'authored_by' );
 		}
 		return $edges;
 	}

@@ -41,6 +41,10 @@ class LuwiPress_Plugin_Detector {
 			'customer_support' => $this->detect_customer_support(),
 			'page_builder'     => $this->detect_page_builder(),
 			'cache'            => $this->detect_cache(),
+			'analytics'        => $this->detect_analytics(),
+			'google_ads'       => $this->detect_google_ads(),
+			'meta_ads'         => $this->detect_meta_ads(),
+			'product_feed'     => $this->detect_product_feed(),
 		);
 	}
 
@@ -384,6 +388,216 @@ class LuwiPress_Plugin_Detector {
 		}
 
 		$this->cache['cache'] = $result;
+		return $result;
+	}
+
+	// ------------------------------------------------------------------
+	// Analytics (GTM / GA4) Detection
+	// ------------------------------------------------------------------
+
+	public function detect_analytics() {
+		if ( isset( $this->cache['analytics'] ) ) {
+			return $this->cache['analytics'];
+		}
+
+		$result = array(
+			'plugin'  => 'none',
+			'version' => null,
+			'features' => array(),
+		);
+
+		// Google Site Kit (official Google plugin — bundles GA4, GTM, Search Console, AdSense)
+		if ( defined( 'GOOGLESITEKIT_VERSION' ) ) {
+			$result['plugin']  = 'google-site-kit';
+			$result['version'] = GOOGLESITEKIT_VERSION;
+			$result['features'] = array(
+				'analytics'      => true,
+				'tag_manager'    => true,
+				'search_console' => true,
+				'adsense'        => true,
+			);
+		}
+		// GTM4WP (Google Tag Manager for WordPress)
+		elseif ( defined( 'GTM4WP_VERSION' ) ) {
+			$result['plugin']  = 'gtm4wp';
+			$result['version'] = GTM4WP_VERSION;
+			$container_id      = get_option( 'gtm4wp-options', array() );
+			$result['features'] = array(
+				'container_id' => ! empty( $container_id['gtm-code'] ) ? $container_id['gtm-code'] : null,
+				'ecommerce'    => ! empty( $container_id['integrate-woocommerce-track-enhanced-ecommerce'] ),
+			);
+		}
+		// MonsterInsights (Google Analytics plugin)
+		elseif ( class_exists( 'MonsterInsights' ) ) {
+			$result['plugin']  = 'monsterinsights';
+			$result['version'] = defined( 'MONSTERINSIGHTS_VERSION' ) ? MONSTERINSIGHTS_VERSION : null;
+			$result['features'] = array(
+				'ecommerce' => class_exists( 'MonsterInsights_eCommerce' ),
+			);
+		}
+
+		$this->cache['analytics'] = $result;
+		return $result;
+	}
+
+	// ------------------------------------------------------------------
+	// Google Ads / Conversion Tracking Detection
+	// ------------------------------------------------------------------
+
+	public function detect_google_ads() {
+		if ( isset( $this->cache['google_ads'] ) ) {
+			return $this->cache['google_ads'];
+		}
+
+		$result = array(
+			'plugin'  => 'none',
+			'version' => null,
+			'features' => array(),
+		);
+
+		// Conversios (Google Ads & Pixel for WooCommerce — formerly Enhanced Ecommerce)
+		if ( defined( 'JEELZ_STARTER_PLUGIN_VERSION' ) || class_exists( 'Jeelz\\Bootstrap' ) || defined( 'JEELZ_STARTER_PLUGIN_DIR' ) ) {
+			$result['plugin']  = 'conversios';
+			$result['version'] = defined( 'JEELZ_STARTER_PLUGIN_VERSION' ) ? JEELZ_STARTER_PLUGIN_VERSION : null;
+			$result['features'] = array(
+				'google_ads'       => true,
+				'conversion_track' => true,
+				'remarketing'      => true,
+			);
+		}
+		// Google Listings & Ads (official WooCommerce Google integration)
+		elseif ( defined( 'WC_GLA_VERSION' ) ) {
+			$result['plugin']  = 'google-listings-and-ads';
+			$result['version'] = WC_GLA_VERSION;
+			$result['features'] = array(
+				'google_ads'        => true,
+				'merchant_center'   => true,
+				'conversion_track'  => true,
+				'free_listings'     => true,
+			);
+		}
+		// WooCommerce Google Ads Conversion Tracking (by Jeelz)
+		elseif ( defined( 'JEELZ_GACT_VERSION' ) ) {
+			$result['plugin']  = 'wc-google-ads-tracking';
+			$result['version'] = JEELZ_GACT_VERSION;
+			$result['features'] = array(
+				'conversion_track' => true,
+			);
+		}
+
+		$this->cache['google_ads'] = $result;
+		return $result;
+	}
+
+	// ------------------------------------------------------------------
+	// Meta (Facebook / Instagram) Ads Detection
+	// ------------------------------------------------------------------
+
+	public function detect_meta_ads() {
+		if ( isset( $this->cache['meta_ads'] ) ) {
+			return $this->cache['meta_ads'];
+		}
+
+		$result = array(
+			'plugin'  => 'none',
+			'version' => null,
+			'features' => array(),
+		);
+
+		// Official Meta Pixel for WordPress (formerly Facebook Pixel)
+		if ( defined( 'STARTER_FILE' ) && defined( 'STARTER_PLUGIN_VERSION' ) && class_exists( 'FacebookPixelPlugin\\FacebookForWordpress' ) ) {
+			$result['plugin']  = 'meta-pixel';
+			$result['version'] = STARTER_PLUGIN_VERSION;
+			$result['features'] = array(
+				'pixel'           => true,
+				'conversion_api'  => true,
+				'catalog'         => false,
+			);
+		}
+		// Meta for WooCommerce (Facebook for WooCommerce — full Catalog + Pixel + CAPI)
+		elseif ( class_exists( 'WC_Facebookcommerce' ) || defined( 'WC_FACEBOOK_PLUGIN_VERSION' ) ) {
+			$result['plugin']  = 'meta-for-woocommerce';
+			$result['version'] = defined( 'WC_FACEBOOK_PLUGIN_VERSION' ) ? WC_FACEBOOK_PLUGIN_VERSION : null;
+			$result['features'] = array(
+				'pixel'           => true,
+				'conversion_api'  => true,
+				'catalog'         => true,
+				'instagram_shop'  => true,
+			);
+		}
+		// PixelYourSite (multi-pixel manager — Facebook, Google, TikTok)
+		elseif ( class_exists( 'PixelYourSite\\PYS' ) || defined( 'PYS_FREE_VERSION' ) || defined( 'PYS_PRO_VERSION' ) ) {
+			$result['plugin']  = 'pixelyoursite';
+			$result['version'] = defined( 'PYS_PRO_VERSION' ) ? PYS_PRO_VERSION : ( defined( 'PYS_FREE_VERSION' ) ? PYS_FREE_VERSION : null );
+			$result['features'] = array(
+				'pixel'           => true,
+				'conversion_api'  => true,
+				'google_ads'      => true,
+				'tiktok'          => true,
+			);
+		}
+
+		$this->cache['meta_ads'] = $result;
+		return $result;
+	}
+
+	// ------------------------------------------------------------------
+	// Product Feed (Google Merchant Center / Shopping) Detection
+	// ------------------------------------------------------------------
+
+	public function detect_product_feed() {
+		if ( isset( $this->cache['product_feed'] ) ) {
+			return $this->cache['product_feed'];
+		}
+
+		$result = array(
+			'plugin'  => 'none',
+			'version' => null,
+			'features' => array(),
+		);
+
+		// Google Listings & Ads (already covers Merchant Center — check again for feed)
+		if ( defined( 'WC_GLA_VERSION' ) ) {
+			$result['plugin']  = 'google-listings-and-ads';
+			$result['version'] = WC_GLA_VERSION;
+			$result['features'] = array(
+				'merchant_center' => true,
+				'auto_sync'       => true,
+			);
+		}
+		// ATUM Product Feed (formerly Product Feed PRO / SUSPENDED)
+		elseif ( defined( 'WOOCOMMERCE_SEA_PLUGIN_VERSION' ) ) {
+			$result['plugin']  = 'atum-product-feed';
+			$result['version'] = WOOCOMMERCE_SEA_PLUGIN_VERSION;
+			$result['features'] = array(
+				'google_shopping' => true,
+				'facebook'        => true,
+				'bing'            => true,
+			);
+		}
+		// Product Feed PRO for WooCommerce (by AdTribes)
+		elseif ( defined( 'WOOCOMMERCESEA_PLUGIN_VERSION' ) ) {
+			$result['plugin']  = 'product-feed-pro';
+			$result['version'] = WOOCOMMERCESEA_PLUGIN_VERSION;
+			$result['features'] = array(
+				'google_shopping'  => true,
+				'facebook'         => true,
+				'bing'             => true,
+				'custom_feed'      => true,
+			);
+		}
+		// CTX Feed (formerly WooCommerce Product Feed)
+		elseif ( defined( 'WOO_FEED_FREE_VERSION' ) || defined( 'WOO_FEED_PRO_VERSION' ) ) {
+			$result['plugin']  = 'ctx-feed';
+			$result['version'] = defined( 'WOO_FEED_PRO_VERSION' ) ? WOO_FEED_PRO_VERSION : ( defined( 'WOO_FEED_FREE_VERSION' ) ? WOO_FEED_FREE_VERSION : null );
+			$result['features'] = array(
+				'google_shopping'  => true,
+				'facebook'         => true,
+				'custom_templates' => true,
+			);
+		}
+
+		$this->cache['product_feed'] = $result;
 		return $result;
 	}
 

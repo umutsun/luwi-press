@@ -120,17 +120,60 @@
     box-sizing: border-box !important;
 }
 .lp-chat-header-actions button:hover { background: rgba(255,255,255,.2); }
+.lp-chat-escalate-btn {
+    background: linear-gradient(135deg, #25d366, #20ba5a) !important;
+    border-radius: 50% !important;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    max-width: 32px !important;
+    max-height: 32px !important;
+    animation: lp-ring-pulse 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.5);
+}
+.lp-chat-escalate-btn:hover {
+    background: linear-gradient(135deg, #128c7e, #075e54) !important;
+    animation: none !important;
+    transform: scale(1.2);
+    box-shadow: 0 2px 12px rgba(37, 211, 102, 0.5) !important;
+}
 .lp-chat-escalate-btn::before {
     content: '';
     display: inline-block;
-    width: 12px;
-    min-width: 12px;
-    height: 12px;
-    min-height: 12px;
+    width: 16px;
+    min-width: 16px;
+    height: 16px;
+    min-height: 16px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 00-1.02.24l-2.2 2.2a15.05 15.05 0 01-6.59-6.58l2.2-2.21a1 1 0 00.24-1.02A11.36 11.36 0 018.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z'/%3E%3C/svg%3E");
-    background-size: 12px 12px;
+    background-size: 16px 16px;
     background-repeat: no-repeat;
     background-position: center;
+    filter: drop-shadow(0 0 2px rgba(255,255,255,0.5));
+}
+/* After pseudo-element: expanding ring */
+.lp-chat-escalate-btn::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid rgba(37, 211, 102, 0.6);
+    animation: lp-ring-expand 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.lp-chat-escalate-btn:hover::after {
+    animation: none !important;
+    border-color: transparent;
+}
+@keyframes lp-ring-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.5); }
+    70% { box-shadow: 0 0 0 10px rgba(37, 211, 102, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }
+}
+@keyframes lp-ring-expand {
+    0% { inset: -2px; opacity: 1; border-width: 2px; }
+    100% { inset: -10px; opacity: 0; border-width: 1px; }
 }
 .lp-chat-close-btn { font-size: 16px; line-height: 1; color: var(--lp-text) !important; }
 

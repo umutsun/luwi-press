@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 2.0.7
+ * Version: 2.0.9
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '2.0.7');
+define('LUWIPRESS_VERSION', '2.0.9');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -114,6 +114,22 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-knowledge-graph.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-elementor.php';
 
+        // Theme management and demo content
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-theme-manager.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-demo-import.php';
+
+        // Marketplace integration
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-adapter.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-amazon.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-ebay.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-trendyol.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-alibaba.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-hepsiburada.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-n11.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-etsy.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-walmart.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-marketplace.php';
+
         // BM25 search index
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-search-index.php';
 
@@ -136,6 +152,7 @@ class LuwiPress {
         LuwiPress_Token_Tracker::create_table();
         LuwiPress_Customer_Chat::create_table();
         LuwiPress_Search_Index::create_table();
+        LuwiPress_Marketplace::create_table();
 
         // Generate HMAC secret if not set
         LuwiPress_HMAC::ensure_secret();
@@ -192,6 +209,9 @@ class LuwiPress {
         LuwiPress_Open_Claw::get_instance();
         LuwiPress_CRM_Bridge::get_instance();
         LuwiPress_Knowledge_Graph::get_instance();
+        LuwiPress_Marketplace::get_instance();
+        LuwiPress_Theme_Manager::get_instance();
+        LuwiPress_Demo_Import::get_instance();
         LuwiPress_Search_Index::get_instance();
         LuwiPress_Customer_Chat::get_instance();
 
@@ -368,7 +388,76 @@ class LuwiPress {
             $chat_days = absint( get_option( 'luwipress_chat_retention_days', 90 ) );
             LuwiPress_Customer_Chat::cleanup( $chat_days );
         }
+        // Orphan translation scan (detect non-EN content registered as EN originals)
+        $this->scan_orphan_translations();
+
         LuwiPress_Logger::log( 'Daily cleanup completed', 'info' );
+    }
+
+    /**
+     * Scan for orphan translations — posts/products registered as EN originals
+     * but containing non-English content. Logs warnings for manual review.
+     */
+    private function scan_orphan_translations() {
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            return;
+        }
+
+        global $wpdb;
+        $default_lang = apply_filters( 'wpml_default_language', 'en' );
+
+        // Find posts registered as originals (source_language_code IS NULL)
+        // in the default language but created in the last 7 days
+        $recent_originals = $wpdb->get_results( $wpdb->prepare(
+            "SELECT p.ID, p.post_title, p.post_type, t.language_code
+             FROM {$wpdb->posts} p
+             JOIN {$wpdb->prefix}icl_translations t ON p.ID = t.element_id
+             WHERE t.source_language_code IS NULL
+               AND t.language_code = %s
+               AND t.element_type LIKE 'post_%%'
+               AND p.post_status = 'publish'
+               AND p.post_date > DATE_SUB(NOW(), INTERVAL 7 DAY)
+             ORDER BY p.post_date DESC
+             LIMIT 50",
+            $default_lang
+        ) );
+
+        if ( empty( $recent_originals ) ) {
+            return;
+        }
+
+        $orphans = array();
+        foreach ( $recent_originals as $post ) {
+            $title = mb_strtolower( $post->post_title );
+            // Detect non-English titles by checking for common non-EN words
+            $non_en_indicators = array(
+                'professionale', 'argilla', 'elettro', 'strumenti', 'percussione',
+                'guitarra', 'eléctric', 'percusión', 'tambor', 'cuerdas', 'madera',
+                'professionnel', 'guitare', 'tambour', 'oud turc',
+            );
+            $matches = 0;
+            foreach ( $non_en_indicators as $word ) {
+                if ( false !== mb_strpos( $title, $word ) ) {
+                    $matches++;
+                }
+            }
+            if ( $matches >= 1 ) {
+                $orphans[] = $post;
+            }
+        }
+
+        if ( ! empty( $orphans ) ) {
+            $ids = wp_list_pluck( $orphans, 'ID' );
+            LuwiPress_Logger::log(
+                sprintf(
+                    'Orphan scan: %d suspect post(s) with non-English content registered as %s originals: %s',
+                    count( $orphans ),
+                    strtoupper( $default_lang ),
+                    implode( ', ', array_map( function( $p ) { return '#' . $p->ID . ' "' . $p->post_title . '"'; }, $orphans ) )
+                ),
+                'warning'
+            );
+        }
     }
 
     /**

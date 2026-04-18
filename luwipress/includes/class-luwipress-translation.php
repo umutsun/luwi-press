@@ -151,6 +151,13 @@ class LuwiPress_Translation {
             'permission_callback' => [$this, 'check_token_permission'],
         ]);
 
+        // Fix excerpts — extract from Elementor content
+        register_rest_route($namespace, '/translation/fix-excerpts', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'rest_fix_excerpts'],
+            'permission_callback' => [$this, 'check_permission'],
+        ]);
+
         // Fix Elementor mode on translated blog posts — removes _elementor_edit_mode
         // so WordPress renders post_content instead of English _elementor_data
         register_rest_route($namespace, '/translation/fix-elementor', [
@@ -892,6 +899,183 @@ class LuwiPress_Translation {
     }
 
     /**
+     * Create a translation post and register it with WPML/Polylang.
+     *
+     * Central method — every translation post in the plugin MUST go through here.
+     * Handles: WPML, Polylang, and vanilla WordPress.
+     *
+     * @param int    $source_id   Original post ID.
+     * @param string $language    Target language code (e.g. 'fr', 'it', 'es').
+     * @param array  $post_data   Array with keys: title, slug, content, excerpt (all optional).
+     * @return int|WP_Error       New post ID or WP_Error on failure.
+     */
+    public function create_translation_post( $source_id, $language, $post_data = array() ) {
+        global $wpdb;
+
+        $source_post = get_post( $source_id );
+        if ( ! $source_post ) {
+            return new \WP_Error( 'invalid_source', 'Source post #' . $source_id . ' not found' );
+        }
+
+        $post_type    = $source_post->post_type;
+        $element_type = 'post_' . $post_type;
+
+        // Determine translation plugin
+        $detector  = LuwiPress_Plugin_Detector::get_instance();
+        $lang_info = $detector->detect_translation();
+        $plugin    = $lang_info['plugin'] ?? 'none';
+
+        $default_lang = 'none' !== $plugin
+            ? apply_filters( 'wpml_default_language', get_locale() )
+            : substr( get_locale(), 0, 2 );
+
+        // ── Duplicate lock ──
+        $lock_key = 'luwipress_tpost_' . $source_id . '_' . $language;
+        if ( get_transient( $lock_key ) ) {
+            return new \WP_Error( 'locked', 'Translation lock active for #' . $source_id . ' → ' . $language );
+        }
+        set_transient( $lock_key, 1, 60 );
+
+        // ── Get WPML trid (if WPML) ──
+        $trid = null;
+        if ( 'wpml' === $plugin && defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            $trid = apply_filters( 'wpml_element_trid', null, $source_id, $element_type );
+            if ( ! $trid ) {
+                delete_transient( $lock_key );
+                return new \WP_Error( 'no_trid', 'No WPML trid for #' . $source_id );
+            }
+
+            // Check if translation already exists
+            $existing_id = $wpdb->get_var( $wpdb->prepare(
+                "SELECT element_id FROM {$wpdb->prefix}icl_translations
+                 WHERE trid = %d AND language_code = %s AND element_type = %s",
+                $trid, $language, $element_type
+            ) );
+            if ( $existing_id && get_post_status( $existing_id ) ) {
+                delete_transient( $lock_key );
+                return absint( $existing_id ); // Already exists — return existing ID
+            }
+        }
+
+        // ── Create the post via direct DB insert (bypass WPML hooks entirely) ──
+        $title   = $post_data['title']   ?? $source_post->post_title;
+        $slug    = $post_data['slug']    ?? sanitize_title( $title ) . '-' . $language;
+        $content = $post_data['content'] ?? '';
+        $excerpt = $post_data['excerpt'] ?? '';
+
+        $new_id = $wpdb->insert(
+            $wpdb->posts,
+            array(
+                'post_author'  => $source_post->post_author,
+                'post_title'   => $title,
+                'post_name'    => wp_unique_post_slug( $slug, 0, 'publish', $post_type, 0 ),
+                'post_content' => $content,
+                'post_excerpt' => $excerpt,
+                'post_status'  => 'publish',
+                'post_type'    => $post_type,
+                'post_date'    => current_time( 'mysql' ),
+                'post_date_gmt'     => current_time( 'mysql', true ),
+                'post_modified'     => current_time( 'mysql' ),
+                'post_modified_gmt' => current_time( 'mysql', true ),
+                'comment_status'    => $source_post->comment_status,
+                'ping_status'       => $source_post->ping_status,
+                'post_parent'       => 0,
+                'guid'              => '',
+            ),
+            array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s' )
+        );
+
+        if ( ! $new_id ) {
+            delete_transient( $lock_key );
+            return new \WP_Error( 'insert_failed', 'Failed to insert translation post for #' . $source_id );
+        }
+
+        $new_post_id = absint( $wpdb->insert_id );
+
+        // Update guid
+        $wpdb->update(
+            $wpdb->posts,
+            array( 'guid' => get_permalink( $new_post_id ) ?: ( home_url( '/?p=' . $new_post_id ) ) ),
+            array( 'ID' => $new_post_id ),
+            array( '%s' ),
+            array( '%d' )
+        );
+
+        // Clean object cache
+        clean_post_cache( $new_post_id );
+
+        // ── Register with translation plugin ──
+        if ( 'wpml' === $plugin && $trid ) {
+            // Remove any auto-created WPML record (should not exist since we bypassed hooks)
+            $wpdb->delete(
+                $wpdb->prefix . 'icl_translations',
+                array( 'element_id' => $new_post_id, 'element_type' => $element_type ),
+                array( '%d', '%s' )
+            );
+
+            // Also remove any record that might occupy this trid+language slot
+            $wpdb->delete(
+                $wpdb->prefix . 'icl_translations',
+                array( 'trid' => $trid, 'language_code' => $language, 'element_type' => $element_type ),
+                array( '%d', '%s', '%s' )
+            );
+
+            // Insert the correct WPML record
+            $wpdb->insert(
+                $wpdb->prefix . 'icl_translations',
+                array(
+                    'element_type'         => $element_type,
+                    'element_id'           => $new_post_id,
+                    'trid'                 => $trid,
+                    'language_code'        => $language,
+                    'source_language_code' => $default_lang,
+                ),
+                array( '%s', '%d', '%d', '%s', '%s' )
+            );
+
+            // Verify
+            $verify = $wpdb->get_row( $wpdb->prepare(
+                "SELECT language_code, source_language_code, trid FROM {$wpdb->prefix}icl_translations
+                 WHERE element_id = %d AND element_type = %s",
+                $new_post_id, $element_type
+            ) );
+
+            if ( ! $verify || $verify->language_code !== $language || (int) $verify->trid !== (int) $trid ) {
+                // Catastrophic failure — trash and abort
+                wp_delete_post( $new_post_id, true );
+                delete_transient( $lock_key );
+                LuwiPress_Logger::log(
+                    sprintf( 'CRITICAL: WPML registration failed for translation of #%d → %s. Post deleted.', $source_id, $language ),
+                    'error'
+                );
+                return new \WP_Error( 'wpml_failed', 'WPML registration failed — translation post deleted' );
+            }
+
+        } elseif ( 'polylang' === $plugin && function_exists( 'pll_set_post_language' ) ) {
+            pll_set_post_language( $new_post_id, $language );
+            $translations = pll_get_post_translations( $source_id );
+            $translations[ $language ] = $new_post_id;
+            pll_save_post_translations( $translations );
+        }
+
+        // ── Copy featured image ──
+        $thumb_id = get_post_thumbnail_id( $source_id );
+        if ( $thumb_id ) {
+            update_post_meta( $new_post_id, '_thumbnail_id', $thumb_id );
+        }
+
+        delete_transient( $lock_key );
+
+        LuwiPress_Logger::log(
+            sprintf( 'Translation post created: #%d (%s) from #%d [%s] via %s',
+                $new_post_id, strtoupper( $language ), $source_id, $post_type, $plugin ),
+            'info'
+        );
+
+        return $new_post_id;
+    }
+
+    /**
      * Create WPML translation
      */
     private function create_wpml_translation( $product_id, $language, $translated ) {
@@ -963,89 +1147,24 @@ class LuwiPress_Translation {
                 }
             }
         } else {
-            // ── Create new translation post ──
-            $original = get_post( $product_id );
-            if ( ! $original ) {
-                return;
-            }
-
-            // Transient lock to prevent duplicate creation from parallel cron jobs
-            $lock_key = 'luwipress_lock_' . $product_id . '_' . $language;
-            if ( get_transient( $lock_key ) ) {
-                LuwiPress_Logger::log( 'Translation lock active, skipping #' . $product_id . ' → ' . $language, 'info' );
-                return;
-            }
-            set_transient( $lock_key, 1, 30 );
-
-            $slug = ! empty( $translated['slug'] ) ? sanitize_title( $translated['slug'] ) : sanitize_title( $translated['name'] );
-            $new_id = wp_insert_post( array(
-                'post_title'   => $translated['name'],
-                'post_name'    => $slug,
-                'post_content' => $translated['description'],
-                'post_excerpt' => $translated['short_description'] ?? '',
-                'post_type'    => $post_type,
-                'post_status'  => $original->post_status,
-                'post_author'  => $original->post_author,
+            // ── Create new translation post via centralized method ──
+            $new_id = $this->create_translation_post( $product_id, $language, array(
+                'title'   => $translated['name'],
+                'slug'    => $translated['slug'] ?? '',
+                'content' => $translated['description'],
+                'excerpt' => $translated['short_description'] ?? '',
             ) );
 
             if ( is_wp_error( $new_id ) ) {
-                delete_transient( $lock_key );
-                LuwiPress_Logger::log( 'Failed to create translation: ' . $new_id->get_error_message(), 'error' );
+                LuwiPress_Logger::log( 'Translation creation failed: ' . $new_id->get_error_message(), 'error' );
                 return;
-            }
-
-            // Link to WPML translation group (with SQL fallback)
-            do_action( 'wpml_set_element_language_details', array(
-                'element_id'           => $new_id,
-                'element_type'         => $element_type,
-                'trid'                 => $trid,
-                'language_code'        => $language,
-                'source_language_code' => $default_lang,
-            ) );
-
-            // Verify WPML action worked — if not, insert directly
-            global $wpdb;
-            $linked = $wpdb->get_var( $wpdb->prepare(
-                "SELECT translation_id FROM {$wpdb->prefix}icl_translations
-                 WHERE element_id = %d AND element_type = %s",
-                $new_id, $element_type
-            ) );
-
-            if ( ! $linked ) {
-                $wpdb->insert(
-                    $wpdb->prefix . 'icl_translations',
-                    array(
-                        'element_type'         => $element_type,
-                        'element_id'           => $new_id,
-                        'trid'                 => $trid,
-                        'language_code'        => $language,
-                        'source_language_code' => $default_lang,
-                    ),
-                    array( '%s', '%d', '%d', '%s', '%s' )
-                );
-
-                LuwiPress_Logger::log(
-                    sprintf( 'WPML SQL fallback: post #%d registered in icl_translations (trid=%d, lang=%s)', $new_id, $trid, $language ),
-                    'warning',
-                    array( 'post_id' => $new_id, 'trid' => $trid, 'language' => $language )
-                );
             }
 
             $target_id = $new_id;
 
-            // ── Force publish status (WPML may reset to draft) ──
-            wp_update_post( array( 'ID' => $new_id, 'post_status' => 'publish' ) );
-
             // ── Elementor: copy structure with translated text ──
-            // Skip if chunked translation is active (it handles Elementor data separately)
             if ( $is_elementor && ! $is_chunked ) {
                 $this->copy_elementor_translated( $product_id, $new_id, $translated );
-            }
-
-            // ── Copy featured image for all post types ──
-            $thumb_id = get_post_thumbnail_id( $product_id );
-            if ( $thumb_id ) {
-                set_post_thumbnail( $new_id, $thumb_id );
             }
 
             // ── Copy WooCommerce-specific meta & taxonomies (products only) ──
@@ -1083,14 +1202,6 @@ class LuwiPress_Translation {
                 $this->copy_wpml_taxonomy_translations( $product_id, $new_id, $language, 'product_tag' );
             }
 
-            // Release creation lock
-            delete_transient( $lock_key );
-
-            LuwiPress_Logger::log(
-                sprintf( 'WPML translation created: #%d (%s) from #%d — "%s"', $new_id, strtoupper( $language ), $product_id, $translated['name'] ),
-                'info',
-                array( 'original_id' => $product_id, 'translated_id' => $new_id, 'language' => $language )
-            );
         }
 
         // ── Save SEO meta (Rank Math / Yoast) ──
@@ -3020,6 +3131,49 @@ class LuwiPress_Translation {
         wp_send_json_success( array(
             'stopped' => $stopped,
             'message' => sprintf( '%d translation(s) stopped. You can resume with Translate All.', $stopped ),
+        ) );
+    }
+
+    // ─── REST: Fix excerpts — extract from Elementor widget text ────────
+
+    public function rest_fix_excerpts( $request ) {
+        global $wpdb;
+
+        $posts = $wpdb->get_results(
+            "SELECT p.ID, p.post_type
+             FROM {$wpdb->posts} p
+             JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_elementor_data'
+             WHERE p.post_status = 'publish'
+               AND p.post_type IN ('post', 'page')
+               AND (p.post_excerpt = '' OR p.post_excerpt IS NULL)
+               AND pm.meta_value != ''
+             LIMIT 200"
+        );
+
+        $fixed = 0;
+        $fixed_ids = array();
+        foreach ( $posts as $row ) {
+            $raw = get_post_meta( $row->ID, '_elementor_data', true );
+            if ( empty( $raw ) ) continue;
+
+            $data = json_decode( $raw, true );
+            if ( ! is_array( $data ) ) continue;
+
+            $excerpt = '';
+            $this->walk_for_excerpt( $data, $excerpt );
+
+            if ( ! empty( $excerpt ) ) {
+                wp_update_post( array( 'ID' => $row->ID, 'post_excerpt' => $excerpt ) );
+                $fixed++;
+                $fixed_ids[] = $row->ID;
+            }
+        }
+
+        LuwiPress_Logger::log( sprintf( 'Fix excerpts (REST): %d posts updated', $fixed ), 'info' );
+        return rest_ensure_response( array(
+            'fixed'     => $fixed,
+            'fixed_ids' => $fixed_ids,
+            'message'   => sprintf( '%d excerpts extracted from Elementor content.', $fixed ),
         ) );
     }
 

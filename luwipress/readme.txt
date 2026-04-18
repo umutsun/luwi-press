@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 2.0.7
+Stable tag: 2.0.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -132,6 +132,32 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 2.0.9 — Theme Library & Smart Setup =
+* NEW: Theme Library — multi-theme catalog with install/activate/setup from plugin
+* NEW: Theme Manager engine — remote ZIP install via Theme_Upgrader, one-click activate
+* NEW: 4-step setup wizard — Requirements → Install → Activate → Setup Store
+* NEW: 3 themes in catalog — Luwi Elementor (available), Luwi Minimal & Boutique (coming soon)
+* NEW: Smart setup — WC store info auto-fills Contact page (email, phone, address)
+* NEW: Color presets picker — Burnished Gold, Forest Green, Deep Navy, Dusty Rose
+* NEW: Full production safety — snapshot before changes, one-click rollback to previous state
+* NEW: Health check after setup — verifies site responds with HTTP 200
+* NEW: WooCommerce page verification — Shop/Cart/Checkout/MyAccount auto-created if missing
+* NEW: Checkpoint system — setup progress saved, resumable on failure
+* NEW: Blog/Journal starter page added (7 pages total)
+* NEW: Cleanup — trash starter pages + reset homepage/blog in one click
+* IMPROVED: Demo content — Luwi palette, Playfair Display headings, Luwi widgets
+* IMPROVED: Elementor guard — import disabled when Elementor not active
+* IMPROVED: Confirmation dialogs before theme activation and page import
+
+= 2.0.8 — Marketplace Integration =
+* NEW: Multi-marketplace product publishing (Amazon, eBay, Trendyol, Hepsiburada, N11, Alibaba, Etsy, Walmart)
+* NEW: Marketplace adapter pattern — interface-based, each marketplace is a separate adapter class
+* NEW: REST API endpoints — publish, publish-batch, status, overview, test, categories (luwipress/v1/marketplace/*)
+* NEW: Marketplace listings DB table with sync status tracking
+* NEW: Settings tab — search-enabled grid UI with per-marketplace credentials and enable toggle
+* NEW: Product data mapping — WooCommerce fields automatically mapped to each marketplace's format
+* NEW: Design-system-aligned minimal card UI with autocomplete search, status badges (Live/Ready/Off)
 
 = 2.0.6 — Rebrand Cleanup =
 * REBRAND: All CSS variables renamed --n8n-* → --lp-*

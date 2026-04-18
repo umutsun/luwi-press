@@ -90,6 +90,8 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 	// Customer Chat
 	update_option( 'luwipress_chat_enabled', isset( $_POST['luwipress_chat_enabled'] ) ? 1 : 0 );
 	update_option( 'luwipress_chat_greeting', sanitize_textarea_field( $_POST['luwipress_chat_greeting'] ?? 'Hi! How can I help you today?' ) );
+	update_option( 'luwipress_chat_tone', sanitize_text_field( $_POST['luwipress_chat_tone'] ?? 'friendly' ) );
+	update_option( 'luwipress_chat_custom_instructions', sanitize_textarea_field( $_POST['luwipress_chat_custom_instructions'] ?? '' ) );
 	update_option( 'luwipress_chat_shipping_policy', sanitize_textarea_field( $_POST['luwipress_chat_shipping_policy'] ?? '' ) );
 	update_option( 'luwipress_chat_returns_policy', sanitize_textarea_field( $_POST['luwipress_chat_returns_policy'] ?? '' ) );
 	update_option( 'luwipress_chat_color_primary', sanitize_hex_color( $_POST['luwipress_chat_color_primary'] ?? '#6366f1' ) );
@@ -100,6 +102,43 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 	update_option( 'luwipress_chat_daily_budget', floatval( $_POST['luwipress_chat_daily_budget'] ?? 0.50 ) );
 	update_option( 'luwipress_chat_max_messages', absint( $_POST['luwipress_chat_max_messages'] ?? 10 ) );
 	update_option( 'luwipress_chat_rate_limit', absint( $_POST['luwipress_chat_rate_limit'] ?? 30 ) );
+
+	// Marketplaces — save all marketplace credentials as a single serialised option
+	$mp_keys = array(
+		'amazon_api_key', 'amazon_seller_id', 'amazon_region',
+		'ebay_api_key', 'ebay_environment', 'ebay_marketplace_id',
+		'trendyol_api_key', 'trendyol_api_secret', 'trendyol_seller_id', 'trendyol_cargo_company_id',
+		'alibaba_app_key', 'alibaba_app_secret', 'alibaba_access_token',
+		'hepsiburada_api_key', 'hepsiburada_api_secret', 'hepsiburada_merchant_id',
+		'n11_api_key', 'n11_api_secret',
+		'etsy_api_key', 'etsy_shop_id',
+		'walmart_client_id', 'walmart_client_secret',
+	);
+	foreach ( $mp_keys as $k ) {
+		$opt = 'luwipress_' . $k;
+		if ( $k === 'trendyol_cargo_company_id' ) {
+			update_option( $opt, absint( $_POST[ $opt ] ?? 10 ) );
+		} else {
+			update_option( $opt, sanitize_text_field( $_POST[ $opt ] ?? '' ) );
+		}
+	}
+	// Enable toggles
+	$mp_slugs = array( 'amazon', 'ebay', 'trendyol', 'alibaba', 'hepsiburada', 'n11', 'etsy', 'walmart' );
+	foreach ( $mp_slugs as $slug ) {
+		update_option( 'luwipress_marketplace_' . $slug . '_enabled', isset( $_POST[ 'luwipress_marketplace_' . $slug . '_enabled' ] ) ? 1 : 0 );
+	}
+
+	// Advertising — Google Ads
+	update_option( 'luwipress_google_ads_customer_id', sanitize_text_field( $_POST['luwipress_google_ads_customer_id'] ?? '' ) );
+	update_option( 'luwipress_google_merchant_id', sanitize_text_field( $_POST['luwipress_google_merchant_id'] ?? '' ) );
+	update_option( 'luwipress_google_ads_conversion_id', sanitize_text_field( $_POST['luwipress_google_ads_conversion_id'] ?? '' ) );
+	update_option( 'luwipress_google_ads_conversion_label', sanitize_text_field( $_POST['luwipress_google_ads_conversion_label'] ?? '' ) );
+
+	// Advertising — Meta (Facebook/Instagram)
+	update_option( 'luwipress_meta_pixel_id', sanitize_text_field( $_POST['luwipress_meta_pixel_id'] ?? '' ) );
+	update_option( 'luwipress_meta_access_token', sanitize_text_field( $_POST['luwipress_meta_access_token'] ?? '' ) );
+	update_option( 'luwipress_meta_catalog_id', sanitize_text_field( $_POST['luwipress_meta_catalog_id'] ?? '' ) );
+	update_option( 'luwipress_meta_business_id', sanitize_text_field( $_POST['luwipress_meta_business_id'] ?? '' ) );
 
 	// Security
 	update_option( 'luwipress_security_headers', isset( $_POST['luwipress_security_headers'] ) ? 1 : 0 );
@@ -146,6 +185,35 @@ $security_headers   = get_option( 'luwipress_security_headers', 1 );
 $ip_whitelist       = get_option( 'luwipress_ip_whitelist', '' );
 $hmac_secret        = get_option( 'luwipress_hmac_secret', '' );
 
+// Marketplace settings — compact loader
+$mp_cfg = array();
+$mp_all_slugs = array( 'amazon', 'ebay', 'trendyol', 'alibaba', 'hepsiburada', 'n11', 'etsy', 'walmart' );
+foreach ( $mp_all_slugs as $_s ) {
+	$mp_cfg[ $_s ]['enabled'] = get_option( 'luwipress_marketplace_' . $_s . '_enabled', 0 );
+}
+$mp_cfg['amazon']['api_key']    = get_option( 'luwipress_amazon_api_key', '' );
+$mp_cfg['amazon']['seller_id']  = get_option( 'luwipress_amazon_seller_id', '' );
+$mp_cfg['amazon']['region']     = get_option( 'luwipress_amazon_region', 'eu' );
+$mp_cfg['ebay']['api_key']      = get_option( 'luwipress_ebay_api_key', '' );
+$mp_cfg['ebay']['environment']  = get_option( 'luwipress_ebay_environment', 'production' );
+$mp_cfg['ebay']['marketplace']  = get_option( 'luwipress_ebay_marketplace_id', 'EBAY_US' );
+$mp_cfg['trendyol']['api_key']  = get_option( 'luwipress_trendyol_api_key', '' );
+$mp_cfg['trendyol']['api_secret'] = get_option( 'luwipress_trendyol_api_secret', '' );
+$mp_cfg['trendyol']['seller_id'] = get_option( 'luwipress_trendyol_seller_id', '' );
+$mp_cfg['trendyol']['cargo']    = get_option( 'luwipress_trendyol_cargo_company_id', 10 );
+$mp_cfg['alibaba']['app_key']   = get_option( 'luwipress_alibaba_app_key', '' );
+$mp_cfg['alibaba']['app_secret'] = get_option( 'luwipress_alibaba_app_secret', '' );
+$mp_cfg['alibaba']['access_token'] = get_option( 'luwipress_alibaba_access_token', '' );
+$mp_cfg['hepsiburada']['api_key']    = get_option( 'luwipress_hepsiburada_api_key', '' );
+$mp_cfg['hepsiburada']['api_secret'] = get_option( 'luwipress_hepsiburada_api_secret', '' );
+$mp_cfg['hepsiburada']['merchant_id'] = get_option( 'luwipress_hepsiburada_merchant_id', '' );
+$mp_cfg['n11']['api_key']       = get_option( 'luwipress_n11_api_key', '' );
+$mp_cfg['n11']['api_secret']    = get_option( 'luwipress_n11_api_secret', '' );
+$mp_cfg['etsy']['api_key']      = get_option( 'luwipress_etsy_api_key', '' );
+$mp_cfg['etsy']['shop_id']      = get_option( 'luwipress_etsy_shop_id', '' );
+$mp_cfg['walmart']['client_id'] = get_option( 'luwipress_walmart_client_id', '' );
+$mp_cfg['walmart']['client_secret'] = get_option( 'luwipress_walmart_client_secret', '' );
+
 $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'connection';
 
 // Detected plugins for info boxes
@@ -162,6 +230,9 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 	<nav class="nav-tab-wrapper luwipress-tabs">
 		<a href="?page=luwipress-settings&tab=connection" class="nav-tab <?php echo 'connection' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-admin-links"></span> <?php esc_html_e( 'Connection', 'luwipress' ); ?>
+		</a>
+		<a href="?page=luwipress-settings&tab=theme-setup" class="nav-tab <?php echo 'theme-setup' === $active_tab ? 'nav-tab-active' : ''; ?>">
+			<span class="dashicons dashicons-welcome-widgets-menus"></span> <?php esc_html_e( 'Theme Setup', 'luwipress' ); ?>
 		</a>
 		<a href="?page=luwipress-settings&tab=general" class="nav-tab <?php echo 'general' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-admin-settings"></span> <?php esc_html_e( 'General', 'luwipress' ); ?>
@@ -184,6 +255,12 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		<a href="?page=luwipress-settings&tab=customer-chat" class="nav-tab <?php echo 'customer-chat' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-format-chat"></span> <?php esc_html_e( 'Customer Chat', 'luwipress' ); ?>
 		</a>
+		<a href="?page=luwipress-settings&tab=marketplaces" class="nav-tab <?php echo 'marketplaces' === $active_tab ? 'nav-tab-active' : ''; ?>">
+			<span class="dashicons dashicons-store"></span> <?php esc_html_e( 'Marketplaces', 'luwipress' ); ?>
+		</a>
+		<a href="?page=luwipress-settings&tab=advertising" class="nav-tab <?php echo 'advertising' === $active_tab ? 'nav-tab-active' : ''; ?>">
+			<span class="dashicons dashicons-megaphone"></span> <?php esc_html_e( 'Advertising', 'luwipress' ); ?>
+		</a>
 		<a href="?page=luwipress-settings&tab=security" class="nav-tab <?php echo 'security' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-shield-alt"></span> <?php esc_html_e( 'Security', 'luwipress' ); ?>
 		</a>
@@ -196,28 +273,8 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		<div class="luwipress-tab-content <?php echo 'connection' === $active_tab ? 'tab-active' : ''; ?>" id="tab-connection">
 
 			<?php
-			$processing_mode  = get_option( 'luwipress_processing_mode', 'local' );
-			$default_provider = get_option( 'luwipress_default_provider', 'anthropic' );
+			$processing_mode = get_option( 'luwipress_processing_mode', 'local' );
 			?>
-
-			<!-- AI Provider -->
-			<div class="luwipress-card" style="border-left:4px solid #0073aa;">
-				<h2><?php esc_html_e( 'AI Provider', 'luwipress' ); ?></h2>
-				<p class="description" style="margin-bottom:12px;"><?php esc_html_e( 'LuwiPress calls AI APIs directly from WordPress. Select your preferred provider.', 'luwipress' ); ?></p>
-				<table class="form-table">
-					<tr>
-						<th><label for="luwipress_default_provider"><?php esc_html_e( 'Default AI Provider', 'luwipress' ); ?></label></th>
-						<td>
-							<select name="luwipress_default_provider" id="luwipress_default_provider">
-								<option value="anthropic" <?php selected( $default_provider, 'anthropic' ); ?>>Anthropic (Claude)</option>
-								<option value="openai" <?php selected( $default_provider, 'openai' ); ?>>OpenAI (GPT)</option>
-								<option value="google" <?php selected( $default_provider, 'google' ); ?>>Google (Gemini)</option>
-							</select>
-							<p class="description"><?php esc_html_e( 'Each task can also use a specific provider.', 'luwipress' ); ?></p>
-						</td>
-					</tr>
-				</table>
-			</div>
 
 			<!-- API Authentication -->
 			<div class="luwipress-card">
@@ -278,6 +335,523 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					</tr>
 				</table>
 			</div>
+		</div>
+
+		<!-- THEME SETUP -->
+		<div class="luwipress-tab-content <?php echo 'theme-setup' === $active_tab ? 'tab-active' : ''; ?>" id="tab-theme-setup">
+
+			<style>
+				.lp-ts{--ts-radius:var(--radius-lg);--ts-gap:var(--space-lg)}
+				/* Theme catalog grid */
+				.lp-tc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--space-lg);margin-bottom:var(--space-2xl)}
+				.lp-tc-card{background:var(--lp-surface);border:1px solid var(--lp-border);border-radius:var(--radius-lg);padding:var(--space-xl);transition:border-color var(--duration-fast),box-shadow var(--duration-fast);position:relative;display:flex;flex-direction:column}
+				.lp-tc-card:hover{border-color:var(--lp-primary-light);box-shadow:var(--lp-shadow-md)}
+				.lp-tc-card.is-active{border-color:var(--lp-success);background:var(--lp-success-bg)}
+				.lp-tc-card.is-coming{opacity:.65;pointer-events:auto}
+				.lp-tc-head{display:flex;align-items:center;gap:var(--space-md);margin-bottom:var(--space-md)}
+				.lp-tc-icon{width:48px;height:48px;border-radius:var(--radius-md);background:var(--lp-primary-50);display:flex;align-items:center;justify-content:center;color:var(--lp-primary);font-size:24px;flex-shrink:0}
+				.lp-tc-card.is-coming .lp-tc-icon{background:var(--lp-surface-secondary);color:var(--lp-gray-light)}
+				.lp-tc-name{font-weight:700;font-size:var(--text-md);color:var(--lp-text);margin:0}
+				.lp-tc-ver{font-size:var(--text-xs);color:var(--lp-text-secondary)}
+				.lp-tc-update-badge{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;background:var(--lp-warning);color:#fff;border-radius:var(--radius-full);vertical-align:middle;white-space:nowrap}
+				.lp-tc-desc{font-size:var(--text-sm);color:var(--lp-text-secondary);line-height:1.6;margin-bottom:var(--space-md);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+				.lp-tc-features{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:var(--space-lg)}
+				.lp-tc-feat{font-size:var(--text-xs);padding:2px 8px;background:var(--lp-surface-secondary);border-radius:var(--radius-full);color:var(--lp-text-secondary)}
+				/* Badge float removed — palette swatches in header instead */
+				.lp-tc-status{display:flex;flex-direction:column;gap:2px;margin-bottom:var(--space-md)}
+				.lp-tc-status-row{display:flex;align-items:center;gap:var(--space-xs);font-size:var(--text-xs);font-weight:500}
+				.lp-tc-status-row .dashicons{font-size:14px;width:14px;height:14px}
+				.lp-tc-status-row.ok{color:var(--lp-success)}
+				.lp-tc-status-row.warn{color:var(--lp-warning)}
+				.lp-tc-status-row.err{color:var(--lp-error)}
+				.lp-tc-status-row.neutral{color:var(--lp-text-secondary)}
+				.lp-tc-log:empty{display:none}
+				.lp-tc-log{margin-bottom:var(--space-sm);padding:var(--space-sm) var(--space-md);background:var(--lp-surface-secondary);border-radius:var(--radius-sm);font-size:var(--text-xs)}
+				.lp-tc-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:auto}
+				.lp-tc-actions .button{font-size:12px !important;padding:4px 12px !important;line-height:1.6 !important;height:auto !important}
+				.lp-tc-palette{display:flex;gap:3px;margin-left:auto;flex-shrink:0}
+				.lp-tc-swatch{width:16px;height:16px;border-radius:50%;border:1px solid rgba(0,0,0,.1);flex-shrink:0}
+				/* Wizard steps */
+				.lp-ts-steps{display:flex;gap:var(--space-xs);margin-bottom:var(--ts-gap);padding:0}
+				.lp-ts-step{flex:1;display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-md);background:var(--lp-surface-secondary);border-radius:var(--radius-md);font-size:var(--text-sm);color:var(--lp-text-secondary);transition:all var(--duration-fast)}
+				.lp-ts-step.done{background:var(--lp-success-bg);color:var(--lp-success)}
+				.lp-ts-step.current{background:var(--lp-primary-50);color:var(--lp-primary);font-weight:600}
+				.lp-ts-step .num{width:24px;height:24px;border-radius:50%;background:var(--lp-border);color:#fff;display:flex;align-items:center;justify-content:center;font-size:var(--text-xs);font-weight:700;flex-shrink:0}
+				.lp-ts-step.done .num{background:var(--lp-success)}
+				.lp-ts-step.current .num{background:var(--lp-primary)}
+				.lp-ts-card{background:var(--lp-surface);border:1px solid var(--lp-border);border-radius:var(--ts-radius);padding:var(--space-xl);margin-bottom:var(--ts-gap)}
+				.lp-ts-card h3{margin:0 0 var(--space-sm);font-size:var(--text-lg);font-weight:700}
+				.lp-ts-card p{margin:0 0 var(--space-md);color:var(--lp-text-secondary);font-size:var(--text-sm)}
+				.lp-ts-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:var(--radius-full);font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+				.lp-ts-badge.ok{background:#dcfce7;color:var(--lp-success)}
+				.lp-ts-badge.warn{background:var(--lp-warning-bg);color:#b45309}
+				.lp-ts-badge.err{background:#fef2f2;color:var(--lp-error)}
+				.lp-ts-badge.info{background:var(--lp-primary-50);color:var(--lp-primary)}
+				.lp-ts-row{display:flex;gap:var(--space-md);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-md)}
+				.lp-ts-btn{padding:10px 24px;font-size:var(--text-md);display:inline-flex;align-items:center;gap:var(--space-sm)}
+				.lp-ts-btn .dashicons{font-size:18px;width:18px;height:18px}
+				.lp-ts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--space-sm);margin-bottom:var(--space-md)}
+				.lp-ts-pg{background:var(--lp-surface-secondary);border-radius:var(--radius-sm);padding:var(--space-sm) var(--space-md);display:flex;align-items:center;gap:var(--space-sm);font-size:var(--text-sm)}
+				.lp-ts-pg.ok{color:var(--lp-success)}
+				.lp-ts-pg.miss{color:var(--lp-warning)}
+				.lp-ts-pg .dashicons{font-size:14px;width:14px;height:14px}
+				.lp-ts-log{background:var(--lp-surface-secondary);border:1px solid var(--lp-border-light);border-radius:var(--radius-sm);padding:var(--space-md);font-family:var(--font-mono);font-size:var(--text-sm);max-height:240px;overflow-y:auto;line-height:1.8;margin-top:var(--space-md)}
+				.lp-ts-log .ok{color:var(--lp-success)}
+				.lp-ts-log .skip{color:var(--lp-warning)}
+				.lp-ts-log .fail{color:var(--lp-error)}
+				.lp-ts-cleanup{margin-top:var(--space-xl);padding-top:var(--space-lg);border-top:1px solid var(--lp-border)}
+				.lp-ts-log-step{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-sm) 0;font-size:var(--text-sm);animation:lp-fade-up .3s ease both}
+				.lp-ts-log-step .dashicons{font-size:18px;width:18px;height:18px;flex-shrink:0}
+				.lp-ts-log-step.ok{color:var(--lp-success)}
+				.lp-ts-log-step.ok .dashicons{color:var(--lp-success)}
+				.lp-ts-log-step.fail{color:var(--lp-error)}
+				.lp-ts-log-step.fail .dashicons{color:var(--lp-error)}
+				.lp-ts-log-step.pending{color:var(--lp-text-secondary)}
+				.lp-ts-log-step.pending .dashicons{color:var(--lp-primary)}
+				.spin{animation:rotation 1s linear infinite}
+				@keyframes rotation{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+				.lp-tc-store-status{background:var(--lp-surface);border:1px solid var(--lp-border);border-radius:var(--radius-lg);padding:var(--space-xl);margin-bottom:var(--space-xl)}
+				.lp-tc-detect-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-xl)}
+				.lp-tc-detect-group{display:flex;flex-direction:column;gap:2px}
+				.lp-tc-detect-label{font-size:var(--text-xs);font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--lp-text-secondary);margin-bottom:var(--space-sm);padding-bottom:var(--space-xs);border-bottom:1px solid var(--lp-border-light)}
+				.lp-tc-detect-row{display:flex;align-items:center;gap:var(--space-xs);font-size:var(--text-sm);padding:3px 0}
+				.lp-tc-detect-row .dashicons{font-size:14px;width:14px;height:14px;flex-shrink:0}
+				.lp-tc-detect-row.ok{color:var(--lp-success)}
+				.lp-tc-detect-row.ok .dashicons{color:var(--lp-success)}
+				.lp-tc-detect-row.miss{color:var(--lp-text-secondary)}
+				.lp-tc-detect-row.miss .dashicons{color:var(--lp-border)}
+				.lp-tc-detect-row.err{color:var(--lp-error)}
+				.lp-tc-detect-row.err .dashicons{color:var(--lp-error)}
+				.lp-tc-detect-row.neutral{color:var(--lp-text)}
+				.lp-tc-detect-row.neutral .dashicons{color:var(--lp-text-secondary)}
+				.lp-tc-will-create{font-size:var(--text-xs);color:var(--lp-primary);font-weight:600;margin-left:auto}
+				.lp-tc-ver-inline{font-size:var(--text-xs);color:var(--lp-text-secondary);font-weight:400}
+				@media(max-width:782px){.lp-tc-detect-grid{grid-template-columns:1fr}}
+				.btn-danger{color:var(--lp-error)!important;border-color:var(--lp-error)!important}
+				.btn-danger:hover{background:var(--lp-error)!important;color:#fff!important}
+			</style>
+
+			<?php
+			$tm      = LuwiPress_Theme_Manager::get_instance();
+			$catalog = $tm->get_catalog();
+
+			// Determine which theme to show wizard for.
+			// Priority: active Luwi theme > installed Luwi theme > first available.
+			$selected_slug = '';
+			foreach ( $catalog as $sl => $ct ) {
+				if ( $ct['active'] && ! $ct['coming_soon'] ) { $selected_slug = $sl; break; }
+			}
+			if ( ! $selected_slug ) {
+				foreach ( $catalog as $sl => $ct ) {
+					if ( $ct['installed'] && ! $ct['coming_soon'] ) { $selected_slug = $sl; break; }
+				}
+			}
+			if ( ! $selected_slug ) {
+				foreach ( $catalog as $sl => $ct ) {
+					if ( ! $ct['coming_soon'] ) { $selected_slug = $sl; break; }
+				}
+			}
+
+			// Allow URL override: ?luwi_theme=slug
+			if ( ! empty( $_GET['luwi_theme'] ) && isset( $catalog[ sanitize_text_field( $_GET['luwi_theme'] ) ] ) ) {
+				$selected_slug = sanitize_text_field( $_GET['luwi_theme'] );
+			}
+
+			$status = $tm->get_status( $selected_slug );
+			$def    = $status['theme'] ?? array();
+
+			// Step states.
+			$s_installed = $status['installed'] ?? false;
+			$s_active    = $status['active'] ?? false;
+			$s_elementor = $status['has_elementor'] ?? false;
+			$s_wc        = $status['has_wc'] ?? false;
+			$s_setup     = $status['setup_done'] ?? false;
+			$s_hp        = $status['has_homepage'] ?? false;
+			$s_menu      = $status['has_menu'] ?? false;
+
+			// Current step.
+			if ( ! $s_elementor )      { $step = 0; }
+			elseif ( ! $s_installed )   { $step = 1; }
+			elseif ( ! $s_active )      { $step = 2; }
+			elseif ( ! $s_setup )       { $step = 3; }
+			else                        { $step = 4; }
+
+			$demo_pages     = $status['demo_pages'] ?? array();
+			$wc_pages       = $status['wc_pages'] ?? array();
+			$missing_count  = $status['demo_missing'] ?? 0;
+			$existing_count = $status['demo_existing'] ?? 0;
+
+			$page_icons = array(
+				'home'             => 'dashicons-admin-home',
+				'about'            => 'dashicons-info-outline',
+				'contact'          => 'dashicons-email-alt',
+				'faq'              => 'dashicons-editor-help',
+				'blog'             => 'dashicons-edit-large',
+				'terms-conditions' => 'dashicons-media-document',
+				'privacy-policy'   => 'dashicons-shield',
+			);
+			?>
+
+			<!-- Theme Catalog -->
+			<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-sm)">
+				<div>
+					<h2 style="font-size:var(--text-lg);font-weight:700;margin:0 0 4px"><?php esc_html_e( 'Theme Library', 'luwipress' ); ?></h2>
+					<p style="color:var(--lp-text-secondary);font-size:var(--text-sm);margin:0"><?php esc_html_e( 'Free premium themes included with your LuwiPress license.', 'luwipress' ); ?></p>
+				</div>
+				<button type="button" class="button button-secondary" id="lp-check-updates-btn" style="font-size:var(--text-xs);white-space:nowrap">
+					<span class="dashicons dashicons-update" style="font-size:14px;width:14px;height:14px;margin-top:2px"></span>
+					<?php esc_html_e( 'Check for Updates', 'luwipress' ); ?>
+				</button>
+			</div>
+
+			<div class="lp-tc-grid">
+				<?php foreach ( $catalog as $t_slug => $t ) :
+					$card_class = 'lp-tc-card';
+					if ( $t['active'] )       $card_class .= ' is-active';
+					if ( $t['coming_soon'] )  $card_class .= ' is-coming';
+				?>
+				<div class="<?php echo esc_attr( $card_class ); ?>">
+
+					<!-- Header -->
+					<div class="lp-tc-head">
+						<div class="lp-tc-icon"><span class="dashicons <?php echo esc_attr( $t['icon'] ); ?>"></span></div>
+						<div>
+							<h3 class="lp-tc-name"><?php echo esc_html( $t['name'] ); ?></h3>
+							<span class="lp-tc-ver">v<?php echo esc_html( $t['installed_ver'] ?? $t['version'] ); ?></span>
+							<?php if ( ! empty( $t['update_available'] ) ) : ?>
+								<span class="lp-tc-update-badge">
+									<?php echo esc_html( sprintf( __( 'Update: v%s', 'luwipress' ), $t['latest_version'] ) ); ?>
+								</span>
+							<?php endif; ?>
+						</div>
+						<?php if ( ! empty( $t['palette'] ) ) : ?>
+						<span class="lp-tc-palette">
+							<?php foreach ( $t['palette'] as $pval ) : ?>
+								<span class="lp-tc-swatch" style="background:<?php echo esc_attr( $pval ); ?>"></span>
+							<?php endforeach; ?>
+						</span>
+						<?php endif; ?>
+					</div>
+
+					<p class="lp-tc-desc"><?php echo esc_html( $t['description'] ); ?></p>
+
+					<!-- Status: what's detected -->
+					<?php if ( ! $t['coming_soon'] ) : ?>
+					<div class="lp-tc-status">
+						<?php
+						$t_folder_exists = is_dir( get_theme_root() . '/' . $t_slug );
+						if ( $t['active'] ) : ?>
+							<div class="lp-tc-status-row ok"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Active theme', 'luwipress' ); ?></div>
+						<?php elseif ( $t['installed'] ) : ?>
+							<div class="lp-tc-status-row warn"><span class="dashicons dashicons-info-outline"></span> <?php esc_html_e( 'Installed — not active', 'luwipress' ); ?></div>
+						<?php elseif ( $t_folder_exists ) : ?>
+							<div class="lp-tc-status-row warn"><span class="dashicons dashicons-update"></span> <?php esc_html_e( 'Needs update — folder exists', 'luwipress' ); ?></div>
+						<?php else : ?>
+							<div class="lp-tc-status-row neutral"><span class="dashicons dashicons-download"></span> <?php esc_html_e( 'Not installed', 'luwipress' ); ?></div>
+						<?php endif; ?>
+						<?php if ( ! defined( 'ELEMENTOR_VERSION' ) ) : ?>
+							<div class="lp-tc-status-row err"><span class="dashicons dashicons-warning"></span> <?php esc_html_e( 'Elementor required', 'luwipress' ); ?></div>
+						<?php endif; ?>
+					</div>
+					<?php endif; ?>
+
+					<!-- Live progress log -->
+					<div class="lp-tc-log" id="lp-card-log-<?php echo esc_attr( $t_slug ); ?>"></div>
+
+					<!-- Actions -->
+					<div class="lp-tc-actions">
+						<?php if ( $t['coming_soon'] ) : ?>
+							<span class="button button-secondary" disabled style="opacity:.5"><?php esc_html_e( 'Coming Soon', 'luwipress' ); ?></span>
+						<?php elseif ( ! defined( 'ELEMENTOR_VERSION' ) ) : ?>
+							<span class="button button-secondary" disabled style="opacity:.5"><?php esc_html_e( 'Elementor Required', 'luwipress' ); ?></span>
+						<?php elseif ( $t['active'] ) : ?>
+							<?php if ( ! empty( $t['update_available'] ) ) : ?>
+								<button type="button" class="button button-primary lp-theme-update-btn" data-slug="<?php echo esc_attr( $t_slug ); ?>">
+									<span class="dashicons dashicons-update" style="font-size:13px;width:13px;height:13px;margin-top:3px"></span>
+									<?php echo esc_html( sprintf( __( 'Update to v%s', 'luwipress' ), $t['latest_version'] ) ); ?>
+								</button>
+							<?php endif; ?>
+						<?php else :
+							$folder_exists = is_dir( get_theme_root() . '/' . $t_slug );
+							if ( $t['installed'] && ! empty( $t['update_available'] ) ) :
+						?>
+							<button type="button" class="button button-primary lp-theme-update-btn" data-slug="<?php echo esc_attr( $t_slug ); ?>">
+								<span class="dashicons dashicons-update" style="font-size:13px;width:13px;height:13px;margin-top:3px"></span>
+								<?php echo esc_html( sprintf( __( 'Update to v%s', 'luwipress' ), $t['latest_version'] ) ); ?>
+							</button>
+						<?php else : ?>
+							<button type="button" class="button button-primary lp-card-wizard-btn" data-slug="<?php echo esc_attr( $t_slug ); ?>" data-installed="<?php echo $t['installed'] ? '1' : '0'; ?>">
+								<?php if ( $t['installed'] ) : ?>
+									<span class="dashicons dashicons-controls-play" style="font-size:13px;width:13px;height:13px;margin-top:3px"></span>
+									<?php esc_html_e( 'Activate & Setup', 'luwipress' ); ?>
+								<?php else : ?>
+									<span class="dashicons dashicons-download" style="font-size:13px;width:13px;height:13px;margin-top:3px"></span>
+									<?php esc_html_e( 'Install & Setup', 'luwipress' ); ?>
+								<?php endif; ?>
+							</button>
+						<?php endif; ?>
+						<?php endif; ?>
+					</div>
+				</div>
+				<?php endforeach; ?>
+			</div>
+
+			<!-- Store Status Panel -->
+			<?php
+			$current_theme   = wp_get_theme();
+			$is_luwi_active  = strpos( get_template(), 'luwi-' ) === 0;
+			$has_elementor   = defined( 'ELEMENTOR_VERSION' );
+			$has_wc          = class_exists( 'WooCommerce' );
+			$product_count   = $has_wc ? ( wp_count_posts( 'product' )->publish ?? 0 ) : 0;
+			$front_page      = get_option( 'show_on_front' );
+			$hp_id           = absint( get_option( 'page_on_front' ) );
+			$has_homepage    = ( 'page' === $front_page && $hp_id > 0 );
+			$locations       = get_nav_menu_locations();
+			$has_menu        = ! empty( $locations['primary'] );
+			$has_snapshot    = ! empty( $tm->get_snapshot() );
+
+			// Demo pages check.
+			$demo_pages_check = array(
+				'home'    => get_page_by_path( 'home' ),
+				'about'   => get_page_by_path( 'about' ),
+				'contact' => get_page_by_path( 'contact' ),
+				'faq'     => get_page_by_path( 'faq' ),
+				'blog'    => get_page_by_path( 'blog' ),
+			);
+
+			// WC pages.
+			$wc_pages_check = array();
+			if ( $has_wc && function_exists( 'wc_get_page_id' ) ) {
+				$wc_pages_check = array(
+					'Shop'       => wc_get_page_id( 'shop' ) > 0,
+					'Cart'       => wc_get_page_id( 'cart' ) > 0,
+					'Checkout'   => wc_get_page_id( 'checkout' ) > 0,
+					'My Account' => wc_get_page_id( 'myaccount' ) > 0,
+				);
+			}
+			?>
+			<div class="lp-tc-store-status">
+				<h3 style="font-size:var(--text-md);font-weight:700;margin:0 0 var(--space-md);display:flex;align-items:center;gap:var(--space-sm)">
+					<span class="dashicons dashicons-welcome-view-site" style="color:var(--lp-primary)"></span>
+					<?php esc_html_e( 'Current Store Status', 'luwipress' ); ?>
+				</h3>
+
+				<div class="lp-tc-detect-grid">
+					<!-- Environment -->
+					<div class="lp-tc-detect-group">
+						<span class="lp-tc-detect-label"><?php esc_html_e( 'Environment', 'luwipress' ); ?></span>
+						<div class="lp-tc-detect-row <?php echo $is_luwi_active ? 'ok' : 'neutral'; ?>">
+							<span class="dashicons <?php echo $is_luwi_active ? 'dashicons-yes-alt' : 'dashicons-info-outline'; ?>"></span>
+							<?php printf( esc_html__( 'Theme: %s', 'luwipress' ), '<strong>' . esc_html( $current_theme->get( 'Name' ) ) . '</strong>' ); ?>
+						</div>
+						<div class="lp-tc-detect-row <?php echo $has_elementor ? 'ok' : 'err'; ?>">
+							<span class="dashicons <?php echo $has_elementor ? 'dashicons-yes-alt' : 'dashicons-warning'; ?>"></span>
+							Elementor <?php echo $has_elementor ? '<span class="lp-tc-ver-inline">v' . esc_html( defined( 'ELEMENTOR_VERSION' ) ? ELEMENTOR_VERSION : '' ) . '</span>' : '— <strong>' . esc_html__( 'Required', 'luwipress' ) . '</strong>'; ?>
+						</div>
+						<div class="lp-tc-detect-row <?php echo $has_wc ? 'ok' : 'neutral'; ?>">
+							<span class="dashicons <?php echo $has_wc ? 'dashicons-yes-alt' : 'dashicons-info-outline'; ?>"></span>
+							WooCommerce <?php echo $has_wc ? '— <strong>' . intval( $product_count ) . '</strong> ' . esc_html__( 'products', 'luwipress' ) : '— ' . esc_html__( 'optional', 'luwipress' ); ?>
+						</div>
+					</div>
+
+					<!-- Pages -->
+					<div class="lp-tc-detect-group">
+						<span class="lp-tc-detect-label"><?php esc_html_e( 'Store Pages', 'luwipress' ); ?></span>
+						<?php foreach ( $demo_pages_check as $pg_slug => $pg_post ) :
+							$exists = ( $pg_post && 'publish' === $pg_post->post_status );
+						?>
+						<div class="lp-tc-detect-row <?php echo $exists ? 'ok' : 'miss'; ?>">
+							<span class="dashicons <?php echo $exists ? 'dashicons-yes-alt' : 'dashicons-marker'; ?>"></span>
+							<?php echo esc_html( ucfirst( $pg_slug ) ); ?>
+							<?php if ( ! $exists ) : ?><span class="lp-tc-will-create"><?php esc_html_e( 'will create', 'luwipress' ); ?></span><?php endif; ?>
+						</div>
+						<?php endforeach; ?>
+					</div>
+
+					<!-- Store Setup -->
+					<div class="lp-tc-detect-group">
+						<span class="lp-tc-detect-label"><?php esc_html_e( 'Store Setup', 'luwipress' ); ?></span>
+						<div class="lp-tc-detect-row <?php echo $has_homepage ? 'ok' : 'miss'; ?>">
+							<span class="dashicons <?php echo $has_homepage ? 'dashicons-yes-alt' : 'dashicons-marker'; ?>"></span>
+							<?php echo $has_homepage ? esc_html__( 'Homepage set', 'luwipress' ) : esc_html__( 'Homepage — will set', 'luwipress' ); ?>
+						</div>
+						<div class="lp-tc-detect-row <?php echo $has_menu ? 'ok' : 'miss'; ?>">
+							<span class="dashicons <?php echo $has_menu ? 'dashicons-yes-alt' : 'dashicons-marker'; ?>"></span>
+							<?php echo $has_menu ? esc_html__( 'Navigation menu', 'luwipress' ) : esc_html__( 'Menu — will create', 'luwipress' ); ?>
+						</div>
+						<?php if ( $has_wc ) : foreach ( $wc_pages_check as $wc_label => $wc_ok ) : ?>
+						<div class="lp-tc-detect-row <?php echo $wc_ok ? 'ok' : 'miss'; ?>">
+							<span class="dashicons <?php echo $wc_ok ? 'dashicons-yes-alt' : 'dashicons-marker'; ?>"></span>
+							<?php echo esc_html( $wc_label ); ?>
+						</div>
+						<?php endforeach; endif; ?>
+						<?php if ( $has_snapshot ) : ?>
+						<div class="lp-tc-detect-row ok">
+							<span class="dashicons dashicons-backup"></span>
+							<?php esc_html_e( 'Backup snapshot saved', 'luwipress' ); ?>
+						</div>
+						<?php endif; ?>
+					</div>
+				</div>
+
+				<?php if ( $has_snapshot ) : ?>
+				<div style="margin-top:var(--space-md);padding-top:var(--space-md);border-top:1px solid var(--lp-border-light)">
+					<button type="button" class="button" id="lp-rollback-btn" style="color:var(--lp-error);border-color:var(--lp-error);font-size:var(--text-xs)">
+						<span class="dashicons dashicons-undo" style="font-size:14px;width:14px;height:14px;margin-top:2px"></span>
+						<?php esc_html_e( 'Rollback to Previous State', 'luwipress' ); ?>
+					</button>
+					<span id="lp-rollback-result" style="margin-left:var(--space-sm);font-size:var(--text-xs)"></span>
+				</div>
+				<?php endif; ?>
+			</div>
+
+			<script>
+			(function(){
+				var nonce = '<?php echo esc_js( wp_create_nonce( 'luwipress_dashboard_nonce' ) ); ?>';
+
+				function wizardStep(action, data, logEl, label) {
+					return new Promise(function(resolve, reject) {
+						data.action = action;
+						data.nonce  = nonce;
+						logEl.innerHTML += '<div class="lp-ts-log-step pending"><span class="dashicons dashicons-update spin"></span> ' + label + '...</div>';
+						var stepEl = logEl.querySelector('.lp-ts-log-step.pending:last-child');
+
+						jQuery.post(ajaxurl, data, function(res) {
+							if (res.success) {
+								stepEl.className = 'lp-ts-log-step ok';
+								stepEl.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> ' + label;
+								resolve(res.data);
+							} else {
+								stepEl.className = 'lp-ts-log-step fail';
+								stepEl.innerHTML = '<span class="dashicons dashicons-warning"></span> ' + label + ' — ' + (res.data || 'Failed');
+								reject(res.data);
+							}
+						}).fail(function() {
+							stepEl.className = 'lp-ts-log-step fail';
+							stepEl.innerHTML = '<span class="dashicons dashicons-warning"></span> ' + label + ' — Request failed';
+							reject('Request failed');
+						});
+					});
+				}
+
+					/* ── Rollback button ── */
+				var rbBtn = document.getElementById('lp-rollback-btn');
+				if (rbBtn) rbBtn.addEventListener('click', function() {
+					if (!confirm('<?php echo esc_js( __( 'Restore previous theme and remove starter pages?', 'luwipress' ) ); ?>')) return;
+					var me = this;
+					me.disabled = true;
+					me.innerHTML = '<span class="dashicons dashicons-update spin" style="font-size:14px;width:14px;height:14px"></span> <?php esc_html_e( 'Rolling back...', 'luwipress' ); ?>';
+					jQuery.post(ajaxurl, {action: 'luwipress_theme_rollback', nonce: nonce}, function(res) {
+						var rd = document.getElementById('lp-rollback-result');
+						if (res.success) {
+							rd.innerHTML = '<span style="color:var(--lp-success)">✓ <?php esc_html_e( 'Restored', 'luwipress' ); ?></span>';
+							setTimeout(function(){ location.reload(); }, 1500);
+						} else {
+							rd.innerHTML = '<span style="color:var(--lp-error)">' + (res.data || 'Failed') + '</span>';
+							me.disabled = false;
+							me.innerHTML = '<span class="dashicons dashicons-undo"></span> <?php esc_html_e( 'Retry', 'luwipress' ); ?>';
+						}
+					});
+				});
+
+				/* ── Card Install/Activate buttons (inline wizard) ── */
+				document.querySelectorAll('.lp-card-wizard-btn').forEach(function(btn) {
+					btn.addEventListener('click', function() {
+						var cardSlug = this.getAttribute('data-slug');
+						var isInstalled = this.getAttribute('data-installed') === '1';
+						var log = document.getElementById('lp-card-log-' + cardSlug);
+						var me = this;
+
+						// Hide button, show progress in log area.
+						me.style.display = 'none';
+						log.innerHTML = '';
+
+						var steps = [];
+						if (!isInstalled) {
+							steps.push(['luwipress_theme_install', {slug: cardSlug}, '<?php esc_html_e( 'Downloading & installing theme', 'luwipress' ); ?>']);
+						}
+						steps.push(['luwipress_theme_activate', {slug: cardSlug}, '<?php esc_html_e( 'Activating theme & saving backup', 'luwipress' ); ?>']);
+						steps.push(['luwipress_theme_setup', {slug: cardSlug, color_preset: ''}, '<?php esc_html_e( 'Creating pages, menus & homepage', 'luwipress' ); ?>']);
+
+						var chain = Promise.resolve();
+						steps.forEach(function(s) {
+							chain = chain.then(function() {
+								return wizardStep(s[0], s[1], log, s[2]);
+							});
+						});
+
+						chain.then(function() {
+							log.innerHTML += '<div class="lp-ts-log-step ok" style="font-weight:700;margin-top:var(--space-xs)"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Store ready! Reloading...', 'luwipress' ); ?></div>';
+							setTimeout(function(){ location.reload(); }, 2000);
+						}).catch(function() {
+							me.style.display = '';
+							me.innerHTML = '<?php esc_html_e( 'Retry', 'luwipress' ); ?>';
+						});
+					});
+				});
+
+				/* ── Check for Updates button ── */
+				var checkBtn = document.getElementById('lp-check-updates-btn');
+				if (checkBtn) checkBtn.addEventListener('click', function() {
+					var me = this;
+					me.disabled = true;
+					me.innerHTML = '<span class="dashicons dashicons-update spin" style="font-size:14px;width:14px;height:14px"></span> <?php esc_html_e( 'Checking...', 'luwipress' ); ?>';
+					jQuery.post(ajaxurl, {action: 'luwipress_theme_check_updates', nonce: nonce}, function(res) {
+						if (res.success) {
+							var updates = res.data;
+							var count = 0;
+							for (var s in updates) { if (updates[s].has_update) count++; }
+							if (count > 0) {
+								me.innerHTML = '<span class="dashicons dashicons-yes-alt" style="font-size:14px;width:14px;height:14px;margin-top:2px"></span> ' + count + ' <?php esc_html_e( 'update(s) found — reloading...', 'luwipress' ); ?>';
+								setTimeout(function(){ location.reload(); }, 1500);
+							} else {
+								me.innerHTML = '<span class="dashicons dashicons-yes-alt" style="font-size:14px;width:14px;height:14px;margin-top:2px"></span> <?php esc_html_e( 'All themes up to date', 'luwipress' ); ?>';
+								me.disabled = false;
+								setTimeout(function(){
+									me.innerHTML = '<span class="dashicons dashicons-update" style="font-size:14px;width:14px;height:14px;margin-top:2px"></span> <?php esc_html_e( 'Check for Updates', 'luwipress' ); ?>';
+								}, 3000);
+							}
+						} else {
+							me.innerHTML = '<span class="dashicons dashicons-warning" style="font-size:14px;width:14px;height:14px;margin-top:2px"></span> <?php esc_html_e( 'Check failed', 'luwipress' ); ?>';
+							me.disabled = false;
+						}
+					}).fail(function() {
+						me.innerHTML = '<?php esc_html_e( 'Check failed', 'luwipress' ); ?>';
+						me.disabled = false;
+					});
+				});
+
+				/* ── Update Theme button ── */
+				document.querySelectorAll('.lp-theme-update-btn').forEach(function(btn) {
+					btn.addEventListener('click', function() {
+						var slug = this.getAttribute('data-slug');
+						var me = this;
+						var log = document.getElementById('lp-card-log-' + slug);
+
+						if (!confirm('<?php echo esc_js( __( 'Update this theme? Your customizations in Elementor will be preserved.', 'luwipress' ) ); ?>')) return;
+
+						me.disabled = true;
+						me.innerHTML = '<span class="dashicons dashicons-update spin" style="font-size:14px;width:14px;height:14px"></span> <?php esc_html_e( 'Updating...', 'luwipress' ); ?>';
+						if (log) log.innerHTML = '';
+
+						jQuery.post(ajaxurl, {action: 'luwipress_theme_update', slug: slug, nonce: nonce}, function(res) {
+							if (res.success) {
+								me.innerHTML = '<span class="dashicons dashicons-yes-alt" style="font-size:14px;width:14px;height:14px"></span> <?php esc_html_e( 'Updated! Reloading...', 'luwipress' ); ?>';
+								if (log) log.innerHTML = '<div class="lp-ts-log-step ok"><span class="dashicons dashicons-yes-alt"></span> v' + res.data.old_version + ' → v' + res.data.new_version + '</div>';
+								setTimeout(function(){ location.reload(); }, 2000);
+							} else {
+								me.innerHTML = '<span class="dashicons dashicons-warning" style="font-size:14px;width:14px;height:14px"></span> ' + (res.data || '<?php esc_html_e( 'Update failed', 'luwipress' ); ?>');
+								me.disabled = false;
+							}
+						}).fail(function() {
+							me.innerHTML = '<?php esc_html_e( 'Update failed — retry', 'luwipress' ); ?>';
+							me.disabled = false;
+						});
+					});
+				});
+			})();
+			</script>
+
 		</div>
 
 		<!-- GENERAL -->
@@ -503,7 +1077,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				</table>
 			</div>
 
-			<div class="luwipress-card" style="background:#f9fafb;">
+			<div class="luwipress-card luwipress-card--muted">
 				<h2><?php esc_html_e( 'Cost Protection', 'luwipress' ); ?></h2>
 				<ul class="luwipress-feature-list">
 					<li><span class="dashicons dashicons-shield"></span> <?php esc_html_e( 'Daily budget limit auto-pauses AI when reached — no surprise charges', 'luwipress' ); ?></li>
@@ -913,6 +1487,8 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			<?php
 			$chat_enabled    = get_option( 'luwipress_chat_enabled', 0 );
 			$chat_greeting   = get_option( 'luwipress_chat_greeting', 'Hi! How can I help you today?' );
+			$chat_tone       = get_option( 'luwipress_chat_tone', 'friendly' );
+			$chat_custom_instructions = get_option( 'luwipress_chat_custom_instructions', '' );
 			$chat_shipping   = get_option( 'luwipress_chat_shipping_policy', '' );
 			$chat_returns    = get_option( 'luwipress_chat_returns_policy', '' );
 			$chat_primary    = get_option( 'luwipress_chat_color_primary', '#6366f1' );
@@ -925,7 +1501,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			$chat_rate       = get_option( 'luwipress_chat_rate_limit', 30 );
 			?>
 
-			<div class="luwipress-card" style="border-left:4px solid #6366f1;">
+			<div class="luwipress-card luwipress-card--info">
 				<h3><?php esc_html_e( 'Customer Chat Widget', 'luwipress' ); ?></h3>
 				<p class="description"><?php esc_html_e( 'AI-powered chat widget for your customers. Answers product questions, checks order status, and escalates to WhatsApp/Telegram when needed.', 'luwipress' ); ?></p>
 
@@ -944,6 +1520,28 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 						<td>
 							<input type="text" id="luwipress_chat_greeting" name="luwipress_chat_greeting"
 								value="<?php echo esc_attr( $chat_greeting ); ?>" class="regular-text">
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_chat_tone"><?php esc_html_e( 'Chat Tone', 'luwipress' ); ?></label></th>
+						<td>
+							<select id="luwipress_chat_tone" name="luwipress_chat_tone">
+								<option value="friendly" <?php selected( $chat_tone, 'friendly' ); ?>><?php esc_html_e( 'Friendly & Warm', 'luwipress' ); ?></option>
+								<option value="professional" <?php selected( $chat_tone, 'professional' ); ?>><?php esc_html_e( 'Professional & Formal', 'luwipress' ); ?></option>
+								<option value="casual" <?php selected( $chat_tone, 'casual' ); ?>><?php esc_html_e( 'Casual & Playful', 'luwipress' ); ?></option>
+								<option value="expert" <?php selected( $chat_tone, 'expert' ); ?>><?php esc_html_e( 'Expert & Knowledgeable', 'luwipress' ); ?></option>
+								<option value="luxury" <?php selected( $chat_tone, 'luxury' ); ?>><?php esc_html_e( 'Luxury & Refined', 'luwipress' ); ?></option>
+								<option value="custom" <?php selected( $chat_tone, 'custom' ); ?>><?php esc_html_e( 'Custom (write your own)', 'luwipress' ); ?></option>
+							</select>
+							<p class="description"><?php esc_html_e( 'Sets the personality and communication style of the chat assistant.', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_chat_custom_instructions"><?php esc_html_e( 'Custom Instructions', 'luwipress' ); ?></label></th>
+						<td>
+							<textarea id="luwipress_chat_custom_instructions" name="luwipress_chat_custom_instructions"
+								rows="3" class="large-text" placeholder="<?php esc_attr_e( 'e.g. Always mention we offer free shipping on orders over €200. Use music-related metaphors.', 'luwipress' ); ?>"><?php echo esc_textarea( $chat_custom_instructions ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'Extra instructions appended to the AI system prompt. Works with any tone.', 'luwipress' ); ?></p>
 						</td>
 					</tr>
 					<tr>
@@ -968,7 +1566,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				</table>
 			</div>
 
-			<div class="luwipress-card" style="border-left:4px solid #25d366;">
+			<div class="luwipress-card luwipress-card--success">
 				<h3><?php esc_html_e( 'Escalation — Connect to Team', 'luwipress' ); ?></h3>
 				<p class="description"><?php esc_html_e( 'When AI cannot answer or customer requests, they are redirected to your team via WhatsApp or Telegram.', 'luwipress' ); ?></p>
 
@@ -1012,7 +1610,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				</table>
 			</div>
 
-			<div class="luwipress-card" style="border-left:4px solid #f59e0b;">
+			<div class="luwipress-card luwipress-card--warning">
 				<h3><?php esc_html_e( 'Store Policies (RAG Context)', 'luwipress' ); ?></h3>
 				<p class="description"><?php esc_html_e( 'These texts are fed to the AI so it can answer shipping and return questions accurately.', 'luwipress' ); ?></p>
 
@@ -1034,7 +1632,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				</table>
 			</div>
 
-			<div class="luwipress-card" style="border-left:4px solid #ef4444;">
+			<div class="luwipress-card luwipress-card--error">
 				<h3><?php esc_html_e( 'Budget & Rate Limiting', 'luwipress' ); ?></h3>
 
 				<table class="form-table">
@@ -1052,6 +1650,302 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 							<input type="number" id="luwipress_chat_rate_limit" name="luwipress_chat_rate_limit"
 								value="<?php echo esc_attr( $chat_rate ); ?>" min="5" max="500" style="width:80px;">
 							<span class="description"><?php esc_html_e( 'messages per hour per visitor', 'luwipress' ); ?></span>
+						</td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+		<!-- MARKETPLACES -->
+		<div class="luwipress-tab-content <?php echo 'marketplaces' === $active_tab ? 'tab-active' : ''; ?>" id="tab-marketplaces">
+
+			<style>
+				/* ── Marketplace Tab — Design System ── */
+				.lp-mp-search{position:relative;margin-bottom:var(--space-lg)}
+				.lp-mp-search input{width:100%;padding:10px 14px 10px 38px;border:1px solid var(--lp-border);border-radius:var(--radius-md);font-size:var(--text-md);font-family:var(--font-sans);background:var(--lp-surface);transition:border-color var(--duration-fast) var(--ease-out),box-shadow var(--duration-fast) var(--ease-out);outline:none}
+				.lp-mp-search input:focus{border-color:var(--lp-primary);box-shadow:0 0 0 3px var(--lp-primary-50)}
+				.lp-mp-search input::placeholder{color:var(--lp-gray-light)}
+				.lp-mp-search .dashicons{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--lp-gray-light);font-size:16px}
+
+				.lp-mp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--space-md)}
+				.lp-mp-card{background:var(--lp-surface);border:1px solid var(--lp-border);border-radius:var(--radius-md);overflow:hidden;transition:border-color var(--duration-fast) var(--ease-out),box-shadow var(--duration-fast) var(--ease-out)}
+				.lp-mp-card:hover{border-color:var(--lp-primary-light);box-shadow:var(--lp-shadow-md)}
+				.lp-mp-card.lp-mp-connected{border-color:var(--lp-success)}
+				.lp-mp-card[hidden]{display:none}
+
+				.lp-mp-head{display:flex;align-items:center;padding:var(--space-md) var(--space-lg);gap:var(--space-md);cursor:pointer;user-select:none}
+				.lp-mp-dot{width:10px;height:10px;border-radius:var(--radius-full);flex-shrink:0}
+				.lp-mp-label{font-weight:600;font-size:var(--text-md);color:var(--lp-text);flex:1}
+				.lp-mp-status{font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:2px 8px;border-radius:var(--radius-full)}
+				.lp-mp-status.on{background:#dcfce7;color:var(--lp-success)}
+				.lp-mp-status.cfg{background:var(--lp-primary-50);color:var(--lp-primary)}
+				.lp-mp-status.off{background:var(--lp-border-light);color:var(--lp-gray-light)}
+				.lp-mp-chevron{color:var(--lp-gray-light);transition:transform var(--duration-fast) var(--ease-out);font-size:16px}
+				.lp-mp-card.open .lp-mp-chevron{transform:rotate(180deg)}
+
+				.lp-mp-fields{display:none;padding:0 var(--space-lg) var(--space-lg);border-top:1px solid var(--lp-border-light)}
+				.lp-mp-card.open .lp-mp-fields{display:block}
+				.lp-mp-field{display:flex;align-items:center;gap:var(--space-sm);margin-top:var(--space-md)}
+				.lp-mp-field label{min-width:100px;font-size:var(--text-sm);color:var(--lp-text-secondary);font-weight:500}
+				.lp-mp-field input[type="text"],.lp-mp-field input[type="password"],.lp-mp-field select{flex:1;padding:7px 10px;border:1px solid var(--lp-border);border-radius:var(--radius-sm);font-size:var(--text-sm);font-family:var(--font-sans);background:var(--lp-surface);transition:border-color var(--duration-fast);outline:none;max-width:280px}
+				.lp-mp-field input:focus,.lp-mp-field select:focus{border-color:var(--lp-primary)}
+				.lp-mp-field input[type="number"]{width:80px;flex:unset}
+				.lp-mp-field .lp-mp-ok{color:var(--lp-success);font-size:14px;flex-shrink:0}
+				.lp-mp-enable{margin-top:var(--space-md);display:flex;align-items:center;gap:var(--space-sm)}
+				.lp-mp-enable label{font-size:var(--text-sm);color:var(--lp-text);font-weight:500;cursor:pointer}
+
+				.lp-mp-empty{text-align:center;padding:var(--space-3xl);color:var(--lp-gray-light);font-size:var(--text-md);display:none}
+			</style>
+
+			<!-- Search -->
+			<div class="lp-mp-search">
+				<span class="dashicons dashicons-search"></span>
+				<input type="text" id="lp-mp-filter" placeholder="<?php esc_attr_e( 'Search marketplaces...', 'luwipress' ); ?>" autocomplete="off" />
+			</div>
+
+			<!-- Grid -->
+			<div class="lp-mp-grid" id="lp-mp-grid">
+			<?php
+			$mp_defs = array(
+				'amazon'      => array( 'Amazon',      '#ff9900', array(
+					array( 'luwipress_amazon_api_key',   'API Key',   'password', $mp_cfg['amazon']['api_key'] ),
+					array( 'luwipress_amazon_seller_id', 'Seller ID', 'text',     $mp_cfg['amazon']['seller_id'] ),
+					array( 'luwipress_amazon_region',    'Region',    'select',   $mp_cfg['amazon']['region'], array( 'na' => 'NA', 'eu' => 'EU', 'fe' => 'FE' ) ),
+				)),
+				'ebay'        => array( 'eBay',        '#e53238', array(
+					array( 'luwipress_ebay_api_key',        'OAuth Token', 'password', $mp_cfg['ebay']['api_key'] ),
+					array( 'luwipress_ebay_environment',    'Environment', 'select',   $mp_cfg['ebay']['environment'], array( 'sandbox' => 'Sandbox', 'production' => 'Production' ) ),
+					array( 'luwipress_ebay_marketplace_id', 'Market',      'select',   $mp_cfg['ebay']['marketplace'], array( 'EBAY_US' => 'US', 'EBAY_GB' => 'UK', 'EBAY_DE' => 'DE', 'EBAY_FR' => 'FR', 'EBAY_IT' => 'IT', 'EBAY_ES' => 'ES', 'EBAY_AU' => 'AU' ) ),
+				)),
+				'trendyol'    => array( 'Trendyol',    '#f27a1a', array(
+					array( 'luwipress_trendyol_api_key',    'API Key',    'password', $mp_cfg['trendyol']['api_key'] ),
+					array( 'luwipress_trendyol_api_secret', 'API Secret', 'password', $mp_cfg['trendyol']['api_secret'] ),
+					array( 'luwipress_trendyol_seller_id',  'Seller ID',  'text',     $mp_cfg['trendyol']['seller_id'] ),
+					array( 'luwipress_trendyol_cargo_company_id', 'Cargo ID', 'number', $mp_cfg['trendyol']['cargo'] ),
+				)),
+				'hepsiburada' => array( 'Hepsiburada', '#ff6000', array(
+					array( 'luwipress_hepsiburada_api_key',     'API Key',     'password', $mp_cfg['hepsiburada']['api_key'] ),
+					array( 'luwipress_hepsiburada_api_secret',  'API Secret',  'password', $mp_cfg['hepsiburada']['api_secret'] ),
+					array( 'luwipress_hepsiburada_merchant_id', 'Merchant ID', 'text',     $mp_cfg['hepsiburada']['merchant_id'] ),
+				)),
+				'n11'         => array( 'N11',         '#1a237e', array(
+					array( 'luwipress_n11_api_key',    'API Key',    'password', $mp_cfg['n11']['api_key'] ),
+					array( 'luwipress_n11_api_secret', 'API Secret', 'password', $mp_cfg['n11']['api_secret'] ),
+				)),
+				'alibaba'     => array( 'Alibaba',     '#ff6a00', array(
+					array( 'luwipress_alibaba_app_key',      'App Key',      'text',     $mp_cfg['alibaba']['app_key'] ),
+					array( 'luwipress_alibaba_app_secret',   'App Secret',   'password', $mp_cfg['alibaba']['app_secret'] ),
+					array( 'luwipress_alibaba_access_token', 'Access Token', 'password', $mp_cfg['alibaba']['access_token'] ),
+				)),
+				'etsy'        => array( 'Etsy',        '#f1641e', array(
+					array( 'luwipress_etsy_api_key', 'API Key', 'password', $mp_cfg['etsy']['api_key'] ),
+					array( 'luwipress_etsy_shop_id', 'Shop ID', 'text',     $mp_cfg['etsy']['shop_id'] ),
+				)),
+				'walmart'     => array( 'Walmart',     '#0071dc', array(
+					array( 'luwipress_walmart_client_id',     'Client ID',     'text',     $mp_cfg['walmart']['client_id'] ),
+					array( 'luwipress_walmart_client_secret', 'Client Secret', 'password', $mp_cfg['walmart']['client_secret'] ),
+				)),
+			);
+
+			foreach ( $mp_defs as $slug => $mp ) :
+				$label   = $mp[0];
+				$color   = $mp[1];
+				$fields  = $mp[2];
+				$enabled = ! empty( $mp_cfg[ $slug ]['enabled'] );
+				$has_key = false;
+				foreach ( $fields as $f ) {
+					if ( in_array( $f[2], array( 'password', 'text' ), true ) && ! empty( $f[3] ) ) { $has_key = true; break; }
+				}
+				$state_class = ( $enabled && $has_key ) ? 'lp-mp-connected' : '';
+				$state_class .= $enabled ? ' open' : '';
+			?>
+				<div class="lp-mp-card <?php echo esc_attr( trim( $state_class ) ); ?>" data-mp="<?php echo esc_attr( $slug ); ?>" data-name="<?php echo esc_attr( strtolower( $label ) ); ?>">
+					<div class="lp-mp-head" onclick="this.parentElement.classList.toggle('open')">
+						<span class="lp-mp-dot" style="background:<?php echo esc_attr( $color ); ?>"></span>
+						<span class="lp-mp-label"><?php echo esc_html( $label ); ?></span>
+						<?php if ( $enabled && $has_key ) : ?>
+							<span class="lp-mp-status on"><?php esc_html_e( 'Live', 'luwipress' ); ?></span>
+						<?php elseif ( $has_key ) : ?>
+							<span class="lp-mp-status cfg"><?php esc_html_e( 'Ready', 'luwipress' ); ?></span>
+						<?php else : ?>
+							<span class="lp-mp-status off"><?php esc_html_e( 'Off', 'luwipress' ); ?></span>
+						<?php endif; ?>
+						<span class="lp-mp-chevron dashicons dashicons-arrow-down-alt2"></span>
+					</div>
+					<div class="lp-mp-fields">
+						<div class="lp-mp-enable">
+							<input type="checkbox" id="lp_en_<?php echo esc_attr( $slug ); ?>" name="luwipress_marketplace_<?php echo esc_attr( $slug ); ?>_enabled" value="1" <?php checked( $enabled ); ?> />
+							<label for="lp_en_<?php echo esc_attr( $slug ); ?>"><?php printf( esc_html__( 'Enable %s', 'luwipress' ), esc_html( $label ) ); ?></label>
+						</div>
+						<?php foreach ( $fields as $f ) :
+							$fn = $f[0]; $fl = $f[1]; $ft = $f[2]; $fv = $f[3]; $fo = $f[4] ?? array();
+						?>
+						<div class="lp-mp-field">
+							<label for="<?php echo esc_attr( $fn ); ?>"><?php echo esc_html( $fl ); ?></label>
+							<?php if ( 'select' === $ft ) : ?>
+								<select id="<?php echo esc_attr( $fn ); ?>" name="<?php echo esc_attr( $fn ); ?>">
+									<?php foreach ( $fo as $ov => $ol ) : ?>
+										<option value="<?php echo esc_attr( $ov ); ?>" <?php selected( $fv, $ov ); ?>><?php echo esc_html( $ol ); ?></option>
+									<?php endforeach; ?>
+								</select>
+							<?php elseif ( 'number' === $ft ) : ?>
+								<input type="number" id="<?php echo esc_attr( $fn ); ?>" name="<?php echo esc_attr( $fn ); ?>" value="<?php echo esc_attr( $fv ); ?>" min="1" />
+							<?php else : ?>
+								<input type="<?php echo esc_attr( $ft ); ?>" id="<?php echo esc_attr( $fn ); ?>" name="<?php echo esc_attr( $fn ); ?>" value="<?php echo esc_attr( $fv ); ?>" autocomplete="off" />
+								<?php if ( 'password' === $ft && ! empty( $fv ) ) : ?>
+									<span class="lp-mp-ok dashicons dashicons-yes-alt"></span>
+								<?php endif; ?>
+							<?php endif; ?>
+						</div>
+						<?php endforeach; ?>
+					</div>
+				</div>
+			<?php endforeach; ?>
+			</div>
+
+			<div class="lp-mp-empty" id="lp-mp-empty"><?php esc_html_e( 'No marketplaces match your search.', 'luwipress' ); ?></div>
+
+			<script>
+			(function(){
+				var input = document.getElementById('lp-mp-filter');
+				var grid  = document.getElementById('lp-mp-grid');
+				var empty = document.getElementById('lp-mp-empty');
+				if (!input || !grid) return;
+
+				input.addEventListener('input', function(){
+					var q = this.value.toLowerCase().trim();
+					var cards = grid.querySelectorAll('.lp-mp-card');
+					var visible = 0;
+					cards.forEach(function(c){
+						var match = !q || c.getAttribute('data-name').indexOf(q) !== -1 || c.getAttribute('data-mp').indexOf(q) !== -1;
+						c.hidden = !match;
+						if (match) visible++;
+					});
+					empty.style.display = visible === 0 ? 'block' : 'none';
+				});
+			})();
+			</script>
+
+		</div>
+
+		<!-- ADVERTISING -->
+		<div class="luwipress-tab-content <?php echo 'advertising' === $active_tab ? 'tab-active' : ''; ?>" id="tab-advertising">
+			<?php
+			$detector   = LuwiPress_Plugin_Detector::get_instance();
+			$ad_gads    = $detector->detect_google_ads();
+			$ad_meta    = $detector->detect_meta_ads();
+			$ad_analytics = $detector->detect_analytics();
+			?>
+
+			<!-- Detected Plugins Status -->
+			<div class="luwipress-card">
+				<h2><?php esc_html_e( 'Detected Advertising Plugins', 'luwipress' ); ?></h2>
+				<table class="form-table">
+					<tr>
+						<th><?php esc_html_e( 'Analytics', 'luwipress' ); ?></th>
+						<td>
+							<?php if ( 'none' !== $ad_analytics['plugin'] ) : ?>
+								<span class="lp-pill pill-ok"><span class="dashicons dashicons-yes-alt"></span> <?php echo esc_html( ucwords( str_replace( '-', ' ', $ad_analytics['plugin'] ) ) . ' v' . $ad_analytics['version'] ); ?></span>
+							<?php else : ?>
+								<span class="lp-pill pill-neutral"><?php esc_html_e( 'Not detected', 'luwipress' ); ?></span>
+								<p class="description"><?php esc_html_e( 'Recommended: Google Site Kit or GTM4WP', 'luwipress' ); ?></p>
+							<?php endif; ?>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Google Ads', 'luwipress' ); ?></th>
+						<td>
+							<?php if ( 'none' !== $ad_gads['plugin'] ) : ?>
+								<span class="lp-pill pill-ok"><span class="dashicons dashicons-yes-alt"></span> <?php echo esc_html( ucwords( str_replace( '-', ' ', $ad_gads['plugin'] ) ) . ' v' . $ad_gads['version'] ); ?></span>
+								<?php if ( ! empty( $ad_gads['features']['merchant_center'] ) ) : ?>
+									<span class="lp-pill pill-ok"><span class="dashicons dashicons-store"></span> <?php esc_html_e( 'Merchant Center', 'luwipress' ); ?></span>
+								<?php endif; ?>
+							<?php else : ?>
+								<span class="lp-pill pill-neutral"><?php esc_html_e( 'Not detected', 'luwipress' ); ?></span>
+								<p class="description"><?php esc_html_e( 'Recommended: Google for WooCommerce', 'luwipress' ); ?></p>
+							<?php endif; ?>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Meta (Facebook)', 'luwipress' ); ?></th>
+						<td>
+							<?php if ( 'none' !== $ad_meta['plugin'] ) : ?>
+								<span class="lp-pill pill-ok"><span class="dashicons dashicons-yes-alt"></span> <?php echo esc_html( ucwords( str_replace( '-', ' ', $ad_meta['plugin'] ) ) . ' v' . $ad_meta['version'] ); ?></span>
+								<?php if ( ! empty( $ad_meta['features']['conversion_api'] ) ) : ?>
+									<span class="lp-pill pill-ok"><span class="dashicons dashicons-cloud"></span> <?php esc_html_e( 'CAPI', 'luwipress' ); ?></span>
+								<?php endif; ?>
+							<?php else : ?>
+								<span class="lp-pill pill-neutral"><?php esc_html_e( 'Not detected', 'luwipress' ); ?></span>
+								<p class="description"><?php esc_html_e( 'Recommended: Meta Pixel for WordPress', 'luwipress' ); ?></p>
+							<?php endif; ?>
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<!-- Google Ads Configuration -->
+			<div class="luwipress-card">
+				<h2><span class="dashicons dashicons-megaphone"></span> <?php esc_html_e( 'Google Ads', 'luwipress' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Store your Google Ads identifiers for AI-powered ad copy generation and conversion tracking reference.', 'luwipress' ); ?></p>
+				<table class="form-table">
+					<tr>
+						<th><label for="luwipress_google_ads_customer_id"><?php esc_html_e( 'Customer ID', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="text" id="luwipress_google_ads_customer_id" name="luwipress_google_ads_customer_id" class="regular-text" value="<?php echo esc_attr( get_option( 'luwipress_google_ads_customer_id', '' ) ); ?>" placeholder="123-456-7890" />
+							<p class="description"><?php esc_html_e( 'Your Google Ads account ID (format: XXX-XXX-XXXX)', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_google_merchant_id"><?php esc_html_e( 'Merchant Center ID', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="text" id="luwipress_google_merchant_id" name="luwipress_google_merchant_id" class="regular-text" value="<?php echo esc_attr( get_option( 'luwipress_google_merchant_id', '' ) ); ?>" placeholder="123456789" />
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_google_ads_conversion_id"><?php esc_html_e( 'Conversion ID', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="text" id="luwipress_google_ads_conversion_id" name="luwipress_google_ads_conversion_id" class="regular-text" value="<?php echo esc_attr( get_option( 'luwipress_google_ads_conversion_id', '' ) ); ?>" placeholder="AW-XXXXXXXXX" />
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_google_ads_conversion_label"><?php esc_html_e( 'Conversion Label', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="text" id="luwipress_google_ads_conversion_label" name="luwipress_google_ads_conversion_label" class="regular-text" value="<?php echo esc_attr( get_option( 'luwipress_google_ads_conversion_label', '' ) ); ?>" placeholder="AbCdEfGhIjKlMn" />
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<!-- Meta (Facebook) Configuration -->
+			<div class="luwipress-card">
+				<h2><span class="dashicons dashicons-share"></span> <?php esc_html_e( 'Meta (Facebook / Instagram)', 'luwipress' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Store your Meta Business identifiers for catalog sync and conversion API reference.', 'luwipress' ); ?></p>
+				<table class="form-table">
+					<tr>
+						<th><label for="luwipress_meta_pixel_id"><?php esc_html_e( 'Pixel ID', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="text" id="luwipress_meta_pixel_id" name="luwipress_meta_pixel_id" class="regular-text" value="<?php echo esc_attr( get_option( 'luwipress_meta_pixel_id', '' ) ); ?>" placeholder="1234567890123456" />
+							<p class="description"><?php esc_html_e( 'Found in Meta Events Manager > Data Sources', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_meta_access_token"><?php esc_html_e( 'Conversions API Token', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="password" id="luwipress_meta_access_token" name="luwipress_meta_access_token" class="regular-text" value="<?php echo esc_attr( get_option( 'luwipress_meta_access_token', '' ) ); ?>" />
+							<p class="description"><?php esc_html_e( 'System User access token from Meta Business Settings', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_meta_catalog_id"><?php esc_html_e( 'Catalog ID', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="text" id="luwipress_meta_catalog_id" name="luwipress_meta_catalog_id" class="regular-text" value="<?php echo esc_attr( get_option( 'luwipress_meta_catalog_id', '' ) ); ?>" placeholder="1234567890123456" />
+							<p class="description"><?php esc_html_e( 'Commerce Manager > Catalog ID (for product sync)', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_meta_business_id"><?php esc_html_e( 'Business ID', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="text" id="luwipress_meta_business_id" name="luwipress_meta_business_id" class="regular-text" value="<?php echo esc_attr( get_option( 'luwipress_meta_business_id', '' ) ); ?>" placeholder="1234567890123456" />
 						</td>
 					</tr>
 				</table>
