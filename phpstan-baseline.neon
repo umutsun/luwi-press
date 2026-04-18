@@ -1,0 +1,1186 @@
+parameters:
+	ignoreErrors:
+		-
+			message: "#^Constant WC_VERSION not found\\.$#"
+			count: 2
+			path: luwipress/admin/admin-page.php
+
+		-
+			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
+			count: 1
+			path: luwipress/admin/admin-page.php
+
+		-
+			message: "#^Parameter \\#1 \\$text of function esc_attr expects string, float given\\.$#"
+			count: 1
+			path: luwipress/admin/settings-page.php
+
+		-
+			message: "#^Parameter \\#1 \\$text of function esc_attr expects string, int given\\.$#"
+			count: 1
+			path: luwipress/admin/settings-page.php
+
+		-
+			message: "#^Comparison operation \"\\>\" between int\\<1, max\\> and 0 is always true\\.$#"
+			count: 4
+			path: luwipress/admin/translation-page.php
+
+		-
+			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
+			count: 1
+			path: luwipress/admin/translation-page.php
+
+		-
+			message: "#^Function wc_get_product not found\\.$#"
+			count: 5
+			path: luwipress/includes/class-luwipress-aeo.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product_Attribute\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-ai-content.php
+
+		-
+			message: "#^Call to method get_options\\(\\) on an unknown class WC_Product_Attribute\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-ai-content.php
+
+		-
+			message: "#^Function wc_get_product not found\\.$#"
+			count: 6
+			path: luwipress/includes/class-luwipress-ai-content.php
+
+		-
+			message: "#^Property LuwiPress_AI_Content\\:\\:\\$n8n_api_token is never read, only written\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-ai-content.php
+
+		-
+			message: "#^Property LuwiPress_AI_Content\\:\\:\\$n8n_webhook_url is never read, only written\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-ai-content.php
+
+		-
+			message: "#^Parameter \\#1 \\$post of function get_the_title expects int\\|WP_Post, string given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-ai-engine.php
+
+		-
+			message: "#^Call to static method decode\\(\\) on an unknown class firebase\\\\jwt\\\\JWT\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-auth.php
+
+		-
+			message: "#^Call to static method encode\\(\\) on an unknown class firebase\\\\jwt\\\\JWT\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-auth.php
+
+		-
+			message: "#^Instantiated class Firebase\\\\JWT\\\\Key not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-auth.php
+
+		-
+			message: "#^Parameter \\#3 \\$autoload of function update_option expects bool\\|null, string given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-auth.php
+
+		-
+			message: "#^Call to method get_display_name\\(\\) on an unknown class WC_Customer\\.$#"
+			count: 3
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Call to method get_email\\(\\) on an unknown class WC_Customer\\.$#"
+			count: 3
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Call to method get_first_name\\(\\) on an unknown class WC_Customer\\.$#"
+			count: 3
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Customer\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Comparison operation \"\\>\" between array\\<int\\|WP_Comment\\>\\|int and 0 results in an error\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Function wc_get_order not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Function wc_get_orders not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Instantiated class WC_Customer not found\\.$#"
+			count: 4
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Parameter \\#1 \\$comment_id of function get_comment_meta expects int, string given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Parameter \\#1 \\$post of function get_the_title expects int\\|WP_Post, string given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Parameter \\#3 \\$autoload of function update_option expects bool\\|null, string given\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-crm-bridge.php
+
+		-
+			message: "#^Function wc_get_order_status_name not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-customer-chat.php
+
+		-
+			message: "#^Call to function is_wp_error\\(\\) with int\\<0, max\\> will always evaluate to false\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-elementor.php
+
+		-
+			message: "#^Cannot access property \\$files_manager on class\\-string\\|object\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-elementor.php
+
+		-
+			message: "#^Method LuwiPress_Elementor\\:\\:save_translated_page_standalone\\(\\) never returns WP_Error so it can be removed from the return type\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-elementor.php
+
+		-
+			message: "#^Method LuwiPress_Elementor\\:\\:translate_long_html\\(\\) never returns WP_Error so it can be removed from the return type\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-elementor.php
+
+		-
+			message: "#^Parameter \\#1 \\$postarr of function wp_insert_post expects array\\{ID\\?\\: int, post_author\\?\\: int, post_date\\?\\: string, post_date_gmt\\?\\: string, post_content\\?\\: string, post_content_filtered\\?\\: string, post_title\\?\\: string, post_excerpt\\?\\: string, \\.\\.\\.\\}, array\\{post_title\\: non\\-falsy\\-string, post_content\\: '', post_type\\: string, post_status\\: 'draft', post_author\\: string, post_name\\: non\\-falsy\\-string\\} given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-elementor.php
+
+		-
+			message: "#^Parameter \\#1 \\$string of function trim expects string, array given\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-elementor.php
+
+		-
+			message: "#^is_wp_error\\(int\\<0, max\\>\\) will always evaluate to false\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-elementor.php
+
+		-
+			message: "#^Offset 1 on array\\{array\\<int, string\\>, array\\<int, non\\-empty\\-string\\>\\} on left side of \\?\\? always exists and is not nullable\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-internal-linker.php
+
+		-
+			message: "#^Function get_woocommerce_currency not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-knowledge-graph.php
+
+		-
+			message: "#^Function wc_attribute_taxonomy_name not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-knowledge-graph.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 7
+			path: luwipress/includes/class-luwipress-marketplace.php
+
+		-
+			message: "#^Function wc_get_product not found\\.$#"
+			count: 3
+			path: luwipress/includes/class-luwipress-marketplace.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace\\:\\:publish_to_marketplaces\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-marketplace.php
+
+		-
+			message: "#^Function get_woocommerce_currency_symbol not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-open-claw.php
+
+		-
+			message: "#^Parameter \\#3 \\$autoload of function update_option expects bool\\|null, string given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-open-claw.php
+
+		-
+			message: "#^Unreachable statement \\- code above always terminates\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-open-claw.php
+
+		-
+			message: "#^Function pll_get_post_translations not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-plugin-detector.php
+
+		-
+			message: "#^Function pll_save_post_translations not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-plugin-detector.php
+
+		-
+			message: "#^Function wc_get_product not found\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-review-analytics.php
+
+		-
+			message: "#^Parameter \\#1 \\$comment_id of function get_comment_meta expects int, string given\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-review-analytics.php
+
+		-
+			message: "#^Call to an undefined method object\\:\\:is_taxonomy\\(\\)\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-search-index.php
+
+		-
+			message: "#^Function WC not found\\.$#"
+			count: 3
+			path: luwipress/includes/class-luwipress-site-config.php
+
+		-
+			message: "#^Function get_woocommerce_currency not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-site-config.php
+
+		-
+			message: "#^Function get_woocommerce_currency_symbol not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-site-config.php
+
+		-
+			message: "#^Function wc_tax_enabled not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-site-config.php
+
+		-
+			message: "#^Call to function is_wp_error\\(\\) with int\\<0, max\\> will always evaluate to false\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Function pll_default_language not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Function pll_get_post_translations not found\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Function pll_save_post_translations not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Method LuwiPress_Translation\\:\\:translate_elementor_chunked\\(\\) is unused\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Method LuwiPress_Translation\\:\\:translate_html_chunked\\(\\) never returns WP_Error so it can be removed from the return type\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Method LuwiPress_Translation\\:\\:wpml_share_product_images\\(\\) is unused\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Parameter \\#1 \\$postarr of function wp_insert_post expects array\\{ID\\?\\: int, post_author\\?\\: int, post_date\\?\\: string, post_date_gmt\\?\\: string, post_content\\?\\: string, post_content_filtered\\?\\: string, post_title\\?\\: string, post_excerpt\\?\\: string, \\.\\.\\.\\}, array\\{post_title\\: mixed, post_content\\: mixed, post_excerpt\\: mixed, post_type\\: string, post_status\\: string, post_author\\: string\\} given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Parameter \\#1 \\$prompt of static method LuwiPress_AI_Engine\\:\\:build_messages\\(\\) expects array, string given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Parameter \\#1 \\$string of function trim expects string, array given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Ternary operator condition is always true\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Unreachable statement \\- code above always terminates\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Variable \\$translated_term_ids in empty\\(\\) always exists and is not falsy\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^is_wp_error\\(int\\<0, max\\>\\) will always evaluate to false\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-translation.php
+
+		-
+			message: "#^Call to method get_amount\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_code\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_date_expires\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_discount_type\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_free_shipping\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Shipping_Zone\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_minimum_amount\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_shipping_methods\\(\\) on an unknown class WC_Shipping_Zone\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_usage_count\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_usage_limit\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method get_zone_name\\(\\) on an unknown class WC_Shipping_Zone\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method save\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method set_amount\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method set_code\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method set_date_expires\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method set_discount_type\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method set_free_shipping\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method set_individual_use\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method set_minimum_amount\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to method set_usage_limit\\(\\) on an unknown class WC_Coupon\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to static method get_instance\\(\\) on an unknown class LuwiPress_Chatwoot\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Call to static method get_zones\\(\\) on an unknown class WC_Shipping_Zones\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Cannot access property \\$download_link on array\\|object\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Cannot access property \\$name on array\\|object\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Cannot access property \\$plugins on array\\|object\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Cannot access property \\$version on array\\|object\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Function get_woocommerce_currency not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Function get_woocommerce_currency_symbol not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Function wc_get_customer_total_spent not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Function wc_get_order not found\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Function wc_get_order_notes not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Function wc_get_orders not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Instantiated class WC_Coupon not found\\.$#"
+			count: 2
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Instantiated class WC_Shipping_Zone not found\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Parameter \\#1 \\$commentdata of function wp_insert_comment expects array\\{comment_agent\\?\\: string, comment_approved\\?\\: int\\|string, comment_author\\?\\: string, comment_author_email\\?\\: string, comment_author_IP\\?\\: string, comment_author_url\\?\\: string, comment_content\\?\\: string, comment_date\\?\\: string, \\.\\.\\.\\}, array\\{comment_post_ID\\: string, comment_parent\\: string, comment_content\\: string, comment_author\\: non\\-falsy\\-string, comment_author_email\\: mixed, user_id\\: int, comment_approved\\: 1\\} given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Parameter \\#2 \\$user_id of function get_the_author_meta expects int\\|false, string given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Parameter \\#3 \\$context of static method LuwiPress_Logger\\:\\:log\\(\\) expects array, string given\\.$#"
+			count: 3
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Property LuwiPress_WebMCP\\:\\:\\$resource_templates is never read, only written\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^is_wp_error\\(WP_Error\\) will always evaluate to true\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-webmcp.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Adapter\\:\\:map_product_data\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-adapter.php
+
+		-
+			message: "#^Call to method get_attributes\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_gallery_image_ids\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_height\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 2
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_image_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_length\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product_Attribute\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_options\\(\\) on an unknown class WC_Product_Attribute\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_regular_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_short_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_stock_quantity\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_weight\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_width\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Function get_woocommerce_currency not found\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Function wc_attribute_label not found\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Alibaba\\:\\:map_product_data\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-alibaba.php
+
+		-
+			message: "#^Call to method get_attribute\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_gallery_image_ids\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_height\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 2
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_image_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_length\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_regular_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_sale_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_short_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_sku\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_stock_quantity\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_weight\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_width\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Function get_woocommerce_currency not found\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Amazon\\:\\:extract_bullet_points\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Amazon\\:\\:get_brand\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Amazon\\:\\:map_product_data\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-amazon.php
+
+		-
+			message: "#^Call to method get_attribute\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_attributes\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_gallery_image_ids\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_height\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_image_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_length\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product_Attribute\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_options\\(\\) on an unknown class WC_Product_Attribute\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_regular_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_sale_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_short_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_sku\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_stock_quantity\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_weight\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_width\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Function get_woocommerce_currency not found\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Function wc_attribute_label not found\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Ebay\\:\\:map_product_data\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-ebay.php
+
+		-
+			message: "#^Call to method get_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-etsy.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 3
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-etsy.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-etsy.php
+
+		-
+			message: "#^Call to method get_regular_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-etsy.php
+
+		-
+			message: "#^Call to method get_short_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-etsy.php
+
+		-
+			message: "#^Call to method get_sku\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-etsy.php
+
+		-
+			message: "#^Call to method get_stock_quantity\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-etsy.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Etsy\\:\\:map_product_data\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-etsy.php
+
+		-
+			message: "#^Call to method get_attribute\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_gallery_image_ids\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_image_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_regular_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_short_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_sku\\(\\) on an unknown class WC_Product\\.$#"
+			count: 2
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_stock_quantity\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_weight\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Hepsiburada\\:\\:map_product_data\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-hepsiburada.php
+
+		-
+			message: "#^Call to method get_attribute\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Call to method get_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Call to method get_gallery_image_ids\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 2
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Call to method get_image_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Call to method get_regular_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Call to method get_short_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 3
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Call to method get_sku\\(\\) on an unknown class WC_Product\\.$#"
+			count: 2
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Call to method get_stock_quantity\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Function get_woocommerce_currency not found\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_N11\\:\\:map_product_data\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-n11.php
+
+		-
+			message: "#^Call to method get_attribute\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_attributes\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_gallery_image_ids\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 4
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_image_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product_Attribute\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_options\\(\\) on an unknown class WC_Product_Attribute\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_regular_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_short_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_sku\\(\\) on an unknown class WC_Product\\.$#"
+			count: 2
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_stock_quantity\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_tax_class\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_weight\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to static method get_rates_for_tax_class\\(\\) on an unknown class WC_Tax\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Function get_woocommerce_currency not found\\.$#"
+			count: 2
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Function wc_attribute_label not found\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Trendyol\\:\\:get_primary_category\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Trendyol\\:\\:get_vat_rate\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Trendyol\\:\\:map_product_data\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-trendyol.php
+
+		-
+			message: "#^Call to method get_attribute\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Call to method get_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 2
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Call to method get_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Call to method get_image_id\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Call to method get_regular_price\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Call to method get_short_description\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Call to method get_sku\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Call to method get_stock_quantity\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Call to method get_weight\\(\\) on an unknown class WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Function get_woocommerce_currency not found\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^Parameter \\$product of method LuwiPress_Marketplace_Walmart\\:\\:map_product_data\\(\\) has invalid type WC_Product\\.$#"
+			count: 1
+			path: luwipress/includes/marketplace/class-luwipress-marketplace-walmart.php
+
+		-
+			message: "#^File begins with UTF\\-8 BOM character\\. This may cause problems when running the code in the web browser\\.$#"
+			count: 1
+			path: luwipress/luwipress.php
+
+		-
+			message: "#^Function get_woocommerce_currency_symbol not found\\.$#"
+			count: 1
+			path: luwipress/luwipress.php

@@ -1,0 +1,17 @@
+parameters:
+    level: 5
+    parallel:
+        maximumNumberOfProcesses: 1
+    paths:
+        - luwipress/
+    excludePaths:
+        - luwipress/assets/
+        - luwipress/languages/
+    bootstrapFiles:
+        - phpstan-bootstrap.php
+    # All existing errors tracked in phpstan-baseline.neon
+    # New code must pass Level 5 clean
+
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+    - phpstan-baseline.neon

@@ -1,0 +1,34 @@
+{
+    "name": "luwi/luwipress",
+    "description": "LuwiPress development tooling — linters, static analysis, tests",
+    "type": "project",
+    "license": "GPL-2.0-or-later",
+    "require-dev": {
+        "brain/monkey": "^2.6",
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "php-stubs/woocommerce-stubs": "^10.7",
+        "phpcompatibility/phpcompatibility-wp": "^2.1",
+        "phpstan/phpstan": "^1.12",
+        "phpunit/phpunit": "^9.6",
+        "squizlabs/php_codesniffer": "^3.10",
+        "szepeviktor/phpstan-wordpress": "^1.3",
+        "wp-coding-standards/wpcs": "^3.1",
+        "yoast/phpunit-polyfills": "^3.0"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        },
+        "sort-packages": true
+    },
+    "scripts": {
+        "lint": "phpcs",
+        "analyse": "phpstan analyse",
+        "test": "phpunit",
+        "check": [
+            "@lint",
+            "@analyse",
+            "@test"
+        ]
+    }
+}

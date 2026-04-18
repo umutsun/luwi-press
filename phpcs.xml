@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<ruleset name="LuwiPress">
+    <description>LuwiPress WordPress plugin coding standards</description>
+
+    <!-- Scan only the plugin directory -->
+    <file>luwipress/</file>
+
+    <!-- Exclude non-PHP assets -->
+    <exclude-pattern>luwipress/assets/*</exclude-pattern>
+    <exclude-pattern>luwipress/languages/*</exclude-pattern>
+
+    <!-- Show colors and progress -->
+    <arg name="colors"/>
+    <arg value="sp"/>
+    <arg name="extensions" value="php"/>
+
+    <!-- WordPress Core + Extra (includes security checks) -->
+    <rule ref="WordPress-Core"/>
+    <rule ref="WordPress-Extra"/>
+
+    <!-- PHP Compatibility: plugin supports 7.4+ -->
+    <rule ref="PHPCompatibilityWP"/>
+    <config name="testVersion" value="7.4-"/>
+
+    <!-- Pragmatic exclusions for existing codebase -->
+
+    <!-- We use class-luwipress-*.php naming consistently -->
+    <rule ref="WordPress.Files.FileName.InvalidClassFileName">
+        <severity>0</severity>
+    </rule>
+
+    <!-- Filename underscores — our files use hyphens (WP standard) -->
+    <rule ref="WordPress.Files.FileName.NotHyphenatedLowercase">
+        <severity>0</severity>
+    </rule>
+
+    <!-- Global prefix audit deferred to Phase 4 -->
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+        <severity>0</severity>
+    </rule>
+
+    <!-- Yoda conditions — not enforced for readability -->
+    <rule ref="WordPress.PHP.YodaConditions">
+        <severity>0</severity>
+    </rule>
+</ruleset>
