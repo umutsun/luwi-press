@@ -14,6 +14,8 @@ LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerc
 - AI alt text for product images (SEO + accessibility)
 - Schema markup auto-generation (Product, Article, BreadcrumbList)
 - Multi-provider: **OpenAI** (GPT-4o Mini), **Anthropic** (Claude Haiku 4.5), **Google** (Gemini 2.0 Flash)
+- **Provider fallback + retry** on transient errors (rate limits, 5xx, timeouts) — jobs keep running when one provider hiccups
+- **Translation-copy protection** — enrichment only writes to the default-language source; WPML/Polylang translation copies are automatically skipped to prevent accidental cross-language overwrites
 
 ### 2. SEO & Answer Engine Optimization (AEO)
 - Auto FAQ schema, HowTo schema, Speakable markup
@@ -29,18 +31,25 @@ LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerc
 - Chunked AI translation for long content (avoids timeouts)
 - Background cron processing
 - Coverage tracking per language + content type
+- **Pick any language as source** — if one language copy of a product is cleaner than the default, retranslate the others from that copy (`source_language` parameter)
+- **Fail-safe content protection** — if the AI returns an unparseable response, the translation is rejected and your existing content is left untouched (no risk of raw payloads ending up on your product page)
 
-### 4. Elementor Mastery (30+ tools)
-- Read full page structure via REST API
-- Edit widget text, styles, responsive overrides
-- **Section reorder** — reorganize layouts programmatically
-- **Find & replace** — text or styles across multiple pages
+### 4. Elementor Mastery (34+ tools)
+- Read full page structure via REST API (tree + flat widget view + compact outline)
+- Edit widget text, styles, responsive overrides — breakpoint-aware
+- Add / delete / move / clone sections, columns, widgets programmatically
+- **Section reorder** — reorganize layouts by ID order
+- **Find & replace** — text or styles across multiple pages in one call
 - **Structure sync** — propagate layout changes to WPML translations (preserves translated texts)
 - **Global design tokens** — read/write Elementor Kit colors & typography
-- **Template library** — list + apply saved templates
-- Snapshot/rollback safety net (max 10 per post)
-- Kit CSS management (global custom CSS)
-- Batch CSS to multiple posts by ID or post type
+- **Template library** — list + apply saved templates across multiple posts
+- **Kit CSS management** — append layered rules with named markers, batch-apply to many posts
+- **CSS vars** — read/write CSS custom properties on Kit for instant design-token changes
+- **Production safety protocol**:
+  - Named snapshot before every mutation (`/elementor/snapshot`), rollback by ID (`/elementor/rollback`)
+  - Auto-snapshot on reorder, sync-structure, translate operations
+  - `/elementor/flush-css` purges per-post Elementor CSS cache after edits
+  - Snapshot retention: up to 10 per post, listable via `/elementor/snapshots/{id}`
 - Auto-fix spacing issues, responsive audits
 
 ### 5. Customer Chat Widget (Frontend AI Assistant)
@@ -266,4 +275,4 @@ All endpoints under namespace `luwipress/v1`.
 
 ---
 
-*Document version 2.0.9 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference.*
+*Document version 2.0.10 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference.*

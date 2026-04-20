@@ -101,6 +101,7 @@ class LuwiPress_Translation {
                 'post_id'          => ['sanitize_callback' => 'absint'],
                 'product_id'       => ['sanitize_callback' => 'absint'], // backward compat alias for post_id
                 'target_languages' => ['required' => true],
+                'source_language'  => ['sanitize_callback' => 'sanitize_text_field'],
             ],
         ]);
 
@@ -180,6 +181,25 @@ class LuwiPress_Translation {
 
     public function check_token_permission( $request ) {
         return LuwiPress_Permission::check_token( $request );
+    }
+
+    /**
+     * Resolve the WPML language code of a post. Returns null if WPML is inactive
+     * or the language can't be determined. Centralises the array/object/null
+     * handling for `wpml_post_language_details`.
+     */
+    public static function get_post_wpml_language( $post_id ) {
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            return null;
+        }
+        $info = apply_filters( 'wpml_post_language_details', null, $post_id );
+        if ( is_array( $info ) ) {
+            return $info['language_code'] ?? null;
+        }
+        if ( is_object( $info ) ) {
+            return $info->language_code ?? null;
+        }
+        return null;
     }
 
     /**
@@ -328,7 +348,31 @@ class LuwiPress_Translation {
             return new WP_Error('not_found', 'Post not found or not translatable', ['status' => 404]);
         }
 
-        $source_language = apply_filters( 'wpml_default_language', get_locale() );
+        $source_override = $request->get_param( 'source_language' );
+        $source_language = $source_override ? sanitize_text_field( $source_override ) : apply_filters( 'wpml_default_language', get_locale() );
+
+        // If source_language override is given and WPML is active, read content from THAT language's
+        // translated post rather than the post_id passed in. This lets callers pick a clean source
+        // (e.g. retranslate EN from ES when the EN copy is corrupted).
+        $source_post_id = $product_id;
+        if ( $source_override && defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            $element_type = 'post_' . $post->post_type;
+            $trid = apply_filters( 'wpml_element_trid', null, $product_id, $element_type );
+            if ( $trid ) {
+                $translations = apply_filters( 'wpml_get_element_translations', null, $trid, $element_type );
+                if ( is_array( $translations ) && isset( $translations[ $source_language ]->element_id ) ) {
+                    $candidate = (int) $translations[ $source_language ]->element_id;
+                    if ( $candidate && get_post( $candidate ) ) {
+                        $source_post_id = $candidate;
+                    }
+                }
+            }
+        }
+
+        $source_product = ( $source_post_id !== $product_id && function_exists( 'wc_get_product' ) )
+            ? wc_get_product( $source_post_id )
+            : $product;
+        $source_post_obj = ( $source_post_id !== $product_id ) ? get_post( $source_post_id ) : $post;
 
         // Use WC product if available, fall back to WP post (WPML compatibility)
         $payload = [
@@ -336,12 +380,12 @@ class LuwiPress_Translation {
             'source_language'  => $source_language,
             'target_languages' => $target_languages,
             'content' => [
-                'name'              => $product ? $product->get_name() : $post->post_title,
-                'description'       => $product ? $product->get_description() : $post->post_content,
-                'short_description' => $product ? $product->get_short_description() : $post->post_excerpt,
-                'meta_title'        => $this->get_seo_meta($product_id, 'title'),
-                'meta_description'  => $this->get_seo_meta($product_id, 'description'),
-                'faq'               => get_post_meta($product_id, '_luwipress_faq', true) ?: [],
+                'name'              => $source_product ? $source_product->get_name() : $source_post_obj->post_title,
+                'description'       => $source_product ? $source_product->get_description() : $source_post_obj->post_content,
+                'short_description' => $source_product ? $source_product->get_short_description() : $source_post_obj->post_excerpt,
+                'meta_title'        => $this->get_seo_meta($source_post_id, 'title'),
+                'meta_description'  => $this->get_seo_meta($source_post_id, 'description'),
+                'faq'               => get_post_meta($source_post_id, '_luwipress_faq', true) ?: [],
             ],
             'categories' => wp_list_pluck(get_the_terms($product_id, $post->post_type === 'product' ? 'product_cat' : 'category') ?: [], 'name'),
             'permalink'  => get_permalink($product_id),
@@ -427,21 +471,17 @@ class LuwiPress_Translation {
                         if ( $parsed ) {
                             $ai_result = $parsed;
                         } else {
-                            // Smart fallback: extract title from first line, rest is description
-                            $lines = preg_split( '/\n+/', trim( $raw_text ), 2 );
-                            $first_line = trim( strip_tags( $lines[0] ?? '' ) );
-                            $rest = trim( $lines[1] ?? $raw_text );
-
-                            // If first line looks like a title (short, no period)
-                            $title_candidate = ( strlen( $first_line ) < 200 && strpos( $first_line, '.' ) === false )
-                                ? $first_line : '';
-
-                            $ai_result = array(
-                                'title'             => $title_candidate,
-                                'description'       => $rest ?: $raw_text,
-                                'short_description' => '',
+                            // JSON parse failed AND extract_json failed. NEVER write raw text to
+                            // post_content — it could be a literal JSON payload dump (bug history:
+                            // corrupted IT copies on tapadum.com, 2026-04-20). Fail the translation
+                            // and preserve existing content untouched.
+                            update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'failed' );
+                            LuwiPress_Logger::log(
+                                'Translation JSON parse failed for ' . $lang . ' (product #' . $product_id . '): raw response could not be parsed, translation rejected to protect existing content. raw_len=' . strlen( $raw_text ),
+                                'error',
+                                array( 'product_id' => $product_id, 'language' => $lang, 'raw_head' => mb_substr( $raw_text, 0, 200 ) )
                             );
-                            LuwiPress_Logger::log( 'Translation JSON fallback for ' . $lang . ': title="' . mb_substr( $title_candidate, 0, 50 ) . '" desc_len=' . strlen( $rest ), 'warning' );
+                            continue;
                         }
                     }
                 }
@@ -480,9 +520,11 @@ class LuwiPress_Translation {
         }
 
         LuwiPress_Logger::log( 'Translation requested for: ' . ( $product ? $product->get_name() : $post->post_title ), 'info', array(
-            'product_id' => $product_id,
-            'languages'  => $target_languages,
-            'mode'       => $mode,
+            'product_id'      => $product_id,
+            'source_post_id'  => $source_post_id,
+            'source_language' => $source_language,
+            'languages'       => $target_languages,
+            'mode'            => $mode,
         ) );
 
         return rest_ensure_response( array(
@@ -1099,12 +1141,46 @@ class LuwiPress_Translation {
         $default_lang  = apply_filters( 'wpml_default_language', get_locale() );
         $translated_id = apply_filters( 'wpml_object_id', $product_id, $post_type, false, $language );
 
-        LuwiPress_Logger::log( 'WPML save: source=#' . $product_id . ' trid=' . $trid . ' lang=' . $language . ' translated_id=' . ( $translated_id ?: 'null' ) . ' name_len=' . strlen( $translated['name'] ?? '' ) . ' desc_len=' . strlen( $translated['description'] ?? '' ), 'info' );
+        // Determine WPML language of the post we were handed. If the caller passed a post whose
+        // WPML language already matches the target (e.g. retranslating the EN copy itself from a
+        // different source), `wpml_object_id` returns the same id and the downstream branches skip
+        // the update. Detect that case and rewrite the EN copy in place.
+        $post_language = self::get_post_wpml_language( $product_id ) ?: '';
+
+        LuwiPress_Logger::log( 'WPML save: source=#' . $product_id . ' trid=' . $trid . ' lang=' . $language . ' post_lang=' . ( $post_language ?: '?' ) . ' translated_id=' . ( $translated_id ?: 'null' ) . ' name_len=' . strlen( $translated['name'] ?? '' ) . ' desc_len=' . strlen( $translated['description'] ?? '' ), 'info' );
 
         // Check if source is an Elementor page
         $is_elementor = LuwiPress_Elementor::is_elementor_page( $product_id );
         // Skip old copy_elementor_translated when chunked translation will handle it
         $is_chunked = get_post_meta( $product_id, '_luwipress_elementor_chunked', true );
+
+        // Self-retranslate: the passed post IS the target-language copy (e.g. EN copy of a product
+        // whose content was corrupted, being rewritten in place from a cleaner source like ES).
+        if ( $translated_id && $translated_id === $product_id && $post_language === $language ) {
+            $existing_post = get_post( $product_id );
+            $needs_slug    = $existing_post && ( is_numeric( $existing_post->post_name ) || empty( $existing_post->post_name ) );
+            $update_data   = array(
+                'ID'           => $product_id,
+                'post_title'   => $translated['name'],
+                'post_content' => $translated['description'],
+                'post_excerpt' => $translated['short_description'] ?? '',
+                'post_status'  => 'publish',
+            );
+            if ( $needs_slug && ! empty( $translated['name'] ) ) {
+                $update_data['post_name'] = ! empty( $translated['slug'] ) ? sanitize_title( $translated['slug'] ) : sanitize_title( $translated['name'] );
+            }
+            $self_result = wp_update_post( $update_data, true );
+            if ( is_wp_error( $self_result ) ) {
+                LuwiPress_Logger::log( 'WPML self-update FAILED: #' . $product_id . ' — ' . $self_result->get_error_message(), 'error' );
+            } else {
+                LuwiPress_Logger::log( 'WPML self-update: #' . $product_id . ' (' . strtoupper( $language ) . ') content_len=' . strlen( $translated['description'] ?? '' ), 'info' );
+            }
+            if ( $is_elementor && ! $is_chunked ) {
+                $this->copy_elementor_translated( $product_id, $product_id, $translated );
+            }
+            clean_post_cache( $product_id );
+            return;
+        }
 
         if ( $translated_id && $translated_id !== $product_id ) {
             // ── Update existing translation ──

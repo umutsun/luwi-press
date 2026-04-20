@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 2.0.9
+ * Version: 2.0.10
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '2.0.9');
+define('LUWIPRESS_VERSION', '2.0.10');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -65,7 +65,9 @@ class LuwiPress {
         add_action('rest_api_init', array($this, 'register_rest_routes'));
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
-        add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
+        add_action('admin_init', array($this, 'handle_cron_notice_dismiss'));
+        add_action('admin_notices', array($this, 'render_cron_notices'));
+        add_action('wp_footer', array($this, 'render_chat_assets'), 1);
         add_action('admin_enqueue_scripts', array($this, 'admin_enqueue_scripts'));
         add_action('wp_ajax_luwipress_test_connection', array($this, 'ajax_test_connection'));
         add_action('wp_ajax_luwipress_scan_opportunities', array($this, 'ajax_scan_opportunities'));
@@ -482,34 +484,105 @@ class LuwiPress {
             }
         }
     }
-    
+
     /**
-     * Enqueue scripts
+     * Render an admin notice when WP-Cron is disabled.
+     *
+     * Many LuwiPress features (translation queue, content scheduler, enrichment,
+     * CRM refresh) rely on WP-Cron. If DISABLE_WP_CRON is true and no external
+     * trigger is confirmed, jobs sit unexecuted.
      */
-    public function enqueue_scripts() {
-        if ( ! get_option( 'luwipress_chat_enabled', 0 ) ) {
+    public function render_cron_notices() {
+        if ( ! current_user_can( 'manage_options' ) ) {
             return;
         }
+
+        if ( ! defined( 'DISABLE_WP_CRON' ) || ! DISABLE_WP_CRON ) {
+            return;
+        }
+
+        if ( get_option( 'luwipress_external_cron_confirmed', false ) ) {
+            return;
+        }
+
+        $dismiss_url = wp_nonce_url(
+            add_query_arg( 'luwipress_dismiss_cron_notice', '1' ),
+            'luwipress_dismiss_cron_notice'
+        );
+
+        $cron_url = site_url( 'wp-cron.php?doing_wp_cron' );
+        ?>
+        <div class="notice notice-warning">
+            <p>
+                <strong><?php esc_html_e( 'LuwiPress — WP-Cron is disabled.', 'luwipress' ); ?></strong>
+                <?php esc_html_e( 'DISABLE_WP_CRON is defined as true in wp-config.php. Background jobs (translation queue, content scheduler, product enrichment, CRM refresh) will not run automatically until an external cron trigger is configured.', 'luwipress' ); ?>
+            </p>
+            <p>
+                <?php esc_html_e( 'Add a server cron entry that hits this URL every 5 minutes:', 'luwipress' ); ?>
+                <br><code>*/5 * * * * wget -q -O - <?php echo esc_url( $cron_url ); ?> &gt;/dev/null 2&gt;&amp;1</code>
+            </p>
+            <p>
+                <a href="<?php echo esc_url( $dismiss_url ); ?>" class="button button-secondary"><?php esc_html_e( 'Dismiss — external cron is configured', 'luwipress' ); ?></a>
+            </p>
+        </div>
+        <?php
+    }
+
+    /**
+     * Handle the cron notice dismiss link.
+     *
+     * Sets a site-wide option so the notice stays hidden. If WP-Cron is later
+     * re-enabled (DISABLE_WP_CRON removed from wp-config.php), the confirmation
+     * is cleared automatically so the warning returns if cron gets disabled again.
+     */
+    public function handle_cron_notice_dismiss() {
+        // Auto-clear confirmation when WP-Cron is no longer disabled.
+        if ( ( ! defined( 'DISABLE_WP_CRON' ) || ! DISABLE_WP_CRON ) && get_option( 'luwipress_external_cron_confirmed', false ) ) {
+            delete_option( 'luwipress_external_cron_confirmed' );
+        }
+
+        if ( empty( $_GET['luwipress_dismiss_cron_notice'] ) ) {
+            return;
+        }
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        $nonce = isset( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
+        if ( ! wp_verify_nonce( $nonce, 'luwipress_dismiss_cron_notice' ) ) {
+            return;
+        }
+
+        update_option( 'luwipress_external_cron_confirmed', true );
+
+        wp_safe_redirect( remove_query_arg( array( 'luwipress_dismiss_cron_notice', '_wpnonce' ) ) );
+        exit;
+    }
+
+    /**
+     * Render chat assets directly to the footer.
+     *
+     * Why not wp_enqueue_*:
+     *   Cache plugins (LiteSpeed, WP Rocket, W3TC) frequently combine/defer
+     *   or strip enqueued chat assets, leaving the launcher invisible despite
+     *   the config being present. We bypass the enqueue pipeline entirely
+     *   and echo the CSS inline + JS with data-no-optimize attributes so
+     *   optimizers know to leave them alone.
+     */
+    public function render_chat_assets() {
         if ( is_admin() ) {
             return;
         }
+        if ( ! get_option( 'luwipress_chat_enabled', 0 ) ) {
+            return;
+        }
 
+        $css_file = LUWIPRESS_PLUGIN_DIR . 'assets/css/luwipress-chat.css';
         $js_file  = LUWIPRESS_PLUGIN_DIR . 'assets/js/luwipress-chat.js';
-        $chat_ver = LUWIPRESS_VERSION . '.' . ( file_exists( $js_file ) ? filemtime( $js_file ) : time() );
-        wp_enqueue_style(
-            'luwipress-chat',
-            LUWIPRESS_PLUGIN_URL . 'assets/css/luwipress-chat.css',
-            array(),
-            $chat_ver
-        );
-
-        wp_enqueue_script(
-            'luwipress-chat',
-            LUWIPRESS_PLUGIN_URL . 'assets/js/luwipress-chat.js',
-            array(),
-            $chat_ver,
-            true
-        );
+        if ( ! file_exists( $css_file ) || ! file_exists( $js_file ) ) {
+            return;
+        }
 
         $config = array(
             'rest_url'           => rest_url( 'luwipress/v1/chat/' ),
@@ -525,7 +598,18 @@ class LuwiPress {
             'is_logged_in'       => is_user_logged_in(),
             'customer_name'      => is_user_logged_in() ? wp_get_current_user()->display_name : '',
         );
-        wp_localize_script( 'luwipress-chat', 'lpChat', $config );
+
+        $css      = file_get_contents( $css_file );
+        $js       = file_get_contents( $js_file );
+        $chat_ver = LUWIPRESS_VERSION . '.' . filemtime( $js_file );
+
+        // Optimizer-bypass attributes. Recognized by LiteSpeed, WP Rocket, Autoptimize, Cloudflare.
+        $skip_attrs = 'data-no-optimize="1" data-no-defer="1" data-no-minify="1" data-cfasync="false"';
+
+        echo "\n<!-- luwipress-chat (v{$chat_ver}) render_chat_assets() -->\n";
+        echo '<style id="luwipress-chat-inline-css" ' . $skip_attrs . '>' . $css . '</style>' . "\n";
+        echo '<script id="luwipress-chat-config" ' . $skip_attrs . '>window.lpChat=' . wp_json_encode( $config ) . ';</script>' . "\n";
+        echo '<script id="luwipress-chat-inline-js" ' . $skip_attrs . '>' . $js . '</script>' . "\n";
     }
     
     /**

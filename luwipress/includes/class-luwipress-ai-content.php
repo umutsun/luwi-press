@@ -140,6 +140,19 @@ class LuwiPress_AI_Content {
             return new WP_Error('not_found', 'Product not found.', array('status' => 404));
         }
 
+        // Reject enrichment targeting a WPML translation copy (see enrich-callback guard).
+        if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) ) {
+            $post_lang    = LuwiPress_Translation::get_post_wpml_language( $product_id );
+            $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+            if ( $post_lang && $post_lang !== $default_lang ) {
+                return new WP_Error(
+                    'language_mismatch',
+                    sprintf( 'Product #%d is a %s translation copy; enrich targets the %s source.', $product_id, strtoupper( $post_lang ), strtoupper( $default_lang ) ),
+                    array( 'status' => 409 )
+                );
+            }
+        }
+
         $result = $this->send_for_enrichment($product, $options);
 
         if (is_wp_error($result)) {
@@ -299,6 +312,30 @@ class LuwiPress_AI_Content {
         $product = wc_get_product($product_id);
         if (!$product) {
             return new WP_Error('not_found', 'Product not found.', array('status' => 404));
+        }
+
+        // WPML language guard: enrichment writes source-language content. Writing it to a
+        // translation copy (ES/FR/IT/EN non-default) would corrupt that copy. Reject the
+        // callback in that case. Bypass with explicit header/param for edge cases (e.g. a
+        // caller intentionally targeting a translated post). Incident history: tapadum.com
+        // 2026-04-20 — 31 products corrupted when enrich wrote default-language text into
+        // translation copies.
+        if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) ) {
+            $post_lang    = LuwiPress_Translation::get_post_wpml_language( $product_id );
+            $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+            $allow_target = (bool) ( $data['allow_translation_target'] ?? false );
+            if ( $post_lang && $post_lang !== $default_lang && ! $allow_target ) {
+                LuwiPress_Logger::log(
+                    sprintf( 'Enrich callback REJECTED: product #%d is %s, default is %s. Refusing to overwrite translation copy.', $product_id, strtoupper( $post_lang ), strtoupper( $default_lang ) ),
+                    'error',
+                    array( 'product_id' => $product_id, 'post_language' => $post_lang, 'default_language' => $default_lang )
+                );
+                return new WP_Error(
+                    'language_mismatch',
+                    sprintf( 'Product #%d is a %s translation copy; enrich targets the %s source. Pass allow_translation_target=true to override.', $product_id, strtoupper( $post_lang ), strtoupper( $default_lang ) ),
+                    array( 'status' => 409 )
+                );
+            }
         }
 
         $updated_fields = array();
@@ -491,11 +528,27 @@ class LuwiPress_AI_Content {
         $queued      = array();
         $errors      = array();
 
+        $wpml_active      = defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' );
+        $default_language = $wpml_active ? apply_filters( 'wpml_default_language', get_locale() ) : null;
+
         foreach ($product_ids as $pid) {
             $product = wc_get_product($pid);
             if (!$product) {
                 $errors[] = array('product_id' => $pid, 'error' => 'Product not found');
                 continue;
+            }
+
+            // Skip WPML translation copies — enrichment writes source-language content.
+            if ( $wpml_active ) {
+                $post_lang = LuwiPress_Translation::get_post_wpml_language( $pid );
+                if ( $post_lang && $post_lang !== $default_language ) {
+                    $errors[] = array(
+                        'product_id' => $pid,
+                        'error'      => sprintf( 'Skipped: %s translation copy (default=%s)', strtoupper( $post_lang ), strtoupper( $default_language ) ),
+                    );
+                    LuwiPress_Logger::log( 'Batch enrich skipped translation copy #' . $pid . ' (' . $post_lang . ')', 'warning', array( 'product_id' => $pid, 'post_language' => $post_lang ) );
+                    continue;
+                }
             }
 
             $status = get_post_meta($pid, '_luwipress_enrich_status', true);
