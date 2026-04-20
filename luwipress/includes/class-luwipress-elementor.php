@@ -393,6 +393,13 @@ class LuwiPress_Elementor {
             'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
         ) );
 
+        // Purge page cache (LiteSpeed / WP Rocket / W3TC / Super Cache / Cache Enabler)
+        register_rest_route( $ns, '/elementor/purge-page-cache', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_purge_page_cache' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
         // Elementor CSS print method — set to 'internal' to eliminate FOUC
         register_rest_route( $ns, '/elementor/print-method', array(
             array(
@@ -2639,7 +2646,139 @@ class LuwiPress_Elementor {
         // Clear Elementor CSS cache so it regenerates
         $this->regenerate_css( $post_id );
 
+        // Purge page cache (LiteSpeed/WP Rocket/W3TC/Super Cache) so stale HTML isn't served
+        $this->purge_page_cache_for_post( $post_id );
+
         return true;
+    }
+
+    /**
+     * Purge page cache for a post across any detected cache plugin.
+     * Called automatically after every Elementor data save.
+     *
+     * @param int $post_id Post ID.
+     * @return array List of cache plugins purged.
+     */
+    public function purge_page_cache_for_post( $post_id ) {
+        $purged = array();
+
+        // LiteSpeed Cache (most common on WP hosts)
+        if ( defined( 'LSCWP_V' ) || class_exists( '\LiteSpeed\Purge' ) ) {
+            do_action( 'litespeed_purge_post', $post_id );
+            $purged[] = 'litespeed';
+        }
+
+        // WP Rocket
+        if ( function_exists( 'rocket_clean_post' ) ) {
+            rocket_clean_post( $post_id );
+            $purged[] = 'wp-rocket';
+        }
+
+        // W3 Total Cache
+        if ( function_exists( 'w3tc_flush_post' ) ) {
+            w3tc_flush_post( $post_id );
+            $purged[] = 'w3tc';
+        }
+
+        // WP Super Cache
+        if ( function_exists( 'wp_cache_post_change' ) ) {
+            global $blog_id;
+            wp_cache_post_change( $blog_id, $post_id );
+            $purged[] = 'wp-super-cache';
+        }
+
+        // Cache Enabler
+        // @phpstan-ignore-next-line function.alreadyNarrowedType
+        if ( class_exists( 'Cache_Enabler' ) && method_exists( 'Cache_Enabler', 'clear_page_cache_by_post_id' ) ) {
+            Cache_Enabler::clear_page_cache_by_post_id( $post_id );
+            $purged[] = 'cache-enabler';
+        }
+
+        return $purged;
+    }
+
+    /**
+     * Purge page cache for a URL (not tied to a post).
+     *
+     * @param string $url Full URL to purge.
+     * @return array
+     */
+    public function purge_page_cache_for_url( $url ) {
+        $purged = array();
+
+        if ( defined( 'LSCWP_V' ) || class_exists( '\LiteSpeed\Purge' ) ) {
+            do_action( 'litespeed_purge_url', $url );
+            $purged[] = 'litespeed';
+        }
+        if ( function_exists( 'rocket_clean_files' ) ) {
+            rocket_clean_files( $url );
+            $purged[] = 'wp-rocket';
+        }
+
+        return $purged;
+    }
+
+    /**
+     * Purge entire site page cache. Use sparingly.
+     */
+    public function purge_page_cache_all() {
+        $purged = array();
+
+        if ( defined( 'LSCWP_V' ) || class_exists( '\LiteSpeed\Purge' ) ) {
+            do_action( 'litespeed_purge_all' );
+            $purged[] = 'litespeed';
+        }
+        if ( function_exists( 'rocket_clean_domain' ) ) {
+            rocket_clean_domain();
+            $purged[] = 'wp-rocket';
+        }
+        if ( function_exists( 'w3tc_flush_all' ) ) {
+            w3tc_flush_all();
+            $purged[] = 'w3tc';
+        }
+        // @phpstan-ignore-next-line function.alreadyNarrowedType
+        if ( class_exists( 'Cache_Enabler' ) && method_exists( 'Cache_Enabler', 'clear_complete_cache' ) ) {
+            Cache_Enabler::clear_complete_cache();
+            $purged[] = 'cache-enabler';
+        }
+
+        return $purged;
+    }
+
+    /**
+     * REST handler: POST /elementor/purge-page-cache
+     * Body options (one of): post_id (int), post_ids (array of int), url (string), all (bool)
+     */
+    public function rest_purge_page_cache( $request ) {
+        $post_id  = intval( $request->get_param( 'post_id' ) );
+        $post_ids = $request->get_param( 'post_ids' );
+        $url      = $request->get_param( 'url' );
+        $purge_all = (bool) $request->get_param( 'all' );
+
+        $results = array();
+
+        if ( $purge_all ) {
+            $results['_all'] = $this->purge_page_cache_all();
+        } elseif ( is_array( $post_ids ) && ! empty( $post_ids ) ) {
+            foreach ( $post_ids as $pid ) {
+                $pid = intval( $pid );
+                if ( $pid > 0 ) {
+                    $results[ $pid ] = $this->purge_page_cache_for_post( $pid );
+                }
+            }
+        } elseif ( $post_id > 0 ) {
+            $results[ $post_id ] = $this->purge_page_cache_for_post( $post_id );
+        } elseif ( ! empty( $url ) ) {
+            $url = esc_url_raw( $url );
+            $results[ $url ] = $this->purge_page_cache_for_url( $url );
+        } else {
+            return new WP_Error( 'missing_params', 'Provide post_id, post_ids, url, or all=true', array( 'status' => 400 ) );
+        }
+
+        return rest_ensure_response( array(
+            'status'  => 'completed',
+            'results' => $results,
+        ) );
     }
 
     /**
