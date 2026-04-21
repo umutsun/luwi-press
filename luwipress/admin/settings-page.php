@@ -59,6 +59,17 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 	update_option( 'luwipress_google_ai_api_key', sanitize_text_field( $_POST['luwipress_google_ai_api_key'] ?? '' ) );
 	update_option( 'luwipress_ai_provider', sanitize_text_field( $_POST['luwipress_ai_provider'] ?? 'openai' ) );
 	update_option( 'luwipress_ai_model', sanitize_text_field( $_POST['luwipress_ai_model'] ?? 'gpt-4o-mini' ) );
+
+	// OpenAI-Compatible provider (DeepSeek, Kimi, Groq, Together, custom)
+	$oai_preset_allowed = array( 'deepseek', 'kimi', 'groq', 'together', 'custom' );
+	$oai_preset         = sanitize_text_field( $_POST['luwipress_oai_compat_preset'] ?? 'deepseek' );
+	if ( ! in_array( $oai_preset, $oai_preset_allowed, true ) ) {
+		$oai_preset = 'deepseek';
+	}
+	update_option( 'luwipress_oai_compat_preset', $oai_preset );
+	update_option( 'luwipress_oai_compat_api_key', sanitize_text_field( $_POST['luwipress_oai_compat_api_key'] ?? '' ) );
+	update_option( 'luwipress_oai_compat_base_url', esc_url_raw( $_POST['luwipress_oai_compat_base_url'] ?? '' ) );
+	update_option( 'luwipress_oai_compat_model', sanitize_text_field( $_POST['luwipress_oai_compat_model'] ?? '' ) );
 	update_option( 'luwipress_daily_token_limit', floatval( $_POST['luwipress_daily_token_limit'] ?? 1.00 ) );
 	update_option( 'luwipress_max_output_tokens', absint( $_POST['luwipress_max_output_tokens'] ?? 1024 ) );
 
@@ -163,6 +174,13 @@ $anthropic_key      = get_option( 'luwipress_anthropic_api_key', '' );
 $google_ai_key      = get_option( 'luwipress_google_ai_api_key', '' );
 $ai_provider        = get_option( 'luwipress_ai_provider', 'openai' );
 $ai_model           = get_option( 'luwipress_ai_model', 'gpt-4o-mini' );
+$oai_compat_preset  = get_option( 'luwipress_oai_compat_preset', 'deepseek' );
+$oai_compat_key     = get_option( 'luwipress_oai_compat_api_key', '' );
+$oai_compat_base    = get_option( 'luwipress_oai_compat_base_url', '' );
+$oai_compat_model   = get_option( 'luwipress_oai_compat_model', '' );
+$oai_compat_presets = class_exists( 'LuwiPress_Provider_OpenAI_Compatible' )
+	? LuwiPress_Provider_OpenAI_Compatible::get_presets()
+	: array();
 $daily_token_limit  = floatval( get_option( 'luwipress_daily_token_limit', 1.00 ) );
 $max_output_tokens  = absint( get_option( 'luwipress_max_output_tokens', 1024 ) );
 $image_provider     = get_option( 'luwipress_image_provider', 'dall-e-3' );
@@ -482,6 +500,13 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 										<span class="provider-desc"><?php esc_html_e( 'Gemini Pro for cost-effective content at scale', 'luwipress' ); ?></span>
 									</span>
 								</label>
+								<label class="luwipress-provider-option <?php echo 'openai-compatible' === $ai_provider ? 'provider-selected' : ''; ?>">
+									<input type="radio" name="luwipress_ai_provider" value="openai-compatible" <?php checked( $ai_provider, 'openai-compatible' ); ?> />
+									<span class="provider-card">
+										<strong>OpenAI-Compatible</strong>
+										<span class="provider-desc"><?php esc_html_e( 'DeepSeek, Kimi, Groq, Together.ai, or self-hosted', 'luwipress' ); ?></span>
+									</span>
+								</label>
 							</fieldset>
 						</td>
 					</tr>
@@ -559,6 +584,118 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					</tr>
 				</table>
 			</div>
+
+			<!-- OpenAI-Compatible provider (DeepSeek, Kimi, Groq, Together, custom) -->
+			<?php if ( ! empty( $oai_compat_presets ) ) : ?>
+			<div class="luwipress-card">
+				<h2>
+					<?php esc_html_e( 'OpenAI-Compatible Provider', 'luwipress' ); ?>
+					<?php if ( 'openai-compatible' === $ai_provider ) : ?>
+						<span class="badge-active" style="margin-left:6px;"><?php esc_html_e( 'Active', 'luwipress' ); ?></span>
+					<?php endif; ?>
+				</h2>
+				<p class="description" style="margin-bottom:16px;">
+					<?php esc_html_e( 'Use any vendor that speaks the OpenAI chat/completions API — DeepSeek, Moonshot Kimi, Groq, Together.ai, or a self-hosted model (Ollama, vLLM, LM Studio). One provider slot, swap vendors via presets.', 'luwipress' ); ?>
+				</p>
+				<table class="form-table">
+					<tr>
+						<th><label for="luwipress_oai_compat_preset"><?php esc_html_e( 'Preset', 'luwipress' ); ?></label></th>
+						<td>
+							<select name="luwipress_oai_compat_preset" id="luwipress_oai_compat_preset">
+								<?php foreach ( $oai_compat_presets as $preset_key => $preset_info ) : ?>
+									<option value="<?php echo esc_attr( $preset_key ); ?>" <?php selected( $oai_compat_preset, $preset_key ); ?>>
+										<?php echo esc_html( $preset_info['label'] ); ?>
+										<?php if ( ! empty( $preset_info['base_url'] ) ) : ?>
+											— <?php echo esc_html( $preset_info['base_url'] ); ?>
+										<?php endif; ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+							<p class="description">
+								<?php esc_html_e( 'Switching preset updates the base URL and model list automatically.', 'luwipress' ); ?>
+							</p>
+						</td>
+					</tr>
+					<tr class="luwipress-oai-compat-custom-row" <?php echo 'custom' !== $oai_compat_preset ? 'style="display:none;"' : ''; ?>>
+						<th><label for="luwipress_oai_compat_base_url"><?php esc_html_e( 'Base URL', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="url" id="luwipress_oai_compat_base_url" name="luwipress_oai_compat_base_url"
+							       value="<?php echo esc_attr( $oai_compat_base ); ?>" class="regular-text"
+							       placeholder="http://localhost:11434/v1" />
+							<p class="description">
+								<?php esc_html_e( 'For self-hosted only. Include /v1 if the server expects it. Leave empty for the hosted presets above.', 'luwipress' ); ?>
+							</p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_oai_compat_api_key"><?php esc_html_e( 'API Key', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="password" id="luwipress_oai_compat_api_key" name="luwipress_oai_compat_api_key"
+							       value="<?php echo esc_attr( $oai_compat_key ); ?>" class="regular-text" autocomplete="off"
+							       placeholder="sk-..." />
+							<button type="button" class="button button-small luwipress-toggle-password" data-target="luwipress_oai_compat_api_key">
+								<span class="dashicons dashicons-visibility"></span>
+							</button>
+							<?php if ( ! empty( $oai_compat_key ) ) : ?>
+								<span style="color:#16a34a;margin-left:8px;"><span class="dashicons dashicons-yes-alt"></span></span>
+							<?php endif; ?>
+							<p class="description">
+								<?php esc_html_e( 'For self-hosted servers that do not require auth, enter any non-empty value (e.g. "local").', 'luwipress' ); ?>
+							</p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="luwipress_oai_compat_model"><?php esc_html_e( 'Model', 'luwipress' ); ?></label></th>
+						<td>
+							<?php
+							$current_preset_models = $oai_compat_presets[ $oai_compat_preset ]['models'] ?? array();
+							if ( ! empty( $current_preset_models ) ) :
+								?>
+								<select name="luwipress_oai_compat_model" id="luwipress_oai_compat_model">
+									<option value=""><?php esc_html_e( '— Use preset default —', 'luwipress' ); ?></option>
+									<?php foreach ( $current_preset_models as $model_id => $model_label ) : ?>
+										<option value="<?php echo esc_attr( $model_id ); ?>" <?php selected( $oai_compat_model, $model_id ); ?>>
+											<?php echo esc_html( $model_label ); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+							<?php else : ?>
+								<input type="text" id="luwipress_oai_compat_model" name="luwipress_oai_compat_model"
+								       value="<?php echo esc_attr( $oai_compat_model ); ?>" class="regular-text"
+								       placeholder="llama-3.1-8b-instruct" />
+							<?php endif; ?>
+							<?php
+							$off_peak = $oai_compat_presets[ $oai_compat_preset ]['off_peak_utc'] ?? null;
+							if ( is_array( $off_peak ) && count( $off_peak ) === 2 ) :
+								?>
+								<p class="description">
+									<?php
+									/* translators: 1: start time, 2: end time in UTC */
+									printf(
+										esc_html__( 'Tip: %1$s offers a ~50%% off-peak discount between %2$s–%3$s UTC.', 'luwipress' ),
+										esc_html( $oai_compat_presets[ $oai_compat_preset ]['label'] ),
+										esc_html( $off_peak[0] ),
+										esc_html( $off_peak[1] )
+									);
+									?>
+								</p>
+							<?php endif; ?>
+						</td>
+					</tr>
+				</table>
+				<script>
+				(function () {
+					var presetEl = document.getElementById( 'luwipress_oai_compat_preset' );
+					var customRow = document.querySelector( '.luwipress-oai-compat-custom-row' );
+					if ( presetEl && customRow ) {
+						presetEl.addEventListener( 'change', function () {
+							customRow.style.display = this.value === 'custom' ? '' : 'none';
+						} );
+					}
+				})();
+				</script>
+			</div>
+			<?php endif; ?>
 
 			<!-- Model Selection & Cost Control -->
 			<div class="luwipress-card">

@@ -279,7 +279,7 @@ class LuwiPress_AI_Engine {
 		}
 
 		$chain = array_values( array_filter(
-			array( 'anthropic', 'openai', 'google' ),
+			array( 'anthropic', 'openai', 'google', 'openai-compatible' ),
 			static function ( $p ) use ( $primary ) {
 				return $p !== $primary;
 			}
@@ -416,6 +416,9 @@ class LuwiPress_AI_Engine {
 			case 'google':
 				$provider = new LuwiPress_Provider_Google();
 				break;
+			case 'openai-compatible':
+				$provider = new LuwiPress_Provider_OpenAI_Compatible();
+				break;
 			default:
 				return new WP_Error(
 					'luwipress_unknown_provider',
@@ -445,7 +448,7 @@ class LuwiPress_AI_Engine {
 	 */
 	public static function get_configured_providers() {
 		$configured = array();
-		foreach ( array( 'anthropic', 'openai', 'google' ) as $name ) {
+		foreach ( array( 'anthropic', 'openai', 'google', 'openai-compatible' ) as $name ) {
 			$provider = self::get_provider( $name );
 			if ( ! is_wp_error( $provider ) ) {
 				$configured[ $name ] = $provider;

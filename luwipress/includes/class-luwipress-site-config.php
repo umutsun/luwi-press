@@ -168,9 +168,10 @@ class LuwiPress_Site_Config {
 
 	private function get_active_ai_key( $provider ) {
 		$key_map = array(
-			'anthropic' => 'luwipress_anthropic_api_key',
-			'openai'    => 'luwipress_openai_api_key',
-			'google'    => 'luwipress_google_ai_api_key',
+			'anthropic'         => 'luwipress_anthropic_api_key',
+			'openai'            => 'luwipress_openai_api_key',
+			'google'            => 'luwipress_google_ai_api_key',
+			'openai-compatible' => 'luwipress_oai_compat_api_key',
 		);
 
 		$option = $key_map[ $provider ] ?? '';
