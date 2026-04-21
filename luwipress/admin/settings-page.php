@@ -35,7 +35,19 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 
 	// AI Content
 	update_option( 'luwipress_auto_enrich', isset( $_POST['luwipress_auto_enrich'] ) ? 1 : 0 );
-	update_option( 'luwipress_target_language', sanitize_text_field( $_POST['luwipress_target_language'] ?? 'tr' ) );
+	$primary_lang = sanitize_text_field( $_POST['luwipress_target_language'] ?? '' );
+	if ( class_exists( 'LuwiPress_Plugin_Detector' ) ) {
+		$t_info = LuwiPress_Plugin_Detector::get_instance()->detect_translation();
+		$active = $t_info['active_languages'] ?? array();
+		if ( 'none' !== ( $t_info['plugin'] ?? 'none' ) && ! empty( $active ) && ! in_array( $primary_lang, $active, true ) ) {
+			// Submitted language isn't active on the site — snap to translation plugin's default.
+			$primary_lang = $t_info['default_language'] ?? ( $active[0] ?? 'en' );
+		}
+	}
+	if ( empty( $primary_lang ) ) {
+		$primary_lang = 'en';
+	}
+	update_option( 'luwipress_target_language', $primary_lang );
 
 	// Thin content auto-enrichment
 	$thin_was_enabled = get_option( 'luwipress_auto_enrich_thin', false );
@@ -800,18 +812,99 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					<tr>
 						<th><label for="luwipress_target_language"><?php esc_html_e( 'Primary Language', 'luwipress' ); ?></label></th>
 						<td>
-							<select id="luwipress_target_language" name="luwipress_target_language">
-								<?php
-								$languages = array(
-									'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French',
-									'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch',
+							<?php
+							// Fallback dictionary for display names — used when we need a label for any code.
+							$lang_names = array(
+								'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French',
+								'ar' => 'Arabic',  'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch',
+								'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese',  'pt' => 'Portuguese',
+								'pl' => 'Polish',  'sv' => 'Swedish',  'fi' => 'Finnish',  'da' => 'Danish',
+								'no' => 'Norwegian', 'cs' => 'Czech',  'el' => 'Greek',    'he' => 'Hebrew',
+								'ko' => 'Korean',  'hi' => 'Hindi',    'uk' => 'Ukrainian', 'ro' => 'Romanian',
+								'hu' => 'Hungarian', 'bg' => 'Bulgarian', 'sk' => 'Slovak', 'hr' => 'Croatian',
+							);
+
+							$lang_source  = 'fallback';
+							$lang_options = array();
+							$t_detected   = null;
+
+							if ( class_exists( 'LuwiPress_Plugin_Detector' ) ) {
+								$t_detected = LuwiPress_Plugin_Detector::get_instance()->detect_translation();
+								if ( 'none' !== ( $t_detected['plugin'] ?? 'none' ) && ! empty( $t_detected['active_languages'] ) ) {
+									$lang_source = $t_detected['plugin'];
+									foreach ( (array) $t_detected['active_languages'] as $code ) {
+										$code = strtolower( substr( (string) $code, 0, 2 ) );
+										if ( '' === $code || isset( $lang_options[ $code ] ) ) {
+											continue;
+										}
+										$lang_options[ $code ] = $lang_names[ $code ] ?? strtoupper( $code );
+									}
+								}
+							}
+
+							if ( empty( $lang_options ) ) {
+								$lang_options = array(
+									'en' => 'English', 'tr' => 'Turkish', 'de' => 'German', 'fr' => 'French',
+									'ar' => 'Arabic',  'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch',
 									'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese',
 								);
-								foreach ( $languages as $code => $name ) : ?>
-									<option value="<?php echo esc_attr( $code ); ?>" <?php selected( $target_language, $code ); ?>><?php echo esc_html( "$name ($code)" ); ?></option>
+							}
+
+							// If the saved target is not in the detected list, show it as a ghost option so
+							// the user can see the mismatch and switch. Save handler will snap it to a valid value.
+							$saved_lang_missing = ! isset( $lang_options[ $target_language ] );
+							?>
+							<select id="luwipress_target_language" name="luwipress_target_language">
+								<?php foreach ( $lang_options as $code => $name ) : ?>
+									<option value="<?php echo esc_attr( $code ); ?>" <?php selected( $target_language, $code ); ?>><?php echo esc_html( $name . ' (' . $code . ')' ); ?></option>
 								<?php endforeach; ?>
+								<?php if ( $saved_lang_missing && ! empty( $target_language ) ) : ?>
+									<option value="<?php echo esc_attr( $target_language ); ?>" selected disabled>
+										<?php echo esc_html( ( $lang_names[ $target_language ] ?? strtoupper( $target_language ) ) . ' (' . $target_language . ') — not active on site' ); ?>
+									</option>
+								<?php endif; ?>
 							</select>
-							<p class="description"><?php esc_html_e( 'Language for AI-generated descriptions, meta, and FAQ content.', 'luwipress' ); ?></p>
+
+							<?php if ( 'fallback' !== $lang_source ) : ?>
+								<span class="badge-active" style="margin-left:8px;">
+									<?php
+									/* translators: 1: translation plugin name (e.g. WPML, Polylang, TranslatePress), 2: number of active languages */
+									printf(
+										esc_html__( 'Detected from %1$s — %2$d active language(s)', 'luwipress' ),
+										esc_html( strtoupper( $lang_source ) ),
+										count( $lang_options )
+									);
+									?>
+								</span>
+								<?php if ( ! empty( $t_detected['default_language'] ) ) : ?>
+									<p class="description">
+										<?php
+										/* translators: 1: translation plugin name, 2: default language code */
+										printf(
+											esc_html__( '%1$s default language: %2$s. AI-generated content will be written in the language selected above.', 'luwipress' ),
+											esc_html( strtoupper( $lang_source ) ),
+											'<code>' . esc_html( $t_detected['default_language'] ) . '</code>'
+										);
+										?>
+									</p>
+								<?php endif; ?>
+								<?php if ( $saved_lang_missing ) : ?>
+									<p class="description" style="color:#b45309;">
+										<span class="dashicons dashicons-warning" style="color:#b45309;"></span>
+										<?php
+										/* translators: %s: currently-saved language code */
+										printf(
+											esc_html__( 'The saved language (%s) is not active in your translation plugin. Pick an active language above — saving will snap to a valid one automatically.', 'luwipress' ),
+											'<code>' . esc_html( $target_language ) . '</code>'
+										);
+										?>
+									</p>
+								<?php endif; ?>
+							<?php else : ?>
+								<p class="description">
+									<?php esc_html_e( 'No translation plugin detected — showing the default language list. Install WPML, Polylang, or TranslatePress to tailor this list to your site.', 'luwipress' ); ?>
+								</p>
+							<?php endif; ?>
 						</td>
 					</tr>
 				</table>

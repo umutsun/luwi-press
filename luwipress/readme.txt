@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.2
+Stable tag: 3.1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -132,6 +132,13 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.3 — Primary Language Dropdown Uses Detected Languages =
+* IMPROVED: Settings → AI Content → Primary Language now reads the active languages from WPML, Polylang, or TranslatePress when one is installed, instead of the old 11-language hardcoded list. You can only pick a language your site actually serves, removing a foot-gun where Tapadum-style sites had `tr` selected while the site ran on EN+FR+IT+ES.
+* NEW: Badge above the dropdown shows which translation plugin was detected and how many languages it exposes. Default language from the translation plugin is surfaced as a hint so the admin knows what the source-of-truth is.
+* NEW: Save handler validates the submitted language against the detected active list; an invalid submission snaps to the translation plugin's default language instead of silently persisting a mismatched value.
+* NEW: When a previously-saved language is no longer active (e.g. site disabled a language in WPML), a warning line appears inline on the dropdown so admins can fix it explicitly.
+* FALLBACK: If no translation plugin is present, the original list (11 common locales) still ships as the fallback. No breaking change for single-language sites.
 
 = 3.1.2 — Multi-Provider Expansion (OpenAI-Compatible) =
 * NEW: Fourth AI provider slot — **OpenAI-Compatible** — a single provider class that talks to any vendor exposing OpenAI's `/chat/completions` schema. Ships with presets for **DeepSeek**, **Moonshot Kimi**, **Groq**, and **Together.ai**, plus a **Custom** preset for self-hosted LLMs (Ollama, vLLM, LM Studio, text-generation-webui).
