@@ -142,20 +142,24 @@ class LuwiPress_Site_Config {
 
 	private function get_luwipress_info() {
 		$ai_provider = get_option( 'luwipress_ai_provider', 'openai' );
+		$api_token   = get_option( 'luwipress_seo_api_token', '' );
+		$ai_key      = $this->get_active_ai_key( $ai_provider );
 
 		$info = array(
-			'version'          => defined( 'LUWIPRESS_VERSION' ) ? LUWIPRESS_VERSION : null,
-			'webhook_url'      => get_option( 'luwipress_seo_webhook_url', '' ),
-			'api_token'        => get_option( 'luwipress_seo_api_token', '' ),
-			'modules_active'   => $this->get_active_modules(),
-			'target_language'  => get_option( 'luwipress_target_language', 'tr' ),
-			'target_languages' => get_option( 'luwipress_translation_languages', array() ),
-			'auto_enrich'      => (bool) get_option( 'luwipress_auto_enrich', false ),
-			'ai'               => array(
-				'provider'   => $ai_provider,
-				'model'      => get_option( 'luwipress_ai_model', 'gpt-4o-mini' ),
-				'max_tokens' => absint( get_option( 'luwipress_max_output_tokens', 1024 ) ),
-				'api_key'    => $this->get_active_ai_key( $ai_provider ),
+			'version'               => defined( 'LUWIPRESS_VERSION' ) ? LUWIPRESS_VERSION : null,
+			'webhook_url'           => get_option( 'luwipress_seo_webhook_url', '' ),
+			'api_token_configured'  => ! empty( $api_token ),
+			'api_token_hint'        => self::mask_secret( $api_token ),
+			'modules_active'        => $this->get_active_modules(),
+			'target_language'       => get_option( 'luwipress_target_language', 'tr' ),
+			'target_languages'      => get_option( 'luwipress_translation_languages', array() ),
+			'auto_enrich'           => (bool) get_option( 'luwipress_auto_enrich', false ),
+			'ai'                    => array(
+				'provider'           => $ai_provider,
+				'model'              => get_option( 'luwipress_ai_model', 'gpt-4o-mini' ),
+				'max_tokens'         => absint( get_option( 'luwipress_max_output_tokens', 1024 ) ),
+				'api_key_configured' => ! empty( $ai_key ),
+				'api_key_hint'       => self::mask_secret( $ai_key ),
 			),
 		);
 
@@ -175,6 +179,18 @@ class LuwiPress_Site_Config {
 		}
 
 		return get_option( $option, '' );
+	}
+
+	/**
+	 * Returns a non-reversible hint for a secret: last 4 chars prefixed with stars.
+	 * Never returns the full value. Empty secrets return empty string.
+	 */
+	private static function mask_secret( $secret ) {
+		if ( ! is_string( $secret ) || '' === $secret ) {
+			return '';
+		}
+		$tail = substr( $secret, -4 );
+		return '****' . $tail;
 	}
 
 	private function get_active_modules() {
