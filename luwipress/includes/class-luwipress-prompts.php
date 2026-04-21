@@ -222,6 +222,13 @@ Review: %4$s',
 			? $data['depth']
 			: 'standard';
 
+		// Brand voice card — batch-level override falls back to site-level default.
+		// Appended to the system prompt so it layers on top of depth rules rather than replacing them.
+		$brand_voice = isset( $data['brand_voice'] ) ? trim( (string) $data['brand_voice'] ) : '';
+		if ( '' === $brand_voice ) {
+			$brand_voice = trim( (string) get_option( 'luwipress_brand_voice_card', '' ) );
+		}
+
 		if ( '' !== $custom_system ) {
 			// Variable substitution so operators can reference the job's context inside their prompt.
 			$system = strtr( $custom_system, array(
@@ -232,9 +239,17 @@ Review: %4$s',
 				'{keywords}'     => (string) ( $data['keywords'] ?? '' ),
 				'{site_name}'    => (string) ( $data['site_name'] ?? get_bloginfo( 'name' ) ),
 				'{depth}'        => $depth,
+				'{brand_voice}'  => $brand_voice,
 			) );
+			// If the operator didn't use {brand_voice} but one is set, append it so the voice still lands.
+			if ( '' !== $brand_voice && false === strpos( $custom_system, '{brand_voice}' ) ) {
+				$system .= self::brand_voice_block( $brand_voice );
+			}
 		} else {
 			$system = self::content_default_system_prompt( $depth );
+			if ( '' !== $brand_voice ) {
+				$system .= self::brand_voice_block( $brand_voice );
+			}
 		}
 
 		$user = self::content_user_prompt( $data, $depth );
@@ -242,6 +257,185 @@ Review: %4$s',
 		$prompt = array( 'system' => $system, 'user' => $user );
 
 		return apply_filters( 'luwipress_prompt_content_generation', $prompt, $data );
+	}
+
+	/**
+	 * Wrap the operator's brand voice card in a clearly-marked section so the model treats it as a hard constraint layer.
+	 */
+	private static function brand_voice_block( $brand_voice ) {
+		return "\n\n---\nBRAND VOICE CARD (site-specific constraints — always honor on top of the rules above):\n" . $brand_voice . "\n---\n";
+	}
+
+	/**
+	 * Phase 1 of two-phase editorial generation — produces an outline only.
+	 * Humans review/edit the outline before Phase 2 writes the full article.
+	 */
+	public static function outline_generation( array $data ) {
+		$depth = in_array( ( $data['depth'] ?? 'deep' ), array( 'deep', 'editorial' ), true ) ? $data['depth'] : 'deep';
+
+		$section_target = 'editorial' === $depth ? '6-8' : '5-7';
+		$faq_target     = 'editorial' === $depth ? '3-5' : '3-5';
+
+		$system = "You are an expert editorial planner. You produce article OUTLINES — not full articles.\n"
+			. "The outline is a skeleton a human editor will review, edit, and approve before we write the full piece.\n"
+			. "You write the outline in the target language specified. The outline is structural, but every heading and point must be specific and concrete — never generic filler.\n\n"
+			. "HARD RULES:\n"
+			. " • Every section heading must advance the topic — no overlap, no restating.\n"
+			. " • Every bullet point must name a concrete fact, example, name, date, or concept the section will cover. 'Discuss X' is not allowed — say what about X.\n"
+			. " • No AI-boilerplate (no 'in today's world', 'as we know', 'in this article we will').\n"
+			. " • Keep bullet points short (≤ 18 words). The editor will expand in Phase 2.\n"
+			. " • Return ONLY a valid JSON object (no markdown fences, no prose around it).\n";
+
+		$brand_voice = isset( $data['brand_voice'] ) ? trim( (string) $data['brand_voice'] ) : '';
+		if ( '' === $brand_voice ) {
+			$brand_voice = trim( (string) get_option( 'luwipress_brand_voice_card', '' ) );
+		}
+		if ( '' !== $brand_voice ) {
+			$system .= self::brand_voice_block( $brand_voice );
+		}
+
+		$user = sprintf(
+			"Plan an article outline for the site '%1\$s'.\n\nTOPIC: %2\$s\nTARGET LANGUAGE: %3\$s\nTONE: %4\$s\nDEPTH PRESET: %5\$s\nSEO KEYWORDS: %6\$s\n\nReturn ONLY this JSON shape:\n{\n  \"title\":            \"specific 45-65 char title\",\n  \"hook\":             \"1-2 sentence opening idea — anecdote, contrast, vivid image, or surprising fact (NOT a summary of the article)\",\n  \"sections\":         [ { \"heading\": \"H2 heading\", \"points\": [\"concrete point\", \"concrete point\", \"concrete point\"] } ],\n  \"faq\":              [\"Question readers actually search?\"],\n  \"closing_approach\": \"short description of how to close (reflective line, memorable image, CTA, etc) — not a summary\"\n}\n\nTARGETS:\n • sections: %7\$s H2 sections, each with 3-5 concrete points\n • faq: %8\$s questions (only include if they add value)",
+			$data['site_name']  ?? get_bloginfo( 'name' ),
+			$data['topic']      ?? '',
+			$data['language']   ?? 'English',
+			$data['tone']       ?? 'informative',
+			$depth,
+			$data['keywords']   ?? '',
+			$section_target,
+			$faq_target
+		);
+
+		$prompt = array( 'system' => $system, 'user' => $user );
+		return apply_filters( 'luwipress_prompt_outline_generation', $prompt, $data );
+	}
+
+	/**
+	 * Phase 2 — full article written STRICTLY from an approved outline.
+	 * Expects `outline` key in $data (array shape matching outline_generation output).
+	 */
+	public static function content_from_outline( array $data ) {
+		$depth   = in_array( ( $data['depth'] ?? 'deep' ), array( 'standard', 'deep', 'editorial' ), true ) ? $data['depth'] : 'deep';
+		$outline = is_array( $data['outline'] ?? null ) ? $data['outline'] : array();
+
+		// Reuse the full article system prompt + layer outline adherence on top.
+		$system = self::content_default_system_prompt( $depth );
+
+		$brand_voice = isset( $data['brand_voice'] ) ? trim( (string) $data['brand_voice'] ) : '';
+		if ( '' === $brand_voice ) {
+			$brand_voice = trim( (string) get_option( 'luwipress_brand_voice_card', '' ) );
+		}
+		if ( '' !== $brand_voice ) {
+			$system .= self::brand_voice_block( $brand_voice );
+		}
+
+		$system .= "\n\n---\nAPPROVED OUTLINE ADHERENCE:\n"
+			. " • An editor has already approved the outline below. Follow it exactly.\n"
+			. " • Do not add new H2 sections. Do not skip H2 sections. Do not rename H2 headings.\n"
+			. " • Expand every bullet point into substantial prose — one short paragraph each minimum.\n"
+			. " • The hook opening must match the spirit of the outline's hook (same angle, full sentence execution).\n"
+			. " • FAQ items must cover every question listed, in order.\n"
+			. " • Close using the closing_approach described.\n"
+			. "---\n";
+
+		$outline_text = self::format_outline_for_prompt( $outline );
+
+		$user = sprintf(
+			"Write the full article for the site '%1\$s' following the approved outline below.\n\nTOPIC: %2\$s\nTARGET LANGUAGE: %3\$s\nTONE: %4\$s\nTARGET WORD COUNT: %5\$s\nSEO KEYWORDS: %6\$s\nDEPTH PRESET: %7\$s\n\nAPPROVED OUTLINE:\n%8\$s\n\nReturn ONLY a JSON object:\n{\n  \"title\":           \"use the outline title unless it's clearly poor — 45-65 chars\",\n  \"content\":         \"Full HTML article — <h2>/<h3>/<p>/<ul>/<ol>/<blockquote>/<table>. Internal link placeholders inline as [INTERNAL_LINK: anchor].\",\n  \"excerpt\":         \"2-3 sentence summary, max 160 chars\",\n  \"meta_title\":      \"SEO meta title, max 60 chars\",\n  \"meta_description\": \"SEO meta description, max 155 chars, compelling CTA\",\n  \"tags\":            [\"5-8 specific, searchable tags\"]\n}",
+			$data['site_name']  ?? get_bloginfo( 'name' ),
+			$data['topic']      ?? '',
+			$data['language']   ?? 'English',
+			$data['tone']       ?? 'informative',
+			$data['word_count'] ?? 2000,
+			$data['keywords']   ?? '',
+			$depth,
+			$outline_text
+		);
+
+		$prompt = array( 'system' => $system, 'user' => $user );
+		return apply_filters( 'luwipress_prompt_content_from_outline', $prompt, $data );
+	}
+
+	/**
+	 * Render an outline array as a readable block for prompt injection.
+	 */
+	private static function format_outline_for_prompt( array $outline ) {
+		$lines = array();
+		$lines[] = 'TITLE: ' . ( $outline['title'] ?? '' );
+		$lines[] = 'HOOK: ' . ( $outline['hook'] ?? '' );
+		$lines[] = '';
+		$lines[] = 'SECTIONS:';
+		if ( ! empty( $outline['sections'] ) && is_array( $outline['sections'] ) ) {
+			foreach ( $outline['sections'] as $idx => $section ) {
+				$heading = $section['heading'] ?? '';
+				$lines[] = sprintf( '%d. %s', $idx + 1, $heading );
+				$points = $section['points'] ?? array();
+				if ( is_array( $points ) ) {
+					foreach ( $points as $point ) {
+						$lines[] = '   - ' . $point;
+					}
+				}
+			}
+		}
+		if ( ! empty( $outline['faq'] ) && is_array( $outline['faq'] ) ) {
+			$lines[] = '';
+			$lines[] = 'FAQ:';
+			foreach ( $outline['faq'] as $q ) {
+				$lines[] = '  • ' . $q;
+			}
+		}
+		if ( ! empty( $outline['closing_approach'] ) ) {
+			$lines[] = '';
+			$lines[] = 'CLOSING: ' . $outline['closing_approach'];
+		}
+		return implode( "\n", $lines );
+	}
+
+	/**
+	 * Topic brainstorm — produces a list of specific, publishable article titles from a theme.
+	 */
+	public static function topic_brainstorm( array $data ) {
+		$theme = (string) ( $data['theme'] ?? '' );
+		$count = max( 1, min( 20, (int) ( $data['count'] ?? 10 ) ) );
+		$style = sanitize_text_field( (string) ( $data['style_hint'] ?? '' ) );
+		$lang  = (string) ( $data['language'] ?? 'English' );
+
+		$system = "You generate article title ideas for a working content queue — NOT a generic brainstorm list.\n"
+			. "Every title must be specific, concrete, publishable as-is, and searchable. Reject generic templates.\n\n"
+			. "HARD RULES:\n"
+			. " • Title must name a specific thing: a person, place, date, number, concept, or object. Not 'exploring music' but 'How Aşık Veysel's tuning shaped modern bağlama'.\n"
+			. " • No title is allowed to start with: 'The Ultimate Guide', 'Everything You Need', 'A Beginner's Guide' (unless truly beginner-targeted).\n"
+			. " • Vary angles: history, craft, culture, technique, comparison, personal voice, how-to.\n"
+			. " • No duplicates. No two titles about the same angle of the same subject.\n"
+			. " • Write titles in the target language.\n"
+			. " • Return ONLY valid JSON (no markdown fences, no prose around it).\n";
+
+		$brand_voice = isset( $data['brand_voice'] ) ? trim( (string) $data['brand_voice'] ) : '';
+		if ( '' === $brand_voice ) {
+			$brand_voice = trim( (string) get_option( 'luwipress_brand_voice_card', '' ) );
+		}
+		if ( '' !== $brand_voice ) {
+			$system .= self::brand_voice_block( $brand_voice );
+		}
+
+		$existing = $data['existing_titles'] ?? array();
+		$existing_block = '';
+		if ( is_array( $existing ) && ! empty( $existing ) ) {
+			$existing_block = "\n\nAVOID DUPLICATES — these titles already exist on the site, do NOT propose variations of them:\n"
+				. '• ' . implode( "\n• ", array_slice( $existing, 0, 50 ) );
+		}
+
+		$user = sprintf(
+			"Theme: %1\$s\nTarget language: %2\$s\nStyle hint (optional): %3\$s\nCount: %4\$d\n%5\$s\n\nReturn ONLY this JSON:\n{\n  \"topics\": [\n    { \"title\": \"...\", \"angle\": \"1-line reason this angle is publishable\", \"depth\": \"standard|deep|editorial\" }\n  ]\n}",
+			$theme,
+			$lang,
+			$style !== '' ? $style : 'none',
+			$count,
+			$existing_block
+		);
+
+		$prompt = array( 'system' => $system, 'user' => $user );
+		return apply_filters( 'luwipress_prompt_topic_brainstorm', $prompt, $data );
 	}
 
 	/**

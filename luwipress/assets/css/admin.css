@@ -3664,3 +3664,1450 @@ a:focus-visible {
 }
 .usage-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-lg); }
 .usage-modal-header h3 { margin: 0; font-size: var(--text-lg); font-weight: 700; }
+
+/* ========================================
+   Content Scheduler — Wizard
+   ======================================== */
+
+.lp-title-icon { color: var(--lp-primary); }
+
+/* Stat card accent variants (replaces inline hex) */
+.sched-stat--muted   { --accent: var(--lp-gray); }
+.sched-stat--warning { --accent: var(--lp-warning); }
+.sched-stat--info    { --accent: var(--lp-info); }
+.sched-stat--success { --accent: var(--lp-success); }
+.sched-stat--error   { --accent: var(--lp-error); }
+
+/* Queue item status chip variants */
+.sched-item-status--muted   { background: var(--lp-gray); }
+.sched-item-status--warning { background: var(--lp-warning); }
+.sched-item-status--info    { background: var(--lp-info); }
+.sched-item-status--success { background: var(--lp-success); }
+.sched-item-status--error   { background: var(--lp-error); }
+
+/* Wizard card header with stepper */
+.sched-wizard-card { margin-bottom: 20px; }
+.sched-wiz-header {
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+}
+.sched-wiz-header h3 { flex: 0 0 auto; margin: 0; }
+
+.sched-steps {
+    display: flex;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+.sched-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: var(--lp-bg);
+    color: var(--lp-text-secondary);
+    border: 1px solid var(--lp-border-light);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: default;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    user-select: none;
+}
+.sched-step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--lp-border);
+    color: var(--lp-surface);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+.sched-step.is-active {
+    background: var(--lp-primary-50);
+    color: var(--lp-primary);
+    border-color: var(--lp-primary);
+}
+.sched-step.is-active .sched-step-num {
+    background: var(--lp-primary);
+    color: #fff;
+}
+.sched-step.is-done {
+    background: var(--lp-success-bg);
+    color: var(--lp-success);
+    border-color: var(--lp-success-light, var(--lp-success));
+    cursor: pointer;
+}
+.sched-step.is-done .sched-step-num {
+    background: var(--lp-success);
+    color: #fff;
+}
+.sched-step.is-done .sched-step-num::before { content: '✓'; }
+.sched-step.is-done .sched-step-num:not(:empty) { font-size: 0; }
+.sched-step.is-done .sched-step-num::before { font-size: 11px; }
+
+/* Panels */
+.sched-wiz-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 8px 0 4px;
+}
+.sched-wiz-intro h4 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--lp-text);
+}
+.sched-wiz-intro p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--lp-text-secondary);
+    line-height: 1.5;
+}
+
+.sched-field-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+.sched-req { color: var(--lp-error); }
+
+.sched-wiz-topics {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 220px;
+}
+.sched-bulk-count.over-limit {
+    color: var(--lp-error);
+    font-weight: 700;
+}
+
+.sched-wiz-examples {
+    background: var(--lp-bg);
+    border: 1px solid var(--lp-border-light);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+}
+.sched-wiz-examples summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--lp-text-secondary);
+    list-style: none;
+}
+.sched-wiz-examples summary::-webkit-details-marker { display: none; }
+.sched-wiz-examples summary::before {
+    content: '＋ ';
+    font-weight: 700;
+    color: var(--lp-primary);
+    margin-right: 4px;
+}
+.sched-wiz-examples[open] summary::before { content: '− '; }
+.sched-wiz-examples-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* Depth cards */
+.sched-depth-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+.sched-depth-card {
+    position: relative;
+    cursor: pointer;
+    padding: 14px 14px 12px;
+    border: 1px solid var(--lp-border);
+    border-radius: var(--radius-sm);
+    background: var(--lp-surface);
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    display: block;
+}
+.sched-depth-card input {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    margin: 0;
+    accent-color: var(--lp-primary);
+}
+.sched-depth-card:hover {
+    border-color: var(--lp-primary);
+}
+.sched-depth-card:has(input:checked) {
+    border-color: var(--lp-primary);
+    background: var(--lp-primary-50);
+    box-shadow: 0 0 0 2px var(--lp-primary-50);
+}
+.sched-depth-inner { padding-right: 24px; }
+.sched-depth-inner strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--lp-text);
+    margin-bottom: 2px;
+}
+.sched-depth-desc {
+    display: block;
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+    line-height: 1.4;
+}
+.sched-depth-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--lp-gray);
+    font-style: italic;
+    line-height: 1.4;
+}
+
+.sched-checkbox--inline {
+    padding: 28px 0 0;
+    align-items: flex-start;
+    line-height: 1.4;
+}
+
+/* Summary */
+.sched-wiz-summary {
+    background: var(--lp-bg);
+    border: 1px solid var(--lp-border-light);
+    border-radius: var(--radius-sm);
+    padding: 20px;
+}
+.sched-sum-top {
+    text-align: center;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--lp-border-light);
+}
+.sched-sum-num {
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--lp-primary);
+    line-height: 1;
+}
+.sched-sum-lbl {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--lp-text-secondary);
+}
+.sched-sum-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px 16px;
+    margin-bottom: 16px;
+}
+.sched-sum-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.sched-sum-row strong {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--lp-gray);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.sched-sum-row span {
+    font-size: 13px;
+    color: var(--lp-text);
+    font-weight: 500;
+    word-break: break-word;
+}
+.sched-sum-topics {
+    padding-top: 16px;
+    border-top: 1px solid var(--lp-border-light);
+}
+.sched-sum-topics strong {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--lp-gray);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin-bottom: 8px;
+}
+.sched-sum-topics ol {
+    margin: 0;
+    padding-left: 22px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--lp-text);
+}
+.sched-sum-topics .sched-sum-more {
+    list-style: none;
+    margin-left: -22px;
+    color: var(--lp-text-secondary);
+    font-style: italic;
+    font-size: 12px;
+}
+
+/* Navigation bar */
+.sched-wiz-nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--lp-border-light);
+}
+.sched-wiz-nav .button {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+}
+.sched-wiz-progress {
+    flex: 1 1 auto;
+    height: 4px;
+    background: var(--lp-border-light);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.sched-wiz-progress-bar {
+    height: 100%;
+    background: var(--lp-primary);
+    border-radius: 999px;
+    transition: width 0.3s var(--ease-out, ease-out);
+}
+.sched-wiz-submit {
+    padding: 8px 18px !important;
+    font-weight: 600 !important;
+}
+.sched-wiz-submit .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+/* Inline feedback notice */
+.sched-wiz-notice {
+    margin: 12px 0 0;
+    border-radius: var(--radius-sm);
+}
+
+/* Queue card */
+.sched-queue-card { margin-bottom: 20px; }
+.sched-queue-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.sched-queue-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--lp-border-light);
+}
+.sched-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background: var(--lp-bg);
+    color: var(--lp-text-secondary);
+    border: 1px solid var(--lp-border-light);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sched-filter:hover { border-color: var(--lp-primary); color: var(--lp-primary); }
+.sched-filter.is-active {
+    background: var(--lp-primary);
+    color: #fff;
+    border-color: var(--lp-primary);
+}
+.sched-filter.is-active .sched-filter-count { background: rgba(255,255,255,0.25); color: #fff; }
+.sched-filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 18px;
+    padding: 0 6px;
+    background: var(--lp-border-light);
+    color: var(--lp-gray-dark);
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+}
+.sched-tag--depth {
+    background: var(--lp-primary-50);
+    color: var(--lp-primary);
+}
+.sched-tag--mode {
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+.sched-tag--mode-draft {
+    background: var(--lp-warning-bg);
+    color: var(--lp-warning);
+}
+.sched-tag--mode-auto {
+    background: var(--lp-success-bg);
+    color: var(--lp-success);
+}
+
+/* Publish-mode cards (same pattern as depth cards, 2-up) */
+.sched-mode-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+.sched-mode-card {
+    position: relative;
+    cursor: pointer;
+    padding: 14px 14px 12px;
+    border: 1px solid var(--lp-border);
+    border-radius: var(--radius-sm);
+    background: var(--lp-surface);
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    display: block;
+}
+.sched-mode-card input {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    margin: 0;
+    accent-color: var(--lp-primary);
+}
+.sched-mode-card:hover { border-color: var(--lp-primary); }
+.sched-mode-card:has(input:checked) {
+    border-color: var(--lp-primary);
+    background: var(--lp-primary-50);
+    box-shadow: 0 0 0 2px var(--lp-primary-50);
+}
+.sched-mode-inner { padding-right: 24px; }
+.sched-mode-inner strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--lp-text);
+    margin-bottom: 4px;
+}
+.sched-mode-inner small {
+    display: block;
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+    line-height: 1.45;
+}
+@media (max-width: 720px) {
+    .sched-mode-grid { grid-template-columns: 1fr; }
+}
+
+/* Override-syntax hint (Step 1) */
+.sched-wiz-syntax {
+    background: var(--lp-bg);
+    border: 1px solid var(--lp-border-light);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+}
+.sched-wiz-syntax summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--lp-text-secondary);
+    list-style: none;
+}
+.sched-wiz-syntax summary::-webkit-details-marker { display: none; }
+.sched-wiz-syntax summary::before {
+    content: '＋ ';
+    font-weight: 700;
+    color: var(--lp-primary);
+    margin-right: 4px;
+}
+.sched-wiz-syntax[open] summary::before { content: '− '; }
+.sched-wiz-syntax-body {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--lp-text-secondary);
+    line-height: 1.5;
+}
+.sched-wiz-syntax-body p { margin: 0 0 8px; }
+.sched-wiz-code {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border-light);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--lp-text);
+    overflow-x: auto;
+    margin: 0 0 8px;
+    white-space: pre;
+}
+.sched-wiz-syntax-keys {
+    font-size: 12px;
+    line-height: 1.8;
+}
+.sched-wiz-syntax-keys code {
+    background: var(--lp-primary-50);
+    color: var(--lp-primary);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+/* Budget preview (Step 4) */
+.sched-wiz-budget {
+    margin-top: 16px;
+    background: var(--lp-primary-50);
+    border: 1px solid var(--lp-primary);
+    border-radius: var(--radius-sm);
+    padding: 16px 18px;
+}
+.sched-wiz-budget-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: var(--lp-primary);
+}
+.sched-wiz-budget-head .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+.sched-wiz-budget-head strong {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 700;
+}
+.sched-wiz-budget-provider {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--lp-text-secondary);
+    background: var(--lp-surface);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 500;
+}
+.sched-wiz-budget-body {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.sched-wiz-budget-total {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--lp-text);
+    line-height: 1;
+}
+.sched-wiz-budget-breakdown {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+}
+.sched-wiz-budget-loading,
+.sched-wiz-budget-err {
+    font-size: 13px;
+    color: var(--lp-text-secondary);
+    font-style: italic;
+}
+.sched-wiz-budget-err { color: var(--lp-error); }
+.sched-wiz-budget-disclaimer {
+    margin: 12px 0 0;
+    font-size: 11px;
+    color: var(--lp-text-secondary);
+    line-height: 1.5;
+}
+
+/* Retry button on failed queue items */
+.sched-retry {
+    color: var(--lp-warning) !important;
+    border-color: var(--lp-warning) !important;
+}
+.sched-retry .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+
+/* Brand voice card (Step 2 disclosure) */
+.sched-wiz-voice {
+    background: var(--lp-bg);
+    border: 1px solid var(--lp-border-light);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+}
+.sched-wiz-voice summary {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--lp-text);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sched-wiz-voice summary::-webkit-details-marker { display: none; }
+.sched-wiz-voice summary::before {
+    content: '▸';
+    font-size: 10px;
+    color: var(--lp-gray);
+    transition: transform 0.2s;
+}
+.sched-wiz-voice[open] summary::before { transform: rotate(90deg); }
+.sched-wiz-voice summary .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: var(--lp-primary);
+}
+.sched-wiz-voice-pill {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--lp-success-bg);
+    color: var(--lp-success);
+    text-transform: none;
+    letter-spacing: 0;
+}
+.sched-wiz-voice-pill--empty {
+    background: var(--lp-border-light);
+    color: var(--lp-gray);
+}
+.sched-wiz-voice-body {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.sched-wiz-voice-help {
+    margin: 0;
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+    line-height: 1.5;
+}
+.sched-wiz-voice-text {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    min-height: 120px;
+    resize: vertical;
+}
+.sched-wiz-voice-save {
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+}
+
+/* Enrich button + toast */
+.sched-enrich {
+    color: var(--lp-primary) !important;
+    border-color: var(--lp-primary) !important;
+}
+.sched-enrich .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+.sched-enrich-toast {
+    position: absolute;
+    right: 8px;
+    bottom: -6px;
+    transform: translateY(100%);
+    background: var(--lp-primary);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 500;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    z-index: 3;
+    white-space: nowrap;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+.sched-enrich-toast.is-hiding { opacity: 0; }
+.sched-item { position: relative; }
+
+/* Bulk selection — per-row checkbox */
+.sched-item-pick {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    padding-right: 6px;
+    cursor: pointer;
+}
+.sched-item-check {
+    margin: 0;
+    accent-color: var(--lp-primary);
+    cursor: pointer;
+}
+
+/* Bulk toolbar */
+.sched-bulk-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 14px;
+    margin: -4px 0 14px;
+    background: var(--lp-primary-50);
+    border: 1px solid var(--lp-primary);
+    border-radius: var(--radius-sm);
+    animation: sched-bulk-slide 0.2s ease-out;
+}
+@keyframes sched-bulk-slide {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.sched-bulk-toolbar-all {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--lp-primary);
+}
+.sched-bulk-toolbar-count {
+    font-size: 12px;
+    font-weight: 500;
+}
+.sched-bulk-toolbar-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.sched-bulk-run {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+}
+.sched-bulk-run .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+.sched-bulk-run[data-bulk="publish"]:disabled {
+    opacity: 0.5;
+}
+.sched-bulk-danger {
+    color: var(--lp-error) !important;
+    border-color: var(--lp-error) !important;
+}
+.sched-bulk-danger:hover {
+    background: var(--lp-error-bg) !important;
+}
+
+@media (max-width: 720px) {
+    .sched-bulk-toolbar { flex-wrap: wrap; }
+    .sched-bulk-toolbar-actions { margin-left: 0; width: 100%; }
+}
+
+/* ============================================
+   Outline approval gate (Step 2 checkbox)
+   ============================================ */
+.sched-outline-gate {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--lp-bg);
+    border: 1px solid var(--lp-border-light);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-top: 2px;
+}
+.sched-outline-gate:has(input:checked) {
+    background: var(--lp-primary-50);
+    border-color: var(--lp-primary);
+}
+.sched-outline-gate input[type="checkbox"] {
+    margin-top: 3px;
+    accent-color: var(--lp-primary);
+}
+.sched-outline-gate span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.sched-outline-gate strong {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--lp-text);
+}
+.sched-outline-gate small {
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+    line-height: 1.45;
+}
+
+/* ============================================
+   Topic brainstorm panel (Step 1)
+   ============================================ */
+.sched-wiz-head-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+.sched-brainstorm-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+    color: var(--lp-primary) !important;
+    border-color: var(--lp-primary) !important;
+}
+.sched-brainstorm-toggle .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+
+.sched-brainstorm {
+    background: var(--lp-primary-50);
+    border: 1px solid var(--lp-primary);
+    border-radius: var(--radius-sm);
+    padding: 16px 18px;
+    animation: sched-bulk-slide 0.2s ease-out;
+}
+.sched-brainstorm-head h5 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--lp-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.sched-brainstorm-head h5 .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+.sched-brainstorm-head p {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+    line-height: 1.5;
+}
+.sched-brainstorm-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.sched-brainstorm-fields {
+    display: grid;
+    grid-template-columns: 1fr 80px 1fr;
+    gap: 10px;
+}
+.sched-brainstorm-small input { text-align: center; }
+.sched-brainstorm-run {
+    align-self: flex-start;
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+}
+
+.sched-brainstorm-results {
+    margin-top: 14px;
+}
+.sched-brainstorm-results:empty { display: none; }
+.sched-brainstorm-loading,
+.sched-brainstorm-err {
+    padding: 12px 14px;
+    background: var(--lp-surface);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--lp-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.sched-brainstorm-err { color: var(--lp-error); }
+
+.sched-brainstorm-picks-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--lp-surface);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    font-size: 13px;
+    font-weight: 500;
+}
+.sched-brainstorm-picks-head label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+.sched-brainstorm-picks {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: var(--lp-surface);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    border-top: 1px solid var(--lp-border-light);
+}
+.sched-brainstorm-picks li {
+    border-bottom: 1px solid var(--lp-border-light);
+}
+.sched-brainstorm-picks li:last-child { border-bottom: none; }
+.sched-brainstorm-picks label {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    grid-template-areas:
+        "check title   depth"
+        ".     angle   angle";
+    gap: 4px 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    align-items: start;
+}
+.sched-brainstorm-picks label:hover { background: var(--lp-surface-hover); }
+.sched-brainstorm-picks input { grid-area: check; margin-top: 3px; accent-color: var(--lp-primary); }
+.sched-brainstorm-title {
+    grid-area: title;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--lp-text);
+    line-height: 1.4;
+}
+.sched-brainstorm-depth {
+    grid-area: depth;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    background: var(--lp-primary);
+    color: #fff;
+    border-radius: 3px;
+    align-self: start;
+}
+.sched-brainstorm-angle {
+    grid-area: angle;
+    font-size: 11px;
+    color: var(--lp-text-secondary);
+    line-height: 1.4;
+    font-style: italic;
+}
+.sched-brainstorm-add {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+}
+@media (max-width: 720px) {
+    .sched-brainstorm-fields { grid-template-columns: 1fr; }
+}
+
+/* ============================================
+   Outline review modal
+   ============================================ */
+.sched-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sched-modal[hidden] { display: none !important; }
+.sched-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 15, 30, 0.55);
+    backdrop-filter: blur(2px);
+    animation: sched-fade-in 0.18s ease-out;
+}
+.sched-modal-panel {
+    position: relative;
+    background: var(--lp-surface);
+    border-radius: 12px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.35);
+    width: min(860px, calc(100vw - 40px));
+    max-height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
+    animation: sched-modal-pop 0.22s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+    overflow: hidden;
+}
+@keyframes sched-fade-in {
+    from { opacity: 0; } to { opacity: 1; }
+}
+@keyframes sched-modal-pop {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.sched-modal-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--lp-border-light);
+}
+.sched-modal-head h3 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--lp-text);
+}
+.sched-modal-sub {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+    letter-spacing: 0.02em;
+}
+.sched-modal-close {
+    background: none;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--lp-text-secondary);
+    transition: background 0.15s, color 0.15s;
+}
+.sched-modal-close:hover { background: var(--lp-surface-hover); color: var(--lp-text); }
+.sched-modal-close .dashicons { font-size: 18px; width: 18px; height: 18px; }
+
+.sched-modal-body {
+    padding: 20px 22px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    background: var(--lp-bg);
+}
+.sched-modal-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--lp-border-light);
+    background: var(--lp-surface);
+}
+.sched-modal-foot-right {
+    display: flex;
+    gap: 8px;
+}
+
+.sched-outline-loading,
+.sched-outline-err {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 40px 16px;
+    font-size: 13px;
+    color: var(--lp-text-secondary);
+}
+.sched-outline-err { color: var(--lp-error); }
+
+.sched-outline-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+.sched-outline-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--lp-gray);
+    margin-bottom: 4px;
+}
+.sched-outline-field input[type="text"],
+.sched-outline-field textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--lp-border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    color: var(--lp-text);
+    background: var(--lp-surface);
+    font-family: inherit;
+    resize: vertical;
+}
+.sched-outline-field textarea {
+    line-height: 1.5;
+}
+
+.sched-outline-sections-wrap {
+    margin-bottom: 18px;
+}
+.sched-outline-sections-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+.sched-outline-sections-head h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--lp-text);
+}
+.sched-outline-section-add {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+}
+
+.sched-outline-sections {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.sched-outline-section {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sched-outline-section-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.sched-outline-section-num {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--lp-primary);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sched-outline-heading {
+    flex: 1 1 auto;
+    padding: 8px 10px;
+    border: 1px solid var(--lp-border);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--lp-text);
+    background: var(--lp-bg);
+    width: 100%;
+}
+.sched-outline-section-del {
+    flex: 0 0 auto;
+    background: none;
+    border: 1px solid var(--lp-border);
+    border-radius: var(--radius-sm);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--lp-text-secondary);
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.sched-outline-section-del:hover {
+    color: var(--lp-error);
+    border-color: var(--lp-error);
+    background: var(--lp-error-bg);
+}
+.sched-outline-section-del .dashicons { font-size: 14px; width: 14px; height: 14px; }
+.sched-outline-points {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--lp-border-light);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    line-height: 1.6;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    resize: vertical;
+    min-height: 72px;
+    background: var(--lp-bg);
+}
+
+.sched-outline-regen {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+}
+
+@media (max-width: 720px) {
+    .sched-modal-panel { width: calc(100vw - 20px); max-height: calc(100vh - 20px); }
+    .sched-modal-head, .sched-modal-body, .sched-modal-foot { padding-left: 14px; padding-right: 14px; }
+    .sched-modal-foot { flex-direction: column; align-items: stretch; gap: 8px; }
+    .sched-modal-foot-right { flex-direction: column-reverse; }
+}
+
+/* ============================================
+   Multilingual duplicate (Step 2 — chips)
+   ============================================ */
+.sched-i18n-field {
+    padding: 12px 14px;
+    background: var(--lp-bg);
+    border: 1px solid var(--lp-border-light);
+    border-radius: var(--radius-sm);
+}
+.sched-i18n-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+.sched-i18n-head label {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--lp-text);
+}
+.sched-i18n-plugin {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    background: var(--lp-primary);
+    color: #fff;
+    border-radius: 3px;
+}
+.sched-i18n-help {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+    line-height: 1.5;
+}
+.sched-i18n-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.sched-i18n-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+    user-select: none;
+}
+.sched-i18n-chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+}
+.sched-i18n-chip-code {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--lp-text-secondary);
+}
+.sched-i18n-chip:hover {
+    border-color: var(--lp-primary);
+    color: var(--lp-primary);
+}
+.sched-i18n-chip:has(input:checked) {
+    background: var(--lp-primary);
+    border-color: var(--lp-primary);
+}
+.sched-i18n-chip:has(input:checked) .sched-i18n-chip-code {
+    color: #fff;
+}
+.sched-i18n-chip[hidden] { display: none; }
+
+/* ============================================
+   Recurring plans card
+   ============================================ */
+.sched-plans-card { margin-bottom: 20px; }
+.sched-plans-help {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--lp-text-secondary);
+    line-height: 1.5;
+}
+.sched-plans-empty {
+    text-align: center;
+    padding: 36px 20px;
+    color: var(--lp-gray);
+}
+.sched-plans-empty .dashicons {
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: var(--lp-border);
+    margin-bottom: 10px;
+}
+.sched-plans-empty h3 {
+    font-size: 15px;
+    color: var(--lp-text);
+    margin: 0 0 4px;
+}
+.sched-plans-empty p {
+    font-size: 13px;
+    margin: 0;
+}
+
+.sched-plans-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.sched-plan-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--lp-bg);
+    border: 1px solid var(--lp-border-light);
+    border-radius: var(--radius-sm);
+    transition: border-color 0.15s, background 0.15s;
+}
+.sched-plan-row:hover { border-color: var(--lp-border); }
+.sched-plan-row.is-paused {
+    opacity: 0.7;
+    background: var(--lp-surface);
+    border-style: dashed;
+}
+.sched-plan-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.sched-plan-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sched-plan-title strong {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--lp-text);
+}
+.sched-plan-pill {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+.sched-plan-pill--paused {
+    background: var(--lp-warning-bg);
+    color: var(--lp-warning);
+}
+.sched-plan-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+}
+.sched-plan-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.sched-plan-meta .dashicons {
+    font-size: 13px;
+    width: 13px;
+    height: 13px;
+    color: var(--lp-gray);
+}
+.sched-plan-dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--lp-gray);
+}
+.sched-plan-dates strong {
+    color: var(--lp-text-secondary);
+    font-weight: 600;
+}
+.sched-plan-err {
+    color: var(--lp-error);
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+}
+.sched-plan-err .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    color: var(--lp-error) !important;
+}
+.sched-plan-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+.sched-plan-actions .button {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+}
+.sched-plan-actions .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+
+@media (max-width: 720px) {
+    .sched-plan-row { flex-direction: column; }
+    .sched-plan-actions { width: 100%; justify-content: flex-start; }
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+    .sched-depth-grid { grid-template-columns: 1fr; }
+    .sched-wiz-header h3 { flex: 1 1 100%; }
+    .sched-steps { justify-content: flex-start; }
+    .sched-step-lbl { display: none; }
+    .sched-step { padding: 6px 10px; }
+    .sched-wiz-nav { flex-wrap: wrap; }
+    .sched-wiz-progress { order: -1; flex-basis: 100%; }
+}

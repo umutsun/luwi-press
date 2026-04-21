@@ -90,6 +90,18 @@
             widget.style.setProperty('--lp-primary', primary);
             widget.style.setProperty('--lp-text', textColor);
 
+            // Only show WhatsApp CTA if a number is configured
+            var hasWa = !!lpChat.whatsapp_number;
+            var waHeaderBtn = hasWa
+                ? '<button class="lp-chat-wa-pill" title="Chat on WhatsApp" aria-label="Chat on WhatsApp"><span class="lp-chat-wa-pill-icon"></span><span class="lp-chat-wa-pill-label">WhatsApp</span></button>'
+                : '';
+            var waCtaBar = hasWa
+                ? '<div class="lp-chat-wa-cta" role="region" aria-label="WhatsApp shortcut">' +
+                    '<span class="lp-chat-wa-cta-text">Prefer WhatsApp? Talk to our team directly.</span>' +
+                    '<button class="lp-chat-wa-cta-btn" type="button"><span class="lp-chat-wa-cta-icon"></span>Chat on WhatsApp</button>' +
+                  '</div>'
+                : '';
+
             widget.innerHTML =
                 '<button id="lp-chat-toggle" class="lp-chat-toggle" aria-label="Chat with us"></button>' +
                 '<div class="lp-chat-window">' +
@@ -99,11 +111,12 @@
                             '<span class="lp-chat-subtitle">AI Assistant</span>' +
                         '</div>' +
                         '<div class="lp-chat-header-actions">' +
-                            '<button class="lp-chat-escalate-btn" title="Talk to our team"></button>' +
+                            waHeaderBtn +
                             '<button class="lp-chat-close-btn" aria-label="Close chat">&times;</button>' +
                         '</div>' +
                     '</div>' +
                     '<div class="lp-chat-body" id="lp-chat-body"></div>' +
+                    waCtaBar +
                     '<div class="lp-chat-input-area">' +
                         '<input type="text" id="lp-chat-input" class="lp-chat-input" placeholder="Type your question..." maxlength="1000" autocomplete="off">' +
                         '<button id="lp-chat-send" class="lp-chat-send-btn" disabled></button>' +
@@ -127,9 +140,11 @@
                 self.toggleWidget();
             });
 
-            document.querySelector('.lp-chat-escalate-btn').addEventListener('click', function() {
-                self.escalateToAgent();
-            });
+            // WhatsApp CTA bindings — header pill + bottom bar (both optional)
+            var waPill = document.querySelector('.lp-chat-wa-pill');
+            if (waPill) waPill.addEventListener('click', function() { self.escalateToAgent(); });
+            var waCta = document.querySelector('.lp-chat-wa-cta-btn');
+            if (waCta) waCta.addEventListener('click', function() { self.escalateToAgent(); });
 
             document.getElementById('lp-chat-input').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {

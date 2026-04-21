@@ -638,6 +638,43 @@ function buildGraph(data, viewFilter) {
 		node.attr('transform', function(d){ return 'translate(' + d.x + ',' + d.y + ')'; });
 	});
 
+	// Fit simulation to viewport: compute bounding box of all nodes and pan+scale
+	// so everything is visible with a margin. Smaller graphs (customers with 8
+	// segments) used to leave half the nodes off-screen — this fixes that.
+	function fitToViewport(duration) {
+		if (!nodes.length) return;
+		var xs = nodes.map(function(n){ return n.x || 0; });
+		var ys = nodes.map(function(n){ return n.y || 0; });
+		var rs = nodes.map(function(n){ return n.radius || 10; });
+		var minX = Math.min.apply(null, xs.map(function(x,i){ return x - rs[i] - 30; }));
+		var maxX = Math.max.apply(null, xs.map(function(x,i){ return x + rs[i] + 30; }));
+		var minY = Math.min.apply(null, ys.map(function(y,i){ return y - rs[i] - 40; }));
+		var maxY = Math.max.apply(null, ys.map(function(y,i){ return y + rs[i] + 40; }));
+		var bw = Math.max(1, maxX - minX);
+		var bh = Math.max(1, maxY - minY);
+		var scale = Math.min(width / bw, height / bh, 2.5);
+		if (!isFinite(scale) || scale <= 0) return;
+		var tx = width  / 2 - ((minX + maxX) / 2) * scale;
+		var ty = height / 2 - ((minY + maxY) / 2) * scale;
+		svg.transition().duration(duration || 600).call(
+			zoom.transform,
+			d3.zoomIdentity.translate(tx, ty).scale(scale)
+		);
+	}
+
+	// Auto-fit once the simulation has cooled (alpha < 0.1) or after 2.5s fallback
+	var autoFitDone = false;
+	simulation.on('end', function() {
+		if (autoFitDone) return;
+		autoFitDone = true;
+		fitToViewport(800);
+	});
+	setTimeout(function() {
+		if (autoFitDone) return;
+		autoFitDone = true;
+		fitToViewport(800);
+	}, 2500);
+
 	// Zoom controls
 	document.getElementById('kg-zoom-in').onclick = function() {
 		svg.transition().duration(300).call(zoom.scaleBy, 1.4);
@@ -646,7 +683,8 @@ function buildGraph(data, viewFilter) {
 		svg.transition().duration(300).call(zoom.scaleBy, 0.7);
 	};
 	document.getElementById('kg-zoom-fit').onclick = function() {
-		svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+		// "Fit" now means fit-to-nodes, not reset-to-identity. Much more useful.
+		fitToViewport(400);
 	};
 	var resetBtn = document.getElementById('kg-layout-reset');
 	if (resetBtn) {
@@ -693,6 +731,24 @@ function buildTooltip(d) {
 		h += '<div class="kg-tt-row">Coverage: <b>' + (d.coverage || 0).toFixed(0) + '%</b></div>';
 		h += '<div class="kg-tt-row">Translated: ' + (d.data.products_translated || 0) + '</div>';
 		h += '<div class="kg-tt-row">Missing: ' + (d.data.products_missing || 0) + '</div>';
+	} else if (d.type === 'post') {
+		var pp = d.data || {};
+		h += '<div class="kg-tt-row">Score: <b>' + (d.score || 0) + '</b></div>';
+		h += '<div class="kg-tt-row">Words: ' + (pp.word_count || 0) + '</div>';
+		var ps = d.seo || {};
+		h += '<div class="kg-tt-row">SEO: ' + (ps.has_title ? '✓' : '✗') + ' title, ' + (ps.has_description ? '✓' : '✗') + ' desc</div>';
+		if (pp.author_name) h += '<div class="kg-tt-row">Author: ' + escHtml(pp.author_name) + '</div>';
+	} else if (d.type === 'page') {
+		var pg = d.data || {};
+		var role = pg.is_front_page ? 'Homepage' : (pg.is_shop_page ? 'Shop' : (pg.is_blog_page ? 'Blog' : (pg.parent_id === 0 ? 'Top-level' : 'Child')));
+		h += '<div class="kg-tt-row">Role: <b>' + role + '</b></div>';
+		h += '<div class="kg-tt-row">Content: ' + (pg.content_length || 0).toLocaleString() + ' chars</div>';
+		if (pg.template && pg.template !== 'default') h += '<div class="kg-tt-row">Template: ' + escHtml(pg.template) + '</div>';
+	} else if (d.type === 'segment') {
+		var sg = d.data || {};
+		h += '<div class="kg-tt-row">Customers: <b>' + (sg.count || 0) + '</b></div>';
+		h += '<div class="kg-tt-row">Share: ' + (sg.share_pct || 0).toFixed(1) + '%</div>';
+		if (sg.segment) h += '<div class="kg-tt-row">Cohort: ' + escHtml(sg.segment) + '</div>';
 	}
 	return h;
 }
@@ -815,22 +871,23 @@ function showDetailPanel(d) {
 		});
 		h += '</div>';
 
-		// Recommendations
+		// Recommendations — every one is actionable (AI action, editor link, or media link)
 		var recs = [];
+		var editUrl = '/wp-admin/post.php?post=' + p.id + '&action=edit';
 		if (!p.seo || !p.seo.has_title || !p.seo.has_description) {
 			var miss = [];
 			if (!p.seo || !p.seo.has_title) miss.push('title');
 			if (!p.seo || !p.seo.has_description) miss.push('description');
-			recs.push({ p: 'high', l: 'Add SEO Meta', d: 'Missing ' + miss.join(' & ') });
+			recs.push({ p: 'high', l: 'Add SEO Meta', d: 'Missing ' + miss.join(' & ') + ' — edit post to add', link: editUrl });
 		}
 		var missingPostLangs = [];
 		langKeys.forEach(function(l) { if (trans[l] !== 'completed') missingPostLangs.push(l); });
 		if (missingPostLangs.length) {
 			recs.push({a:'translate', l:'Translate ' + missingPostLangs.map(function(x){return x.toUpperCase();}).join(', '), d:missingPostLangs.length + ' language' + (missingPostLangs.length>1?'s':''), p:'medium', langs:missingPostLangs.join(',')});
 		}
-		if (!p.has_featured_image) recs.push({ p: 'medium', l: 'Add Featured Image', d: 'Improves social sharing & SEO' });
-		if (p.word_count < 300) recs.push({ p: 'medium', l: 'Expand Content', d: 'Only ~' + p.word_count + ' words — aim for 600+' });
-		if (p.is_stale) recs.push({ p: 'low', l: 'Refresh Content', d: 'Last updated ' + p.days_since_modified + ' days ago' });
+		if (!p.has_featured_image) recs.push({ p: 'medium', l: 'Add Featured Image', d: 'Improves social sharing & SEO', link: editUrl });
+		if (p.word_count < 300) recs.push({ p: 'medium', l: 'Expand Content', d: 'Only ~' + p.word_count + ' words — aim for 600+', link: editUrl });
+		if (p.is_stale) recs.push({ p: 'low', l: 'Refresh Content', d: 'Last updated ' + p.days_since_modified + ' days ago', link: editUrl });
 
 		var pri = {high:0,medium:1,low:2};
 		recs.sort(function(a,b){ return (pri[a.p]||9)-(pri[b.p]||9); });
@@ -841,12 +898,20 @@ function showDetailPanel(d) {
 				if (r.a) {
 					var extra = r.langs ? ",'" + r.langs + "'" : '';
 					h += '<button class="kg-rec kg-rec-' + r.p + '" onclick="kgAction(\'' + r.a + '\',' + p.id + ',this' + extra + ')">';
+					h += '<span class="kg-rec-dot"></span>';
+					h += '<span class="kg-rec-body"><strong>' + r.l + '</strong><br><small>' + r.d + '</small></span>';
+					h += '</button>';
+				} else if (r.link) {
+					h += '<a class="kg-rec kg-rec-' + r.p + '" href="' + r.link + '" target="_blank" rel="noopener">';
+					h += '<span class="kg-rec-dot"></span>';
+					h += '<span class="kg-rec-body"><strong>' + r.l + ' →</strong><br><small>' + r.d + '</small></span>';
+					h += '</a>';
 				} else {
 					h += '<div class="kg-rec kg-rec-' + r.p + '">';
+					h += '<span class="kg-rec-dot"></span>';
+					h += '<span class="kg-rec-body"><strong>' + r.l + '</strong><br><small>' + r.d + '</small></span>';
+					h += '</div>';
 				}
-				h += '<span class="kg-rec-dot"></span>';
-				h += '<span class="kg-rec-body"><strong>' + r.l + '</strong><br><small>' + r.d + '</small></span>';
-				h += r.a ? '</button>' : '</div>';
 			});
 			h += '</div>';
 		} else {
@@ -981,24 +1046,34 @@ function showDetailPanel(d) {
 		h += statusChip((pg.children_ids || []).length > 0, (pg.children_ids || []).length + ' child' + ((pg.children_ids || []).length !== 1 ? 'ren' : ''));
 		h += '</div>';
 
-		// Recommendations
+		// Recommendations — pages live or die by Elementor editor, so every rec links there
 		var pageRecs = [];
+		var pgEditUrl = '/wp-admin/post.php?post=' + pg.id + '&action=edit';
 		if ((pg.content_length || 0) < 300 && !pg.is_front_page) {
-			pageRecs.push({ p: 'medium', l: 'Expand content', d: 'Only ' + (pg.content_length || 0) + ' chars — aim for 800+' });
+			pageRecs.push({ p: 'medium', l: 'Expand content', d: 'Only ' + (pg.content_length || 0) + ' chars — aim for 800+', link: pgEditUrl });
 		}
 		if (pg.parent_id === 0 && (pg.children_ids || []).length === 0 && !pg.is_front_page && !pg.is_shop_page && !pg.is_blog_page) {
-			pageRecs.push({ p: 'low', l: 'Orphan top-level page', d: 'Not referenced by other pages — check menu linking' });
+			pageRecs.push({ p: 'low', l: 'Orphan top-level page', d: 'Not referenced by other pages — check menu linking', link: '/wp-admin/nav-menus.php' });
 		}
 
 		if (pageRecs.length > 0) {
 			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
 			pageRecs.forEach(function(r) {
-				h += '<div class="kg-rec kg-rec-' + r.p + '">';
-				h += '<span class="kg-rec-dot"></span>';
-				h += '<span class="kg-rec-body"><strong>' + r.l + '</strong><br><small>' + r.d + '</small></span>';
-				h += '</div>';
+				if (r.link) {
+					h += '<a class="kg-rec kg-rec-' + r.p + '" href="' + r.link + '" target="_blank" rel="noopener">';
+					h += '<span class="kg-rec-dot"></span>';
+					h += '<span class="kg-rec-body"><strong>' + r.l + ' →</strong><br><small>' + r.d + '</small></span>';
+					h += '</a>';
+				} else {
+					h += '<div class="kg-rec kg-rec-' + r.p + '">';
+					h += '<span class="kg-rec-dot"></span>';
+					h += '<span class="kg-rec-body"><strong>' + r.l + '</strong><br><small>' + r.d + '</small></span>';
+					h += '</div>';
+				}
 			});
 			h += '</div>';
+		} else {
+			h += '<div class="kg-p-allgood">All optimizations complete</div>';
 		}
 
 		h += '<div class="kg-p-footer">';
@@ -1078,33 +1153,52 @@ function showDetailPanel(d) {
 		h += '<p style="margin:8px 0;color:var(--lp-text-muted);font-size:12px;font-style:italic;">→ ' + escHtml(info.priority) + '</p>';
 		h += '</div>';
 
-		// Segment-specific recommendations
+		// Segment-specific recommendations — each ships with either a CSV export
+		// action (concrete, non-destructive) or a link to the WooCommerce customer list
+		// filtered for this cohort. LuwiPress never writes to third-party CRM plugins.
 		var segRecs = [];
+		var customersUrl = '/wp-admin/users.php?role=customer';
 		if (seg === 'one_time' && count > 10) {
-			segRecs.push({ p: 'high', l: 'Launch win-back campaign', d: count + ' customers never returned. A single re-engagement email could lift repeat rate substantially.' });
+			segRecs.push({ p: 'high', l: 'Launch win-back campaign', d: count + ' customers never returned. Export list and feed into your email tool.', a: 'export_segment_csv', seg: seg });
 		} else if (seg === 'new' && count > 0) {
-			segRecs.push({ p: 'high', l: 'Send onboarding sequence', d: 'Trigger welcome flow with "What to expect next" + category recommendation.' });
+			segRecs.push({ p: 'high', l: 'Send onboarding sequence', d: 'Trigger welcome flow with "What to expect next" + category recommendation.', a: 'export_segment_csv', seg: seg });
 		} else if (seg === 'at_risk' && count > 0) {
-			segRecs.push({ p: 'high', l: 'Re-engagement email', d: 'They loved you once. Offer a loyalty perk before they drift to dormant.' });
+			segRecs.push({ p: 'high', l: 'Re-engagement email', d: 'They loved you once. Offer a loyalty perk before they drift to dormant.', a: 'export_segment_csv', seg: seg });
 		} else if (seg === 'dormant' && count > 0) {
-			segRecs.push({ p: 'medium', l: 'Exclusive reactivation offer', d: 'One last try — limited discount or new arrivals preview.' });
+			segRecs.push({ p: 'medium', l: 'Exclusive reactivation offer', d: 'One last try — limited discount or new arrivals preview.', a: 'export_segment_csv', seg: seg });
 		} else if (seg === 'vip' && count > 0) {
-			segRecs.push({ p: 'medium', l: 'VIP perk program', d: 'Early access, free shipping, personal note — keep them feeling special.' });
+			segRecs.push({ p: 'medium', l: 'VIP perk program', d: 'Early access, free shipping, personal note — keep them feeling special.', a: 'export_segment_csv', seg: seg });
 		} else if (seg === 'loyal' && count > 0) {
-			segRecs.push({ p: 'low', l: 'Cross-sell adjacent categories', d: 'Loyal buyers already trust your brand. Introduce complementary products.' });
+			segRecs.push({ p: 'low', l: 'Cross-sell adjacent categories', d: 'Loyal buyers already trust your brand. Introduce complementary products.', a: 'export_segment_csv', seg: seg });
 		} else if (count === 0) {
 			if (seg === 'vip' || seg === 'loyal') {
-				segRecs.push({ p: 'medium', l: 'No ' + s.label + ' customers yet', d: 'Build a retention program to cultivate this cohort.' });
+				segRecs.push({ p: 'medium', l: 'No ' + s.label + ' customers yet', d: 'Build a retention program to cultivate this cohort.', link: customersUrl });
 			}
+		}
+		// Every segment gets a "View in admin" rec
+		if (count > 0) {
+			segRecs.push({ p: 'low', l: 'View customers in admin', d: 'Open WooCommerce users list (filter manually by this cohort).', link: customersUrl });
 		}
 
 		if (segRecs.length > 0) {
 			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
 			segRecs.forEach(function(r) {
-				h += '<div class="kg-rec kg-rec-' + r.p + '">';
-				h += '<span class="kg-rec-dot"></span>';
-				h += '<span class="kg-rec-body"><strong>' + escHtml(r.l) + '</strong><br><small>' + escHtml(r.d) + '</small></span>';
-				h += '</div>';
+				if (r.a === 'export_segment_csv') {
+					h += '<button class="kg-rec kg-rec-' + r.p + '" onclick="kgExportSegmentCsv(\'' + r.seg + '\',this)">';
+					h += '<span class="kg-rec-dot"></span>';
+					h += '<span class="kg-rec-body"><strong>' + escHtml(r.l) + '</strong><br><small>' + escHtml(r.d) + '</small></span>';
+					h += '</button>';
+				} else if (r.link) {
+					h += '<a class="kg-rec kg-rec-' + r.p + '" href="' + r.link + '" target="_blank" rel="noopener">';
+					h += '<span class="kg-rec-dot"></span>';
+					h += '<span class="kg-rec-body"><strong>' + escHtml(r.l) + ' →</strong><br><small>' + escHtml(r.d) + '</small></span>';
+					h += '</a>';
+				} else {
+					h += '<div class="kg-rec kg-rec-' + r.p + '">';
+					h += '<span class="kg-rec-dot"></span>';
+					h += '<span class="kg-rec-body"><strong>' + escHtml(r.l) + '</strong><br><small>' + escHtml(r.d) + '</small></span>';
+					h += '</div>';
+				}
 			});
 			h += '</div>';
 		}
@@ -1414,6 +1508,7 @@ function init(forceFresh) {
 			bindRevenueClick(data);
 			bindTaxonomyClick(data);
 			updateCacheBadge(data);
+			updatePresetCounts(data);
 		}, !!forceFresh);
 	});
 }
@@ -1797,7 +1892,9 @@ function initSearch() {
 		var hits = [];
 		var products = _kgData.nodes.products || [];
 		var posts    = _kgData.nodes.posts || [];
+		var pages    = _kgData.nodes.pages || [];
 		var cats     = _kgData.nodes.categories || [];
+		var segments = _kgData.nodes.customer_segments || [];
 
 		products.forEach(function(p) {
 			var label = (p.name || '') + ' ' + (p.sku || '') + ' ' + (p.slug || '');
@@ -1810,9 +1907,21 @@ function initSearch() {
 				hits.push({ id: 'post:' + p.id, type: 'post', label: p.title, meta: 'Blog post' });
 			}
 		});
+		pages.forEach(function(p) {
+			var label = (p.title || '') + ' ' + (p.slug || '');
+			if (label.toLowerCase().indexOf(q) !== -1) {
+				var meta = p.is_front_page ? 'Homepage' : (p.is_shop_page ? 'Shop page' : (p.is_blog_page ? 'Blog page' : 'Page'));
+				hits.push({ id: 'page:' + p.id, type: 'page', label: p.title || ('Page #' + p.id), meta: meta });
+			}
+		});
 		cats.forEach(function(c) {
 			if ((c.name || '').toLowerCase().indexOf(q) !== -1) {
 				hits.push({ id: 'category:' + c.id, type: 'category', label: c.name, meta: c.product_count + ' products' });
+			}
+		});
+		segments.forEach(function(s) {
+			if ((s.label || '').toLowerCase().indexOf(q) !== -1 || (s.segment || '').toLowerCase().indexOf(q) !== -1) {
+				hits.push({ id: s.id || ('segment_' + s.segment), type: 'segment', label: s.label, meta: (s.count || 0) + ' customers' });
 			}
 		});
 
@@ -1942,6 +2051,35 @@ function initPresets() {
 		_kgCurrentPreset = preset || 'all';
 		if (labelEl) labelEl.textContent = item.textContent.replace(/\s*\(.+\)\s*$/, '').trim();
 		if (_kgData) buildGraph(_kgData);
+	});
+}
+
+// Inject match counts into preset menu items so operators see how many nodes
+// each filter selects before committing. Called whenever _kgData refreshes.
+function updatePresetCounts(data) {
+	if (!data || !data.nodes) return;
+	var products = data.nodes.products || [];
+	var posts    = data.nodes.posts    || [];
+	var counts = {
+		all: products.length + posts.length,
+		needs_seo: products.filter(function(p){ return !p.seo || !p.seo.has_title || !p.seo.has_description; }).length
+			+ posts.filter(function(p){ return !p.seo || !p.seo.has_title || !p.seo.has_description; }).length,
+		not_enriched: products.filter(function(p){ return !p.enrichment || p.enrichment.status !== 'completed'; }).length,
+		thin_content: products.filter(function(p){ return (p.content_length || 0) < 500; }).length
+			+ posts.filter(function(p){ return (p.word_count || 0) < 300; }).length,
+		translation_backlog: (function(){
+			var hasMissing = function(t){ if (!t) return false; var k = Object.keys(t); for (var i=0;i<k.length;i++) if (t[k[i]] !== 'completed') return true; return false; };
+			return products.filter(function(p){ return hasMissing(p.translation); }).length
+				+ posts.filter(function(p){ return hasMissing(p.translation); }).length;
+		})(),
+		high_opportunity: products.filter(function(p){ return (p.opportunity_score || 0) > 30; }).length
+	};
+	document.querySelectorAll('#kg-preset-menu .kg-dropdown-item').forEach(function(btn) {
+		var key = btn.getAttribute('data-preset');
+		if (!(key in counts)) return;
+		// Strip any existing trailing (N) first so repeated refreshes don't stack parens.
+		var base = btn.textContent.replace(/\s*\(\d+\)\s*$/, '');
+		btn.textContent = base + ' (' + counts[key] + ')';
 	});
 }
 
@@ -2271,6 +2409,7 @@ window.lpKg = {
 	showElementorAuditDrilldown: showElementorAuditDrilldown,
 	showDesignAuditPanel: showDesignAuditPanel,
 	updateCacheBadge: updateCacheBadge,
+	updatePresetCounts: updatePresetCounts,
 	fetchGraph: fetchGraph,
 	getData: function() { return _kgData; },
 	setData: function(d) { _kgData = d; }
@@ -2561,6 +2700,7 @@ function kgRefreshAndReopen(nodeId, nodeType, langCode) {
 		if (window.lpKg.bindRevenueClick) window.lpKg.bindRevenueClick(data);
 		if (window.lpKg.bindTaxonomyClick) window.lpKg.bindTaxonomyClick(data);
 		if (window.lpKg.updateCacheBadge) window.lpKg.updateCacheBadge(data);
+		if (window.lpKg.updatePresetCounts) window.lpKg.updatePresetCounts(data);
 
 		// Re-open the detail panel for the same node
 		if (nodeType === 'taxonomy') {
@@ -2613,4 +2753,64 @@ function buildNodeFromData(p, type) {
 		score: p.opportunity_score || 0, seo: p.seo, enrichment: p.enrichment,
 		aeo: p.aeo, translation: p.translation, reviews: p.reviews, data: p
 	};
+}
+
+// Export a customer segment as CSV — pulls from /crm/segment/{segKey} which
+// returns the rich customer record (name, email, order_count, total_spent,
+// last_order, days_since) up to 100 customers. LuwiPress never pushes to
+// external CRM plugins, so this is the operator's handoff point: export,
+// import into email tool, send campaign.
+function kgExportSegmentCsv(segKey, btn) {
+	var originalText = btn.innerHTML;
+	btn.disabled = true;
+	btn.innerHTML = '<span class="kg-action-spinner"></span> Exporting...';
+
+	var headers = { 'X-WP-Nonce': lpKgNonce };
+	var apiToken = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
+	if (apiToken) headers['Authorization'] = 'Bearer ' + apiToken;
+
+	fetch(lpKgRestUrl + 'crm/segment/' + encodeURIComponent(segKey) + '?limit=100', { headers: headers, credentials: 'same-origin' })
+		.then(function(r) { return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
+		.then(function(res) {
+			if (!res.ok) throw new Error('Segment fetch failed');
+			var customers = (res.data && res.data.customers) || [];
+			var label = (res.data && res.data.label) || segKey;
+			if (!customers.length) {
+				btn.innerHTML = '<span style="color:var(--lp-warning);">No customers</span>';
+				setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
+				return;
+			}
+			// Build CSV (BOM + CRLF so Excel/Numbers parse it)
+			var rows = [['customer_id', 'name', 'email', 'order_count', 'total_spent', 'last_order', 'days_since_last_order', 'segment', 'segment_label']];
+			customers.forEach(function(c) {
+				rows.push([c.id || '', c.name || '', c.email || '', c.order_count || 0, c.total_spent || 0, c.last_order || '', c.days_since || '', segKey, label]);
+			});
+			var csv = '﻿' + rows.map(function(row) {
+				return row.map(function(cell) {
+					var s = String(cell == null ? '' : cell);
+					return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+				}).join(',');
+			}).join('\r\n');
+			var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+			var url = URL.createObjectURL(blob);
+			var a = document.createElement('a');
+			a.href = url;
+			a.download = 'luwipress-segment-' + segKey + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+			btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> Downloaded (' + customers.length + ')';
+			btn.classList.add('kg-action-done');
+			setTimeout(function(){
+				btn.disabled = false;
+				btn.innerHTML = originalText;
+				btn.classList.remove('kg-action-done');
+			}, 4000);
+		})
+		.catch(function(err) {
+			btn.innerHTML = '<span style="color:var(--lp-error);">Export failed</span>';
+			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
+			if (window.console) console.error('[lpKg] segment export error:', err);
+		});
 }

@@ -675,13 +675,18 @@ class LuwiPress_Customer_Chat {
 		$cache_key = 'luwipress_chat_kg_data';
 		$data = get_transient( $cache_key );
 
-		if ( false !== $data ) {
+		// Treat stored-but-empty as miss so we don't serve a broken snapshot
+		// forever (previous bug: empty array passed `false !== $data` and the
+		// AI got zero context until the transient expired an hour later).
+		$has_products = ! empty( $data['nodes']['products'] );
+		$has_cats     = ! empty( $data['nodes']['categories'] );
+		if ( false !== $data && ( $has_products || $has_cats ) ) {
 			return $data;
 		}
 
 		// Fetch KG data directly via the class (no HTTP call)
 		if ( ! class_exists( 'LuwiPress_Knowledge_Graph' ) ) {
-			return array();
+			return $this->synthesize_fallback_snapshot();
 		}
 
 		$kg      = LuwiPress_Knowledge_Graph::get_instance();
@@ -691,8 +696,83 @@ class LuwiPress_Customer_Chat {
 		$response = $kg->handle_knowledge_graph( $request );
 		$data     = ( $response instanceof WP_REST_Response ) ? $response->get_data() : $response;
 
+		// Cold-start fallback: if KG returns nothing usable (e.g. handler errored,
+		// cache transient collision, permission misfire), synthesise a minimal
+		// snapshot directly from WP so the chat never degrades to "no info".
+		if ( empty( $data['nodes']['categories'] ) && empty( $data['nodes']['products'] ) ) {
+			$data = $this->synthesize_fallback_snapshot();
+		}
+
 		// Cache for 1 hour
 		set_transient( $cache_key, $data, HOUR_IN_SECONDS );
+
+		return $data;
+	}
+
+	/**
+	 * Build a minimal KG-shaped snapshot from WP/WC when the Knowledge Graph
+	 * handler returns nothing. Ensures the chat always has categories + a few
+	 * flagship products in context.
+	 *
+	 * @return array KG-shaped snapshot with summary, nodes.products, nodes.categories.
+	 */
+	private function synthesize_fallback_snapshot() {
+		$data = array( 'summary' => array(), 'nodes' => array( 'products' => array(), 'categories' => array() ) );
+
+		if ( ! function_exists( 'wc_get_products' ) ) {
+			return $data;
+		}
+
+		// Top categories by product count
+		$terms = get_terms( array(
+			'taxonomy'   => 'product_cat',
+			'hide_empty' => true,
+			'number'     => 20,
+			'orderby'    => 'count',
+			'order'      => 'DESC',
+		) );
+		if ( ! is_wp_error( $terms ) ) {
+			foreach ( $terms as $term ) {
+				$data['nodes']['categories'][] = array(
+					'id'            => $term->term_id,
+					'name'          => $term->name,
+					'slug'          => $term->slug,
+					'product_count' => (int) $term->count,
+				);
+			}
+		}
+
+		// Top N products (most recent publish)
+		$products = wc_get_products( array(
+			'status'  => 'publish',
+			'limit'   => 20,
+			'orderby' => 'date',
+			'order'   => 'DESC',
+		) );
+		if ( is_array( $products ) ) {
+			foreach ( $products as $p ) {
+				$pid = $p->get_id();
+				$cat_ids = array();
+				$cat_terms = get_the_terms( $pid, 'product_cat' );
+				if ( $cat_terms && ! is_wp_error( $cat_terms ) ) {
+					foreach ( $cat_terms as $t ) { $cat_ids[] = $t->term_id; }
+				}
+				$data['nodes']['products'][] = array(
+					'id'           => $pid,
+					'name'         => $p->get_name(),
+					'slug'         => $p->get_slug(),
+					'sku'          => $p->get_sku(),
+					'price'        => $p->get_price(),
+					'stock_status' => $p->get_stock_status(),
+					'categories'   => $cat_ids,
+				);
+			}
+		}
+
+		$data['summary'] = array(
+			'total_products'   => (int) wp_count_posts( 'product' )->publish,
+			'total_categories' => count( $data['nodes']['categories'] ),
+		);
 
 		return $data;
 	}
@@ -732,6 +812,18 @@ class LuwiPress_Customer_Chat {
 				foreach ( $keywords as $kw ) {
 					if ( mb_strpos( $title, $kw ) !== false ) {
 						$score += 3;
+					}
+				}
+
+				// Search in slug — products often have friendly slugs that differ from title
+				// (e.g. product "Çağlama - Double Pick Up" has slug "caglama-double-pick-up").
+				// Customer typing "caglama" should match.
+				$slug = mb_strtolower( $p['slug'] ?? '' );
+				if ( ! empty( $slug ) ) {
+					foreach ( $keywords as $kw ) {
+						if ( mb_strpos( $slug, $kw ) !== false ) {
+							$score += 2;
+						}
 					}
 				}
 
@@ -1016,8 +1108,9 @@ class LuwiPress_Customer_Chat {
 		$prompt .= "RULES:\n";
 		$prompt .= "- Use ONLY the product information provided above — never invent products or prices\n";
 		$prompt .= "- When mentioning products, always include their link\n";
-		$prompt .= "- If asked about categories or browsing, suggest relevant categories from the list\n";
-		$prompt .= "- If you cannot answer confidently, suggest the customer speak with the team\n";
+		$prompt .= "- NEVER reply with \"I don't have information about our products.\" If no specific product matched, say so briefly and then ALWAYS list 3–5 relevant categories from PRODUCT CATEGORIES above with a short pitch — the goal is to keep the conversation productive and route the customer to something real.\n";
+		$prompt .= "- If asked about categories or browsing, suggest relevant categories from the list with a one-liner for each\n";
+		$prompt .= "- If you truly cannot help (order issue, complaint, refund), suggest the customer speak with the team via WhatsApp (link in the widget)\n";
 		$prompt .= "- Keep responses under 150 words\n";
 		$prompt .= "- Respond in the same language the customer uses\n";
 

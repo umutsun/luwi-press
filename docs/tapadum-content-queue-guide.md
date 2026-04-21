@@ -31,28 +31,69 @@ Her content queue yazısı için üç kalite seviyesinden birini seçersiniz:
 
 ---
 
-## 2. Yol A — Admin UI (önerilen, operatör için en kolay)
+## 2. Path A — Admin UI (recommended, easiest for operators)
 
-### 2.1 Kurulum
+### 2.1 Where it lives
 
 1. **WordPress admin** → **LuwiPress** → **Content Scheduler**
-2. Sayfada **"Bulk Queue"** kartını göreceksiniz (Pending/Generating/Ready sayaçlarının altında).
+2. The page is a 4-step **wizard**: Topics → Style → Schedule → Review.
+3. Use **Next** / **Back** to move between steps. Under Step 1 there is an "Advanced: per-topic overrides" section — use it when individual rows need to deviate from the batch defaults.
 
-### 2.2 Formu doldur
+### 2.2 Filling in the steps
 
-| Alan | Tapadum için önerilen |
-|---|---|
-| **Topics textarea** | Her satıra bir konu. Opsiyonel: `Konu | anahtar kelime, başka anahtar` pipe syntax'ı |
-| **Start date** | Yarın |
-| **Publish time** | 09:00 |
-| **Spacing** | 1 day (günde 1 yazı) |
-| **AI stagger (min)** | 10 (her 10 dakikada bir AI çağrısı — bütçe dostu) |
-| **Content depth** | `editorial` (kültürel konular için) / `deep` (eğitici konular) / `standard` (kısa ürün yazıları) |
-| **Tone** | Informative / Creative |
-| **Words** | 2500 |
-| **Language** | Türkçe |
-| **Post Type** | Blog Post |
-| **Generate featured image** | ✓ |
+| Step | Field | Recommended for Tapadum |
+|---|---|---|
+| **1. Topics** | Topics textarea | One topic per line. Optional per-topic overrides (below) |
+| **2. Style** | Content depth | `editorial` (cultural), `deep` (explainer), `standard` (short/product) |
+| **2. Style** | Tone | Informative / Creative |
+| **2. Style** | Words | 2500 |
+| **2. Style** | Language | Turkish |
+| **2. Style** | Post Type | Blog Post |
+| **2. Style** | Generate featured image | ✓ |
+| **3. Schedule** | After AI generates | **Save as draft for review** (recommended) or Auto-publish on schedule |
+| **3. Schedule** | Start date | Tomorrow |
+| **3. Schedule** | Publish time | 09:00 |
+| **3. Schedule** | Cadence | 1 day (one post per day) |
+| **3. Schedule** | AI stagger (min) | 10 (budget-friendly) |
+| **4. Review** | Summary + estimated cost | Confirm → Queue all topics |
+
+### 2.2a Draft-first workflow (new, recommended)
+
+When Step 3 has **"Save as draft for review"** selected:
+- As soon as AI generation finishes, the article lands as a **WP Draft** (the scheduled publish date is baked into `post_date`).
+- A **"Review & publish"** button appears next to that queue row and sends you straight to the WP editor.
+- Your flow is: generate → review → edit if needed → Publish.
+
+The alternative, "Auto-publish on schedule", is the classic behavior: once AI finishes, the post goes live on the scheduled date with no manual step.
+
+### 2.2b Per-topic override syntax (new, advanced)
+
+If one or two rows in a batch need a different depth / words / tone, append `key=value` segments separated by pipes:
+
+```
+The music and note theories of Gurdjieff | depth=editorial | words=3000
+How to store your darbuka | depth=standard | words=900 | image=0
+History of the santur | keywords=ethnic instruments, turkish music | tone=creative
+Al-Farabi's book on music and healing | depth=editorial | words=3500 | tone=academic
+```
+
+Supported keys:
+
+| Key | Value | Note |
+|---|---|---|
+| `keywords` / `kw` | string | Legacy `Topic \| keyword` syntax still works |
+| `depth` | `standard` / `deep` / `editorial` | |
+| `words` / `word_count` | 300–5000 | |
+| `tone` | `professional`, `casual`, `academic`, `creative`, `persuasive`, `informative` | |
+| `lang` / `language` | language code (tr, en, it, fr…) | For multilingual batches |
+| `image` / `img` | 0 / 1 (also yes/no, true/false) | Whether this row gets a featured image |
+| `type` / `post_type` | `post` / `page` / `product` | |
+
+**Rule:** If the first segment has no `=` it keeps the legacy keyword behavior. All subsequent segments must be `key=value`.
+
+### 2.2c Failed retry (new)
+
+When a row ends up in `Failed` status a **Retry** button shows up next to it — it clears the error, flips the row back to `pending`, and re-queues AI generation 30 seconds later. The old delete-and-re-add pattern is no longer necessary.
 
 ### 2.3 Örnek — Tapadum 12 başlık (editorial preset)
 

@@ -1,6 +1,6 @@
 # LuwiPress — Complete Feature Overview
 
-**Version:** 3.1.10 · **License:** GPLv2+ · **Target:** WooCommerce stores
+**Version:** 3.1.14 · **License:** GPLv2+ · **Target:** WooCommerce stores
 
 LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerce. It generates content, optimizes SEO, translates products, and automates store management — integrating seamlessly with existing plugins (Rank Math, WPML, Elementor, etc.) without replacing them.
 
@@ -8,6 +8,7 @@ Shipped as a lean **365 KB core** plus two optional companion plugins — instal
 
 ## 🆕 What's new in 3.x
 
+- **Content Scheduler overhaul (3.1.14)** — the Scheduler page is now a full 4-step wizard: Topics → Style → Schedule → Review. New **draft-first publish workflow** creates WP drafts ready for editorial review instead of auto-publishing. **Two-phase Outline Approval** for deep/editorial depth: AI drafts an outline, editor approves / edits it in a modal, only then does the full article get written — strictly following the approved structure. Operators can define a **brand voice card** (site + batch-level) that layers tone, forbidden openers, cultural context on top of the depth rules. **AI topic brainstorm** proposes specific publishable titles from a theme, filtered against recent posts so duplicates don't leak in. **Per-topic pipe overrides** let individual rows deviate from batch defaults (`Topic | depth=editorial | words=3000`). **Budget preview** in the Review step shows real per-provider cost before you queue. **One-click draft enrich** resolves internal links + suggests categories/tags from existing taxonomy. **Bulk approve & publish** with per-row checkboxes. **Multilingual duplicate** — one topic becomes N linked articles across WPML/Polylang languages. **Recurring plans** — define a theme + cadence and the editorial calendar fills itself.
 - **Content depth presets (3.1.10)** — the Content Scheduler bulk queue now ships with three quality levels: **Standard** (balanced SEO article, 800-1500 words), **Deep** (research-grade explainer with citations, counter-arguments, and a FAQ, 1500-3000 words), and **Editorial** (essay-style with strong voice, cultural/historical context, narrative arc, 2000-3500+ words). The system prompt has been rewritten to forbid AI-boilerplate openers, mandate concrete-over-vague writing, and require internal link placeholders. Operators can also paste a custom system prompt under `luwipress_content_system_prompt` option with `{topic}`, `{tone}`, `{depth}` variable substitution to encode their brand voice.
 - **Bulk content queue (3.1.9)** — Content Scheduler now accepts up to 50 topics in one go. Paste your list (one topic per line, optional `| keywords` pipe syntax), pick a start date and publish spacing (e.g. "1 post per day" or "every 6 hours"), and the whole batch is queued. AI generation is staggered so the daily budget doesn't burst; if the cap is hit mid-batch, pending jobs auto-defer by an hour and pick up when there's room. A "Run N pending now" button shortcuts wp-cron for operators who want immediate processing.
 - **Batch monitor + CSV round-trip + layout memory (3.1.7)** — three operational power-features round out the Knowledge Graph. When you queue a category-wide enrichment, a live progress bar appears in the corner and tracks the job until it finishes (queued → running → done, with failure counts). The Export dropdown now round-trips: export a CSV of opportunities or missing SEO, edit it offline in Excel or Sheets, re-upload — the new `POST /seo/meta-bulk` endpoint applies up to 500 row updates through your SEO plugin in one call. And when you drag a node to a preferred position, the graph remembers it per view (Products / Posts / Pages / Customers) via localStorage so your layout persists across sessions; a reset button reverts to the auto-layout when you want a fresh start. Design Health now reads "N/A" instead of "0%" on sites without Elementor.
@@ -147,11 +148,25 @@ A single REST endpoint plus an interactive D3.js admin page that turns your stor
 - Auto-invalidation on content and meta changes; Refresh button forces reload
 
 ### 8. Content Scheduler & Blog Automation
-- AI-generated blog posts with scheduled publishing
-- Image generation: **DALL-E 3**, **DALL-E 2**, **Gemini Imagen 3**
-- Featured image auto-assignment
-- Custom post type support
-- Internal linking suggestions
+- **4-step wizard interface** — Topics → Style → Schedule → Review, with a live progress bar, per-step validation, and step-jump navigation for completed steps
+- **Draft-first workflow** (default) — AI-generated articles land as reviewable WP drafts with the target publish date baked in; one-click "Review & publish" jumps straight to the post editor
+- **Auto-publish mode** — the classic path for hands-off batches: AI finishes, article goes live on the scheduled date with no manual step
+- **Content depth presets** — Standard (800–1500 words), Deep (1500–3000 words with research framing + FAQ), Editorial (2000–3500+ words with narrative voice)
+- **Two-phase Outline Approval** (deep/editorial only) — AI first drafts a structural outline (title, hook, sections with bullet points, FAQ, closing approach), editor reviews and edits it in a modal, then Phase 2 writes the full article strictly following the approved outline
+- **Brand voice card** — site-level default + per-batch override that layers operator-defined voice (audience, forbidden openers, preferred opening style, cultural context, banned terms) on top of the depth rules
+- **AI topic brainstorm** — proposes specific publishable titles from a theme you supply, filtered against the last 30 post titles so no duplicates leak in; brand-voice aware and returns a recommended depth tier per suggestion
+- **Per-topic pipe overrides** — `Topic | keywords | depth=editorial | words=3000 | tone=creative | image=0 | lang=tr | type=post` lets individual rows deviate from batch defaults without leaving the textarea
+- **Bulk queue** — paste up to 50 topics at once, pick a start date and publish cadence (1 post/day, every 6 hours, etc.); AI generation is staggered so the daily budget doesn't burst
+- **Budget preview** in the Review step — live cost estimate using real provider/model pricing (per-topic input + output tokens × batch size, plus optional image cost), auto-scales with multilingual duplicate
+- **Enrich draft** — one-click button on draft rows runs Internal Linker (resolves `[INTERNAL_LINK: anchor]` markers) and AI taxonomy suggestion (picks from existing categories/tags only — never invents new terms)
+- **Bulk approve & publish** — per-row checkboxes + select-all reveal a toolbar: Publish selected (drafts only), Retry, Delete. 12 drafts → 1 click
+- **Queue filter tabs** — All / Pending / Generating / Outline review / Ready / Published / Failed
+- **Failed retry** — one-click retry on failed rows, clears error and re-queues AI 30s out
+- **Multilingual duplicate** — if WPML or Polylang is active, pick additional languages per batch; each picked language gets its own natively-written article linked via the translation plugin's API (one 12-topic batch → 48 linked articles across 4 languages)
+- **Recurring plans** — theme + cadence (daily/weekly/biweekly/monthly) + post count + depth + language → LuwiPress auto-brainstorms and queues fresh topics on your schedule; budget-aware defers when the daily cap hits; pause / resume / edit / delete per plan
+- **Image generation** — DALL-E 3, DALL-E 2, Gemini Imagen 3 for featured images
+- **Custom post type support** — Posts, Pages, Products, or any public CPT
+- **"Run N pending now"** shortcut — bypasses wp-cron for operators who want immediate processing
 
 ### 9. Review Analytics
 - Sentiment analysis on WooCommerce reviews
@@ -333,4 +348,4 @@ Add the companion plugins to light up:
 
 ---
 
-*Document version 3.1.10 — updated 2026-04-21 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*
+*Document version 3.1.14 — updated 2026-04-22 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*
