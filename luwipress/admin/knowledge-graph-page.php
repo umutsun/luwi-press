@@ -156,7 +156,7 @@ function fetchGraph(cb) {
 		headers['Authorization'] = 'Bearer ' + CONFIG.apiToken;
 	}
 
-	fetch(CONFIG.apiUrl + '?sections=products,categories,translation,store,opportunities,design_audit,posts', {
+	fetch(CONFIG.apiUrl + '?sections=products,categories,translation,store,opportunities,design_audit,posts&fresh=1', {
 		headers: headers,
 		credentials: 'same-origin'
 	})
@@ -1080,6 +1080,17 @@ function initViewSwitch() {
 initViewSwitch();
 init();
 
+// Expose helpers so onclick handlers (outside IIFE) can trigger refresh
+window.lpKg = {
+	updateStats: updateStats,
+	buildGraph: buildGraph,
+	showDetailPanel: showDetailPanel,
+	bindDesignHealthClick: bindDesignHealthClick,
+	fetchGraph: fetchGraph,
+	getData: function() { return _kgData; },
+	setData: function(d) { _kgData = d; }
+};
+
 })();
 
 // Quick Action handler (outside IIFE so onclick attributes can reach it)
@@ -1115,9 +1126,19 @@ function kgAction(action, productId, btn, langs) {
 		body: JSON.stringify(body),
 		credentials: 'same-origin'
 	})
-	.then(function(r) { return r.json(); })
-	.then(function(data) {
-		var isQueued = data && (data.status === 'processing' || data.status === 'queued');
+	.then(function(r) {
+		return r.json().then(function(data) { return { ok: r.ok, status: r.status, data: data }; });
+	})
+	.then(function(res) {
+		if (!res.ok) {
+			var msg = (res.data && (res.data.message || res.data.code)) || ('HTTP ' + res.status);
+			btn.innerHTML = '<span style="color:var(--lp-error);">' + msg + '</span>';
+			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 4000);
+			if (window.console) console.warn('[lpKg] action failed:', action, res);
+			return;
+		}
+		var data = res.data || {};
+		var isQueued = data.status === 'processing' || data.status === 'queued' || data.job_id;
 		btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> ' + (isQueued ? 'Queued' : 'Done');
 		btn.classList.add('kg-action-done');
 
@@ -1127,17 +1148,21 @@ function kgAction(action, productId, btn, langs) {
 			btn.disabled = false;
 			btn.innerHTML = originalText;
 			btn.classList.remove('kg-action-done');
-			// Re-fetch graph data and re-open the same product panel
 			kgRefreshAndReopen(productId, action === 'translate_lang' ? 'language' : null, langs);
 		}, refreshDelay);
 	})
 	.catch(function(err) {
-		btn.innerHTML = '<span style="color:var(--lp-error);">Failed</span>';
+		btn.innerHTML = '<span style="color:var(--lp-error);">Network error</span>';
 		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
+		if (window.console) console.error('[lpKg] action error:', action, err);
 	});
 }
 
 function kgRefreshAndReopen(nodeId, nodeType, langCode) {
+	if (!window.lpKg || !window.lpKg.buildGraph) {
+		if (window.console) console.warn('[lpKg] namespace not ready; skipping refresh');
+		return;
+	}
 	var headers = { 'X-WP-Nonce': lpKgNonce };
 	var apiToken = <?php echo wp_json_encode( $api_token ); ?>;
 	if (apiToken) headers['Authorization'] = 'Bearer ' + apiToken;
@@ -1149,36 +1174,34 @@ function kgRefreshAndReopen(nodeId, nodeType, langCode) {
 	.then(function(r) { return r.json(); })
 	.then(function(data) {
 		if (!data || !data.nodes) return;
-		window._kgData = data;
-		updateStats(data);
-		buildGraph(data);
-		bindDesignHealthClick(data);
+		window.lpKg.setData(data);
+		window.lpKg.updateStats(data);
+		window.lpKg.buildGraph(data);
+		window.lpKg.bindDesignHealthClick(data);
 
 		// Re-open the detail panel for the same node
 		if (nodeType === 'language' && langCode) {
-			// Find the language node
-			var allNodes = [];
-			var pNodes = data.nodes.products || [];
-			var cNodes = data.nodes.categories || [];
 			var lNodes = data.nodes.languages || [];
 			lNodes.forEach(function(l) {
 				if (l.code === langCode) {
-					showDetailPanel({ type: 'language', id: l.id || ('lang_' + l.code), label: l.code.toUpperCase(), coverage: l.coverage_pct, data: l, radius: 16 });
+					window.lpKg.showDetailPanel({ type: 'language', id: l.id || ('lang_' + l.code), label: l.code.toUpperCase(), coverage: l.coverage_pct, data: l, radius: 16 });
 				}
 			});
 		} else if (nodeId) {
-			// Find the product/post node in the new data
 			var items = (data.nodes.products || []).concat(data.nodes.posts || []);
 			for (var i = 0; i < items.length; i++) {
 				if (items[i].id === nodeId) {
 					var p = items[i];
 					var type = p.type || (p.word_count !== undefined ? 'post' : 'product');
 					var fakeNode = buildNodeFromData(p, type);
-					showDetailPanel(fakeNode);
+					window.lpKg.showDetailPanel(fakeNode);
 					break;
 				}
 			}
 		}
+	})
+	.catch(function(err) {
+		if (window.console) console.error('[lpKg] refresh error:', err);
 	});
 }
 
