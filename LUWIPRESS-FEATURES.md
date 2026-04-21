@@ -1,6 +1,6 @@
 # LuwiPress — Complete Feature Overview
 
-**Version:** 3.1.0 · **License:** GPLv2+ · **Target:** WooCommerce stores
+**Version:** 3.1.1 · **License:** GPLv2+ · **Target:** WooCommerce stores
 
 LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerce. It generates content, optimizes SEO, translates products, and automates store management — integrating seamlessly with existing plugins (Rank Math, WPML, Elementor, etc.) without replacing them.
 
@@ -8,6 +8,7 @@ Shipped as a lean **365 KB core** plus two optional companion plugins — instal
 
 ## 🆕 What's new in 3.x
 
+- **Secret masking in site-config (3.1.1)** — the `/site-config` endpoint no longer returns the LuwiPress API token or the active AI provider's API key in clear text. Responses now include `api_token_configured` / `api_key_configured` booleans plus `*_hint` fields (last 4 characters) — enough to verify configuration, impossible to reverse.
 - **Standalone SEO writer** — LuwiPress now writes its own SEO title + meta description when no third-party SEO plugin (Rank Math, Yoast, AIOSEO, SEOPress) is installed. Run the full enrichment pipeline without adding another plugin.
 - **Companion plugin architecture** — WebMCP and Open Claw live in separate plugins, so stores that don't need AI-agent integration or admin AI chat stay lean.
 - **Custom enrichment prompts** — define your store's voice, structure, and formatting rules with variable substitution for `{product_title}`, `{category}`, `{focus_keyword}`, etc. Enforce word counts and meta length limits per request.
@@ -302,4 +303,4 @@ Add the companion plugins to light up:
 
 ---
 
-*Document version 3.1.1 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*
+*Document version 3.1.1 — updated 2026-04-21 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*
