@@ -55,6 +55,30 @@ class LuwiPress_Knowledge_Graph {
 		add_action( 'delete_post', array( $this, 'invalidate_cache' ) );
 		add_action( 'created_term', array( $this, 'invalidate_cache' ) );
 		add_action( 'delete_term', array( $this, 'invalidate_cache' ) );
+
+		// Invalidate when LuwiPress AI pipelines write product meta directly.
+		add_action( 'updated_post_meta', array( $this, 'maybe_invalidate_on_meta' ), 10, 4 );
+		add_action( 'added_post_meta',   array( $this, 'maybe_invalidate_on_meta' ), 10, 4 );
+	}
+
+	/**
+	 * Flush graph cache when LuwiPress-owned meta keys change — save_post
+	 * doesn't always fire for direct update_post_meta from async AI jobs.
+	 */
+	public function maybe_invalidate_on_meta( $meta_id, $post_id, $meta_key, $meta_value ) {
+		if ( ! is_string( $meta_key ) || '' === $meta_key ) {
+			return;
+		}
+		if ( 0 === strpos( $meta_key, '_luwipress_' )
+			|| 'rank_math_title' === $meta_key
+			|| 'rank_math_description' === $meta_key
+			|| 'rank_math_focus_keyword' === $meta_key
+			|| '_yoast_wpseo_title' === $meta_key
+			|| '_yoast_wpseo_metadesc' === $meta_key
+			|| '_yoast_wpseo_focuskw' === $meta_key
+		) {
+			$this->invalidate_cache();
+		}
 	}
 
 	public function register_endpoints() {
@@ -67,6 +91,11 @@ class LuwiPress_Knowledge_Graph {
 					'type'              => 'string',
 					'sanitize_callback' => 'sanitize_text_field',
 					'description'       => 'Comma-separated sections: products,categories,translation,seo,aeo,crm,store,plugins,taxonomy,environment,opportunities,posts,pages,content_taxonomy,media_inventory,menus,product_attributes,authors,order_analytics',
+				),
+				'sections' => array(
+					'type'              => 'string',
+					'sanitize_callback' => 'sanitize_text_field',
+					'description'       => 'Alias for section (accepts comma-separated sections).',
 				),
 				'fresh' => array(
 					'type'    => 'boolean',
@@ -85,8 +114,11 @@ class LuwiPress_Knowledge_Graph {
 	public function handle_knowledge_graph( $request ) {
 		$start = microtime( true );
 
-		// Parse sections
+		// Parse sections (accept both `section` and `sections` for client compatibility)
 		$section_param = $request->get_param( 'section' );
+		if ( empty( $section_param ) ) {
+			$section_param = $request->get_param( 'sections' );
+		}
 		$all_sections  = array( 'products', 'categories', 'translation', 'seo', 'aeo', 'crm', 'store', 'plugins', 'taxonomy', 'environment', 'opportunities', 'posts', 'pages', 'content_taxonomy', 'media_inventory', 'menus', 'product_attributes', 'authors', 'order_analytics', 'design_audit' );
 		$sections      = $section_param ? array_intersect( array_map( 'trim', explode( ',', $section_param ) ), $all_sections ) : $all_sections;
 
