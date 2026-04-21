@@ -2,8 +2,8 @@
 /**
  * LuwiPress AI Content Pipeline
  *
- * Handles product enrichment, schema generation, FAQ generation
- * by triggering n8n workflows and receiving results back.
+ * Handles product enrichment, schema generation, and FAQ generation
+ * through the LuwiPress native AI engine and async job queue.
  *
  * @package LuwiPress
  * @since 1.1.0
@@ -17,11 +17,11 @@ class LuwiPress_AI_Content {
 
     private static $instance = null;
 
-    /** webhook base URL */
-    private $n8n_webhook_url;
+    /** Legacy external webhook URL (kept for back-compat with existing installs). */
+    private $webhook_url;
 
-    /** API token for n8n auth */
-    private $n8n_api_token;
+    /** Legacy external webhook API token. */
+    private $webhook_api_token;
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -31,8 +31,8 @@ class LuwiPress_AI_Content {
     }
 
     private function __construct() {
-        $this->n8n_webhook_url = get_option('luwipress_seo_webhook_url', '');
-        $this->n8n_api_token   = get_option('luwipress_seo_api_token', '');
+        $this->webhook_url       = get_option('luwipress_seo_webhook_url', '');
+        $this->webhook_api_token = get_option('luwipress_seo_api_token', '');
 
         add_action('rest_api_init', array($this, 'register_endpoints'));
         add_action('add_meta_boxes', array($this, 'add_product_meta_box'));
@@ -94,7 +94,7 @@ class LuwiPress_AI_Content {
             'permission_callback' => array($this, 'check_api_token'),
         ));
 
-        // Batch product enrichment → sends multiple products to n8n
+        // Batch product enrichment → queues multiple products for async enrichment
         register_rest_route('luwipress/v1', '/product/enrich-batch', array(
             'methods'             => 'POST',
             'callback'            => array($this, 'handle_batch_enrich_request'),
@@ -205,7 +205,7 @@ class LuwiPress_AI_Content {
     }
 
     /**
-     * Send product for AI enrichment via AI Engine (local or n8n).
+     * Send product for AI enrichment via the local AI Engine.
      */
     private function send_for_enrichment( $product, $options = array() ) {
         $product_id = $product->get_id();
@@ -220,7 +220,7 @@ class LuwiPress_AI_Content {
         $mode = LuwiPress_AI_Engine::get_mode();
 
         if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            // webhook mode: forward to webhook, n8n will call back to /product/enrich-callback
+            // Legacy webhook mode (deprecated): forward to webhook, callback returns via /product/enrich-callback
             $image_url = wp_get_attachment_url( $product->get_image_id() );
             $gallery   = array_map( 'wp_get_attachment_url', $product->get_gallery_image_ids() );
 
@@ -614,7 +614,7 @@ class LuwiPress_AI_Content {
     // ─── BATCH ENRICHMENT ─────────────────────────────────────────────
 
     /**
-     * Handle batch enrichment request — sends multiple products to n8n
+     * Handle batch enrichment request — queues multiple products for async enrichment
      */
     public function handle_batch_enrich_request($request) {
         $product_ids = $request->get_param('product_ids');
@@ -683,7 +683,7 @@ class LuwiPress_AI_Content {
     }
 
     /**
-     * Send batch of product IDs for enrichment (n8n or local sequential).
+     * Send batch of product IDs for enrichment (local sequential).
      */
     private function send_batch_for_enrichment( $product_ids, $options, $batch_id ) {
         $products_data = array();

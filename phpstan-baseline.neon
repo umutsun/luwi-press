@@ -51,12 +51,12 @@ parameters:
 			path: luwipress/includes/class-luwipress-ai-content.php
 
 		-
-			message: "#^Property LuwiPress_AI_Content\\:\\:\\$n8n_api_token is never read, only written\\.$#"
+			message: "#^Property LuwiPress_AI_Content\\:\\:\\$webhook_api_token is never read, only written\\.$#"
 			count: 1
 			path: luwipress/includes/class-luwipress-ai-content.php
 
 		-
-			message: "#^Property LuwiPress_AI_Content\\:\\:\\$n8n_webhook_url is never read, only written\\.$#"
+			message: "#^Property LuwiPress_AI_Content\\:\\:\\$webhook_url is never read, only written\\.$#"
 			count: 1
 			path: luwipress/includes/class-luwipress-ai-content.php
 

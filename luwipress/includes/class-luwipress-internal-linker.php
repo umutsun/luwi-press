@@ -6,7 +6,7 @@
  * the Content Scheduler and resolves them to actual <a> tags by matching
  * against products, categories, and posts.
  *
- * Can also be triggered via n8n for AI-powered link matching.
+ * Can also be triggered remotely for AI-powered link matching.
  *
  * @package LuwiPress
  * @since 1.2.0
@@ -51,11 +51,11 @@ class LuwiPress_Internal_Linker {
 			),
 		) );
 
-		// n8n callback: receive AI-matched links
+		// Async callback: receive AI-matched links
 		register_rest_route( 'luwipress/v1', '/content/resolve-links-callback', array(
 			'methods'             => 'POST',
 			'callback'            => array( $this, 'handle_resolve_callback' ),
-			'permission_callback' => array( $this, 'check_n8n_token' ),
+			'permission_callback' => array( $this, 'check_api_token' ),
 		) );
 
 		// Scan all posts for unresolved markers
@@ -84,7 +84,7 @@ class LuwiPress_Internal_Linker {
 		return rest_ensure_response( $result );
 	}
 
-	// ─── REST: n8n callback with AI-matched links ──────────────────────
+	// ─── REST: async callback with AI-matched links ────────────────────
 
 	public function handle_resolve_callback( $request ) {
 		$data    = $request->get_json_params();
@@ -129,7 +129,7 @@ class LuwiPress_Internal_Linker {
 			) );
 		}
 
-		LuwiPress_Logger::log( 'Internal links resolved via n8n callback', 'info', array(
+		LuwiPress_Logger::log( 'Internal links resolved via async callback', 'info', array(
 			'post_id'  => $post_id,
 			'resolved' => $count,
 		) );
@@ -399,7 +399,7 @@ class LuwiPress_Internal_Linker {
 		return LuwiPress_Permission::check_token_or_admin( $request );
 	}
 
-	public function check_n8n_token( $request ) {
+	public function check_api_token( $request ) {
 		return LuwiPress_Permission::check_token( $request );
 	}
 }

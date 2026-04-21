@@ -123,7 +123,7 @@ class LuwiPress_AEO {
         }
 
         return rest_ensure_response( array(
-            'status'     => ! empty( $result['n8n_forwarded'] ) ? 'queued' : 'completed',
+            'status'     => ! empty( $result['async_forwarded'] ) ? 'queued' : 'completed',
             'product_id' => $product_id,
         ) );
     }
@@ -151,13 +151,13 @@ class LuwiPress_AEO {
         }
 
         return rest_ensure_response( array(
-            'status'     => ! empty( $result['n8n_forwarded'] ) ? 'queued' : 'completed',
+            'status'     => ! empty( $result['async_forwarded'] ) ? 'queued' : 'completed',
             'product_id' => $product_id,
         ) );
     }
 
     /**
-     * Dispatch AEO generation via AI Engine (local or n8n).
+     * Dispatch AEO generation via the local AI Engine.
      */
     private function dispatch_aeo_generation( $product, $options = array() ) {
         $product_id = $product->get_id();
@@ -225,7 +225,7 @@ class LuwiPress_AEO {
     }
 
     /**
-     * POST /aeo/save-faq — Callback from n8n with generated FAQ data
+     * POST /aeo/save-faq — Async callback with generated FAQ data
      */
     public function save_faq_data($request) {
         $data = $request->get_json_params();
@@ -266,7 +266,7 @@ class LuwiPress_AEO {
     }
 
     /**
-     * POST /aeo/save-howto — Callback from n8n with HowTo schema
+     * POST /aeo/save-howto — Async callback with HowTo schema
      */
     public function save_howto_data($request) {
         $data = $request->get_json_params();
@@ -310,7 +310,7 @@ class LuwiPress_AEO {
     }
 
     /**
-     * POST /aeo/save-speakable — Callback from n8n with speakable content
+     * POST /aeo/save-speakable — Async callback with speakable content
      */
     public function save_speakable_data($request) {
         $data = $request->get_json_params();

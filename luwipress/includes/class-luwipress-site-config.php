@@ -3,7 +3,7 @@
  * LuwiPress Site Config
  *
  * Exposes a single REST endpoint that returns the full WordPress + WooCommerce
- * + plugin environment to n8n workflows. This eliminates the need for workflows
+ * + plugin environment to remote automations. This eliminates the need for clients
  * to maintain their own copies of site settings.
  *
  * Endpoint: GET /wp-json/luwipress/v1/site-config
@@ -219,7 +219,7 @@ class LuwiPress_Site_Config {
 	// ------------------------------------------------------------------
 	// GET /content/opportunities
 	//
-	// Single endpoint for n8n to discover what needs work:
+	// Single endpoint for AI clients to discover what needs work:
 	// - products missing SEO meta
 	// - products missing translations
 	// - stale content needing refresh

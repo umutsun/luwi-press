@@ -287,7 +287,9 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			<?php
 			$processing_mode = get_option( 'luwipress_processing_mode', 'local' );
 			$webmcp_active   = class_exists( 'LuwiPress_WebMCP' ) || defined( 'LUWIPRESS_WEBMCP_VERSION' );
-			$webmcp_enabled  = (bool) get_option( 'luwipress_webmcp_enabled', 0 );
+			// Mirror the companion's default (enabled when the option isn't yet persisted).
+			// Companion default is `true`; core default when companion absent is `false`.
+			$webmcp_enabled = (bool) get_option( 'luwipress_webmcp_enabled', $webmcp_active ? 1 : 0 );
 			$mcp_endpoint    = get_rest_url( null, 'luwipress/v1/mcp' );
 			$rest_base       = get_rest_url( null, 'luwipress/v1/' );
 			?>

@@ -2,11 +2,11 @@
 /**
  * LuwiPress Email Proxy
  *
- * REST endpoint that lets n8n workflows send email through WordPress's
+ * REST endpoint that lets authenticated clients send email through WordPress's
  * wp_mail() function. This means whatever SMTP/mail plugin the site uses
  * (WP Mail SMTP, FluentSMTP, Post SMTP, etc.) will handle delivery.
  *
- * n8n workflows no longer need their own SMTP credentials.
+ * External automations no longer need their own SMTP credentials.
  *
  * Endpoint: POST /wp-json/luwipress/v1/send-email
  */
@@ -218,7 +218,7 @@ class LuwiPress_Email_Proxy {
 	}
 
 	/**
-	 * Report which mail method the site is using (for n8n workflow logs).
+	 * Report which mail method the site is using (for automation logs).
 	 */
 	private function get_mail_method() {
 		$detector = LuwiPress_Plugin_Detector::get_instance();

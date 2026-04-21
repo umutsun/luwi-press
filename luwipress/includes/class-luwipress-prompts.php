@@ -2,7 +2,7 @@
 /**
  * AI Prompt Library
  *
- * All system and user prompts extracted from n8n workflow JSONs.
+ * System and user prompts for every supported AI workflow.
  * Every method returns ['system' => string, 'user' => string] and is
  * filterable via apply_filters('luwipress_prompt_{workflow}', ...).
  *

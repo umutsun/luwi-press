@@ -3,7 +3,7 @@
  * LuwiPress HMAC Webhook Verification
  *
  * Provides HMAC-SHA256 signing and verification for webhook payloads.
- * Used for both outbound (WP to n8n) and inbound (n8n to WP) webhook security.
+ * Used for outbound and inbound webhook security.
  *
  * @package LuwiPress
  * @since 1.1.0

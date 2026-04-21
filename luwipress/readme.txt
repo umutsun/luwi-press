@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.4
+Stable tag: 3.1.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,13 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.5 — Customers & Elementor Audit Drill-down =
+* NEW: Knowledge Graph fourth view — **Customers**. Shows eight customer segments (VIP, Loyal, Active, New, One-Time, At Risk, Dormant, Lost) as color-coded nodes sized by cohort count. Each segment has its own detail panel with segment definition, priority action, and targeted recommendations (e.g. win-back campaign for One-Time buyers, reactivation offer for Dormant, VIP perk program for VIPs). Keyboard shortcut `4` added for quick switch.
+* NEW: Design Audit drill-down — click any page row in the Design Health panel to open a dedicated Elementor audit view for that page. Issues are grouped by severity (critical/warning/info) and then by issue type, with affected element IDs listed as code chips. "Open in Elementor" and "View live" buttons jump you straight to the editor or the rendered page.
+* IMPROVED: Design Health panel's per-page results are now scannable summaries (severity counts instead of full issue dumps). The deep list lives in the drill-down where you can act on it.
+* IMPROVED: Knowledge Graph fetch now includes the `crm` section so customer segment data is available without a second request.
+* IMPROVED: Keyboard shortcut help (`?` dialog) updated to include the fourth view.
 
 = 3.1.4 — Knowledge Graph Overhaul =
 * NEW: Knowledge Graph search — typeahead over products, posts, and categories. Keyboard: `/` to focus, `↑↓` to navigate, Enter to select. Selected node auto-zooms and opens its detail panel.

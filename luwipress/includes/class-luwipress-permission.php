@@ -3,7 +3,7 @@
  * LuwiPress Permission Manager
  *
  * Centralised authentication and authorisation for all REST API endpoints.
- * Replaces the duplicated check_admin_permission(), check_n8n_token(), and
+ * Replaces the duplicated check_admin_permission(), check_api_token(), and
  * check_permission() methods that were copy-pasted across 11+ classes.
  *
  * Three access levels:
@@ -85,7 +85,7 @@ class LuwiPress_Permission {
      * Accept either a valid API token OR a logged-in admin.
      *
      * This is the most common permission check — used by endpoints that
-     * n8n workflows call (via token) AND admins use from the dashboard
+     * remote automations call (via token) AND admins use from the dashboard
      * (via cookie auth).
      *
      * @param  WP_REST_Request $request
@@ -101,7 +101,7 @@ class LuwiPress_Permission {
     /**
      * Strict token-only check. Returns WP_Error on failure.
      *
-     * Used for callback endpoints that should only be called by n8n,
+     * Used for callback endpoints that should only be called by server-side clients,
      * never by browser users (e.g., /product/enrich-callback).
      *
      * @param  WP_REST_Request $request

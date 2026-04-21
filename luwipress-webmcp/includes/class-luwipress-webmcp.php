@@ -92,7 +92,6 @@ class LuwiPress_WebMCP {
      * Accepts:
      *  1. WordPress admin cookie (for browser-based clients)
      *  2. Bearer token matching the LuwiPress API token
-     *  3. X-n8nPress-Token header
      *
      * Also validates Origin header to prevent DNS rebinding (per MCP spec).
      */
@@ -116,7 +115,7 @@ class LuwiPress_WebMCP {
     private function validate_origin( $request ) {
         $origin = $request->get_header( 'origin' );
         if ( empty( $origin ) ) {
-            return true; // No origin = server-to-server (CLI, n8n, etc.)
+            return true; // No origin = server-to-server (CLI, workflow runners, etc.)
         }
 
         $allowed = array(
@@ -746,7 +745,7 @@ class LuwiPress_WebMCP {
 
     private function register_system_tools() {
         $this->register_tool( 'system_status', array(
-            'description' => 'Get n8nPress plugin status, version, and server info',
+            'description' => 'Get LuwiPress plugin status, version, and server info',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => new stdClass(),
@@ -780,7 +779,7 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'system_logs', array(
-            'description' => 'Retrieve recent log entries from n8nPress',
+            'description' => 'Retrieve recent log entries from LuwiPress',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
@@ -1011,7 +1010,7 @@ class LuwiPress_WebMCP {
 
     private function register_seo_tools() {
         $this->register_tool( 'seo_enrich_product', array(
-            'description' => 'Trigger AI enrichment for a WooCommerce product (generates descriptions, meta, FAQ, schema via n8n workflow)',
+            'description' => 'Trigger AI enrichment for a WooCommerce product (generates descriptions, meta, FAQ, schema via the LuwiPress AI pipeline)',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
@@ -1024,7 +1023,7 @@ class LuwiPress_WebMCP {
                 'readOnlyHint'     => false,
                 'destructiveHint'  => false,
                 'idempotentHint'   => true,
-                'openWorldHint'    => true,  // Triggers n8n workflow + AI API call
+                'openWorldHint'    => true,  // Triggers async AI pipeline + external API call
             ),
         ), function ( $args ) {
             $ai      = LuwiPress_AI_Content::get_instance();
@@ -1117,7 +1116,7 @@ class LuwiPress_WebMCP {
 
     private function register_aeo_tools() {
         $this->register_tool( 'aeo_generate_faq', array(
-            'description' => 'Trigger AI FAQ generation for a product (sends to n8n workflow)',
+            'description' => 'Trigger AI FAQ generation for a product (runs the LuwiPress AI pipeline)',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
@@ -1248,7 +1247,7 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'translation_request', array(
-            'description' => 'Request AI translation for a post/product to a target language (triggers n8n workflow)',
+            'description' => 'Request AI translation for a post/product to a target language (runs the LuwiPress AI pipeline)',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
@@ -1262,7 +1261,7 @@ class LuwiPress_WebMCP {
                 'readOnlyHint'     => false,
                 'destructiveHint'  => false,
                 'idempotentHint'   => true,
-                'openWorldHint'    => true,  // Triggers n8n workflow + AI API
+                'openWorldHint'    => true,  // Triggers async AI pipeline + external API call
             ),
         ), function ( $args ) {
             return $this->proxy_rest_post( 'LuwiPress_Translation', 'request_translation', array(
@@ -1477,7 +1476,7 @@ class LuwiPress_WebMCP {
         }
 
         $this->register_tool( 'claw_execute', array(
-            'description' => 'Execute an Open Claw AI action (sends prompt to n8n AI workflow for autonomous task execution)',
+            'description' => 'Execute an Open Claw AI action (runs the LuwiPress AI pipeline for autonomous task execution)',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
@@ -1567,14 +1566,14 @@ class LuwiPress_WebMCP {
 
     private function register_workflow_tools() {
         $this->register_tool( 'workflow_report_result', array(
-            'description' => 'Report a workflow execution result back to n8nPress (status, message, token usage)',
+            'description' => 'Report a workflow execution result back to LuwiPress (status, message, token usage)',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
                     'workflow'     => array( 'type' => 'string', 'description' => 'Workflow name (required)' ),
                     'status'       => array( 'type' => 'string', 'description' => 'success, error, warning' ),
                     'message'      => array( 'type' => 'string', 'description' => 'Result message (required)' ),
-                    'execution_id' => array( 'type' => 'string', 'description' => 'n8n execution ID' ),
+                    'execution_id' => array( 'type' => 'string', 'description' => 'Workflow execution ID' ),
                     'token_usage'  => array( 'type' => 'object', 'description' => 'Token usage data: provider, model, input_tokens, output_tokens' ),
                 ),
                 'required'   => array( 'workflow', 'message' ),

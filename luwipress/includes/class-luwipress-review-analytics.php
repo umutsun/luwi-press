@@ -33,11 +33,11 @@ class LuwiPress_Review_Analytics {
 	}
 
 	public function register_endpoints() {
-		// n8n callback: save sentiment analysis for a review
+		// Async callback: save sentiment analysis for a review
 		register_rest_route( 'luwipress/v1', '/review/sentiment-callback', array(
 			'methods'             => 'POST',
 			'callback'            => array( $this, 'handle_sentiment_callback' ),
-			'permission_callback' => array( $this, 'check_n8n_token' ),
+			'permission_callback' => array( $this, 'check_api_token' ),
 		) );
 
 		// Get review analytics for a product
@@ -58,7 +58,7 @@ class LuwiPress_Review_Analytics {
 		) );
 	}
 
-	// ─── CALLBACK: Receive sentiment from n8n ──────────────────────────
+	// ─── CALLBACK: Receive sentiment from async AI pipeline ──────────────
 
 	public function handle_sentiment_callback( $request ) {
 		$data = $request->get_json_params();
@@ -391,7 +391,7 @@ class LuwiPress_Review_Analytics {
 		return LuwiPress_Permission::check_token_or_admin( $request );
 	}
 
-	public function check_n8n_token( $request ) {
+	public function check_api_token( $request ) {
 		return LuwiPress_Permission::check_token( $request );
 	}
 }

@@ -3,7 +3,7 @@
  * LuwiPress Plugin Detector
  *
  * Detects installed/active WordPress plugins and reads their configuration.
- * n8n workflows use this data to integrate with existing plugins instead of
+ * Downstream modules use this data to integrate with existing plugins instead of
  * duplicating their functionality.
  */
 
@@ -28,7 +28,7 @@ class LuwiPress_Plugin_Detector {
 	private function __construct() {}
 
 	/**
-	 * Get full environment snapshot for n8n workflows.
+	 * Get full environment snapshot for AI automations.
 	 *
 	 * @return array
 	 */

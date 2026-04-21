@@ -1,6 +1,6 @@
 # LuwiPress — Complete Feature Overview
 
-**Version:** 3.1.3 · **License:** GPLv2+ · **Target:** WooCommerce stores
+**Version:** 3.1.5 · **License:** GPLv2+ · **Target:** WooCommerce stores
 
 LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerce. It generates content, optimizes SEO, translates products, and automates store management — integrating seamlessly with existing plugins (Rank Math, WPML, Elementor, etc.) without replacing them.
 
@@ -8,6 +8,17 @@ Shipped as a lean **365 KB core** plus two optional companion plugins — instal
 
 ## 🆕 What's new in 3.x
 
+- **Customers view + Elementor audit drill-down (3.1.5)** — the Knowledge Graph gets a fourth view tab focused on customer segments (VIP / Loyal / Active / New / One-Time / At Risk / Dormant / Lost), each with a dedicated detail panel that explains the cohort and recommends a targeted action (win-back campaign, onboarding sequence, VIP perks). The Design Health panel now drills down: click any audited page to see every Elementor issue grouped by severity and type, with affected element IDs and one-click "Open in Elementor" buttons.
+- **Knowledge Graph overhaul (3.1.4)** — the interactive store intelligence page got a major upgrade:
+  - **Search** — type any product, post, or category name; `/` focuses the input, arrows navigate, Enter zooms straight to the node and opens its detail panel.
+  - **Presets** — six one-click filters: All, Needs SEO meta, Not enriched, Thin content, Translation backlog, High opportunity. Filter down 128 products to the 80 that need SEO without writing a query.
+  - **Export** — CSV opportunity list, CSV missing SEO (with Edit URLs), JSON raw graph, PNG snapshot. Hand a spreadsheet to a freelancer or import back into your workflow.
+  - **Pages view** — third tab showing your site's page hierarchy (home, shop, blog, top-level, children) with issue detection for thin content and orphaned pages.
+  - **Order Analytics card** — one click opens a revenue dashboard with 12-month sparkline, top sellers, inventory status (out-of-stock, backorder, on-sale counts), payment method breakdown, and refunds.
+  - **Plugin Health card** — readiness score plus per-category plugin detection and prioritised recommendations.
+  - **Taxonomy Coverage heatmap** — see at a glance which taxonomies are translated and which aren't, with a "Translate all" button per language.
+  - **Category batch actions** — enrich or translate every product in a category with a single click.
+  - **Keyboard shortcuts** — `/` search, `r` refresh, `1/2/3` view switch, `Esc` close panel, `?` help.
 - **Primary Language reads from your translation plugin (3.1.3)** — Settings → AI Content → Primary Language now shows only the languages WPML / Polylang / TranslatePress has active on your site, with a badge confirming which plugin it read from. Invalid saved values get snapped to your translation plugin's default, so sites can't silently drift with an AI-generation language that doesn't exist on the site.
 - **OpenAI-Compatible provider (3.1.2)** — a fourth AI provider slot that talks to any vendor speaking OpenAI's `/chat/completions` schema. Ships with ready-to-use presets for **DeepSeek**, **Moonshot Kimi**, **Groq**, **Together.ai**, plus a **Custom** preset for self-hosted models (Ollama, vLLM, LM Studio). Swap vendors without writing code — pick a preset, paste an API key, done. Off-peak discount hints surfaced in the UI where available (e.g. DeepSeek ~50% off 16:30–00:30 UTC).
 - **Secret masking in site-config (3.1.1)** — the `/site-config` endpoint no longer returns the LuwiPress API token or the active AI provider's API key in clear text. Responses now include `api_token_configured` / `api_key_configured` booleans plus `*_hint` fields (last 4 characters) — enough to verify configuration, impossible to reverse.
@@ -107,16 +118,30 @@ Shipped as a separate **LuwiPress Open Claw** plugin from 3.1.0 onward. Chat-sty
 - Conversation history stored per user (50 messages rolling window)
 
 ### 7. Knowledge Graph
-Single REST endpoint exposing 20+ store intelligence sections:
-- Products, categories, taxonomy
-- SEO coverage, AEO opportunities
-- Translation status per language
+A single REST endpoint plus an interactive D3.js admin page that turns your store into a visual intelligence map.
+
+**Data exposed (20+ sections):**
+- Products, categories, taxonomy, tags
+- SEO coverage, AEO opportunities (FAQ/HowTo/Speakable)
+- Translation status per language (ürün + sayfa + taxonomy)
 - CRM segments (VIP, at-risk, dormant)
 - Media inventory, menu structure, authors
-- Order analytics, content types, plugins detected
+- Order analytics (12-month revenue, repeat rate, payment methods, refunds)
+- Plugin health (SEO, translation, email, CRM, cache, support detection)
+- Design audit (Elementor Kit CSS coverage, responsive issues)
 - **Opportunity scoring** — weighted algorithm flags thin content, missing translations, missing schema
-- Cached with auto-invalidation on content changes
-- Powers all AI workflows with prioritized decisions
+
+**Interactive admin page (3.1.4 overhaul):**
+- **Search** with `/` keyboard shortcut, typeahead over products/posts/categories, auto-zoom to result
+- **Presets**: All / Needs SEO / Not enriched / Thin content / Translation backlog / High opportunity
+- **Three views**: Products (default), Posts, Pages (with parent-child hierarchy)
+- **Eight stat cards**: Products, Posts, SEO coverage, Enriched, Opportunities, Design Health, Plugin Health, 30-day Revenue, Taxonomy Coverage
+- **Clickable detail panels**: Revenue dashboard (sparkline + top sellers + inventory + payments + refunds), Plugin Health (readiness score + recommendations), Taxonomy Heatmap (matrix × languages + bulk translate)
+- **Category batch actions** — enrich or translate every product in a category with one click
+- **Export**: CSV opportunity list, CSV missing SEO (with Edit URLs), JSON, PNG snapshot
+- **Keyboard**: `/` search, `r` refresh, `1/2/3` view, `Esc` close, `?` help
+- **Cache badge** — tells you whether data is cached or freshly computed
+- Auto-invalidation on content and meta changes; Refresh button forces reload
 
 ### 8. Content Scheduler & Blog Automation
 - AI-generated blog posts with scheduled publishing
@@ -305,4 +330,4 @@ Add the companion plugins to light up:
 
 ---
 
-*Document version 3.1.3 — updated 2026-04-21 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*
+*Document version 3.1.5 — updated 2026-04-21 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*

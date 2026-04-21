@@ -1,5 +1,5 @@
 /**
- * n8nPress WebMCP Client
+ * LuwiPress WebMCP Client
  *
  * Browser-side MCP client for the Streamable HTTP transport.
  * Handles the full MCP lifecycle: initialize → tools/list → tools/call.

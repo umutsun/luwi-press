@@ -31,7 +31,7 @@ class LuwiPress_API {
             'args' => $this->get_webhook_args()
         ));
         
-        // Workflow result callback — n8n sends success/error feedback here
+        // Workflow result callback — async AI pipeline sends success/error feedback here
         register_rest_route( 'luwipress/v1', '/workflow/result', array(
             'methods'             => 'POST',
             'callback'            => array( $this, 'handle_workflow_result' ),
@@ -45,14 +45,14 @@ class LuwiPress_API {
             'permission_callback' => array( $this, 'check_api_token_permission' ),
         ) );
 
-        // Token limit check — n8n calls this before making AI calls
+        // Token limit check — clients call this before making AI calls
         register_rest_route( 'luwipress/v1', '/token-usage/check', array(
             'methods'             => 'GET',
             'callback'            => array( $this, 'handle_check_limit' ),
             'permission_callback' => array( $this, 'check_api_token_permission' ),
         ) );
 
-        // Token usage report — n8n POSTs consumption data here after each AI call
+        // Token usage report — clients POST consumption data here after each AI call
         register_rest_route( 'luwipress/v1', '/token-usage', array(
             'methods'             => 'POST',
             'callback'            => array( $this, 'handle_token_usage_report' ),
@@ -658,7 +658,7 @@ class LuwiPress_API {
     }
 
     /**
-     * POST /workflow/result — Receives workflow execution feedback from n8n
+     * POST /workflow/result — Receives workflow execution feedback from async clients
      *
      * Expected payload:
      * {
@@ -757,7 +757,7 @@ class LuwiPress_API {
     }
 
     /**
-     * POST /token-usage — Receive token consumption report from n8n workflow
+     * POST /token-usage — Receive token consumption report from AI workflow client
      */
     public function handle_token_usage_report( $request ) {
         if ( ! class_exists( 'LuwiPress_Token_Tracker' ) ) {

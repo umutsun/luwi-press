@@ -1,8 +1,8 @@
 # LuwiPress WebMCP — Feature Overview
 
-**Version:** 1.0.1 · **License:** GPLv2+ · **Companion to:** LuwiPress core
+**Version:** 1.0.2 · **License:** GPLv2+ · **Companion to:** LuwiPress core
 
-LuwiPress WebMCP turns your WordPress + WooCommerce store into a **Model Context Protocol** server. AI agents — Claude Code, OpenAI-powered scripts, n8n workflows, or any MCP-compliant client — connect once and get programmatic access to 130+ tools that cover your entire store: content, SEO, translation, page building, customers, media, and settings.
+LuwiPress WebMCP turns your WordPress + WooCommerce store into a **Model Context Protocol** server. AI agents — Claude Code, OpenAI-powered scripts, automated workflows, or any MCP-compliant client — connect once and get programmatic access to 130+ tools that cover your entire store: content, SEO, translation, page building, customers, media, and settings.
 
 This is the companion plugin that ships alongside LuwiPress core. Install it only if you want AI-agent integration. Most day-to-day WooCommerce AI automation works without it.
 
@@ -11,7 +11,7 @@ This is the companion plugin that ships alongside LuwiPress core. Install it onl
 ## 🎯 What WebMCP unlocks
 
 - **"Claude, enrich my 50 thinnest products and translate them to French"** — one conversation, hundreds of operations, no SSH, no custom scripts.
-- **n8n workflows that read + write your store** — use LuwiPress as a single MCP node instead of juggling WP REST authentication and request shapes.
+- **Automated workflows that read + write your store** — use LuwiPress as a single MCP node instead of juggling WP REST authentication and request shapes.
 - **Site-specific AI agents** — build a store-specific assistant that knows your product catalogue, translation state, CRM segments, and can take action safely under your existing API token.
 - **Secure remote automation** — one Bearer token authenticates every tool call. Daily AI budget limits and per-workflow cost tracking apply the same as they do from the admin UI.
 
@@ -170,7 +170,7 @@ Response is JSON-RPC 2.0 with tool output in `result.content`.
 ## 🚀 Why WebMCP?
 
 - **Single endpoint for 130+ operations** — replace dozens of REST calls with one MCP session.
-- **AI-agent ready out of the box** — designed for Claude Code, Claude Desktop, OpenAI-based clients, n8n, and any MCP-compliant tooling.
+- **AI-agent ready out of the box** — designed for Claude Code, Claude Desktop, OpenAI-based clients, automated workflows, and any MCP-compliant tooling.
 - **Safety inherited from core** — daily AI budget, rate limits, translation-copy protection, snapshot/rollback for Elementor — all active under MCP too.
 - **Optional** — stores that don't need AI-agent integration keep a leaner core. The companion pattern lets you add exactly what you need.
 - **Reuses your existing credential** — no new API key to manage.

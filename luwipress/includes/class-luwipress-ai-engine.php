@@ -2,8 +2,8 @@
 /**
  * AI Engine — Central dispatcher for all AI operations.
  *
- * Replaces per-class send_to_n8n() methods with a unified dispatch()
- * call that routes to either local AI providers or the n8n webhook
+ * Replaces per-class webhook helpers with a unified dispatch()
+ * call that routes to the configured local AI provider
  * based on the configured processing mode.
  *
  * @package LuwiPress
@@ -27,7 +27,7 @@ class LuwiPress_AI_Engine {
 	private static $providers = array();
 
 	/**
-	 * Default provider per workflow (extracted from n8n workflow configs).
+	 * Default provider per workflow.
 	 *
 	 * @var array
 	 */
@@ -68,7 +68,7 @@ class LuwiPress_AI_Engine {
 	// ─── PUBLIC API ───────────────────────────────────────────────
 
 	/**
-	 * Always returns 'local' — n8n mode removed in v2.0.
+	 * Always returns 'local' — external webhook mode removed in v2.0.
 	 * Kept for backward compatibility with modules that still check mode.
 	 */
 	public static function get_mode() {
@@ -357,8 +357,8 @@ class LuwiPress_AI_Engine {
 			return $result;
 		}
 
-		// In n8n mode, dispatch returns the webhook response, not parsed JSON.
-		if ( ! empty( $result['n8n_forwarded'] ) ) {
+		// When an async webhook path returns raw (non-parsed) output, pass it through.
+		if ( ! empty( $result['async_forwarded'] ) ) {
 			return $result;
 		}
 
@@ -387,10 +387,11 @@ class LuwiPress_AI_Engine {
 	}
 
 	/**
-	 * Stub — n8n forwarding removed in v2.0. Returns error if called.
+	 * Stub — external webhook forwarding removed in v2.0. Returns error if called.
+	 * Kept as a stable API surface so legacy call sites compile; real routing is local.
 	 */
 	public static function forward_to_n8n( $event, array $payload = array(), $callback_url = '' ) {
-		return new WP_Error( 'luwipress_no_n8n', __( 'n8n integration has been removed. All AI processing is handled natively.', 'luwipress' ) );
+		return new WP_Error( 'luwipress_webhook_disabled', __( 'External webhook forwarding has been removed. All AI processing is handled natively.', 'luwipress' ) );
 	}
 
 	// ─── PROVIDER MANAGEMENT ──────────────────────────────────────

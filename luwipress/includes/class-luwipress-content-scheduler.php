@@ -3,7 +3,7 @@
  * LuwiPress Content Scheduler
  *
  * Allows users to enter topics and schedule AI-generated content
- * (articles + images) for automatic publishing via n8n workflows.
+ * (articles + images) for automatic publishing via the LuwiPress AI engine.
  *
  * @package LuwiPress
  * @since 1.2.0
@@ -79,7 +79,7 @@ class LuwiPress_Content_Scheduler {
     }
 
     /**
-     * REST API routes for n8n callbacks
+     * REST API routes for async AI callbacks
      */
     public function register_routes() {
         register_rest_route('luwipress/v1', '/schedule/callback', array(
@@ -210,7 +210,7 @@ class LuwiPress_Content_Scheduler {
     }
 
     /**
-     * AJAX: Create a new scheduled content item and trigger n8n
+     * AJAX: Create a new scheduled content item and queue it for generation
      */
     public function ajax_schedule_content() {
         check_ajax_referer('luwipress_scheduler_nonce', '_wpnonce');
@@ -355,7 +355,7 @@ class LuwiPress_Content_Scheduler {
     }
 
     /**
-     * REST callback: n8n sends generated content back
+     * REST callback: async AI pipeline sends generated content back
      */
     public function handle_callback($request) {
         $data = $request->get_json_params();
@@ -538,7 +538,7 @@ class LuwiPress_Content_Scheduler {
     }
 
     /**
-     * REST: Get schedule list (for n8n)
+     * REST: Get schedule list (for automation clients)
      */
     public function get_schedule_list($request) {
         $status = sanitize_text_field($request->get_param('status') ?? '');

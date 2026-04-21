@@ -128,7 +128,7 @@ class LuwiPress_Token_Tracker {
 	/**
 	 * Guard: Check daily limit before any AI operation.
 	 * Returns WP_Error if limit exceeded, true if allowed.
-	 * Use this as a gate before every n8n webhook call that triggers AI.
+	 * Use this as a gate before every dispatch call that triggers AI.
 	 */
 	public static function check_budget( $workflow = '' ) {
 		if ( ! self::is_limit_exceeded() ) {

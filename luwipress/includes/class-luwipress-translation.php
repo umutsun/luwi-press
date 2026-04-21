@@ -3,7 +3,7 @@
  * LuwiPress Translation Manager
  *
  * REST API endpoints for managing product translations.
- * Integrates with WPML/Polylang and n8n AI translation workflows.
+ * Integrates with WPML/Polylang via the LuwiPress AI translation engine.
  *
  * @package LuwiPress
  * @since 1.1.0
@@ -147,7 +147,7 @@ class LuwiPress_Translation {
             ],
         ]);
 
-        // GET endpoint for n8n workflow to fetch missing terms (no webhook loop)
+        // GET endpoint for AI clients to fetch missing terms (no webhook loop)
         register_rest_route($namespace, '/translation/taxonomy-missing', [
             'methods'             => 'GET',
             'callback'            => [$this, 'get_missing_taxonomy_terms_api'],
@@ -310,7 +310,7 @@ class LuwiPress_Translation {
     /**
      * GET /translation/missing-all — Products missing any target language.
      * Returns each product with its list of missing languages.
-     * n8n workflow uses this to translate all missing languages in one pass.
+     * AI clients use this to translate all missing languages in one pass.
      */
     public function get_missing_translations_all($request) {
         $langs_str   = $request->get_param('target_languages');
@@ -479,7 +479,7 @@ class LuwiPress_Translation {
         $mode = LuwiPress_AI_Engine::get_mode();
 
         if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            // n8n mode: forward to webhook
+            // Legacy webhook mode (dead path — get_mode() always returns 'local').
             $result = LuwiPress_AI_Engine::forward_to_n8n( 'translation_request', $payload, rest_url( 'luwipress/v1/translation/callback' ) );
             if ( is_wp_error( $result ) ) {
                 return $result;
@@ -651,6 +651,17 @@ class LuwiPress_Translation {
             return new WP_Error( 'missing_languages', 'languages parameter is required (array or comma-separated).', array( 'status' => 400 ) );
         }
 
+        // Optional post_ids whitelist — lets callers scope the batch to a category,
+        // search result set, etc. Normalised here so handle_bulk_translation can read it back.
+        $post_ids = $request->get_param( 'post_ids' );
+        if ( ! empty( $post_ids ) ) {
+            if ( is_string( $post_ids ) ) {
+                $post_ids = array_map( 'trim', explode( ',', $post_ids ) );
+            }
+            $post_ids = array_values( array_filter( array_map( 'absint', (array) $post_ids ) ) );
+            $request->set_param( 'post_ids', $post_ids );
+        }
+
         $result = $this->handle_bulk_translation( $request, $post_type, $languages, $limit );
 
         if ( is_wp_error( $result ) ) {
@@ -678,6 +689,16 @@ class LuwiPress_Translation {
         $missing_response = $this->get_missing_translations_all( $fetch_request );
         $missing_data     = $missing_response->get_data();
         $missing_items    = $missing_data['items'] ?? $missing_data['products'] ?? array();
+
+        // Optional whitelist: restrict to specific post IDs (used by category batch).
+        $whitelist = $request->get_param( 'post_ids' );
+        if ( ! empty( $whitelist ) && is_array( $whitelist ) ) {
+            $whitelist_map = array_flip( array_map( 'absint', $whitelist ) );
+            $missing_items = array_values( array_filter( $missing_items, function ( $item ) use ( $whitelist_map ) {
+                $pid = absint( $item['post_id'] ?? $item['product_id'] ?? 0 );
+                return $pid && isset( $whitelist_map[ $pid ] );
+            } ) );
+        }
 
         if ( empty( $missing_items ) ) {
             return array( 'translated' => 0, 'message' => 'Nothing to translate.' );
@@ -709,7 +730,7 @@ class LuwiPress_Translation {
     }
 
     /**
-     * POST /translation/callback — Receive translated content from n8n
+     * POST /translation/callback — Receive translated content from async AI pipeline
      */
     public function handle_translation_callback($request) {
         // Support both JSON body (external REST) and body_params (internal call)
@@ -2233,7 +2254,7 @@ class LuwiPress_Translation {
     // ─── TAXONOMY TRANSLATION ──────────────────────────────────────────
 
     /**
-     * GET /translation/taxonomy-missing — Return missing taxonomy terms for n8n to translate.
+     * GET /translation/taxonomy-missing — Return missing taxonomy terms for clients to translate.
      * This does NOT trigger a webhook — it just returns the data.
      */
     public function get_missing_taxonomy_terms_api($request) {
@@ -2260,7 +2281,7 @@ class LuwiPress_Translation {
     }
 
     /**
-     * POST /translation/taxonomy — Send untranslated terms to n8n for AI translation
+     * POST /translation/taxonomy — Send untranslated terms to the AI engine for translation
      */
     public function request_taxonomy_translation($request) {
         $taxonomy         = $request->get_param('taxonomy');
@@ -2297,7 +2318,7 @@ class LuwiPress_Translation {
         $mode = LuwiPress_AI_Engine::get_mode();
 
         if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            // n8n mode: forward to webhook
+            // Legacy webhook mode (dead path — get_mode() always returns 'local').
             $result = LuwiPress_AI_Engine::forward_to_n8n( 'taxonomy_translation_request', $payload, rest_url( 'luwipress/v1/translation/taxonomy-callback' ) );
             if ( is_wp_error( $result ) ) {
                 return $result;
@@ -2364,7 +2385,7 @@ class LuwiPress_Translation {
     }
 
     /**
-     * POST /translation/taxonomy-callback — Receive translated taxonomy terms from n8n
+     * POST /translation/taxonomy-callback — Receive translated taxonomy terms from async AI pipeline
      */
     public function handle_taxonomy_callback($request) {
         $data = $request->get_json_params();

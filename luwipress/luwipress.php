@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.1.3
+ * Version: 3.1.5
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.1.3');
+define('LUWIPRESS_VERSION', '3.1.5');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -968,15 +968,7 @@ class LuwiPress {
             }
         }
 
-        // Migration: if webhook URL is already set, keep webhook mode for existing installs.
-        $webhook_url = get_option( 'luwipress_seo_webhook_url', '' );
-        if ( ! empty( $webhook_url ) && get_option( 'luwipress_processing_mode' ) === 'local' ) {
-            // Only override if this is the first time setting defaults (fresh activation with existing config).
-            if ( get_option( 'luwipress_ai_engine_migrated' ) === false ) {
-                update_option( 'luwipress_processing_mode', 'n8n' );
-                add_option( 'luwipress_ai_engine_migrated', '1' );
-            }
-        }
+        // Legacy: external webhook support was removed in v2.0 — processing mode is always 'local'.
     }
 }
 

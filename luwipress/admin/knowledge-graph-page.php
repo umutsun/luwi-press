@@ -28,10 +28,44 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 				<?php esc_html_e( 'Knowledge Graph', 'luwipress' ); ?>
 			</h1>
 			<span class="kg-subtitle"><?php esc_html_e( 'Interactive store intelligence map', 'luwipress' ); ?></span>
+			<span id="kg-cache-badge" class="kg-cache-badge" hidden></span>
 		</div>
 		<div class="kg-header-right">
 			<div class="kg-controls">
-				<button type="button" id="kg-refresh" class="kg-btn kg-btn-primary">
+				<div class="kg-search" role="search">
+					<svg class="kg-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+					<input type="search" id="kg-search-input" class="kg-search-input" placeholder="<?php esc_attr_e( 'Search products, posts, categories... (press /)', 'luwipress' ); ?>" autocomplete="off" spellcheck="false" aria-label="<?php esc_attr_e( 'Search knowledge graph', 'luwipress' ); ?>">
+					<button type="button" id="kg-search-clear" class="kg-search-clear" aria-label="<?php esc_attr_e( 'Clear search', 'luwipress' ); ?>" hidden>&times;</button>
+					<div id="kg-search-results" class="kg-search-results" hidden></div>
+				</div>
+				<div class="kg-dropdown" id="kg-preset-dd">
+					<button type="button" class="kg-btn kg-btn-outline" id="kg-preset-trigger" aria-haspopup="true">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+						<?php esc_html_e( 'Preset', 'luwipress' ); ?>
+						<span class="kg-preset-label" id="kg-preset-label"><?php esc_html_e( 'All', 'luwipress' ); ?></span>
+					</button>
+					<div class="kg-dropdown-menu" id="kg-preset-menu" hidden>
+						<button type="button" class="kg-dropdown-item" data-preset="all"><?php esc_html_e( 'All items', 'luwipress' ); ?></button>
+						<button type="button" class="kg-dropdown-item" data-preset="needs_seo"><?php esc_html_e( 'Needs SEO meta', 'luwipress' ); ?></button>
+						<button type="button" class="kg-dropdown-item" data-preset="not_enriched"><?php esc_html_e( 'Not enriched', 'luwipress' ); ?></button>
+						<button type="button" class="kg-dropdown-item" data-preset="thin_content"><?php esc_html_e( 'Thin content', 'luwipress' ); ?></button>
+						<button type="button" class="kg-dropdown-item" data-preset="translation_backlog"><?php esc_html_e( 'Translation backlog', 'luwipress' ); ?></button>
+						<button type="button" class="kg-dropdown-item" data-preset="high_opportunity"><?php esc_html_e( 'High opportunity', 'luwipress' ); ?></button>
+					</div>
+				</div>
+				<div class="kg-dropdown" id="kg-export-dd">
+					<button type="button" class="kg-btn kg-btn-outline" id="kg-export-trigger" aria-haspopup="true">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+						<?php esc_html_e( 'Export', 'luwipress' ); ?>
+					</button>
+					<div class="kg-dropdown-menu" id="kg-export-menu" hidden>
+						<button type="button" class="kg-dropdown-item" data-export="csv_opportunities"><?php esc_html_e( 'CSV — Opportunity list', 'luwipress' ); ?></button>
+						<button type="button" class="kg-dropdown-item" data-export="csv_missing_seo"><?php esc_html_e( 'CSV — Missing SEO', 'luwipress' ); ?></button>
+						<button type="button" class="kg-dropdown-item" data-export="json"><?php esc_html_e( 'JSON — Raw graph', 'luwipress' ); ?></button>
+						<button type="button" class="kg-dropdown-item" data-export="png"><?php esc_html_e( 'PNG — Snapshot', 'luwipress' ); ?></button>
+					</div>
+				</div>
+				<button type="button" id="kg-refresh" class="kg-btn kg-btn-primary" title="<?php esc_attr_e( 'Force reload from database (bypasses cache)', 'luwipress' ); ?>">
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
 					<?php esc_html_e( 'Refresh', 'luwipress' ); ?>
 				</button>
@@ -43,6 +77,14 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 					<button type="button" class="kg-view-btn" data-view="post">
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
 						<?php esc_html_e( 'Posts', 'luwipress' ); ?>
+					</button>
+					<button type="button" class="kg-view-btn" data-view="page">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+						<?php esc_html_e( 'Pages', 'luwipress' ); ?>
+					</button>
+					<button type="button" class="kg-view-btn" data-view="customer">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+						<?php esc_html_e( 'Customers', 'luwipress' ); ?>
 					</button>
 				</div>
 			</div>
@@ -71,9 +113,25 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 			<div class="kg-stat-value" data-counter="opportunity_score_total">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Opportunities', 'luwipress' ); ?></div>
 		</div>
-		<div class="kg-stat kg-stat-skeleton">
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-design">
 			<div class="kg-stat-value" data-counter="design_health">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Design Health', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'View details →', 'luwipress' ); ?></div>
+		</div>
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-plugins">
+			<div class="kg-stat-value" data-counter="plugin_readiness">—</div>
+			<div class="kg-stat-label"><?php esc_html_e( 'Plugin Health', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'View details →', 'luwipress' ); ?></div>
+		</div>
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-revenue">
+			<div class="kg-stat-value" data-counter="revenue_30d">—</div>
+			<div class="kg-stat-label"><?php esc_html_e( '30-Day Revenue', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'View analytics →', 'luwipress' ); ?></div>
+		</div>
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-taxonomy">
+			<div class="kg-stat-value" data-counter="taxonomy_coverage">—</div>
+			<div class="kg-stat-label"><?php esc_html_e( 'Taxonomy Coverage', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'View heatmap →', 'luwipress' ); ?></div>
 		</div>
 	</div>
 
@@ -83,7 +141,7 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 			<div class="kg-spinner"></div>
 			<p><?php esc_html_e( 'Building knowledge graph...', 'luwipress' ); ?></p>
 		</div>
-		<svg id="kg-svg"></svg>
+		<svg id="kg-svg" role="img" aria-label="<?php esc_attr_e( 'Interactive knowledge graph of store content', 'luwipress' ); ?>"></svg>
 		<!-- Tooltip -->
 		<div class="kg-tooltip" id="kg-tooltip"></div>
 		<!-- Zoom controls -->
@@ -96,6 +154,8 @@ $rest_url  = rest_url( 'luwipress/v1/knowledge-graph' );
 		<div class="kg-legend">
 			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-primary)"></span> Product</div>
 			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:#8b5cf6"></span> Post</div>
+			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:#06b6d4"></span> Page</div>
+			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:#a855f7"></span> Segment</div>
 			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-warning)"></span> Category</div>
 			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-blue)"></span> Language</div>
 			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-success)"></span> SEO Complete</div>
@@ -147,7 +207,7 @@ function animateCounter(el, target, suffix) {
 }
 
 // ── Fetch Knowledge Graph ──
-function fetchGraph(cb) {
+function fetchGraph(cb, forceFresh) {
 	var loading = document.getElementById('kg-loading');
 	loading.style.display = 'flex';
 
@@ -156,7 +216,11 @@ function fetchGraph(cb) {
 		headers['Authorization'] = 'Bearer ' + CONFIG.apiToken;
 	}
 
-	fetch(CONFIG.apiUrl + '?sections=products,categories,translation,store,opportunities,design_audit,posts&fresh=1', {
+	// Cache is reliably invalidated on post/meta changes via `maybe_invalidate_on_meta`.
+	// Only bypass when the user explicitly clicks Refresh or just fired an action.
+	var freshParam = forceFresh ? '&fresh=1' : '';
+
+	fetch(CONFIG.apiUrl + '?sections=products,categories,translation,store,opportunities,design_audit,posts,pages,plugins,order_analytics,taxonomy,crm' + freshParam, {
 		headers: headers,
 		credentials: 'same-origin'
 	})
@@ -172,7 +236,42 @@ function fetchGraph(cb) {
 }
 
 // ── Current view state ──
-var _kgCurrentView = 'product'; // 'product' or 'post'
+var _kgCurrentView = 'product'; // 'product' | 'post' | 'page'
+var _kgCurrentPreset = 'all';   // 'all' | 'needs_seo' | 'not_enriched' | 'thin_content' | 'translation_backlog' | 'high_opportunity'
+
+// Filter products/posts by active preset. Returns a filtered copy; leaves non-content nodes intact.
+function applyPreset(productNodes, postNodes, preset) {
+	if (preset === 'all' || !preset) return { products: productNodes, posts: postNodes };
+
+	var pFiltered = productNodes.slice();
+	var sFiltered = postNodes.slice();
+
+	if (preset === 'needs_seo') {
+		pFiltered = productNodes.filter(function(p) { return !p.seo || !p.seo.has_title || !p.seo.has_description; });
+		sFiltered = postNodes.filter(function(p) { return !p.seo || !p.seo.has_title || !p.seo.has_description; });
+	} else if (preset === 'not_enriched') {
+		pFiltered = productNodes.filter(function(p) { return !p.enrichment || p.enrichment.status !== 'completed'; });
+		sFiltered = []; // posts don't have enrichment
+	} else if (preset === 'thin_content') {
+		pFiltered = productNodes.filter(function(p) { return (p.content_length || 0) < 500; });
+		sFiltered = postNodes.filter(function(p) { return (p.word_count || 0) < 300; });
+	} else if (preset === 'translation_backlog') {
+		var hasMissing = function(t) {
+			if (!t) return false;
+			var keys = Object.keys(t);
+			for (var i = 0; i < keys.length; i++) {
+				if (t[keys[i]] !== 'completed') return true;
+			}
+			return false;
+		};
+		pFiltered = productNodes.filter(function(p) { return hasMissing(p.translation); });
+		sFiltered = postNodes.filter(function(p) { return hasMissing(p.translation); });
+	} else if (preset === 'high_opportunity') {
+		pFiltered = productNodes.filter(function(p) { return (p.opportunity_score || 0) > 30; });
+		sFiltered = []; // keep focus on products
+	}
+	return { products: pFiltered, posts: sFiltered };
+}
 
 // ── Build D3 Graph ──
 function buildGraph(data, viewFilter) {
@@ -204,14 +303,37 @@ function buildGraph(data, viewFilter) {
 	var categoryNodes = (data.nodes && data.nodes.categories) ? data.nodes.categories : (data.category_nodes || []);
 	var languageNodes = (data.nodes && data.nodes.languages) ? data.nodes.languages : (data.language_nodes || []);
 	var postNodes     = (data.nodes && data.nodes.posts) ? data.nodes.posts : [];
+	var pageNodes     = (data.nodes && data.nodes.pages) ? data.nodes.pages : [];
+	var segmentNodes  = (data.nodes && data.nodes.customer_segments) ? data.nodes.customer_segments : [];
 	var graphEdges    = data.edges || [];
+
+	// Apply preset filter (before view filter so empty views surface as empty)
+	var presetFiltered = applyPreset(productNodes, postNodes, _kgCurrentPreset);
+	productNodes = presetFiltered.products;
+	postNodes    = presetFiltered.posts;
 
 	// Apply view filter — only show one content type at a time
 	if (viewFilter === 'product') {
 		postNodes = [];
+		pageNodes = [];
+		segmentNodes = [];
+	} else if (viewFilter === 'page') {
+		productNodes = [];
+		categoryNodes = [];
+		postNodes = [];
+		languageNodes = [];
+		segmentNodes = [];
+	} else if (viewFilter === 'customer') {
+		productNodes = [];
+		categoryNodes = [];
+		postNodes = [];
+		pageNodes = [];
+		languageNodes = [];
 	} else if (viewFilter === 'post') {
 		productNodes = [];
 		categoryNodes = [];
+		pageNodes = [];
+		segmentNodes = [];
 		// Build post-specific language nodes from post translation data
 		var postLangStats = {};
 		postNodes.forEach(function(p) {
@@ -337,6 +459,50 @@ function buildGraph(data, viewFilter) {
 		});
 	});
 
+	// Customer segments (radial cluster by cohort)
+	(segmentNodes).forEach(function(s) {
+		var count = s.count || 0;
+		var r = 14 + Math.min(count / 3, 30); // scale by customer count
+		var node = {
+			id: s.id || ('segment_' + s.segment),
+			type: 'segment',
+			label: s.label + ' (' + count + ')',
+			radius: r,
+			score: count,
+			data: s
+		};
+		nodes.push(node);
+		nodeMap[node.id] = node;
+	});
+
+	// Pages (parent-child hierarchy)
+	(pageNodes).forEach(function(p) {
+		var score = 0;
+		if (p.content_length < 300) score += 10;
+		if (p.template === 'default' || !p.template) score += 2;
+		var r = 7;
+		if (p.is_front_page)  r = 16;
+		else if (p.is_shop_page) r = 14;
+		else if (p.is_blog_page) r = 12;
+		else if (p.parent_id === 0) r = 10;
+		var node = {
+			id: 'page:' + p.id,
+			type: 'page',
+			label: p.title || ('Page #' + p.id),
+			radius: r,
+			score: score,
+			data: p
+		};
+		nodes.push(node);
+		nodeMap[node.id] = node;
+	});
+	// Page parent-child edges (second pass so both endpoints exist)
+	(pageNodes).forEach(function(p) {
+		if (p.parent_id && nodeMap['page:' + p.parent_id]) {
+			edges.push({ source: 'page:' + p.id, target: 'page:' + p.parent_id, type: 'child_of' });
+		}
+	});
+
 	// Edges
 	(graphEdges).forEach(function(e) {
 		if (nodeMap[e.source] && nodeMap[e.target]) {
@@ -357,6 +523,25 @@ function buildGraph(data, viewFilter) {
 			if (d.score > 20) return '#dc2626';
 			return '#8b5cf6';
 		}
+		if (d.type === 'page') {
+			if (d.data && d.data.is_front_page) return '#0ea5e9';
+			if (d.data && d.data.is_shop_page)  return '#14b8a6';
+			if (d.data && d.data.is_blog_page)  return '#0891b2';
+			if (d.score > 10) return '#f59e0b';
+			return '#06b6d4';
+		}
+		if (d.type === 'segment') {
+			var seg = (d.data && d.data.segment) || '';
+			if (seg === 'vip')       return '#a855f7'; // purple — highest value
+			if (seg === 'loyal')     return '#16a34a'; // green — healthy recurring
+			if (seg === 'active')    return '#22c55e'; // light green
+			if (seg === 'new')       return '#3b82f6'; // blue — potential
+			if (seg === 'one_time')  return '#f59e0b'; // amber — needs win-back
+			if (seg === 'at_risk')   return '#f97316'; // orange — urgent
+			if (seg === 'dormant')   return '#ef4444'; // red — lost unless revived
+			if (seg === 'lost')      return '#6b7280'; // gray — churned
+			return '#8b5cf6';
+		}
 		if (d.type === 'product') {
 			if (d.seo && d.seo.has_title && d.seo.has_description && d.enrichment && d.enrichment.status === 'completed') return '#16a34a';
 			if (d.score > 30) return '#dc2626';
@@ -369,27 +554,42 @@ function buildGraph(data, viewFilter) {
 	function edgeColor(d) {
 		if (d.type === 'missing_translation') return '#dc262640';
 		if (d.type === 'translated_to') return '#16a34a30';
+		if (d.type === 'child_of') return '#06b6d440';
+		if (d.type === 'upsell')     return '#a855f750';
+		if (d.type === 'cross_sell') return '#f59e0b50';
 		return '#e5e7eb60';
 	}
 
-	// ── Force simulation ──
+	// ── Force simulation — tuned for graph size ──
+	// Large graphs converge too slowly with the default alphaDecay (0.025), so we
+	// step it up as node count grows. Collision padding also shrinks to let the
+	// layout compact a bit more when there are many products per category.
+	var nodeCount = nodes.length;
+	var decay      = nodeCount > 800 ? 0.06 : nodeCount > 400 ? 0.045 : nodeCount > 200 ? 0.035 : 0.025;
+	var collPad    = nodeCount > 400 ? 1 : 3;
+	var collStr    = nodeCount > 400 ? 0.6 : 0.7;
+	var chargeProd = nodeCount > 400 ? -40 : -60;
+
 	var simulation = d3.forceSimulation(nodes)
 		.force('link', d3.forceLink(edges).id(function(d){ return d.id; }).distance(function(d){
 			if (d.type === 'belongs_to') return 50;
 			if (d.type === 'translated_to' || d.type === 'missing_translation') return 90;
+			if (d.type === 'child_of') return 70;
 			return 60;
 		}).strength(function(d){
 			if (d.type === 'belongs_to') return 0.6;
+			if (d.type === 'child_of') return 0.5;
 			return 0.3;
 		}))
 		.force('charge', d3.forceManyBody().strength(function(d){
 			if (d.type === 'category') return -250;
 			if (d.type === 'language') return -400;
-			return -60;
+			if (d.type === 'segment')  return -500;
+			return chargeProd;
 		}))
 		.force('center', d3.forceCenter(width / 2, height / 2))
-		.force('collision', d3.forceCollide().radius(function(d){ return d.radius + 3; }).strength(0.7))
-		.alphaDecay(0.025);
+		.force('collision', d3.forceCollide().radius(function(d){ return d.radius + collPad; }).strength(collStr))
+		.alphaDecay(decay);
 
 	// Zoom
 	var g = svg.append('g');
@@ -428,6 +628,9 @@ function buildGraph(data, viewFilter) {
 		.data(nodes)
 		.enter().append('g')
 		.attr('class', function(d){ return 'kg-node kg-node-' + d.type; })
+		.attr('tabindex', 0)
+		.attr('role', 'button')
+		.attr('aria-label', function(d){ return d.type + ': ' + (d.label || d.id); })
 		.style('cursor', 'pointer')
 		.call(d3.drag()
 			.on('start', function(event, d) {
@@ -848,6 +1051,82 @@ function showDetailPanel(d) {
 			h += '<div class="kg-p-allgood">All optimizations complete for this category</div>';
 		}
 
+		// ── Category Batch Actions ──
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Batch Actions</div>';
+		if (cEnrich < 100) {
+			h += '<button class="kg-rec kg-rec-medium" onclick="kgAction(\'enrich_category\',' + c.id + ',this)">';
+			h += '<span class="kg-rec-dot"></span>';
+			h += '<span class="kg-rec-body"><strong>Enrich all products in this category</strong><br><small>Queues every product missing enrichment</small></span>';
+			h += '</button>';
+		}
+		Object.keys(c.translation_pct || {}).forEach(function(l) {
+			var tp = c.translation_pct[l] || 0;
+			if (tp < 100) {
+				h += '<button class="kg-rec kg-rec-medium" onclick="kgAction(\'translate_category\',' + c.id + ',this,\'' + l + '\')">';
+				h += '<span class="kg-rec-dot"></span>';
+				h += '<span class="kg-rec-body"><strong>Translate category to ' + l.toUpperCase() + '</strong><br><small>Queues every product missing ' + l.toUpperCase() + ' translation</small></span>';
+				h += '</button>';
+			}
+		});
+		h += '</div>';
+
+	} else if (d.type === 'page') {
+		var pg = d.data;
+		var score = d.score || 0;
+		var healthPct = Math.max(0, 100 - score * 5);
+		var healthCls = healthPct >= 80 ? 'good' : healthPct >= 40 ? 'warn' : 'bad';
+
+		var pageRole = 'Page';
+		if (pg.is_front_page) pageRole = 'Home Page';
+		else if (pg.is_shop_page) pageRole = 'Shop Page';
+		else if (pg.is_blog_page) pageRole = 'Blog Index';
+		else if (pg.parent_id === 0) pageRole = 'Top-Level Page';
+		else pageRole = 'Child Page';
+
+		h += '<div class="kg-p-type-badge" style="background:#06b6d4;color:#fff">' + pageRole + '</div>';
+		h += '<h3 class="kg-p-name">' + escHtml(pg.title || ('Page #' + pg.id)) + '</h3>';
+		h += '<div class="kg-p-meta">#' + pg.id;
+		if (pg.template && pg.template !== 'default') h += ' &middot; Template: ' + escHtml(pg.template);
+		if (pg.menu_order) h += ' &middot; Order: ' + pg.menu_order;
+		h += '</div>';
+
+		h += '<div class="kg-p-health kg-h-' + healthCls + '">';
+		h += '<div class="kg-p-health-bar" style="width:' + healthPct + '%"></div>';
+		h += '<span class="kg-p-health-label">Health ' + healthPct + '%</span></div>';
+
+		h += '<div class="kg-p-chips">';
+		h += statusChip(pg.content_length >= 300, 'Content ' + (pg.content_length || 0));
+		h += statusChip(pg.is_front_page, 'Homepage');
+		h += statusChip(pg.is_shop_page, 'Shop');
+		h += statusChip(pg.is_blog_page, 'Blog');
+		h += statusChip((pg.children_ids || []).length > 0, (pg.children_ids || []).length + ' child' + ((pg.children_ids || []).length !== 1 ? 'ren' : ''));
+		h += '</div>';
+
+		// Recommendations
+		var pageRecs = [];
+		if ((pg.content_length || 0) < 300 && !pg.is_front_page) {
+			pageRecs.push({ p: 'medium', l: 'Expand content', d: 'Only ' + (pg.content_length || 0) + ' chars — aim for 800+' });
+		}
+		if (pg.parent_id === 0 && (pg.children_ids || []).length === 0 && !pg.is_front_page && !pg.is_shop_page && !pg.is_blog_page) {
+			pageRecs.push({ p: 'low', l: 'Orphan top-level page', d: 'Not referenced by other pages — check menu linking' });
+		}
+
+		if (pageRecs.length > 0) {
+			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
+			pageRecs.forEach(function(r) {
+				h += '<div class="kg-rec kg-rec-' + r.p + '">';
+				h += '<span class="kg-rec-dot"></span>';
+				h += '<span class="kg-rec-body"><strong>' + r.l + '</strong><br><small>' + r.d + '</small></span>';
+				h += '</div>';
+			});
+			h += '</div>';
+		}
+
+		h += '<div class="kg-p-footer">';
+		h += '<a href="/wp-admin/post.php?post=' + pg.id + '&action=edit" target="_blank" class="kg-btn kg-btn-primary">Edit Page</a>';
+		if (pg.slug) h += '<a href="/?page_id=' + pg.id + '" target="_blank" class="kg-btn kg-btn-outline">View</a>';
+		h += '</div>';
+
 	} else if (d.type === 'language') {
 		var l = d.data;
 		var covPct = l.coverage_pct || 0;
@@ -881,7 +1160,169 @@ function showDetailPanel(d) {
 		} else {
 			h += '<div class="kg-p-allgood">Full coverage — all products translated</div>';
 		}
+	} else if (d.type === 'segment') {
+		var s = d.data;
+		var count = s.count || 0;
+		var share = s.share_pct || 0;
+		var seg = s.segment || '';
+
+		// Segment descriptors + recommendations
+		var segInfo = {
+			vip:      { desc: 'Your highest-value customers — repeat, high AOV.', health: 'good',  priority: 'Reward them.' },
+			loyal:    { desc: 'Regular repeat buyers over time.', health: 'good',  priority: 'Keep them engaged.' },
+			active:   { desc: 'Recently active customers, still converting.', health: 'good',  priority: 'Nudge toward loyalty.' },
+			new:      { desc: 'First-time buyers still in their initial window.', health: 'warn',  priority: 'Onboard quickly — the window to a 2nd purchase is narrow.' },
+			one_time: { desc: 'Bought once, never returned. The biggest retention opportunity.', health: 'warn', priority: 'Win-back campaign — discount, new arrivals, or category-based recommendation.' },
+			at_risk:  { desc: 'Loyal customers whose last order is ageing. Re-engage now.', health: 'warn',  priority: 'Targeted reminder before they churn.' },
+			dormant:  { desc: 'Long inactive. Likely to stay that way unless reactivated.', health: 'bad',   priority: 'Reactivation campaign or exclude from lists.' },
+			lost:     { desc: 'No engagement for a long period. Usually unrecoverable.', health: 'bad',   priority: 'Archive or remove from active lists.' }
+		};
+		var info = segInfo[seg] || { desc: 'Customer segment.', health: 'warn', priority: 'Review segment definition.' };
+
+		h += '<div class="kg-p-type-badge" style="background:' + (function(){
+			if (seg === 'vip') return '#a855f7';
+			if (seg === 'loyal' || seg === 'active') return '#16a34a';
+			if (seg === 'new') return '#3b82f6';
+			if (seg === 'one_time' || seg === 'at_risk') return '#f59e0b';
+			if (seg === 'dormant' || seg === 'lost') return '#ef4444';
+			return '#8b5cf6';
+		})() + ';color:#fff">Customer Segment</div>';
+		h += '<h3 class="kg-p-name">' + escHtml(s.label) + '</h3>';
+		h += '<div class="kg-p-meta">' + count + ' customer' + (count !== 1 ? 's' : '') + ' &middot; ' + share.toFixed(1) + '% of total</div>';
+
+		h += '<div class="kg-p-health kg-h-' + info.health + '">';
+		h += '<div class="kg-p-health-bar" style="width:' + Math.min(100, share) + '%"></div>';
+		h += '<span class="kg-p-health-label">' + share.toFixed(1) + '% share</span></div>';
+
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">About this segment</div>';
+		h += '<p style="margin:8px 0;color:var(--lp-text);font-size:13px;line-height:1.5;">' + escHtml(info.desc) + '</p>';
+		h += '<p style="margin:8px 0;color:var(--lp-text-muted);font-size:12px;font-style:italic;">→ ' + escHtml(info.priority) + '</p>';
+		h += '</div>';
+
+		// Segment-specific recommendations
+		var segRecs = [];
+		if (seg === 'one_time' && count > 10) {
+			segRecs.push({ p: 'high', l: 'Launch win-back campaign', d: count + ' customers never returned. A single re-engagement email could lift repeat rate substantially.' });
+		} else if (seg === 'new' && count > 0) {
+			segRecs.push({ p: 'high', l: 'Send onboarding sequence', d: 'Trigger welcome flow with "What to expect next" + category recommendation.' });
+		} else if (seg === 'at_risk' && count > 0) {
+			segRecs.push({ p: 'high', l: 'Re-engagement email', d: 'They loved you once. Offer a loyalty perk before they drift to dormant.' });
+		} else if (seg === 'dormant' && count > 0) {
+			segRecs.push({ p: 'medium', l: 'Exclusive reactivation offer', d: 'One last try — limited discount or new arrivals preview.' });
+		} else if (seg === 'vip' && count > 0) {
+			segRecs.push({ p: 'medium', l: 'VIP perk program', d: 'Early access, free shipping, personal note — keep them feeling special.' });
+		} else if (seg === 'loyal' && count > 0) {
+			segRecs.push({ p: 'low', l: 'Cross-sell adjacent categories', d: 'Loyal buyers already trust your brand. Introduce complementary products.' });
+		} else if (count === 0) {
+			if (seg === 'vip' || seg === 'loyal') {
+				segRecs.push({ p: 'medium', l: 'No ' + s.label + ' customers yet', d: 'Build a retention program to cultivate this cohort.' });
+			}
+		}
+
+		if (segRecs.length > 0) {
+			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
+			segRecs.forEach(function(r) {
+				h += '<div class="kg-rec kg-rec-' + r.p + '">';
+				h += '<span class="kg-rec-dot"></span>';
+				h += '<span class="kg-rec-body"><strong>' + escHtml(r.l) + '</strong><br><small>' + escHtml(r.d) + '</small></span>';
+				h += '</div>';
+			});
+			h += '</div>';
+		}
+
+		// Quick integration pointer
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">How to reach this segment</div>';
+		h += '<p style="margin:6px 0;color:var(--lp-text-muted);font-size:12px;line-height:1.5;">';
+		h += 'Pull the customer list via <code>GET /wp-json/luwipress/v1/crm/overview</code> (the segment array includes customer IDs). ';
+		h += 'Feed into your email tool of choice — LuwiPress never writes to third-party CRM plugins, so ownership stays with you.';
+		h += '</p></div>';
 	}
+
+	content.innerHTML = h;
+	panel.classList.add('open');
+}
+
+// ── Elementor Audit Drill-down (single page, all issues grouped by severity/type) ──
+function showElementorAuditDrilldown(page) {
+	var panel = document.getElementById('kg-detail-panel');
+	var content = document.getElementById('kg-detail-content');
+	var h = '';
+
+	var healthCls = page.health_score >= 80 ? 'good' : page.health_score >= 50 ? 'warn' : 'bad';
+	var issues = page.issues || [];
+
+	// Group by severity
+	var bySev = { critical: [], warning: [], info: [] };
+	issues.forEach(function(iss) {
+		var sev = iss.severity || 'info';
+		if (!bySev[sev]) bySev[sev] = [];
+		bySev[sev].push(iss);
+	});
+
+	h += '<div class="kg-p-type-badge" style="background:#8b5cf6;color:#fff">Elementor Audit</div>';
+	h += '<h3 class="kg-p-name">' + escHtml(page.title || page.page_type) + '</h3>';
+	h += '<div class="kg-p-meta">' + escHtml(page.page_type);
+	if (page.post_id) h += ' &middot; Post #' + page.post_id;
+	h += ' &middot; ' + issues.length + ' issue' + (issues.length !== 1 ? 's' : '') + '</div>';
+
+	h += '<div class="kg-p-health kg-h-' + healthCls + '">';
+	h += '<div class="kg-p-health-bar" style="width:' + page.health_score + '%"></div>';
+	h += '<span class="kg-p-health-label">Health ' + page.health_score + '%</span></div>';
+
+	// Back to audit summary
+	h += '<div style="margin:10px 0 14px;">';
+	h += '<button class="kg-btn kg-btn-outline kg-btn-sm" onclick="kgBackToDesignAudit()">← Back to audit summary</button>';
+	h += '</div>';
+
+	['critical', 'warning', 'info'].forEach(function(sev) {
+		var list = bySev[sev] || [];
+		if (!list.length) return;
+		var sevColor = sev === 'critical' ? 'var(--lp-error)' : sev === 'warning' ? 'var(--lp-warning)' : 'var(--lp-text-muted)';
+		h += '<div class="kg-p-section">';
+		h += '<div class="kg-p-section-title" style="display:flex;justify-content:space-between;align-items:center;">';
+		h += '<span>' + sev.charAt(0).toUpperCase() + sev.slice(1) + ' <small style="color:var(--lp-text-muted);">(' + list.length + ')</small></span>';
+		h += '</div>';
+
+		// Group by issue type within severity
+		var byType = {};
+		list.forEach(function(iss) {
+			var t = iss.type || 'other';
+			if (!byType[t]) byType[t] = [];
+			byType[t].push(iss);
+		});
+		Object.keys(byType).forEach(function(type) {
+			var group = byType[type];
+			var first = group[0];
+			h += '<div class="kg-audit-issue">';
+			h += '<div class="kg-audit-issue-header">';
+			h += '<span class="kg-audit-issue-dot" style="background:' + sevColor + ';"></span>';
+			h += '<strong>' + escHtml(first.message || type) + '</strong>';
+			if (group.length > 1) h += ' <span class="kg-audit-issue-count">×' + group.length + '</span>';
+			h += '</div>';
+			if (first.fix) {
+				h += '<div class="kg-audit-issue-fix"><strong>Fix:</strong> ' + escHtml(first.fix) + '</div>';
+			}
+			// Affected elements
+			h += '<div class="kg-audit-issue-elements">';
+			group.forEach(function(iss) {
+				var elId   = iss.element_id   || '—';
+				var elType = iss.element_type || '';
+				h += '<span class="kg-audit-issue-chip" title="' + escHtml(elType) + '">#' + escHtml(elId) + '</span>';
+			});
+			h += '</div>';
+			h += '</div>';
+		});
+
+		h += '</div>';
+	});
+
+	// Footer: edit in Elementor + view page
+	h += '<div class="kg-p-footer">';
+	if (page.post_id) {
+		h += '<a href="/wp-admin/post.php?post=' + page.post_id + '&action=elementor" target="_blank" class="kg-btn kg-btn-primary">Open in Elementor</a>';
+		h += '<a href="/?p=' + page.post_id + '" target="_blank" class="kg-btn kg-btn-outline">View live</a>';
+	}
+	h += '</div>';
 
 	content.innerHTML = h;
 	panel.classList.add('open');
@@ -930,26 +1371,30 @@ function showDesignAuditPanel(auditData) {
 		h += '</div>';
 	}
 
-	// Per-page results
+	// Per-page results — clickable drill-down when post_id + issues present
 	if (pages.length > 0) {
 		h += '<div class="kg-p-section"><div class="kg-p-section-title">Page Results</div>';
-		pages.forEach(function(p) {
+		// Store full payload for drill-down lookup
+		window._kgDesignAuditPages = pages;
+		pages.forEach(function(p, idx) {
 			var pCls = p.health_score >= 80 ? 'var(--lp-success)' : p.health_score >= 50 ? 'var(--lp-warning)' : 'var(--lp-error)';
-			h += '<div style="margin-bottom:12px;padding:10px;background:var(--lp-bg-hover);border-radius:8px;">';
+			var drillable = p.post_id && (p.issues || []).length > 0;
+			var extraClass = drillable ? ' kg-audit-page-clickable' : '';
+			var clickAttr  = drillable ? ' onclick="kgOpenAuditDrill(' + idx + ')"' : '';
+			h += '<div class="kg-audit-page-row' + extraClass + '" style="margin-bottom:12px;padding:10px;background:var(--lp-bg-hover);border-radius:8px;"' + clickAttr + '>';
 			h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
 			h += '<strong>' + escHtml(p.title || p.page_type) + '</strong>';
 			h += '<span style="color:' + pCls + ';font-weight:600;">' + p.health_score + '%</span></div>';
-			h += '<div style="font-size:11px;color:var(--lp-text-muted);">' + p.page_type + '</div>';
+			h += '<div style="font-size:11px;color:var(--lp-text-muted);">' + p.page_type + (p.post_id ? ' · #' + p.post_id : '') + (drillable ? ' · <span style="color:var(--lp-primary);">Click to drill down →</span>' : '') + '</div>';
 			if (p.issues && p.issues.length > 0) {
-				h += '<div style="margin-top:6px;">';
-				p.issues.forEach(function(issue) {
-					var iColor = issue.severity === 'critical' ? 'var(--lp-error)' : issue.severity === 'warning' ? 'var(--lp-warning)' : 'var(--lp-text-muted)';
-					h += '<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--lp-border);">';
-					h += '<span style="color:' + iColor + ';font-weight:600;">' + issue.severity.toUpperCase() + '</span> ';
-					h += issue.message;
-					if (issue.fix) h += '<div style="color:var(--lp-text-muted);font-size:10px;">Fix: ' + issue.fix + '</div>';
-					h += '</div>';
-				});
+				h += '<div style="margin-top:6px;font-size:11px;color:var(--lp-text-muted);">' + p.issues.length + ' issue' + (p.issues.length !== 1 ? 's' : '') + ': ';
+				var sevCounts = { critical: 0, warning: 0, info: 0 };
+				p.issues.forEach(function(issue) { sevCounts[issue.severity || 'info']++; });
+				var sevParts = [];
+				if (sevCounts.critical) sevParts.push('<span style="color:var(--lp-error);">' + sevCounts.critical + ' critical</span>');
+				if (sevCounts.warning)  sevParts.push('<span style="color:var(--lp-warning);">' + sevCounts.warning + ' warning</span>');
+				if (sevCounts.info)     sevParts.push('<span>' + sevCounts.info + ' info</span>');
+				h += sevParts.join(' &middot; ');
 				h += '</div>';
 			} else {
 				h += '<div style="margin-top:4px;font-size:11px;color:var(--lp-success);">No issues found</div>';
@@ -989,13 +1434,33 @@ function updateStats(data) {
 	var summary = data.summary || {};
 	var designAudit = (data.nodes && data.nodes.design_audit) ? data.nodes.design_audit : {};
 	var designSummary = designAudit.summary || {};
+	var pluginHealth = data.plugins || {};
+	var store        = data.store || {};
+	var revenue30    = (store.revenue && store.revenue.last_30_days && store.revenue.last_30_days.revenue) || 0;
+
+	// Taxonomy coverage: weighted average across all (term, lang) pairs.
+	var taxonomies = (data.nodes && data.nodes.taxonomies) || [];
+	var taxTotal = 0, taxDone = 0;
+	taxonomies.forEach(function(term) {
+		var trans = term.translations || {};
+		Object.keys(trans).forEach(function(lang) {
+			taxTotal++;
+			var st = trans[lang] && trans[lang].status;
+			if (st === 'translated' || st === 'completed') taxDone++;
+		});
+	});
+	var taxCoverage = taxTotal > 0 ? Math.round(taxDone / taxTotal * 100) : 0;
+
 	var stats = {
 		total_products: summary.total_products || 0,
 		total_posts: summary.total_posts || 0,
 		seo_coverage: summary.seo_coverage || 0,
 		enrichment_coverage: summary.enrichment_coverage || 0,
 		opportunity_score_total: summary.opportunity_score_total || 0,
-		design_health: designSummary.overall_health || 0
+		design_health: designSummary.overall_health || 0,
+		plugin_readiness: Math.round(pluginHealth.readiness_score || 0),
+		revenue_30d: Math.round(revenue30),
+		taxonomy_coverage: taxCoverage
 	};
 
 	document.querySelectorAll('.kg-stat').forEach(function(el) {
@@ -1006,7 +1471,15 @@ function updateStats(data) {
 	Object.keys(stats).forEach(function(key) {
 		var el = document.querySelector('[data-counter="' + key + '"]');
 		if (el) {
-			var suffix = (key.indexOf('coverage') !== -1 || key === 'design_health') ? '%' : '';
+			var suffix = '';
+			if (key.indexOf('coverage') !== -1 || key === 'design_health' || key === 'plugin_readiness' || key === 'taxonomy_coverage') suffix = '%';
+			else if (key === 'revenue_30d') {
+				var curr = (data.store && data.store.currency) || 'EUR';
+				var symbol = { EUR: '€', USD: '$', GBP: '£', TRY: '₺' }[curr] || (curr + ' ');
+				// Prefix currency symbol instead of suffix — simpler: set full text directly
+				el.textContent = symbol + Math.round(stats[key]).toLocaleString();
+				return;
+			}
 			animateCounter(el, Math.round(stats[key]), suffix);
 		}
 	});
@@ -1019,7 +1492,7 @@ document.getElementById('kg-detail-close').onclick = function() {
 
 // ── Refresh ──
 document.getElementById('kg-refresh').onclick = function() {
-	init();
+	init(true); // explicit user refresh → bypass cache
 };
 
 // ── Resize ──
@@ -1035,7 +1508,7 @@ window.addEventListener('resize', function() {
 // ── Init ──
 var _kgData = null; // Store for click handlers
 
-function init() {
+function init(forceFresh) {
 	loadD3(function() {
 		fetchGraph(function(err, data) {
 			if (err || !data) {
@@ -1046,21 +1519,675 @@ function init() {
 			updateStats(data);
 			buildGraph(data);
 			bindDesignHealthClick(data);
-		});
+			bindPluginHealthClick(data);
+			bindRevenueClick(data);
+			bindTaxonomyClick(data);
+			updateCacheBadge(data);
+		}, !!forceFresh);
 	});
 }
 
 function bindDesignHealthClick(data) {
-	var el = document.querySelector('[data-counter="design_health"]');
-	if (!el) return;
-	var card = el.closest('.kg-stat');
+	var card = document.getElementById('kg-stat-design');
 	if (!card) return;
-	card.style.cursor = 'pointer';
-	card.title = 'Click to view Design Audit details';
-	card.addEventListener('click', function() {
+	// Replace listener fresh on every call (data snapshot is captured in closure)
+	card.onclick = function() {
 		var audit = (data.nodes && data.nodes.design_audit) ? data.nodes.design_audit : null;
 		if (audit) showDesignAuditPanel(audit);
+	};
+}
+
+function bindPluginHealthClick(data) {
+	var card = document.getElementById('kg-stat-plugins');
+	if (!card) return;
+	card.onclick = function() {
+		var plugins = data.plugins || null;
+		if (plugins) showPluginHealthPanel(plugins);
+	};
+}
+
+function bindRevenueClick(data) {
+	var card = document.getElementById('kg-stat-revenue');
+	if (!card) return;
+	card.onclick = function() {
+		showRevenuePanel(data.store || {}, (data.nodes && data.nodes.order_analytics) || {});
+	};
+}
+
+function bindTaxonomyClick(data) {
+	var card = document.getElementById('kg-stat-taxonomy');
+	if (!card) return;
+	card.onclick = function() {
+		showTaxonomyHeatmap((data.nodes && data.nodes.taxonomies) || []);
+	};
+}
+
+function updateCacheBadge(data) {
+	var meta = (data && data.meta) || {};
+	var badge = document.getElementById('kg-cache-badge');
+	if (!badge) return;
+	badge.hidden = false;
+	if (meta.from_cache) {
+		badge.textContent = 'cached';
+		badge.className = 'kg-cache-badge kg-cache-hit';
+		badge.title = 'Served from cache. Click Refresh to force reload.';
+	} else {
+		badge.textContent = 'fresh (' + (meta.execution_time_ms || 0) + 'ms)';
+		badge.className = 'kg-cache-badge kg-cache-miss';
+		badge.title = 'Computed on the server just now.';
+	}
+}
+
+function showTaxonomyHeatmap(taxonomies) {
+	var panel = document.getElementById('kg-detail-panel');
+	var content = document.getElementById('kg-detail-content');
+	var h = '';
+
+	// Group terms by taxonomy type
+	var byType = {};
+	taxonomies.forEach(function(term) {
+		var tt = term.type || 'unknown';
+		if (!byType[tt]) byType[tt] = [];
+		byType[tt].push(term);
 	});
+
+	// Collect all languages from any term
+	var langSet = {};
+	taxonomies.forEach(function(term) {
+		Object.keys(term.translations || {}).forEach(function(l) { langSet[l] = true; });
+	});
+	var langs = Object.keys(langSet).sort();
+
+	// Overall stats
+	var totalPairs = 0, donePairs = 0, missingPairs = 0;
+	taxonomies.forEach(function(term) {
+		var trans = term.translations || {};
+		Object.keys(trans).forEach(function(l) {
+			totalPairs++;
+			var st = trans[l] && trans[l].status;
+			if (st === 'translated' || st === 'completed') donePairs++;
+			else if (st === 'missing') missingPairs++;
+		});
+	});
+	var overallPct = totalPairs > 0 ? Math.round(donePairs / totalPairs * 100) : 0;
+	var overallCls = overallPct >= 90 ? 'good' : overallPct >= 60 ? 'warn' : 'bad';
+
+	h += '<div class="kg-p-type-badge" style="background:#a855f7;color:#fff">Taxonomy Coverage</div>';
+	h += '<h3 class="kg-p-name">Translation Heatmap</h3>';
+	h += '<div class="kg-p-meta">' + taxonomies.length + ' terms &middot; ' + langs.length + ' language' + (langs.length !== 1 ? 's' : '') + ' &middot; ' + missingPairs + ' missing translation' + (missingPairs !== 1 ? 's' : '') + '</div>';
+
+	h += '<div class="kg-p-health kg-h-' + overallCls + '">';
+	h += '<div class="kg-p-health-bar" style="width:' + overallPct + '%"></div>';
+	h += '<span class="kg-p-health-label">Coverage ' + overallPct + '%</span></div>';
+
+	// ── Heatmap: rows = tax type, cols = lang
+	var typeKeys = Object.keys(byType).sort();
+	if (langs.length && typeKeys.length) {
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Coverage Matrix</div>';
+		h += '<table class="kg-tax-heatmap">';
+		h += '<thead><tr><th></th>';
+		langs.forEach(function(l) { h += '<th>' + l.toUpperCase() + '</th>'; });
+		h += '</tr></thead><tbody>';
+
+		typeKeys.forEach(function(ttype) {
+			h += '<tr><th class="kg-tax-row-label">' + escHtml(ttype) + ' <small>(' + byType[ttype].length + ')</small></th>';
+			langs.forEach(function(l) {
+				var total = 0, done = 0, missing = 0;
+				byType[ttype].forEach(function(term) {
+					var t = (term.translations || {})[l];
+					if (!t) return;
+					total++;
+					if (t.status === 'translated' || t.status === 'completed') done++;
+					else if (t.status === 'missing') missing++;
+				});
+				var pct = total > 0 ? Math.round(done / total * 100) : 0;
+				var cls = pct >= 95 ? 'kg-tax-cell-good' : pct >= 70 ? 'kg-tax-cell-warn' : pct >= 40 ? 'kg-tax-cell-weak' : 'kg-tax-cell-bad';
+				var title = done + '/' + total + ' translated (' + missing + ' missing)';
+				h += '<td class="kg-tax-cell ' + cls + '" title="' + title + '" data-taxtype="' + escHtml(ttype) + '" data-lang="' + escHtml(l) + '">';
+				h += '<span class="kg-tax-cell-pct">' + pct + '%</span>';
+				if (missing > 0) h += '<span class="kg-tax-cell-missing">' + missing + ' missing</span>';
+				h += '</td>';
+			});
+			h += '</tr>';
+		});
+		h += '</tbody></table>';
+		h += '<div class="kg-tax-legend">';
+		h += '<span><span class="kg-tax-dot kg-tax-cell-good"></span>&ge;95%</span>';
+		h += '<span><span class="kg-tax-dot kg-tax-cell-warn"></span>70-94%</span>';
+		h += '<span><span class="kg-tax-dot kg-tax-cell-weak"></span>40-69%</span>';
+		h += '<span><span class="kg-tax-dot kg-tax-cell-bad"></span>&lt;40%</span>';
+		h += '</div>';
+		h += '</div>';
+	}
+
+	// ── Missing terms by language (actionable)
+	var missingByLang = {};
+	langs.forEach(function(l) { missingByLang[l] = []; });
+	taxonomies.forEach(function(term) {
+		var trans = term.translations || {};
+		langs.forEach(function(l) {
+			var t = trans[l];
+			if (t && t.status === 'missing') {
+				missingByLang[l].push({ id: term.id, name: term.name || ('#' + term.id), type: term.type });
+			}
+		});
+	});
+
+	var anyMissing = false;
+	langs.forEach(function(l) { if (missingByLang[l].length) anyMissing = true; });
+
+	if (anyMissing) {
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Missing Translations</div>';
+		langs.forEach(function(l) {
+			var items = missingByLang[l];
+			if (!items.length) return;
+			h += '<div class="kg-tax-missing-group">';
+			h += '<div class="kg-tax-missing-header">';
+			h += '<strong>' + l.toUpperCase() + '</strong> <small>' + items.length + ' term' + (items.length !== 1 ? 's' : '') + ' missing</small>';
+			h += '<button class="kg-btn kg-btn-primary kg-btn-sm" onclick="kgAction(\'translate_taxonomy\',0,this,\'' + l + '\')">Translate all</button>';
+			h += '</div>';
+			h += '<div class="kg-tax-missing-items">';
+			items.slice(0, 20).forEach(function(item) {
+				h += '<span class="kg-tax-missing-chip" title="' + escHtml(item.type) + '">' + escHtml(item.name) + '</span>';
+			});
+			if (items.length > 20) h += '<span class="kg-tax-missing-more">+' + (items.length - 20) + ' more</span>';
+			h += '</div></div>';
+		});
+		h += '</div>';
+	} else {
+		h += '<div class="kg-p-allgood">All taxonomy terms are fully translated.</div>';
+	}
+
+	content.innerHTML = h;
+	panel.classList.add('open');
+}
+
+function showRevenuePanel(store, analytics) {
+	var panel = document.getElementById('kg-detail-panel');
+	var content = document.getElementById('kg-detail-content');
+	var curr = store.currency || 'EUR';
+	var symbol = { EUR: '€', USD: '$', GBP: '£', TRY: '₺' }[curr] || (curr + ' ');
+	var fmt = function(n) { return symbol + Math.round(n || 0).toLocaleString(); };
+	var h = '';
+
+	h += '<div class="kg-p-type-badge" style="background:#16a34a;color:#fff">Revenue & Orders</div>';
+	h += '<h3 class="kg-p-name">Store Analytics</h3>';
+	h += '<div class="kg-p-meta">Currency: ' + curr + ' · Lifetime: ' + fmt(store.lifetime_revenue) + ' over ' + (store.lifetime_orders || 0) + ' orders</div>';
+
+	// ── Revenue snapshot
+	h += '<div class="kg-p-section"><div class="kg-p-section-title">Revenue Snapshot</div>';
+	var r = store.revenue || {};
+	h += '<div class="kg-p-stat-row"><span>Today</span><strong>' + fmt(r.today && r.today.revenue) + ' <small style="color:var(--lp-text-muted);">(' + ((r.today && r.today.orders) || 0) + ' orders)</small></strong></div>';
+	h += '<div class="kg-p-stat-row"><span>Last 7 days</span><strong>' + fmt(r.last_7_days && r.last_7_days.revenue) + ' <small style="color:var(--lp-text-muted);">(' + ((r.last_7_days && r.last_7_days.orders) || 0) + ' orders)</small></strong></div>';
+	h += '<div class="kg-p-stat-row"><span>Last 30 days</span><strong>' + fmt(r.last_30_days && r.last_30_days.revenue) + ' <small style="color:var(--lp-text-muted);">(' + ((r.last_30_days && r.last_30_days.orders) || 0) + ' orders)</small></strong></div>';
+	h += '<div class="kg-p-stat-row"><span>Average Order Value</span><strong>' + fmt(store.average_order_value) + '</strong></div>';
+	h += '</div>';
+
+	// ── 12-month sparkline (SVG)
+	var months = analytics.monthly_revenue_12m || [];
+	if (months.length) {
+		var maxR = 0;
+		months.forEach(function(m){ if ((m.revenue || 0) > maxR) maxR = m.revenue; });
+		if (maxR > 0) {
+			var w = 300, hgt = 60, pad = 4;
+			var step = (w - pad * 2) / Math.max(1, months.length - 1);
+			var pts = months.map(function(m, i) {
+				var x = pad + i * step;
+				var y = hgt - pad - ((m.revenue || 0) / maxR) * (hgt - pad * 2);
+				return x + ',' + y;
+			}).join(' ');
+			h += '<div class="kg-p-section"><div class="kg-p-section-title">12-Month Revenue Trend</div>';
+			h += '<div class="kg-sparkline-wrap">';
+			h += '<svg viewBox="0 0 ' + w + ' ' + hgt + '" preserveAspectRatio="none" class="kg-sparkline">';
+			h += '<polyline points="' + pts + '" fill="none" stroke="#16a34a" stroke-width="2" stroke-linejoin="round"/>';
+			// area fill
+			h += '<polygon points="' + pad + ',' + (hgt - pad) + ' ' + pts + ' ' + (pad + (months.length - 1) * step) + ',' + (hgt - pad) + '" fill="#16a34a" fill-opacity="0.12"/>';
+			h += '</svg>';
+			h += '<div class="kg-sparkline-labels"><span>' + (months[0].month || '') + '</span><span>' + (months[months.length - 1].month || '') + '</span></div>';
+			h += '</div></div>';
+		}
+	}
+
+	// ── Customer retention
+	var repeatRate = analytics.repeat_customer_rate || 0;
+	var retentionCls = repeatRate >= 20 ? 'good' : repeatRate >= 10 ? 'warn' : 'bad';
+	h += '<div class="kg-p-section"><div class="kg-p-section-title">Customer Retention</div>';
+	h += '<div class="kg-p-health kg-h-' + retentionCls + '" style="margin-top:6px;margin-bottom:10px;">';
+	h += '<div class="kg-p-health-bar" style="width:' + Math.min(100, repeatRate * 2) + '%"></div>';
+	h += '<span class="kg-p-health-label">Repeat rate ' + repeatRate.toFixed(1) + '%</span></div>';
+	h += '<div class="kg-p-stat-row"><span>Total customers</span><strong>' + (analytics.total_customers || 0) + '</strong></div>';
+	h += '<div class="kg-p-stat-row"><span>Repeat customers</span><strong>' + (analytics.repeat_customers || 0) + '</strong></div>';
+	h += '<div class="kg-p-stat-row"><span>Avg items/order</span><strong>' + (analytics.avg_items_per_order || 0) + '</strong></div>';
+	h += '</div>';
+
+	// ── Top sellers
+	var top = store.top_sellers || [];
+	if (top.length) {
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Top Sellers</div>';
+		top.slice(0, 5).forEach(function(p) {
+			h += '<div class="kg-p-stat-row"><span>' + escHtml(p.name || ('#' + p.id)) + '</span>';
+			h += '<strong>' + fmt(p.revenue || 0) + ' <small style="color:var(--lp-text-muted);">(' + (p.quantity || 0) + ' sold)</small></strong></div>';
+		});
+		h += '</div>';
+	}
+
+	// ── Stock alerts
+	var stock = store.stock_alerts || {};
+	var stockIssues = (stock.out_of_stock || 0) + (stock.on_backorder || 0) + (stock.no_price || 0);
+	if (stockIssues > 0 || stock.on_sale > 0) {
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Inventory Status</div>';
+		if (stock.out_of_stock)  h += '<div class="kg-p-stat-row"><span>Out of stock</span><strong class="kg-text-error">' + stock.out_of_stock + '</strong></div>';
+		if (stock.on_backorder)  h += '<div class="kg-p-stat-row"><span>On backorder</span><strong style="color:var(--lp-warning);">' + stock.on_backorder + '</strong></div>';
+		if (stock.no_price)      h += '<div class="kg-p-stat-row"><span>Missing price</span><strong class="kg-text-error">' + stock.no_price + '</strong></div>';
+		if (stock.on_sale)       h += '<div class="kg-p-stat-row"><span>On sale</span><strong style="color:var(--lp-success);">' + stock.on_sale + '</strong></div>';
+		h += '</div>';
+	}
+
+	// ── Payment methods
+	var pm = analytics.payment_methods || {};
+	var pmKeys = Object.keys(pm);
+	if (pmKeys.length) {
+		var pmTotal = 0;
+		pmKeys.forEach(function(k){ pmTotal += pm[k]; });
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Payment Methods (last 90d)</div>';
+		pmKeys.sort(function(a, b){ return pm[b] - pm[a]; }).slice(0, 5).forEach(function(k) {
+			var pct = Math.round((pm[k] / pmTotal) * 100);
+			h += '<div class="kg-p-stat-row"><span>' + escHtml(k) + '</span><strong>' + pm[k] + ' <small style="color:var(--lp-text-muted);">(' + pct + '%)</small></strong></div>';
+		});
+		h += '</div>';
+	}
+
+	// ── Refunds
+	if (analytics.refund_count_90d) {
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Refunds (last 90d)</div>';
+		h += '<div class="kg-p-stat-row"><span>Refund count</span><strong style="color:var(--lp-warning);">' + analytics.refund_count_90d + '</strong></div>';
+		h += '<div class="kg-p-stat-row"><span>Refund amount</span><strong style="color:var(--lp-error);">' + fmt(Math.abs(analytics.refund_amount_90d || 0)) + '</strong></div>';
+		h += '</div>';
+	}
+
+	content.innerHTML = h;
+	panel.classList.add('open');
+}
+
+function showPluginHealthPanel(plugins) {
+	var panel = document.getElementById('kg-detail-panel');
+	var content = document.getElementById('kg-detail-content');
+	var score = Math.round(plugins.readiness_score || 0);
+	var cls = score >= 80 ? 'good' : score >= 50 ? 'warn' : 'bad';
+	var h = '';
+
+	h += '<div class="kg-p-type-badge" style="background:#0ea5e9;color:#fff">Plugin Health</div>';
+	h += '<h3 class="kg-p-name">Site Readiness</h3>';
+	h += '<div class="kg-p-meta">' + (plugins.recommendations ? plugins.recommendations.length : 0) + ' recommendation(s)</div>';
+
+	h += '<div class="kg-p-health kg-h-' + cls + '">';
+	h += '<div class="kg-p-health-bar" style="width:' + score + '%"></div>';
+	h += '<span class="kg-p-health-label">Readiness ' + score + '%</span></div>';
+
+	// Per-category status
+	var cats = ['seo','translation','email','crm','cache','support'];
+	h += '<div class="kg-p-section"><div class="kg-p-section-title">Detected Plugins</div>';
+	cats.forEach(function(cat) {
+		var info = plugins[cat] || {};
+		var name = info.plugin && info.plugin !== 'none' ? info.plugin : '—';
+		var badge = info.status === 'active' ? 'var(--lp-success)' : (info.status === 'not_installed' ? 'var(--lp-text-muted)' : 'var(--lp-warning)');
+		h += '<div class="kg-p-stat-row"><span>' + cat.toUpperCase() + '</span>';
+		h += '<strong style="color:' + badge + '">' + escHtml(name) + (info.version ? ' (' + escHtml(info.version) + ')' : '') + '</strong></div>';
+	});
+	h += '</div>';
+
+	// Recommendations
+	var recs = plugins.recommendations || [];
+	if (recs.length > 0) {
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
+		recs.forEach(function(r) {
+			h += '<div class="kg-rec kg-rec-' + (r.priority || 'medium') + '">';
+			h += '<span class="kg-rec-dot"></span>';
+			h += '<span class="kg-rec-body"><strong>' + escHtml(r.area || 'General') + '</strong><br><small>' + escHtml(r.message || '') + '</small></span>';
+			h += '</div>';
+		});
+		h += '</div>';
+	} else {
+		h += '<div class="kg-p-allgood">Plugin stack is healthy.</div>';
+	}
+
+	content.innerHTML = h;
+	panel.classList.add('open');
+}
+
+// ── Search ──
+function initSearch() {
+	var input   = document.getElementById('kg-search-input');
+	var clear   = document.getElementById('kg-search-clear');
+	var results = document.getElementById('kg-search-results');
+	if (!input || !results) return;
+
+	function closeResults() {
+		results.hidden = true;
+		results.innerHTML = '';
+	}
+
+	function focusNodeById(nodeId) {
+		if (!window.lpKg || !window._kgSvg || !window._kgZoom) return;
+		var svg = window._kgSvg;
+		var zoom = window._kgZoom;
+		var found = null;
+		svg.selectAll('.kg-node').each(function(d) {
+			if (d && d.id === nodeId) found = { d: d, el: this };
+		});
+		if (!found) return;
+		var container = document.getElementById('kg-graph-container');
+		var w = container.clientWidth;
+		var h = container.clientHeight || 600;
+		var scale = 2;
+		var tx = w / 2 - found.d.x * scale;
+		var ty = h / 2 - found.d.y * scale;
+		svg.transition().duration(600).call(
+			zoom.transform,
+			d3.zoomIdentity.translate(tx, ty).scale(scale)
+		);
+		// Pulse the node
+		d3.select(found.el).select('circle')
+			.transition().duration(200).attr('stroke', 'var(--lp-primary)').attr('stroke-width', 4)
+			.transition().duration(400).attr('stroke', '#fff').attr('stroke-width', 2);
+		// Open its detail panel
+		showDetailPanel(found.d);
+	}
+
+	function runSearch(q) {
+		q = (q || '').trim().toLowerCase();
+		clear.hidden = !q;
+		if (q.length < 2) { closeResults(); return; }
+		if (!_kgData || !_kgData.nodes) { closeResults(); return; }
+
+		var hits = [];
+		var products = _kgData.nodes.products || [];
+		var posts    = _kgData.nodes.posts || [];
+		var cats     = _kgData.nodes.categories || [];
+
+		products.forEach(function(p) {
+			var label = (p.name || '') + ' ' + (p.sku || '') + ' ' + (p.slug || '');
+			if (label.toLowerCase().indexOf(q) !== -1) {
+				hits.push({ id: 'product:' + p.id, type: 'product', label: p.name, meta: p.sku || ('#' + p.id) });
+			}
+		});
+		posts.forEach(function(p) {
+			if ((p.title || '').toLowerCase().indexOf(q) !== -1) {
+				hits.push({ id: 'post:' + p.id, type: 'post', label: p.title, meta: 'Blog post' });
+			}
+		});
+		cats.forEach(function(c) {
+			if ((c.name || '').toLowerCase().indexOf(q) !== -1) {
+				hits.push({ id: 'category:' + c.id, type: 'category', label: c.name, meta: c.product_count + ' products' });
+			}
+		});
+
+		hits = hits.slice(0, 20);
+		if (!hits.length) {
+			results.innerHTML = '<div class="kg-search-empty">No matches.</div>';
+			results.hidden = false;
+			return;
+		}
+		var html = '';
+		hits.forEach(function(h, i) {
+			html += '<button type="button" class="kg-search-item' + (i === 0 ? ' kg-search-item-active' : '') + '" data-node="' + h.id + '">';
+			html += '<span class="kg-search-item-type kg-search-item-' + h.type + '">' + h.type + '</span>';
+			html += '<span class="kg-search-item-label">' + escHtml(h.label) + '</span>';
+			html += '<span class="kg-search-item-meta">' + escHtml(h.meta) + '</span>';
+			html += '</button>';
+		});
+		results.innerHTML = html;
+		results.hidden = false;
+
+		results.querySelectorAll('.kg-search-item').forEach(function(btn) {
+			btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+			btn.addEventListener('click', function() {
+				focusNodeById(btn.getAttribute('data-node'));
+				closeResults();
+				input.value = '';
+				clear.hidden = true;
+			});
+		});
+	}
+
+	var debounce;
+	input.addEventListener('input', function() {
+		clearTimeout(debounce);
+		debounce = setTimeout(function(){ runSearch(input.value); }, 120);
+	});
+	input.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape') {
+			input.value = '';
+			clear.hidden = true;
+			closeResults();
+			input.blur();
+			return;
+		}
+		if (e.key === 'Enter') {
+			var first = results.querySelector('.kg-search-item-active');
+			if (first) { first.click(); }
+			return;
+		}
+		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+			e.preventDefault();
+			var items = Array.prototype.slice.call(results.querySelectorAll('.kg-search-item'));
+			if (!items.length) return;
+			var idx = items.findIndex(function(el) { return el.classList.contains('kg-search-item-active'); });
+			items.forEach(function(el) { el.classList.remove('kg-search-item-active'); });
+			idx = idx + (e.key === 'ArrowDown' ? 1 : -1);
+			if (idx < 0) idx = items.length - 1;
+			if (idx >= items.length) idx = 0;
+			items[idx].classList.add('kg-search-item-active');
+			items[idx].scrollIntoView({ block: 'nearest' });
+		}
+	});
+	input.addEventListener('blur', function() { setTimeout(closeResults, 150); });
+	clear.addEventListener('click', function() {
+		input.value = '';
+		clear.hidden = true;
+		closeResults();
+		input.focus();
+	});
+
+	// Global `/` shortcut
+	document.addEventListener('keydown', function(e) {
+		if (e.key === '/' && document.activeElement !== input) {
+			var tag = (document.activeElement && document.activeElement.tagName) || '';
+			if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+			e.preventDefault();
+			input.focus();
+		}
+	});
+}
+
+// ── Dropdown helper ──
+function initDropdown(rootId, triggerId, menuId, onSelect) {
+	var root    = document.getElementById(rootId);
+	var trigger = document.getElementById(triggerId);
+	var menu    = document.getElementById(menuId);
+	if (!root || !trigger || !menu) return;
+
+	function close() { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); }
+	function open()  { menu.hidden = false; trigger.setAttribute('aria-expanded', 'true'); }
+
+	trigger.addEventListener('click', function(e) {
+		e.stopPropagation();
+		if (menu.hidden) open(); else close();
+	});
+	menu.querySelectorAll('.kg-dropdown-item').forEach(function(item) {
+		item.addEventListener('click', function(e) {
+			e.stopPropagation();
+			close();
+			if (onSelect) onSelect(item);
+		});
+	});
+	document.addEventListener('click', function(e) {
+		if (!root.contains(e.target)) close();
+	});
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape') close();
+	});
+}
+
+function initPresets() {
+	var labelEl = document.getElementById('kg-preset-label');
+	initDropdown('kg-preset-dd', 'kg-preset-trigger', 'kg-preset-menu', function(item) {
+		var preset = item.getAttribute('data-preset');
+		_kgCurrentPreset = preset || 'all';
+		if (labelEl) labelEl.textContent = item.textContent.replace(/\s*\(.+\)\s*$/, '').trim();
+		if (_kgData) buildGraph(_kgData);
+	});
+}
+
+function initExport() {
+	initDropdown('kg-export-dd', 'kg-export-trigger', 'kg-export-menu', function(item) {
+		var kind = item.getAttribute('data-export');
+		if (!_kgData) return;
+		if (kind === 'csv_opportunities') exportCsvOpportunities(_kgData);
+		else if (kind === 'csv_missing_seo') exportCsvMissingSeo(_kgData);
+		else if (kind === 'json') exportJson(_kgData);
+		else if (kind === 'png')  exportPng();
+	});
+}
+
+function downloadFile(filename, content, mime) {
+	var blob = new Blob([content], { type: mime || 'text/plain' });
+	var url  = URL.createObjectURL(blob);
+	var a    = document.createElement('a');
+	a.href = url;
+	a.download = filename;
+	document.body.appendChild(a);
+	a.click();
+	setTimeout(function() {
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	}, 100);
+}
+
+function csvEscape(v) {
+	if (v === null || v === undefined) return '';
+	var s = String(v);
+	if (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1) {
+		return '"' + s.replace(/"/g, '""') + '"';
+	}
+	return s;
+}
+
+function exportCsvOpportunities(data) {
+	var products = (data.nodes && data.nodes.products) || [];
+	var rows = [['ID','Name','SKU','Opportunity Score','SEO Title','SEO Desc','Enriched','Content Length','Reviews','Missing Translations']];
+	var sorted = products.slice().sort(function(a, b){ return (b.opportunity_score || 0) - (a.opportunity_score || 0); });
+	sorted.forEach(function(p) {
+		var missing = [];
+		Object.keys(p.translation || {}).forEach(function(l) { if (p.translation[l] !== 'completed') missing.push(l.toUpperCase()); });
+		rows.push([
+			p.id,
+			p.name,
+			p.sku || '',
+			p.opportunity_score || 0,
+			p.seo && p.seo.has_title ? 'Y' : 'N',
+			p.seo && p.seo.has_description ? 'Y' : 'N',
+			p.enrichment && p.enrichment.status === 'completed' ? 'Y' : 'N',
+			p.content_length || 0,
+			(p.reviews && p.reviews.count) || 0,
+			missing.join(',')
+		]);
+	});
+	var csv = rows.map(function(r) { return r.map(csvEscape).join(','); }).join('\n');
+	var stamp = new Date().toISOString().slice(0,10);
+	downloadFile('luwipress-opportunities-' + stamp + '.csv', '\ufeff' + csv, 'text/csv;charset=utf-8');
+}
+
+function exportCsvMissingSeo(data) {
+	var products = (data.nodes && data.nodes.products) || [];
+	var rows = [['ID','Name','SKU','Missing Title','Missing Description','Missing Focus Keyword','Edit URL']];
+	products.forEach(function(p) {
+		var mt = !p.seo || !p.seo.has_title;
+		var md = !p.seo || !p.seo.has_description;
+		var mk = !p.seo || !p.seo.has_focus_kw;
+		if (!mt && !md && !mk) return;
+		rows.push([
+			p.id,
+			p.name,
+			p.sku || '',
+			mt ? 'Y' : '',
+			md ? 'Y' : '',
+			mk ? 'Y' : '',
+			window.location.origin + '/wp-admin/post.php?post=' + p.id + '&action=edit'
+		]);
+	});
+	var csv = rows.map(function(r) { return r.map(csvEscape).join(','); }).join('\n');
+	var stamp = new Date().toISOString().slice(0,10);
+	downloadFile('luwipress-missing-seo-' + stamp + '.csv', '\ufeff' + csv, 'text/csv;charset=utf-8');
+}
+
+function exportJson(data) {
+	var stamp = new Date().toISOString().slice(0,10);
+	downloadFile('luwipress-knowledge-graph-' + stamp + '.json', JSON.stringify(data, null, 2), 'application/json');
+}
+
+function initKeyboardShortcuts() {
+	document.addEventListener('keydown', function(e) {
+		var tag = (document.activeElement && document.activeElement.tagName) || '';
+		if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+		if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+		if (e.key === 'r' || e.key === 'R') {
+			e.preventDefault();
+			var btn = document.getElementById('kg-refresh');
+			if (btn) btn.click();
+		} else if (e.key === '1' || e.key === '2' || e.key === '3' || e.key === '4') {
+			e.preventDefault();
+			var idx = parseInt(e.key, 10) - 1;
+			var btns = document.querySelectorAll('.kg-view-btn');
+			if (btns[idx]) btns[idx].click();
+		} else if (e.key === 'Escape') {
+			var panel = document.getElementById('kg-detail-panel');
+			if (panel && panel.classList.contains('open')) {
+				panel.classList.remove('open');
+			}
+		} else if (e.key === '?') {
+			e.preventDefault();
+			alert('Knowledge Graph shortcuts:\n/  Search\nr  Refresh\n1  Products view\n2  Posts view\n3  Pages view\n4  Customers view\nEsc  Close panel\n?  This help');
+		}
+	});
+}
+
+function exportPng() {
+	var svgEl = document.getElementById('kg-svg');
+	if (!svgEl) return;
+	var rect   = svgEl.getBoundingClientRect();
+	var width  = Math.round(rect.width);
+	var height = Math.round(rect.height);
+	// Clone + inline size
+	var clone = svgEl.cloneNode(true);
+	clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+	clone.setAttribute('width', width);
+	clone.setAttribute('height', height);
+	var xml = new XMLSerializer().serializeToString(clone);
+	var svg64 = btoa(unescape(encodeURIComponent(xml)));
+	var img = new Image();
+	img.onload = function() {
+		var canvas = document.createElement('canvas');
+		canvas.width  = width;
+		canvas.height = height;
+		var ctx = canvas.getContext('2d');
+		ctx.fillStyle = '#ffffff';
+		ctx.fillRect(0, 0, width, height);
+		ctx.drawImage(img, 0, 0);
+		canvas.toBlob(function(blob) {
+			var url = URL.createObjectURL(blob);
+			var a   = document.createElement('a');
+			var stamp = new Date().toISOString().slice(0,10);
+			a.href = url;
+			a.download = 'luwipress-knowledge-graph-' + stamp + '.png';
+			document.body.appendChild(a);
+			a.click();
+			setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+		}, 'image/png');
+	};
+	img.onerror = function() { alert('Could not export PNG — your browser blocked SVG rendering.'); };
+	img.src = 'data:image/svg+xml;base64,' + svg64;
 }
 
 // ── View Switch ──
@@ -1078,6 +2205,10 @@ function initViewSwitch() {
 }
 
 initViewSwitch();
+initSearch();
+initPresets();
+initExport();
+initKeyboardShortcuts();
 init();
 
 // Expose helpers so onclick handlers (outside IIFE) can trigger refresh
@@ -1086,6 +2217,13 @@ window.lpKg = {
 	buildGraph: buildGraph,
 	showDetailPanel: showDetailPanel,
 	bindDesignHealthClick: bindDesignHealthClick,
+	bindPluginHealthClick: bindPluginHealthClick,
+	bindRevenueClick: bindRevenueClick,
+	bindTaxonomyClick: bindTaxonomyClick,
+	showTaxonomyHeatmap: showTaxonomyHeatmap,
+	showElementorAuditDrilldown: showElementorAuditDrilldown,
+	showDesignAuditPanel: showDesignAuditPanel,
+	updateCacheBadge: updateCacheBadge,
 	fetchGraph: fetchGraph,
 	getData: function() { return _kgData; },
 	setData: function(d) { _kgData = d; }
@@ -1096,6 +2234,36 @@ window.lpKg = {
 // Quick Action handler (outside IIFE so onclick attributes can reach it)
 var lpKgRestUrl = <?php echo wp_json_encode( rest_url( 'luwipress/v1/' ) ); ?>;
 var lpKgNonce = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
+
+function kgOpenAuditDrill(idx) {
+	var pages = window._kgDesignAuditPages || [];
+	var page = pages[idx];
+	if (!page) return;
+	if (window.lpKg && window.lpKg.showElementorAuditDrilldown) {
+		window.lpKg.showElementorAuditDrilldown(page);
+	}
+}
+
+function kgBackToDesignAudit() {
+	if (!window.lpKg || !window.lpKg.showDesignAuditPanel || !window.lpKg.getData) return;
+	var data = window.lpKg.getData();
+	var audit = (data && data.nodes && data.nodes.design_audit) || null;
+	if (audit) window.lpKg.showDesignAuditPanel(audit);
+}
+
+function collectProductIdsByCategory(catId) {
+	if (!window.lpKg || !window.lpKg.getData) return [];
+	var data = window.lpKg.getData();
+	if (!data || !data.nodes || !data.nodes.products) return [];
+	catId = parseInt(catId, 10);
+	var ids = [];
+	data.nodes.products.forEach(function(p) {
+		if (Array.isArray(p.categories) && p.categories.indexOf(catId) !== -1) {
+			ids.push(p.id);
+		}
+	});
+	return ids;
+}
 
 function kgAction(action, productId, btn, langs) {
 	var originalText = btn.innerHTML;
@@ -1118,6 +2286,66 @@ function kgAction(action, productId, btn, langs) {
 	} else if (action === 'translate_lang') {
 		endpoint = 'translation/batch';
 		body = { post_type: 'product', languages: langs ? [langs] : [], limit: 50 };
+	} else if (action === 'enrich_category') {
+		// productId carries the category ID here. Collect product IDs in this category
+		// from the cached KG data — backend expects product_ids array.
+		var catIdsE = collectProductIdsByCategory(productId).slice(0, 50);
+		if (!catIdsE.length) {
+			btn.innerHTML = '<span style="color:var(--lp-error);">No products in category</span>';
+			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
+			return;
+		}
+		endpoint = 'product/enrich-batch';
+		body = { product_ids: catIdsE };
+	} else if (action === 'translate_category') {
+		var catIdsT = collectProductIdsByCategory(productId).slice(0, 50);
+		if (!catIdsT.length) {
+			btn.innerHTML = '<span style="color:var(--lp-error);">No products in category</span>';
+			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
+			return;
+		}
+		endpoint = 'translation/batch';
+		body = { post_type: 'product', post_ids: catIdsT, languages: langs ? [langs] : [] };
+	} else if (action === 'translate_taxonomy') {
+		// langs carries the target language code. Find which taxonomy types have missing terms
+		// and dispatch one request per type (backend endpoint is taxonomy-scoped).
+		var targetLang = langs;
+		var taxonomies = (window.lpKg && window.lpKg.getData && window.lpKg.getData().nodes.taxonomies) || [];
+		var typesNeeded = {};
+		taxonomies.forEach(function(term) {
+			var t = (term.translations || {})[targetLang];
+			if (t && t.status === 'missing' && term.type) typesNeeded[term.type] = true;
+		});
+		var types = Object.keys(typesNeeded);
+		if (!types.length) {
+			btn.innerHTML = '<span style="color:var(--lp-success);">Nothing to translate</span>';
+			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
+			return;
+		}
+		// Fire one request per taxonomy type, in parallel.
+		var promises = types.map(function(tax) {
+			return fetch(lpKgRestUrl + 'translation/taxonomy', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce },
+				body: JSON.stringify({ taxonomy: tax, target_languages: [targetLang], limit: 50 }),
+				credentials: 'same-origin'
+			}).then(function(r) { return r.json().then(function(d){ return { ok: r.ok, data: d, tax: tax }; }); });
+		});
+		Promise.all(promises).then(function(results) {
+			var queued = results.filter(function(r) { return r.ok; }).length;
+			btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> Queued (' + queued + '/' + types.length + ')';
+			btn.classList.add('kg-action-done');
+			setTimeout(function() {
+				btn.disabled = false;
+				btn.innerHTML = originalText;
+				btn.classList.remove('kg-action-done');
+				kgRefreshAndReopen(null, 'taxonomy', targetLang);
+			}, 8000);
+		}).catch(function(err) {
+			btn.innerHTML = '<span style="color:var(--lp-error);">Failed</span>';
+			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
+		});
+		return; // skip the default dispatch path
 	}
 
 	fetch(lpKgRestUrl + endpoint, {
@@ -1160,14 +2388,13 @@ function kgAction(action, productId, btn, langs) {
 
 function kgRefreshAndReopen(nodeId, nodeType, langCode) {
 	if (!window.lpKg || !window.lpKg.buildGraph) {
-		if (window.console) console.warn('[lpKg] namespace not ready; skipping refresh');
 		return;
 	}
 	var headers = { 'X-WP-Nonce': lpKgNonce };
 	var apiToken = <?php echo wp_json_encode( $api_token ); ?>;
 	if (apiToken) headers['Authorization'] = 'Bearer ' + apiToken;
 
-	fetch(<?php echo wp_json_encode( $rest_url ); ?> + '?sections=products,categories,translation,store,opportunities,design_audit,posts&fresh=1', {
+	fetch(<?php echo wp_json_encode( $rest_url ); ?> + '?sections=products,categories,translation,store,opportunities,design_audit,posts,pages,plugins,order_analytics,taxonomy,crm&fresh=1', {
 		headers: headers,
 		credentials: 'same-origin'
 	})
@@ -1178,8 +2405,22 @@ function kgRefreshAndReopen(nodeId, nodeType, langCode) {
 		window.lpKg.updateStats(data);
 		window.lpKg.buildGraph(data);
 		window.lpKg.bindDesignHealthClick(data);
+		if (window.lpKg.bindPluginHealthClick) window.lpKg.bindPluginHealthClick(data);
+		if (window.lpKg.bindRevenueClick) window.lpKg.bindRevenueClick(data);
+		if (window.lpKg.bindTaxonomyClick) window.lpKg.bindTaxonomyClick(data);
+		if (window.lpKg.updateCacheBadge) window.lpKg.updateCacheBadge(data);
 
 		// Re-open the detail panel for the same node
+		if (nodeType === 'taxonomy') {
+			// Re-open the heatmap
+			var tax = (data.nodes && data.nodes.taxonomies) || [];
+			if (typeof showTaxonomyHeatmap === 'function') {
+				showTaxonomyHeatmap(tax);
+			} else if (window.lpKg && window.lpKg.showTaxonomyHeatmap) {
+				window.lpKg.showTaxonomyHeatmap(tax);
+			}
+			return;
+		}
 		if (nodeType === 'language' && langCode) {
 			var lNodes = data.nodes.languages || [];
 			lNodes.forEach(function(l) {
