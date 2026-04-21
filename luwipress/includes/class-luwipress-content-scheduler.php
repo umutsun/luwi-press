@@ -371,6 +371,7 @@ class LuwiPress_Content_Scheduler {
         $language        = sanitize_text_field( $_POST['language'] ?? get_option( 'luwipress_target_language', 'tr' ) );
         $tone            = sanitize_text_field( $_POST['tone'] ?? 'professional' );
         $word_count      = absint( $_POST['word_count'] ?? 1500 );
+        $depth           = in_array( ( $_POST['depth'] ?? 'standard' ), array( 'standard', 'deep', 'editorial' ), true ) ? $_POST['depth'] : 'standard';
         $interval_unit   = in_array( ( $_POST['interval_unit'] ?? 'day' ), array( 'hour', 'day' ), true ) ? $_POST['interval_unit'] : 'day';
         $interval_value  = max( 1, absint( $_POST['interval_value'] ?? 1 ) );
         $generate_offset = max( 0, absint( $_POST['generate_offset'] ?? 5 ) ); // minutes
@@ -418,6 +419,7 @@ class LuwiPress_Content_Scheduler {
                     '_luwipress_schedule_language' => $language,
                     '_luwipress_schedule_tone'     => $tone,
                     '_luwipress_schedule_words'    => $word_count,
+                    '_luwipress_schedule_depth'    => $depth,
                     '_luwipress_schedule_created'  => current_time( 'mysql' ),
                     '_luwipress_schedule_user'     => get_current_user_id(),
                     '_luwipress_schedule_batch'    => 1,
@@ -485,6 +487,12 @@ class LuwiPress_Content_Scheduler {
         $tone       = get_post_meta( $schedule_id, '_luwipress_schedule_tone', true );
         $word_count = (int) get_post_meta( $schedule_id, '_luwipress_schedule_words', true );
         $gen_image  = (bool) get_post_meta( $schedule_id, '_luwipress_schedule_image', true );
+        $depth      = get_post_meta( $schedule_id, '_luwipress_schedule_depth', true ) ?: 'standard';
+
+        // Deep/editorial content needs more tokens — scale max_tokens accordingly
+        $max_tokens = 4096;
+        if ( 'deep' === $depth )      $max_tokens = 6000;
+        if ( 'editorial' === $depth ) $max_tokens = 8000;
 
         $prompt    = LuwiPress_Prompts::content_generation( array(
             'topic'      => $topic,
@@ -492,11 +500,12 @@ class LuwiPress_Content_Scheduler {
             'language'   => $language,
             'tone'       => $tone,
             'word_count' => $word_count,
+            'depth'      => $depth,
             'site_name'  => get_bloginfo( 'name' ),
         ) );
         $messages  = LuwiPress_AI_Engine::build_messages( $prompt );
         $ai_result = LuwiPress_AI_Engine::dispatch_json( 'content-scheduler', $messages, array(
-            'max_tokens' => 4096,
+            'max_tokens' => $max_tokens,
         ) );
 
         if ( is_wp_error( $ai_result ) ) {

@@ -214,37 +214,101 @@ Review: %4$s',
 	 * @return array ['system' => string, 'user' => string]
 	 */
 	public static function content_generation( array $data ) {
-		$system = 'You are an expert SEO content writer. You write engaging, well-structured, SEO-optimized articles. Always include proper headings (H2, H3), internal linking opportunities marked as [INTERNAL_LINK: topic], and a clear call-to-action. Write in the specified language.';
+		// Operator-defined system prompt overrides the default — lets sites encode
+		// voice, editorial standards, forbidden words, brand context, etc.
+		$custom_system = trim( (string) get_option( 'luwipress_content_system_prompt', '' ) );
 
-		$user = sprintf(
-			'Write a comprehensive article about: %1$s
+		$depth = in_array( ( $data['depth'] ?? 'standard' ), array( 'standard', 'deep', 'editorial' ), true )
+			? $data['depth']
+			: 'standard';
 
-Target language: %2$s
-Tone: %3$s
-Approximate word count: %4$s
-SEO Keywords: %5$s
-Site name: %6$s
+		if ( '' !== $custom_system ) {
+			// Variable substitution so operators can reference the job's context inside their prompt.
+			$system = strtr( $custom_system, array(
+				'{topic}'        => (string) ( $data['topic'] ?? '' ),
+				'{language}'     => (string) ( $data['language'] ?? 'English' ),
+				'{tone}'         => (string) ( $data['tone'] ?? 'professional' ),
+				'{word_count}'   => (string) ( $data['word_count'] ?? 1000 ),
+				'{keywords}'     => (string) ( $data['keywords'] ?? '' ),
+				'{site_name}'    => (string) ( $data['site_name'] ?? get_bloginfo( 'name' ) ),
+				'{depth}'        => $depth,
+			) );
+		} else {
+			$system = self::content_default_system_prompt( $depth );
+		}
 
-Return a JSON object with these fields:
-- title: SEO-optimized title
-- content: Full HTML article content with proper heading tags (h2, h3)
-- excerpt: 2-3 sentence summary (max 160 chars)
-- meta_title: SEO meta title (max 60 chars)
-- meta_description: SEO meta description (max 155 chars)
-- tags: array of 5-8 relevant tags
-
-IMPORTANT: Return ONLY valid JSON, no markdown code blocks.',
-			$data['topic'] ?? '',
-			$data['language'] ?? 'English',
-			$data['tone'] ?? 'professional',
-			$data['word_count'] ?? 1000,
-			$data['keywords'] ?? '',
-			$data['site_name'] ?? get_bloginfo( 'name' )
-		);
+		$user = self::content_user_prompt( $data, $depth );
 
 		$prompt = array( 'system' => $system, 'user' => $user );
 
 		return apply_filters( 'luwipress_prompt_content_generation', $prompt, $data );
+	}
+
+	/**
+	 * Default system prompt by depth preset. Operators can override the whole
+	 * thing via `luwipress_content_system_prompt` option (admin Settings).
+	 *
+	 * Depth presets:
+	 *  - standard:  balanced SEO article (800-1500 words, clear structure)
+	 *  - deep:      long-form explainer with research framing, examples, citations,
+	 *               counter-arguments, practical takeaways, FAQ (1500-3000 words)
+	 *  - editorial: essay-style long-form with strong voice, cultural/historical
+	 *               context, narrative arc, original perspective, quote-worthy
+	 *               sentences (2000-3500+ words)
+	 */
+	private static function content_default_system_prompt( $depth ) {
+		$base = "You are an expert editorial writer and SEO strategist for the site you are writing for.\n"
+			. "You produce content that reads like it was researched and written by a subject-matter expert — not templated, not padded, not AI-boilerplate.\n"
+			. "You write in the target language specified in the user prompt. Match the tone requested, but never sacrifice accuracy or depth for it.\n\n"
+			. "HARD RULES:\n"
+			. " • No filler sentences ('In this article we will discuss…', 'As we all know…', 'In today's fast-paced world…'). Start with the most interesting, specific sentence the topic allows.\n"
+			. " • No hedging fluff ('might be considered to potentially be…'). Make clear claims; qualify only when genuinely uncertain.\n"
+			. " • Every H2 section must advance the topic — no repetition, no restating the intro.\n"
+			. " • Use concrete examples, specific names, dates, numbers, or quotes where relevant. Vague > specific is a failure.\n"
+			. " • Mark internal linking opportunities inline as [INTERNAL_LINK: anchor text] — place them naturally where a reader would click.\n"
+			. " • Return ONLY valid JSON (no markdown fences, no prose around it).\n";
+
+		if ( 'deep' === $depth ) {
+			return $base . "\nDEPTH: DEEP EXPLAINER\n"
+				. " • Target 1500-3000 words.\n"
+				. " • Structure: opening hook → clear thesis → 4-7 H2 sections covering distinct facets → 'Key takeaways' bullet list → 'Frequently asked questions' H2 with 3-5 Q&A pairs.\n"
+				. " • Include at least one comparison table or numbered list where the topic warrants it.\n"
+				. " • Cite real sources, studies, books, or people by name (verify what you know; don't invent references).\n"
+				. " • End with a clear call-to-action suited to the site's context.\n";
+		}
+
+		if ( 'editorial' === $depth ) {
+			return $base . "\nDEPTH: EDITORIAL ESSAY\n"
+				. " • Target 2000-3500+ words.\n"
+				. " • Structure: strong narrative hook (anecdote, contrast, question, vivid image) → thesis → 5-8 H2 sections that build an argument or story arc → reflective conclusion that leaves a lasting impression.\n"
+				. " • Write with a distinctive voice — not neutral encyclopedia tone. Opinions and interpretations welcome, clearly framed as such.\n"
+				. " • Weave in cultural, historical, or personal context. Draw unexpected connections between the topic and adjacent ideas.\n"
+				. " • Include at least 2-3 quote-worthy sentences a reader would highlight or share.\n"
+				. " • Close with a memorable final line — not a summary.\n"
+				. " • The article should feel like it belongs in a curated publication, not a content mill.\n";
+		}
+
+		// standard
+		return $base . "\nDEPTH: STANDARD\n"
+			. " • Target the requested word count (typical 800-1500 words).\n"
+			. " • Structure: clear introduction (2-3 sentences) → 3-5 H2 sections → brief conclusion with a call-to-action.\n"
+			. " • Balance SEO structure with genuine usefulness to the reader.\n";
+	}
+
+	/**
+	 * User-message body — carries the concrete job data.
+	 */
+	private static function content_user_prompt( array $data, $depth ) {
+		return sprintf(
+			"Write an article for the site '%6\$s'.\n\nTOPIC: %1\$s\nTARGET LANGUAGE: %2\$s\nTONE: %3\$s\nTARGET WORD COUNT: %4\$s\nSEO KEYWORDS: %5\$s\nDEPTH PRESET: %7\$s\n\nReturn ONLY a JSON object with this shape (no markdown fences, no prose around it):\n{\n  \"title\":           \"SEO-optimized title, 45-65 chars\",\n  \"content\":         \"Full HTML article — <h2>/<h3>/<p>/<ul>/<ol>/<blockquote>/<table> as appropriate. Internal link placeholders inline as [INTERNAL_LINK: anchor].\",\n  \"excerpt\":         \"2-3 sentence summary, max 160 chars\",\n  \"meta_title\":      \"SEO meta title, max 60 chars\",\n  \"meta_description\": \"SEO meta description, max 155 chars, compelling CTA\",\n  \"tags\":            [\"5-8 specific, searchable tags (not generic like 'music')\"]\n}",
+			$data['topic']      ?? '',
+			$data['language']   ?? 'English',
+			$data['tone']       ?? 'professional',
+			$data['word_count'] ?? 1000,
+			$data['keywords']   ?? '',
+			$data['site_name']  ?? get_bloginfo( 'name' ),
+			$depth
+		);
 	}
 
 	/**

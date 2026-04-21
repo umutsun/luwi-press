@@ -1597,6 +1597,313 @@ class LuwiPress_WebMCP {
             $data    = $sched->get_schedule_list( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
+
+        $this->register_tool( 'content_schedule_create', array(
+            'description' => 'Queue a single blog post for AI generation and scheduled publishing. The AI runs in the background (wp-cron); this call returns immediately with a schedule_id.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'topic'         => array( 'type' => 'string',  'description' => 'Main topic / title of the article (required)' ),
+                    'keywords'      => array( 'type' => 'string',  'description' => 'Comma-separated SEO keywords (optional)' ),
+                    'publish_date'  => array( 'type' => 'string',  'description' => 'YYYY-MM-DD — when the post should go live' ),
+                    'publish_time'  => array( 'type' => 'string',  'description' => 'HH:MM — publish hour (default "09:00")' ),
+                    'post_type'     => array( 'type' => 'string',  'description' => 'post | page (default "post")' ),
+                    'language'      => array( 'type' => 'string',  'description' => 'Target language code (default: site default)' ),
+                    'tone'          => array( 'type' => 'string',  'description' => 'professional | casual | academic | creative | persuasive | informative' ),
+                    'depth'         => array( 'type' => 'string',  'description' => 'standard | deep | editorial (depth preset; editorial = essay with voice, 2000-3500+ words)' ),
+                    'word_count'    => array( 'type' => 'integer', 'description' => 'Target word count (default 1500)' ),
+                    'generate_image'=> array( 'type' => 'boolean', 'description' => 'Generate a featured image (default true)' ),
+                ),
+                'required' => array( 'topic', 'publish_date' ),
+            ),
+            'annotations' => array(
+                'title'            => 'Schedule Blog Post',
+                'readOnlyHint'     => false,
+                'destructiveHint'  => false,
+                'idempotentHint'   => false,
+                'openWorldHint'    => true,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Content_Scheduler' ) ) {
+                throw new Exception( 'Content Scheduler not loaded' );
+            }
+            $topic        = sanitize_text_field( $args['topic'] ?? '' );
+            $publish_date = sanitize_text_field( $args['publish_date'] ?? '' );
+            if ( empty( $topic ) || empty( $publish_date ) ) {
+                throw new Exception( 'topic and publish_date are required' );
+            }
+
+            $depth = in_array( ( $args['depth'] ?? 'standard' ), array( 'standard', 'deep', 'editorial' ), true ) ? $args['depth'] : 'standard';
+            $publish_time = sanitize_text_field( $args['publish_time'] ?? '09:00' );
+
+            $schedule_id = wp_insert_post( array(
+                'post_type'   => 'luwipress_schedule',
+                'post_title'  => $topic,
+                'post_status' => 'publish',
+                'meta_input'  => array(
+                    '_luwipress_schedule_status'   => 'pending',
+                    '_luwipress_schedule_topic'    => $topic,
+                    '_luwipress_schedule_keywords' => sanitize_text_field( $args['keywords'] ?? '' ),
+                    '_luwipress_schedule_type'     => sanitize_text_field( $args['post_type'] ?? 'post' ),
+                    '_luwipress_schedule_date'     => $publish_date . ' ' . $publish_time,
+                    '_luwipress_schedule_image'    => ! empty( $args['generate_image'] ) ? 1 : 0,
+                    '_luwipress_schedule_language' => sanitize_text_field( $args['language'] ?? get_option( 'luwipress_target_language', 'en' ) ),
+                    '_luwipress_schedule_tone'     => sanitize_text_field( $args['tone'] ?? 'professional' ),
+                    '_luwipress_schedule_words'    => absint( $args['word_count'] ?? 1500 ),
+                    '_luwipress_schedule_depth'    => $depth,
+                    '_luwipress_schedule_created'  => current_time( 'mysql' ),
+                    '_luwipress_schedule_user'     => get_current_user_id(),
+                ),
+            ), true );
+
+            if ( is_wp_error( $schedule_id ) ) {
+                throw new Exception( 'Failed to create schedule: ' . $schedule_id->get_error_message() );
+            }
+
+            // Fire AI generation in background
+            wp_schedule_single_event( time(), 'luwipress_generate_single', array( (int) $schedule_id ) );
+            spawn_cron();
+
+            return array(
+                'success'     => true,
+                'schedule_id' => (int) $schedule_id,
+                'topic'       => $topic,
+                'depth'       => $depth,
+                'publish_at'  => $publish_date . ' ' . $publish_time,
+                'status'      => 'pending',
+                'message'     => 'Queued for AI generation. Check status with content_schedule_status.',
+            );
+        } );
+
+        $this->register_tool( 'content_bulk_queue', array(
+            'description' => 'Queue up to 50 blog post topics for AI generation and staggered publishing. Each topic becomes an individual schedule row. Publish dates are auto-spread across the chosen interval; AI generation is staggered to avoid bursting the daily AI budget.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'topics'          => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Array of topic strings (one per post, max 50). Optional "topic | keywords" pipe syntax per item.' ),
+                    'start_date'      => array( 'type' => 'string',  'description' => 'YYYY-MM-DD — first publish date (defaults to tomorrow)' ),
+                    'start_time'      => array( 'type' => 'string',  'description' => 'HH:MM — publish hour (default "09:00")' ),
+                    'interval_unit'   => array( 'type' => 'string',  'description' => 'day | hour (spacing unit between posts, default "day")' ),
+                    'interval_value'  => array( 'type' => 'integer', 'description' => 'Spacing value (e.g. 1 = every day, 6 = every 6 hours)' ),
+                    'generate_offset' => array( 'type' => 'integer', 'description' => 'Minutes between AI generation runs (budget-friendly staggering; default 5)' ),
+                    'post_type'       => array( 'type' => 'string',  'description' => 'post | page (default "post")' ),
+                    'language'        => array( 'type' => 'string',  'description' => 'Target language code (default: site default)' ),
+                    'tone'            => array( 'type' => 'string',  'description' => 'professional | casual | academic | creative | persuasive | informative' ),
+                    'depth'           => array( 'type' => 'string',  'description' => 'standard | deep | editorial (depth preset)' ),
+                    'word_count'      => array( 'type' => 'integer', 'description' => 'Target word count per post (default 1500)' ),
+                    'generate_image'  => array( 'type' => 'boolean', 'description' => 'Generate featured images (default true)' ),
+                ),
+                'required' => array( 'topics' ),
+            ),
+            'annotations' => array(
+                'title'            => 'Bulk Queue Blog Posts',
+                'readOnlyHint'     => false,
+                'destructiveHint'  => false,
+                'idempotentHint'   => false,
+                'openWorldHint'    => true,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Content_Scheduler' ) ) {
+                throw new Exception( 'Content Scheduler not loaded' );
+            }
+            $topics = $args['topics'] ?? array();
+            if ( ! is_array( $topics ) || empty( $topics ) ) {
+                throw new Exception( 'topics array is required' );
+            }
+            if ( count( $topics ) > 50 ) {
+                throw new Exception( 'Maximum 50 topics per call; split and retry' );
+            }
+
+            // Shared settings
+            $post_type       = sanitize_text_field( $args['post_type'] ?? 'post' );
+            $generate_image  = isset( $args['generate_image'] ) ? (bool) $args['generate_image'] : true;
+            $language        = sanitize_text_field( $args['language'] ?? get_option( 'luwipress_target_language', 'en' ) );
+            $tone            = sanitize_text_field( $args['tone'] ?? 'professional' );
+            $word_count      = absint( $args['word_count'] ?? 1500 );
+            $depth           = in_array( ( $args['depth'] ?? 'standard' ), array( 'standard', 'deep', 'editorial' ), true ) ? $args['depth'] : 'standard';
+            $interval_unit   = in_array( ( $args['interval_unit'] ?? 'day' ), array( 'hour', 'day' ), true ) ? $args['interval_unit'] : 'day';
+            $interval_value  = max( 1, absint( $args['interval_value'] ?? 1 ) );
+            $generate_offset = max( 0, absint( $args['generate_offset'] ?? 5 ) );
+
+            $start_date = sanitize_text_field( $args['start_date'] ?? '' );
+            $start_time = sanitize_text_field( $args['start_time'] ?? '09:00' );
+            if ( empty( $start_date ) ) {
+                $start_date = date_i18n( 'Y-m-d', strtotime( '+1 day', current_time( 'timestamp' ) ) );
+            }
+            $cursor_ts = strtotime( $start_date . ' ' . $start_time );
+            if ( ! $cursor_ts ) {
+                throw new Exception( 'Invalid start_date/start_time' );
+            }
+
+            $step_sec = ( 'hour' === $interval_unit ) ? $interval_value * HOUR_IN_SECONDS : $interval_value * DAY_IN_SECONDS;
+
+            $created = array();
+            $errors  = array();
+
+            foreach ( $topics as $idx => $line ) {
+                $line  = trim( (string) $line );
+                if ( empty( $line ) ) {
+                    $errors[] = array( 'row' => $idx, 'error' => 'empty topic' );
+                    continue;
+                }
+                $parts    = array_map( 'trim', explode( '|', $line, 2 ) );
+                $topic    = sanitize_text_field( $parts[0] ?? '' );
+                $keywords = isset( $parts[1] ) ? sanitize_text_field( $parts[1] ) : '';
+
+                $publish_ts   = $cursor_ts + ( $idx * $step_sec );
+                $publish_date = date( 'Y-m-d H:i:s', $publish_ts );
+
+                $schedule_id = wp_insert_post( array(
+                    'post_type'   => 'luwipress_schedule',
+                    'post_title'  => $topic,
+                    'post_status' => 'publish',
+                    'meta_input'  => array(
+                        '_luwipress_schedule_status'   => 'pending',
+                        '_luwipress_schedule_topic'    => $topic,
+                        '_luwipress_schedule_keywords' => $keywords,
+                        '_luwipress_schedule_type'     => $post_type,
+                        '_luwipress_schedule_date'     => $publish_date,
+                        '_luwipress_schedule_image'    => $generate_image ? 1 : 0,
+                        '_luwipress_schedule_language' => $language,
+                        '_luwipress_schedule_tone'     => $tone,
+                        '_luwipress_schedule_words'    => $word_count,
+                        '_luwipress_schedule_depth'    => $depth,
+                        '_luwipress_schedule_created'  => current_time( 'mysql' ),
+                        '_luwipress_schedule_user'     => get_current_user_id(),
+                        '_luwipress_schedule_batch'    => 1,
+                    ),
+                ), true );
+
+                if ( is_wp_error( $schedule_id ) ) {
+                    $errors[] = array( 'row' => $idx, 'error' => $schedule_id->get_error_message() );
+                    continue;
+                }
+
+                $gen_at = time() + ( count( $created ) * $generate_offset * MINUTE_IN_SECONDS );
+                wp_schedule_single_event( $gen_at, 'luwipress_generate_single', array( (int) $schedule_id ) );
+
+                $created[] = array(
+                    'schedule_id'  => (int) $schedule_id,
+                    'topic'        => $topic,
+                    'publish_date' => $publish_date,
+                    'generate_at'  => date( 'Y-m-d H:i:s', $gen_at ),
+                );
+            }
+
+            spawn_cron();
+
+            return array(
+                'success' => true,
+                'queued'  => count( $created ),
+                'skipped' => count( $errors ),
+                'depth'   => $depth,
+                'items'   => $created,
+                'errors'  => $errors,
+            );
+        } );
+
+        $this->register_tool( 'content_schedule_status', array(
+            'description' => 'Get the status of a single scheduled content item by ID. Returns title, current status (pending/generating/ready/published/failed), publish date, and the published post ID once available.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'schedule_id' => array( 'type' => 'integer', 'description' => 'Schedule item ID (returned from content_schedule_create or content_bulk_queue)' ),
+                ),
+                'required' => array( 'schedule_id' ),
+            ),
+            'annotations' => array(
+                'title'            => 'Schedule Item Status',
+                'readOnlyHint'     => true,
+                'idempotentHint'   => true,
+            ),
+        ), function ( $args ) {
+            $schedule_id = absint( $args['schedule_id'] ?? 0 );
+            if ( ! $schedule_id ) {
+                throw new Exception( 'schedule_id is required' );
+            }
+            $post = get_post( $schedule_id );
+            if ( ! $post || 'luwipress_schedule' !== $post->post_type ) {
+                throw new Exception( 'Schedule item not found' );
+            }
+            return array(
+                'schedule_id'       => $schedule_id,
+                'topic'             => get_post_meta( $schedule_id, '_luwipress_schedule_topic', true ),
+                'status'            => get_post_meta( $schedule_id, '_luwipress_schedule_status', true ),
+                'depth'             => get_post_meta( $schedule_id, '_luwipress_schedule_depth', true ) ?: 'standard',
+                'language'          => get_post_meta( $schedule_id, '_luwipress_schedule_language', true ),
+                'tone'              => get_post_meta( $schedule_id, '_luwipress_schedule_tone', true ),
+                'word_count'        => (int) get_post_meta( $schedule_id, '_luwipress_schedule_words', true ),
+                'publish_date'      => get_post_meta( $schedule_id, '_luwipress_schedule_date', true ),
+                'published_post_id' => (int) get_post_meta( $schedule_id, '_luwipress_published_post_id', true ),
+                'error'             => get_post_meta( $schedule_id, '_luwipress_schedule_error', true ),
+                'created'           => get_post_meta( $schedule_id, '_luwipress_schedule_created', true ),
+            );
+        } );
+
+        $this->register_tool( 'content_schedule_delete', array(
+            'description' => 'Delete (cancel) a scheduled content item before it publishes. If the post has already been published, this only removes the schedule tracking row — the published post remains.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'schedule_id' => array( 'type' => 'integer', 'description' => 'Schedule item ID to delete' ),
+                ),
+                'required' => array( 'schedule_id' ),
+            ),
+            'annotations' => array(
+                'title'            => 'Cancel Scheduled Post',
+                'readOnlyHint'     => false,
+                'destructiveHint'  => true,
+                'idempotentHint'   => true,
+            ),
+        ), function ( $args ) {
+            $schedule_id = absint( $args['schedule_id'] ?? 0 );
+            if ( ! $schedule_id ) {
+                throw new Exception( 'schedule_id is required' );
+            }
+            $post = get_post( $schedule_id );
+            if ( ! $post || 'luwipress_schedule' !== $post->post_type ) {
+                throw new Exception( 'Schedule item not found' );
+            }
+            // Unschedule any pending cron event for this item
+            $next = wp_next_scheduled( 'luwipress_generate_single', array( $schedule_id ) );
+            if ( $next ) {
+                wp_unschedule_event( $next, 'luwipress_generate_single', array( $schedule_id ) );
+            }
+            wp_delete_post( $schedule_id, true );
+            return array( 'success' => true, 'schedule_id' => $schedule_id );
+        } );
+
+        $this->register_tool( 'content_run_pending_now', array(
+            'description' => 'Immediately trigger AI generation for all pending scheduled content (up to 10 per call). Shortcuts wp-cron when you want to process the queue right away.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array(
+                'title'            => 'Run Pending Queue Now',
+                'readOnlyHint'     => false,
+                'idempotentHint'   => false,
+                'openWorldHint'    => true,
+            ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Content_Scheduler' ) ) {
+                throw new Exception( 'Content Scheduler not loaded' );
+            }
+            $sched = LuwiPress_Content_Scheduler::get_instance();
+            $pending = get_posts( array(
+                'post_type'      => 'luwipress_schedule',
+                'posts_per_page' => 10,
+                'meta_query'     => array(
+                    array( 'key' => '_luwipress_schedule_status', 'value' => 'pending' ),
+                ),
+            ) );
+            $processed = 0;
+            foreach ( $pending as $p ) {
+                $sched->cron_generate_single( $p->ID );
+                $processed++;
+            }
+            return array( 'processed' => $processed );
+        } );
     }
 
     /* ───────────────────── Token Usage Tools ──────────────────────── */

@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.9
+Stable tag: 3.1.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,16 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.10 — Content Depth Presets + Dropdown Hotfix =
+* NEW: Content Scheduler "Content depth" preset on the bulk queue form — three levels:
+  - **Standard**: balanced SEO article (800-1500 words, clear structure).
+  - **Deep**: long-form explainer with research framing, examples, citations, counter-arguments, "Key takeaways", and a 3-5 question FAQ (1500-3000 words).
+  - **Editorial**: essay-style with strong voice, cultural/historical context, narrative arc, original perspective, quote-worthy sentences, memorable closing line (2000-3500+ words).
+  `max_tokens` scales automatically (4096 → 6000 → 8000).
+* NEW: Rewritten default content system prompt — stricter anti-filler rules ("no 'in today's fast-paced world' openings"), concrete-over-vague mandate, internal link placeholder syntax, no-markdown-fence JSON output.
+* NEW: Operator-level custom system prompt support — set `luwipress_content_system_prompt` option to override the default entirely. Variable substitution available: `{topic}`, `{language}`, `{tone}`, `{word_count}`, `{keywords}`, `{site_name}`, `{depth}`.
+* FIX: Knowledge Graph dropdowns still occasionally stayed open in pairs — strengthened the sibling-close logic to walk `.kg-dropdown` roots (not just menus), flip both `menu.hidden` and the sibling's `aria-expanded` in one pass.
 
 = 3.1.9 — Content Scheduler Bulk Queue + KG Dropdown Fix =
 * NEW: Content Scheduler → "Bulk Queue" section. Paste up to 50 topics (one per line) with optional `| keywords` pipe syntax on each line. Set a start date, a publish spacing (e.g. "1 day" or "6 hours"), an AI stagger interval (default: 5 minutes between generation runs so you don't burst your AI budget), shared tone / word count / language / post type, and the whole batch is queued in one click. Each topic becomes an individual schedule row with its own `wp_schedule_single_event` worker, so AI calls are spread out automatically. A "Run N pending now" button lets operators kick the queue forward without waiting for wp-cron.

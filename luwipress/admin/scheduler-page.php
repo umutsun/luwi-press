@@ -229,6 +229,14 @@ foreach ( $scheduled_items as $item ) {
 						<input type="number" name="generate_offset" value="5" min="0" max="60" />
 					</div>
 					<div class="sched-field">
+						<label><?php esc_html_e( 'Content depth', 'luwipress' ); ?></label>
+						<select name="depth">
+							<option value="standard"><?php esc_html_e( 'Standard — SEO article (800-1500 w)', 'luwipress' ); ?></option>
+							<option value="deep"><?php esc_html_e( 'Deep — explainer with citations (1500-3000 w)', 'luwipress' ); ?></option>
+							<option value="editorial"><?php esc_html_e( 'Editorial — essay with voice (2000-3500+ w)', 'luwipress' ); ?></option>
+						</select>
+					</div>
+					<div class="sched-field">
 						<label><?php esc_html_e( 'Tone', 'luwipress' ); ?></label>
 						<select name="tone">
 							<?php foreach ( $tone_options as $val => $label ) : ?>

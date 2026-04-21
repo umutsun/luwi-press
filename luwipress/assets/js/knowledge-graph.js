@@ -1903,9 +1903,15 @@ function initDropdown(rootId, triggerId, menuId, onSelect) {
 
 	function close() { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); }
 	function open()  {
-		// Close every other .kg-dropdown-menu so only one is ever open
-		document.querySelectorAll('.kg-dropdown-menu').forEach(function(m) {
-			if (m !== menu) m.hidden = true;
+		// Close every other .kg-dropdown so only one is ever open.
+		// Hide the menu AND flip the sibling trigger's aria-expanded to false
+		// so state + a11y stay in sync.
+		document.querySelectorAll('.kg-dropdown').forEach(function(otherRoot) {
+			if (otherRoot === root) return;
+			var otherMenu    = otherRoot.querySelector('.kg-dropdown-menu');
+			var otherTrigger = otherRoot.querySelector('.kg-btn');
+			if (otherMenu)    otherMenu.hidden = true;
+			if (otherTrigger) otherTrigger.setAttribute('aria-expanded', 'false');
 		});
 		menu.hidden = false;
 		trigger.setAttribute('aria-expanded', 'true');

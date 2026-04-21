@@ -1,6 +1,6 @@
 # LuwiPress WebMCP — Feature Overview
 
-**Version:** 1.0.2 · **License:** GPLv2+ · **Companion to:** LuwiPress core
+**Version:** 1.0.3 · **License:** GPLv2+ · **Companion to:** LuwiPress core
 
 LuwiPress WebMCP turns your WordPress + WooCommerce store into a **Model Context Protocol** server. AI agents — Claude Code, OpenAI-powered scripts, automated workflows, or any MCP-compliant client — connect once and get programmatic access to 130+ tools that cover your entire store: content, SEO, translation, page building, customers, media, and settings.
 
