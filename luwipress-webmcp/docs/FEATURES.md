@@ -1,6 +1,6 @@
 # LuwiPress WebMCP — Feature Overview
 
-**Version:** 1.0.0 · **License:** GPLv2+ · **Companion to:** LuwiPress core
+**Version:** 1.0.1 · **License:** GPLv2+ · **Companion to:** LuwiPress core
 
 LuwiPress WebMCP turns your WordPress + WooCommerce store into a **Model Context Protocol** server. AI agents — Claude Code, OpenAI-powered scripts, n8n workflows, or any MCP-compliant client — connect once and get programmatic access to 130+ tools that cover your entire store: content, SEO, translation, page building, customers, media, and settings.
 
@@ -63,7 +63,7 @@ All LuwiPress REST endpoints surface as MCP tools. Category summary:
 - User management (list, get, create, update, delete)
 - Plugin install / activate / deactivate / update / search
 - Theme activate + list
-- Taxonomy management
+- Taxonomy management — list taxonomies, list/create/update/delete terms, **assign terms to posts** (`taxonomy_assign_terms`: replace, append, or clear tags/categories/product attributes in any taxonomy)
 - Menu management (create, items, reorder)
 - Media upload from URL, list, get, update, delete
 - Comment moderation

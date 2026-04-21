@@ -911,15 +911,17 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'content_update_post', array(
-            'description' => 'Update an existing WordPress post',
+            'description' => 'Update an existing WordPress post. Tags and categories replace the existing set; omit them to leave term assignments untouched.',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
-                    'id'      => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
-                    'title'   => array( 'type' => 'string', 'description' => 'New title' ),
-                    'content' => array( 'type' => 'string', 'description' => 'New content (HTML)' ),
-                    'excerpt' => array( 'type' => 'string', 'description' => 'New excerpt' ),
-                    'status'  => array( 'type' => 'string', 'enum' => array( 'draft', 'publish', 'private', 'pending' ), 'description' => 'New status' ),
+                    'id'         => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'title'      => array( 'type' => 'string', 'description' => 'New title' ),
+                    'content'    => array( 'type' => 'string', 'description' => 'New content (HTML)' ),
+                    'excerpt'    => array( 'type' => 'string', 'description' => 'New excerpt' ),
+                    'status'     => array( 'type' => 'string', 'enum' => array( 'draft', 'publish', 'private', 'pending' ), 'description' => 'New status' ),
+                    'categories' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Category IDs — replaces existing categories when provided' ),
+                    'tags'       => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Tag names — replaces existing tags when provided. Pass [] to clear all tags.' ),
                 ),
                 'required'   => array( 'id' ),
             ),
@@ -2511,17 +2513,34 @@ class LuwiPress_WebMCP {
 
         $result = wp_update_post( $update, true );
         if ( is_wp_error( $result ) ) {
+            do_action( 'wpml_switch_language', apply_filters( 'wpml_default_language', 'en' ) );
             throw new Exception( 'Failed to update: ' . $result->get_error_message() );
+        }
+
+        $terms_updated = array();
+        if ( array_key_exists( 'tags', $args ) && is_array( $args['tags'] ) ) {
+            $tags = array_map( 'sanitize_text_field', $args['tags'] );
+            wp_set_post_tags( $post_id, $tags, false );
+            $terms_updated['tags'] = $tags;
+        }
+        if ( array_key_exists( 'categories', $args ) && is_array( $args['categories'] ) ) {
+            $cats = array_map( 'intval', $args['categories'] );
+            wp_set_post_categories( $post_id, $cats, false );
+            $terms_updated['categories'] = $cats;
         }
 
         update_post_meta( $post_id, '_luwipress_last_updated_via', 'webmcp' );
         do_action( 'wpml_switch_language', apply_filters( 'wpml_default_language', 'en' ) );
 
-        return array(
+        $response = array(
             'id'      => $post_id,
             'updated' => true,
             'url'     => get_permalink( $post_id ),
         );
+        if ( ! empty( $terms_updated ) ) {
+            $response['terms_updated'] = $terms_updated;
+        }
+        return $response;
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -2813,6 +2832,81 @@ class LuwiPress_WebMCP {
                 );
             }
             return array( 'taxonomy' => $taxonomy, 'terms' => $list, 'total' => count( $list ) );
+        } );
+
+        $this->register_tool( 'taxonomy_assign_terms', array(
+            'description' => 'Assign terms from a taxonomy to a post. Works for any taxonomy (post_tag, category, product_tag, product_cat, pa_*). Terms can be IDs, slugs, or names — non-existent term names are auto-created for non-hierarchical taxonomies. Default mode replaces existing terms; pass append=true to add without removing.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'  => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'taxonomy' => array( 'type' => 'string', 'description' => 'Taxonomy slug (required). Examples: post_tag, category, product_tag, product_cat, pa_color' ),
+                    'terms'    => array(
+                        'type'        => 'array',
+                        'items'       => array( 'type' => array( 'string', 'integer' ) ),
+                        'description' => 'Term IDs (integers) or term names/slugs (strings). Pass [] to remove all terms in this taxonomy.',
+                    ),
+                    'append'   => array( 'type' => 'boolean', 'description' => 'If true, add terms without removing existing ones. Default false (replace).' ),
+                ),
+                'required' => array( 'post_id', 'taxonomy', 'terms' ),
+            ),
+            'annotations' => array( 'title' => 'Assign Terms', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $post_id  = intval( $args['post_id'] ?? 0 );
+            $taxonomy = sanitize_text_field( $args['taxonomy'] ?? '' );
+            $append   = ! empty( $args['append'] );
+
+            if ( ! $post_id || ! get_post( $post_id ) ) {
+                throw new Exception( 'Post not found' );
+            }
+            if ( ! taxonomy_exists( $taxonomy ) ) {
+                throw new Exception( "Taxonomy '{$taxonomy}' does not exist" );
+            }
+            if ( ! isset( $args['terms'] ) || ! is_array( $args['terms'] ) ) {
+                throw new Exception( 'terms array is required (use [] to clear)' );
+            }
+
+            $terms_input = $args['terms'];
+            $is_hierarchical = is_taxonomy_hierarchical( $taxonomy );
+
+            // Hierarchical taxonomies (category, product_cat, pa_*): require IDs.
+            // Non-hierarchical (post_tag, product_tag): names are fine and auto-created.
+            if ( $is_hierarchical ) {
+                $terms_input = array_map( 'intval', $terms_input );
+                $terms_input = array_filter( $terms_input );
+            } else {
+                $terms_input = array_map( function ( $t ) {
+                    return is_numeric( $t ) ? intval( $t ) : sanitize_text_field( $t );
+                }, $terms_input );
+            }
+
+            $result = wp_set_object_terms( $post_id, $terms_input, $taxonomy, $append );
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( 'Failed to assign terms: ' . $result->get_error_message() );
+            }
+
+            // Return the resolved term IDs for confirmation.
+            $assigned = wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'all' ) );
+            $out = array();
+            if ( ! is_wp_error( $assigned ) ) {
+                foreach ( $assigned as $term ) {
+                    $out[] = array(
+                        'id'   => $term->term_id,
+                        'name' => $term->name,
+                        'slug' => $term->slug,
+                    );
+                }
+            }
+
+            update_post_meta( $post_id, '_luwipress_last_updated_via', 'webmcp' );
+
+            return array(
+                'post_id'  => $post_id,
+                'taxonomy' => $taxonomy,
+                'mode'     => $append ? 'append' : 'replace',
+                'terms'    => $out,
+                'count'    => count( $out ),
+            );
         } );
 
         $this->register_tool( 'taxonomy_create_term', array(
