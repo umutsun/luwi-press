@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.3
+Stable tag: 3.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,10 +43,9 @@ LuwiPress is a **standalone AI plugin** for WooCommerce stores — generates con
 = How It Works =
 
 1. Install LuwiPress on your WordPress site
-2. Connect to your self-hosted [n8n](https://n8n.io) instance
-3. Enter your AI API key (OpenAI recommended for best cost/quality ratio)
-4. Set a daily budget limit to control costs
-5. Use Open Claw AI assistant or dashboard buttons to trigger automations
+2. Enter your AI API key (OpenAI recommended for best cost/quality ratio)
+3. Set a daily budget limit to control costs
+4. Use Open Claw AI assistant or dashboard buttons to trigger automations — all AI calls run natively in WordPress, no external workflow engine required
 
 = Open Claw AI Assistant =
 
@@ -76,8 +75,7 @@ LuwiPress includes built-in cost protection:
 
 * WordPress 5.6+
 * WooCommerce 5.0+ (recommended)
-* Self-hosted [n8n](https://n8n.io) instance (free, open-source)
-* AI API key (OpenAI, Anthropic, or Google)
+* AI API key (OpenAI, Anthropic, Google, or any OpenAI-compatible endpoint)
 
 = Supported Plugin Integrations =
 
@@ -91,16 +89,15 @@ LuwiPress includes built-in cost protection:
 
 1. Upload the `luwipress` folder to `/wp-content/plugins/`
 2. Activate the plugin through the 'Plugins' menu
-3. Go to **LuwiPress → Settings → Connection** and enter your n8n webhook URL
-4. Go to **Settings → AI API Keys** and enter your OpenAI API key
-5. Set your daily budget limit (recommended: $1.00/day)
-6. Import the n8n workflow templates from the `n8n-workflows/` folder into your n8n instance
+3. Go to **Settings → AI API Keys** and enter your OpenAI, Anthropic, Google, or OpenAI-compatible API key
+4. Set your daily budget limit (recommended: $1.00/day)
+5. (Optional) Install the **LuwiPress WebMCP** companion plugin if you want to expose the store to AI agents over the Model Context Protocol
 
 == Frequently Asked Questions ==
 
-= Do I need an n8n instance? =
+= Do I need any external workflow engine? =
 
-Yes. LuwiPress connects to [n8n](https://n8n.io), a free, open-source workflow automation tool. You can self-host it on any VPS for ~$5/month, or use n8n Cloud.
+No. LuwiPress is fully standalone as of 2.0.1 — the AI engine, job queue, and prompt templates all run natively inside WordPress. No n8n, no Make, no Zapier required. You only need an AI API key.
 
 = Which AI provider should I use? =
 
@@ -108,11 +105,11 @@ We recommend **OpenAI GPT-4o Mini** for the best cost/quality ratio. At $0.15 pe
 
 = Will this increase my hosting costs? =
 
-No. LuwiPress is lightweight middleware — it doesn't add significant load to your WordPress site. All AI processing happens on your n8n instance.
+No. LuwiPress is lightweight — async jobs run through WP-Cron and most AI calls complete in under a second of PHP time. The heavy lifting happens on the AI provider's side, not your server.
 
 = Is my data sent to third parties? =
 
-Product data is sent to your n8n instance (which you control) and then to the AI provider you choose (OpenAI, Anthropic, or Google). No data is sent to LuwiPress servers.
+Product data is sent directly from your WordPress site to the AI provider you choose (OpenAI, Anthropic, Google, or an OpenAI-compatible endpoint you configure). No data is sent to LuwiPress servers or any intermediate service.
 
 = Can I use this without WooCommerce? =
 
@@ -132,6 +129,25 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.4 — Knowledge Graph Overhaul =
+* NEW: Knowledge Graph search — typeahead over products, posts, and categories. Keyboard: `/` to focus, `↑↓` to navigate, Enter to select. Selected node auto-zooms and opens its detail panel.
+* NEW: Knowledge Graph presets — filter dropdown with six built-in views: All items, Needs SEO meta, Not enriched, Thin content, Translation backlog, High opportunity (score > 30). Active preset shown as a badge.
+* NEW: Knowledge Graph export — four formats: CSV opportunity list (opportunity_score desc), CSV missing SEO meta (with Edit URL column), JSON raw graph, PNG viewport snapshot. All with UTF-8 BOM for spreadsheet compatibility.
+* NEW: Pages view — third tab in the graph; parent-child hierarchy with `child_of` edges. Homepage, shop, blog, top-level, and child pages get distinct colours and sizes. Page detail panel shows role badge, template, content length, and recommendations (thin content, orphan pages).
+* NEW: Order Analytics stat card — click to open a Revenue panel with today/7-day/30-day revenue snapshot, AOV, 12-month SVG sparkline, customer retention health bar, top 5 sellers, inventory status, payment method breakdown, and refunds (last 90 days).
+* NEW: Plugin Health stat card — readiness score plus per-category detected plugins (SEO, translation, email, CRM, cache, support) and prioritised recommendations.
+* NEW: Taxonomy Coverage heatmap — click the new stat card to see a matrix of taxonomy type × language with colour-coded coverage (≥95% green, 70-94% orange, 40-69% dark, <40% red). Missing terms listed per language with a "Translate all" button that dispatches one request per taxonomy type.
+* NEW: Category batch actions — from any category detail panel, queue every product in that category for enrichment or translation to a specific language. Frontend collects product IDs from the cached graph; backend `/translation/batch` now accepts an optional `post_ids` whitelist parameter.
+* NEW: Cache badge in the graph header — shows whether the current data was served from cache (`cached`) or freshly computed (`fresh (Nms)`). The Refresh button bypasses cache; normal page loads now hit the cache reliably.
+* NEW: Keyboard shortcuts — `/` search, `r` refresh, `1/2/3` view switch (Products/Posts/Pages), `Esc` close detail panel, `?` show shortcut help.
+* IMPROVED: Knowledge Graph force simulation now adapts to node count (alphaDecay, collision padding, charge strength) so large catalogues (1000+ products) converge in a few seconds instead of 10+.
+* IMPROVED: Cache invalidation is now triggered when LuwiPress or SEO-plugin meta keys change, not only on `save_post`. Async AI enrichment writes no longer leave stale graph data.
+* IMPROVED: `GET /knowledge-graph` accepts both `section` and `sections` parameters. Previous admin requests silently loaded all 20 sections because of a parameter mismatch.
+* FIX: Recommendation action buttons on the Knowledge Graph detail panel were silently failing — the refresh callback referenced functions that lived in an inner scope. The action buttons (Enrich, FAQ, HowTo, Translate) now execute reliably and the panel re-opens with fresh data.
+* FIX: WebMCP companion status on Settings → Connection tab now reflects the companion's own default (`enabled` when the option has not been persisted yet). Previously the admin UI showed "Disabled" even though the MCP endpoint was live.
+* FIX: Dashboard header "Open Claw AI" button replaced with Knowledge Graph shortcut — the Open Claw page was split out in 3.1.0 and the old button led nowhere. OpenAI-Compatible provider now recognised by the AI-key detector and provider label map, so 3.1.2 users no longer see "No AI key" when only that provider is configured. Plugin pills deduplicated across Google Ads / Meta Ads / Product Feed categories — a single plugin covering two categories (e.g. Google Listings & Ads) now shows once.
+* CLEANUP: Legacy `n8nPress` / `n8n workflow` references removed from all user-facing surfaces (admin UI, plugin metadata, LICENSE, readme). Internal identifiers also renamed (`$n8n_webhook_url` → `$webhook_url`, `check_n8n_token()` → `check_api_token()`). No breaking change — `MODE_N8N` and `forward_to_n8n()` kept as deprecated stubs for backward compatibility.
 
 = 3.1.3 — Primary Language Dropdown Uses Detected Languages =
 * IMPROVED: Settings → AI Content → Primary Language now reads the active languages from WPML, Polylang, or TranslatePress when one is installed, instead of the old 11-language hardcoded list. You can only pick a language your site actually serves, removing a foot-gun where Tapadum-style sites had `tr` selected while the site ran on EN+FR+IT+ES.
@@ -437,23 +453,22 @@ LuwiPress is developed by **Luwi Developments LLC** — a boutique AI agency wor
 
 = Free Plugin, Professional Support =
 
-LuwiPress is free and open-source. You bring your own n8n instance and AI API key — no subscription, no hidden fees, no vendor lock-in.
+LuwiPress is free and open-source. You bring your own AI API key — no subscription, no hidden fees, no vendor lock-in, no external services in the loop.
 
 Need help getting started? We offer:
 
-* **Free:** Plugin + workflow templates + documentation
-* **Setup Service:** We configure n8n, import workflows, and connect everything for you
-* **Custom Workflows:** Tailored automation for your specific business needs
-* **Ongoing Support:** Monitoring, optimization, and new workflow development
+* **Free:** Plugin + documentation
+* **Setup Service:** We configure the AI engine, migrate existing SEO/translation data, and get your store automations running
+* **Custom Automations:** Tailored AI pipelines for your specific business needs
+* **Ongoing Support:** Monitoring, optimization, and new automation development
 
 = Resources =
 
 * [Documentation & Guides](https://luwi.dev)
 * [GitHub Repository](https://github.com/umutsun/luwipress)
-* [n8n Workflow Templates](https://github.com/umutsun/luwipress/tree/main/n8n-workflows)
 
 = Contact =
 
 * **Email:** hello@luwi.dev
 * **Web:** [luwi.dev](https://luwi.dev)
-* **Services:** Custom AI workflows, WooCommerce automation, n8n consulting
+* **Services:** Custom AI automations, WooCommerce optimization, store intelligence
