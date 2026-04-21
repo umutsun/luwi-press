@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.14
+Stable tag: 3.1.16
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,19 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.16 — Chat header contrast + taller body =
+* UI: WhatsApp icon button in the chat header now has a 2.5px white border and uses a white pulse ring instead of green. The plain green ring was invisible on red / dark-primary headers — the white halo now reads against any brand color. Button also bumped 32→34px and the hover state adds a thicker white glow.
+* UI: The "online" status dot next to the subtitle also gained a white outline + white pulse for the same contrast reason — it was fading into the red gradient.
+* UI: Chat widget feels less cramped — window max-height bumped 520→640px, body min-height 240→360px and max 340→460px. Earlier pass over-minimized the message area; this restores breathing room for 3–4 turns before scroll kicks in.
+* UI: Window width also bumped 360→380px for a bit more horizontal comfort.
+
+= 3.1.15 — Customer chat UI polish =
+* UI: Removed the bottom "Prefer WhatsApp?" CTA bar — it crowded the chat area and duplicated intent. The WhatsApp escalation now lives solely as a compact icon-only circle in the header (32px, official brand green, breathing pulse) next to the close button. Minimal footprint, still obvious.
+* UI: Chat window refresh — wider (360px), softer 16px corner radius, layered shadow. Header got a subtle gradient and a live "online" dot next to the subtitle so customers feel the assistant is present. Body background is a gentle two-stop off-white so message bubbles pop without fighting for attention.
+* UI: Message bubbles — gradient on customer messages, tinted shadow matching the brand color, slightly larger radius (16px) with a 4px "tail" corner, and a crisp 1px border for assistant bubbles so white-on-white doesn't melt into the body. Font bumped to 13.5px, line-height tightened.
+* UI: Input area — larger pill input (22px radius) with a soft focus ring instead of hard border, placeholder color softened, and the send button now lifts on hover with a brand-tinted shadow.
+* UI: Toggle pill (the entry point before the window opens) also got the gradient + lifted shadow treatment.
 
 = 3.1.14 — Content Scheduler Overhaul (Wizard + Draft-First + Outline Approval + Recurring) =
 * NEW: **Content Scheduler wizard.** The Scheduler page is now a 4-step flow: Topics → Style → Schedule → Review. Forward/back navigation with a progress bar, step-jump for completed steps, inline validation. The previous "New Content" + "Bulk Queue" forms are consolidated — the wizard always uses the bulk endpoint and handles 1-50 topics uniformly.

@@ -90,16 +90,11 @@
             widget.style.setProperty('--lp-primary', primary);
             widget.style.setProperty('--lp-text', textColor);
 
-            // Only show WhatsApp CTA if a number is configured
+            // Minimal WhatsApp entry: icon-only circular button next to close.
+            // No persistent bottom bar — the header icon + title tooltip are enough.
             var hasWa = !!lpChat.whatsapp_number;
             var waHeaderBtn = hasWa
-                ? '<button class="lp-chat-wa-pill" title="Chat on WhatsApp" aria-label="Chat on WhatsApp"><span class="lp-chat-wa-pill-icon"></span><span class="lp-chat-wa-pill-label">WhatsApp</span></button>'
-                : '';
-            var waCtaBar = hasWa
-                ? '<div class="lp-chat-wa-cta" role="region" aria-label="WhatsApp shortcut">' +
-                    '<span class="lp-chat-wa-cta-text">Prefer WhatsApp? Talk to our team directly.</span>' +
-                    '<button class="lp-chat-wa-cta-btn" type="button"><span class="lp-chat-wa-cta-icon"></span>Chat on WhatsApp</button>' +
-                  '</div>'
+                ? '<button class="lp-chat-wa-icon-btn" title="Chat on WhatsApp" aria-label="Chat on WhatsApp"><span class="lp-chat-wa-icon-glyph"></span></button>'
                 : '';
 
             widget.innerHTML =
@@ -116,7 +111,6 @@
                         '</div>' +
                     '</div>' +
                     '<div class="lp-chat-body" id="lp-chat-body"></div>' +
-                    waCtaBar +
                     '<div class="lp-chat-input-area">' +
                         '<input type="text" id="lp-chat-input" class="lp-chat-input" placeholder="Type your question..." maxlength="1000" autocomplete="off">' +
                         '<button id="lp-chat-send" class="lp-chat-send-btn" disabled></button>' +
@@ -140,11 +134,9 @@
                 self.toggleWidget();
             });
 
-            // WhatsApp CTA bindings — header pill + bottom bar (both optional)
-            var waPill = document.querySelector('.lp-chat-wa-pill');
-            if (waPill) waPill.addEventListener('click', function() { self.escalateToAgent(); });
-            var waCta = document.querySelector('.lp-chat-wa-cta-btn');
-            if (waCta) waCta.addEventListener('click', function() { self.escalateToAgent(); });
+            // WhatsApp escalation — single icon button in header, minimal footprint
+            var waBtn = document.querySelector('.lp-chat-wa-icon-btn');
+            if (waBtn) waBtn.addEventListener('click', function() { self.escalateToAgent(); });
 
             document.getElementById('lp-chat-input').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {

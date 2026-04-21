@@ -14,30 +14,30 @@
 .lp-ico { font-style: normal; font-size: inherit; line-height: 1; display: inline-block; }
 .lp-chat-widget.lp-chat-left { right: auto; left: 20px; }
 
-/* Toggle — minimal pill */
+/* Toggle — minimal pill with gradient + lift */
 .lp-chat-toggle {
-    height: 40px;
-    padding: 0 16px;
-    border-radius: 20px;
-    background: var(--lp-primary);
+    height: 44px;
+    padding: 0 18px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, var(--lp-primary) 0%, color-mix(in srgb, var(--lp-primary) 88%, #000) 100%);
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    box-shadow: 0 2px 10px rgba(0,0,0,.12);
-    transition: transform .2s ease, box-shadow .2s ease;
+    gap: 7px;
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--lp-primary) 30%, transparent), 0 1px 3px rgba(0,0,0,.08);
+    transition: transform .2s cubic-bezier(.4,0,.2,1), box-shadow .2s ease;
     position: relative;
     color: var(--lp-text);
     font-family: inherit;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: .01em;
 }
 .lp-chat-toggle:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(0,0,0,.18);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--lp-primary) 40%, transparent), 0 2px 6px rgba(0,0,0,.1);
 }
 .lp-chat-toggle::before {
     content: '';
@@ -52,23 +52,23 @@
     content: 'Chat';
 }
 
-/* Window */
+/* Window — slightly wider, more generous radius, softer shadow */
 .lp-chat-window {
     position: absolute;
     bottom: 58px;
     right: 0;
-    width: 340px;
-    max-height: 460px;
+    width: 380px;
+    max-height: 640px;
     background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04);
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.14), 0 2px 8px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.04);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transform: scale(.85) translateY(10px);
+    transform: scale(.9) translateY(8px);
     opacity: 0;
     pointer-events: none;
-    transition: transform .2s cubic-bezier(.4,0,.2,1), opacity .2s ease;
+    transition: transform .22s cubic-bezier(.4,0,.2,1), opacity .2s ease;
     transform-origin: bottom right;
 }
 .lp-chat-widget.lp-chat-left .lp-chat-window {
@@ -82,20 +82,36 @@
 }
 .lp-chat-widget:not(.lp-chat-closed) .lp-chat-toggle { display: none; }
 
-/* Header — compact */
+/* Header — more breathing room, gradient for depth */
 .lp-chat-header {
-    background: var(--lp-primary);
+    background: linear-gradient(135deg, var(--lp-primary) 0%, color-mix(in srgb, var(--lp-primary) 85%, #000) 100%);
     color: var(--lp-text);
-    padding: 10px 12px;
+    padding: 14px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
+    gap: 12px;
 }
-.lp-chat-header-info { display: flex; flex-direction: column; }
-.lp-chat-title { font-weight: 600; font-size: 13px; }
-.lp-chat-subtitle { font-size: 10px; opacity: .7; }
-.lp-chat-header-actions { display: flex; gap: 8px; align-items: center; }
+.lp-chat-header-info { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.lp-chat-title { font-weight: 600; font-size: 14px; line-height: 1.2; letter-spacing: -.01em; }
+.lp-chat-subtitle {
+    font-size: 10px; opacity: .75; letter-spacing: .04em; text-transform: uppercase;
+    display: inline-flex; align-items: center; gap: 5px;
+}
+.lp-chat-subtitle::before {
+    content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: #22c55e;
+    outline: 1.5px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.85);
+    animation: lp-online-pulse 2s cubic-bezier(.4,0,.2,1) infinite;
+    flex-shrink: 0;
+}
+@keyframes lp-online-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.8); }
+    50%      { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0); }
+}
+.lp-chat-header-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 .lp-chat-header-actions button {
     background: rgba(255,255,255,.15) !important;
     border: none !important;
@@ -119,108 +135,50 @@
     overflow: hidden;
     box-sizing: border-box !important;
 }
-.lp-chat-header-actions button:hover { background: rgba(255,255,255,.2); }
+.lp-chat-header-actions button:hover { background: rgba(255,255,255,.25) !important; }
 
-/* WhatsApp pill in header — replaces the ambiguous phone icon with a labelled brand pill */
-.lp-chat-wa-pill {
+/* WhatsApp: single icon-only circle in header. Brand green body with a
+   thick white border + white breathing pulse — plain green is invisible
+   against a red/dark primary header, so the white ring is what actually
+   carries the attention. */
+.lp-chat-wa-icon-btn {
     background: #25D366 !important;
     color: #fff !important;
-    border: none !important;
-    border-radius: 999px !important;
-    padding: 0 10px !important;
-    height: 30px !important;
-    width: auto !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    min-height: 30px !important;
-    max-height: 30px !important;
+    border: 2.5px solid #fff !important;
+    border-radius: 50% !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    max-width: 34px !important;
+    max-height: 34px !important;
+    padding: 0 !important;
     display: inline-flex !important;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
     cursor: pointer;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: .01em;
-    line-height: 1;
-    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.6);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.9);
     animation: lp-wa-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-    transition: transform .15s ease, box-shadow .15s ease;
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
 }
-.lp-chat-wa-pill:hover {
+.lp-chat-wa-icon-btn:hover {
     background: #1ebe5a !important;
     animation: none !important;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4) !important;
+    transform: scale(1.08);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35), 0 3px 10px rgba(0, 0, 0, 0.25) !important;
 }
-.lp-chat-wa-pill-icon {
-    display: inline-block;
+.lp-chat-wa-icon-glyph {
+    display: block;
     width: 16px;
     height: 16px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fff'%3E%3Cpath d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z'/%3E%3C/svg%3E");
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
-    flex-shrink: 0;
-}
-.lp-chat-wa-pill-label {
-    display: inline-block;
-    white-space: nowrap;
 }
 @keyframes lp-wa-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.55); }
-    50%      { box-shadow: 0 0 0 8px rgba(37, 211, 102, 0); }
-}
-
-/* Persistent WhatsApp CTA bar — sits above the text input, always visible,
-   so the customer doesn't need to discover the header pill. Designed as a
-   gentle nudge rather than a demand: soft green tint + readable label. */
-.lp-chat-wa-cta {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 8px 10px;
-    background: linear-gradient(180deg, #f0faf4 0%, #e6f7ee 100%);
-    border-top: 1px solid #d1f0dd;
-}
-.lp-chat-wa-cta-text {
-    font-size: 11px;
-    color: #0f5132;
-    line-height: 1.3;
-    flex: 1;
-    min-width: 0;
-}
-.lp-chat-wa-cta-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: #25D366;
-    color: #fff;
-    border: none;
-    border-radius: 999px;
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background .15s ease, transform .15s ease, box-shadow .15s ease;
-    box-shadow: 0 1px 3px rgba(37, 211, 102, 0.25);
-}
-.lp-chat-wa-cta-btn:hover {
-    background: #1ebe5a;
-    transform: translateY(-1px);
-    box-shadow: 0 3px 8px rgba(37, 211, 102, 0.35);
-}
-.lp-chat-wa-cta-icon {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fff'%3E%3Cpath d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z'/%3E%3C/svg%3E");
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-    flex-shrink: 0;
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.85); }
+    50%      { box-shadow: 0 0 0 9px rgba(255, 255, 255, 0); }
 }
 
 .lp-chat-close-btn { font-size: 18px; line-height: 1; color: var(--lp-text) !important; }
@@ -229,53 +187,57 @@
 .lp-chat-body {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
+    padding: 18px 14px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    min-height: 200px;
-    max-height: 280px;
-    background: #fafafa;
+    gap: 10px;
+    min-height: 360px;
+    max-height: 460px;
+    background: linear-gradient(180deg, #fafbfc 0%, #f5f6f8 100%);
 }
 .lp-chat-body { scrollbar-width: thin; scrollbar-color: #d1d5db transparent; }
 .lp-chat-body::-webkit-scrollbar { width: 4px; }
 .lp-chat-body::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 .lp-chat-body::-webkit-scrollbar-track { background: transparent; }
 
-/* Messages */
+/* Messages — softer shadow, slightly more generous padding */
 .lp-chat-msg {
     display: flex;
     flex-direction: column;
-    max-width: 82%;
-    animation: lp-msg-in .2s ease;
+    max-width: 84%;
+    animation: lp-msg-in .22s cubic-bezier(.4,0,.2,1);
 }
 .lp-chat-msg-customer { align-self: flex-end; align-items: flex-end; }
 .lp-chat-msg-assistant { align-self: flex-start; align-items: flex-start; }
 @keyframes lp-msg-in {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 .lp-chat-bubble {
-    padding: 8px 12px;
-    border-radius: 12px;
+    padding: 10px 14px;
+    border-radius: 16px;
     word-break: break-word;
-    font-size: 13px;
-    line-height: 1.4;
+    font-size: 13.5px;
+    line-height: 1.45;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
 }
 .lp-chat-msg-customer .lp-chat-bubble {
-    background: var(--lp-primary);
+    background: linear-gradient(135deg, var(--lp-primary) 0%, color-mix(in srgb, var(--lp-primary) 88%, #000) 100%);
     color: var(--lp-text);
-    border-bottom-right-radius: 3px;
+    border-bottom-right-radius: 4px;
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--lp-primary) 25%, transparent);
 }
 .lp-chat-msg-assistant .lp-chat-bubble {
     background: #fff;
     color: #1f2937;
-    border: 1px solid #e5e7eb;
-    border-bottom-left-radius: 3px;
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-bottom-left-radius: 4px;
 }
-.lp-chat-bubble a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
-.lp-chat-msg-assistant .lp-chat-bubble a { color: var(--lp-primary); }
-.lp-chat-time { font-size: 10px; color: #aaa; margin-top: 2px; padding: 0 4px; }
+.lp-chat-bubble a { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; opacity: .95; }
+.lp-chat-bubble a:hover { opacity: 1; text-decoration-thickness: 2px; }
+.lp-chat-msg-assistant .lp-chat-bubble a { color: var(--lp-primary); text-decoration-color: color-mix(in srgb, var(--lp-primary) 40%, transparent); }
+.lp-chat-bubble strong { font-weight: 600; }
+.lp-chat-time { font-size: 10px; color: #9ca3af; margin-top: 3px; padding: 0 6px; letter-spacing: .02em; }
 
 /* Typing */
 .lp-chat-typing {
@@ -298,30 +260,38 @@
     30% { transform: translateY(-4px); opacity: 1; }
 }
 
-/* Input */
+/* Input — premium finish: more padding, soft focus ring, neutral bg */
 .lp-chat-input-area {
     display: flex;
-    padding: 8px 10px;
-    gap: 6px;
-    border-top: 1px solid #eee;
+    padding: 10px 12px;
+    gap: 8px;
+    border-top: 1px solid rgba(15, 23, 42, .06);
     background: #fff;
     flex-shrink: 0;
+    align-items: center;
 }
 .lp-chat-input {
     flex: 1;
-    border: 1px solid #e0e0e0;
-    border-radius: 18px;
-    padding: 7px 12px;
-    font-size: 13px;
+    border: 1px solid transparent;
+    border-radius: 22px;
+    padding: 9px 14px;
+    font-size: 13.5px;
     outline: none;
     font-family: inherit;
-    background: #f5f5f5;
-    transition: border-color .15s, background .15s;
+    background: #f3f4f6;
+    color: #1f2937;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+    min-width: 0;
 }
-.lp-chat-input:focus { border-color: var(--lp-primary); background: #fff; }
+.lp-chat-input::placeholder { color: #9ca3af; }
+.lp-chat-input:focus {
+    border-color: color-mix(in srgb, var(--lp-primary) 55%, transparent);
+    background: #fff;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--lp-primary) 12%, transparent);
+}
 .lp-chat-send-btn {
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     background: var(--lp-primary);
     border: none;
@@ -329,8 +299,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: opacity .15s;
+    transition: opacity .15s, transform .15s, box-shadow .15s;
     flex-shrink: 0;
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--lp-primary) 30%, transparent);
 }
 .lp-chat-send-btn::before {
     content: '';
@@ -343,18 +314,20 @@
     background-size: 16px 16px;
     background-repeat: no-repeat;
     background-position: center;
+    margin-left: 1px; /* optical-centre the paper-plane glyph */
 }
-.lp-chat-send-btn:disabled { opacity: .25; cursor: default; }
-.lp-chat-send-btn:not(:disabled):hover { opacity: .85; }
+.lp-chat-send-btn:disabled { opacity: .3; cursor: default; box-shadow: none; }
+.lp-chat-send-btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 10px color-mix(in srgb, var(--lp-primary) 40%, transparent); }
 
-/* Footer */
+/* Footer — whisper-quiet attribution */
 .lp-chat-footer {
     text-align: center;
-    padding: 4px;
+    padding: 3px 4px 5px;
     font-size: 9px;
-    color: #c0c0c0;
+    color: #cbd5e1;
     background: #fff;
     flex-shrink: 0;
+    letter-spacing: .02em;
 }
 
 /* Channel choice */
