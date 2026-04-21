@@ -125,6 +125,22 @@ class LuwiPress_Plugin_Detector {
 				'focus_kw'    => '_seopress_analysis_target_kw',
 			);
 		}
+		// LuwiPress built-in SEO Writer — no third-party SEO plugin installed.
+		// Downstream consumers (Knowledge Graph, Translation, Settings UI) key off
+		// meta_keys so they work with native keys without per-caller changes.
+		else {
+			$result['plugin']  = 'luwipress-native';
+			$result['version'] = defined( 'LUWIPRESS_VERSION' ) ? LUWIPRESS_VERSION : null;
+			$result['features'] = array(
+				'schema'  => true,  // LuwiPress outputs Product/FAQ/HowTo schema itself
+				'sitemap' => false, // relies on WordPress core or another sitemap plugin
+			);
+			$result['meta_keys'] = array(
+				'title'       => class_exists( 'LuwiPress_SEO_Writer' ) ? LuwiPress_SEO_Writer::META_TITLE : '_luwipress_seo_title',
+				'description' => class_exists( 'LuwiPress_SEO_Writer' ) ? LuwiPress_SEO_Writer::META_DESCRIPTION : '_luwipress_seo_description',
+				'focus_kw'    => class_exists( 'LuwiPress_SEO_Writer' ) ? LuwiPress_SEO_Writer::META_FOCUS_KW : '_luwipress_seo_focus_keyword',
+			);
+		}
 
 		$this->cache['seo'] = $result;
 		return $result;
@@ -648,7 +664,7 @@ class LuwiPress_Plugin_Detector {
 	public function set_seo_meta( $post_id, $data ) {
 		$seo = $this->detect_seo();
 
-		if ( 'none' === $seo['plugin'] || empty( $seo['meta_keys'] ) ) {
+		if ( empty( $seo['meta_keys'] ) ) {
 			return false;
 		}
 

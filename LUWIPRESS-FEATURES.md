@@ -1,8 +1,19 @@
 # LuwiPress — Complete Feature Overview
 
-**Version:** 2.0.9 · **License:** GPLv2+ · **Target:** WooCommerce stores
+**Version:** 3.1.0 · **License:** GPLv2+ · **Target:** WooCommerce stores
 
 LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerce. It generates content, optimizes SEO, translates products, and automates store management — integrating seamlessly with existing plugins (Rank Math, WPML, Elementor, etc.) without replacing them.
+
+Shipped as a lean **365 KB core** plus two optional companion plugins — install only what your store needs.
+
+## 🆕 What's new in 3.x
+
+- **Standalone SEO writer** — LuwiPress now writes its own SEO title + meta description when no third-party SEO plugin (Rank Math, Yoast, AIOSEO, SEOPress) is installed. Run the full enrichment pipeline without adding another plugin.
+- **Companion plugin architecture** — WebMCP and Open Claw live in separate plugins, so stores that don't need AI-agent integration or admin AI chat stay lean.
+- **Custom enrichment prompts** — define your store's voice, structure, and formatting rules with variable substitution for `{product_title}`, `{category}`, `{focus_keyword}`, etc. Enforce word counts and meta length limits per request.
+- **REST-first configuration** — every module's settings are exposable via `GET/POST /<module>/settings` (partial-update). Remote automation and AI agents can reconfigure the plugin without an admin session.
+- **CRM simplification** — customer segmentation is now pure WooCommerce. No third-party CRM plugin dependency, no writes to FluentCRM/Mailchimp contact lists. Your CRM plugin keeps ownership of its own data.
+- **Translation safety net** — if the AI returns an unparseable response, the translation is rejected and your existing content is left untouched. Pick any language as a clean retranslation source.
 
 ---
 
@@ -16,11 +27,16 @@ LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerc
 - Multi-provider: **OpenAI** (GPT-4o Mini), **Anthropic** (Claude Haiku 4.5), **Google** (Gemini 2.0 Flash)
 - **Provider fallback + retry** on transient errors (rate limits, 5xx, timeouts) — jobs keep running when one provider hiccups
 - **Translation-copy protection** — enrichment only writes to the default-language source; WPML/Polylang translation copies are automatically skipped to prevent accidental cross-language overwrites
+- **Custom system prompt** — define a store-specific voice, structure, and formatting rules (opening paragraph style, section order, bolding conventions, FAQ placement). Variable substitution supports `{product_title}`, `{category}`, `{focus_keyword}`, `{price}`, `{currency}`, `{site_name}`, `{target_language}`
+- **Meta constraints** — configure target word count, meta title max length (40–80), meta description max length (120–200), and an optional CTA sentence automatically appended to every meta description (e.g. "Free EU shipping & 15-day return.")
+- **Word-boundary meta trimming** — if the model exceeds your configured limits, descriptions are trimmed at the nearest word boundary before being saved to your SEO plugin
 
 ### 2. SEO & Answer Engine Optimization (AEO)
 - Auto FAQ schema, HowTo schema, Speakable markup
 - Coverage reports (meta titles, descriptions, focus keywords)
 - Works with: **Rank Math**, **Yoast**, **All in One SEO**, **SEOPress**
+- **Standalone SEO writer fallback** — when no third-party SEO plugin is installed, LuwiPress stores title + meta description in its own meta keys and outputs them in the site `<head>`. You can run the full enrichment pipeline without installing Rank Math or Yoast.
+- **Hreflang** — automatic `<link rel="alternate">` tags for multilingual stores. Respects WPML/Polylang native output in `auto` mode; force-on (`always`) or disable (`never`) via settings.
 - Detects thin content, missing alt text, stale posts
 - Answer-engine ready markup for Google AI Overviews & voice assistants
 
@@ -33,6 +49,7 @@ LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerc
 - Coverage tracking per language + content type
 - **Pick any language as source** — if one language copy of a product is cleaner than the default, retranslate the others from that copy (`source_language` parameter)
 - **Fail-safe content protection** — if the AI returns an unparseable response, the translation is rejected and your existing content is left untouched (no risk of raw payloads ending up on your product page)
+- **Batch translate by language** — translate up to 200 missing posts in a single call (`POST /translation/batch`). Powers the "Translate N missing products" button on Knowledge Graph language nodes.
 
 ### 4. Elementor Mastery (34+ tools)
 - Read full page structure via REST API (tree + flat widget view + compact outline)
@@ -65,8 +82,10 @@ LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerc
 - **Separate daily chat budget** (independent from admin)
 - **GDPR compliant** — 90-day auto-cleanup
 
-### 6. Open Claw — Admin AI Assistant
-Chat-style command interface inside WP admin.
+### 6. Open Claw — Admin AI Assistant — **companion plugin**
+
+Shipped as a separate **LuwiPress Open Claw** plugin from 3.1.0 onward. Chat-style command interface inside WP admin.
+
 - **Local commands** (zero AI cost):
   - `/scan` — site health check
   - `/seo` — SEO gap analysis
@@ -81,6 +100,8 @@ Chat-style command interface inside WP admin.
   - `/enrich` — enrich products
   - `/generate [topic]` — generate blog post
   - `/help` — command help
+- Uses core LuwiPress's AI Engine token and daily budget — no separate setup
+- Conversation history stored per user (50 messages rolling window)
 
 ### 7. Knowledge Graph
 Single REST endpoint exposing 20+ store intelligence sections:
@@ -107,10 +128,11 @@ Single REST endpoint exposing 20+ store intelligence sections:
 - Sentiment trend dashboard
 
 ### 10. CRM & Customer Segmentation
-- Detects FluentCRM, Mailchimp for WC integrations
-- Segments: **VIP** (top spenders), **At-Risk** (no recent orders), **Dormant**
-- Per-customer profile with order history + lifetime value
-- Lifecycle email workflow support
+- **Pure WooCommerce** — segments are computed directly from order history. No third-party CRM plugin is required, and LuwiPress never writes to FluentCRM/Mailchimp/Klaviyo contact lists. Your CRM plugin (if any) keeps ownership of its own automations.
+- 8 segments: **VIP**, **Loyal**, **Active**, **New**, **At-Risk**, **Dormant**, **Lost**, **One-Time**
+- Per-customer profile with order history + lifetime value + reviews
+- Lifecycle event queue (post-purchase thank-you, review request, win-back) for downstream email pipelines
+- Configurable thresholds: VIP spend, loyal order count, active/at-risk/dormant windows
 
 ### 11. Marketplace Integration (v2.0.8+)
 Multi-marketplace publishing:
@@ -120,26 +142,29 @@ Multi-marketplace publishing:
 - Sync status tracking DB table
 - Batch publishing
 
-### 12. Theme Library
-3 production-ready themes (v1.0.0+):
-- **Luwi Gold** — Burnished brass, editorial serif, museum gallery aesthetic
-- **Luwi Emerald** — Deep forest greens, organic shapes, eco-conscious
-- **Luwi Ruby** — Deep ruby reds, champagne gold, art-deco luxury
+### 12. WebMCP Server (AI Agent Integration) — **companion plugin**
 
-All themes include: Elementor, WooCommerce, WPML/RTL, dark mode, custom palettes, typography pairs, demo content JSON, one-click setup.
+Shipped as a separate **LuwiPress WebMCP** plugin from 3.0.0 onward. Install it alongside the core plugin to expose the Model Context Protocol endpoint. This keeps the core install lean for stores that don't need AI-agent integration.
 
-### 13. Demo Import
-- One-click demo content import per theme
-- Pre-built pages, products, menus, theme settings
-- Safe import (no production data overwrite)
-
-### 14. WebMCP Server (AI Agent Integration)
-**115+ MCP tools** for AI agents (Claude Code, OpenAI, etc.):
+**130+ MCP tools** for AI agents:
 - Streamable HTTP transport (MCP spec draft 2025-03-26)
 - Origin validation (DNS rebinding protection)
-- Tools for: content, SEO, translation, Elementor, CRM, media, settings
-- Resource templates for parameterized queries
-- Token-based authentication
+- Tools for: content, SEO, translation, Elementor, CRM, media, settings, cache, customer insights
+- Per-module settings tools (`enrich_settings_get/set`, `translation_settings_get/set`, `chat_settings_get/set`, `schedule_settings_get/set`)
+- Token-based authentication — same Bearer token as REST API
+
+---
+
+## 📦 Companion Plugins
+
+Two optional plugins extend LuwiPress core. Install them only if you need the feature.
+
+| Plugin | Purpose | Size |
+|--------|---------|------|
+| **LuwiPress WebMCP** | MCP server exposing 130+ tools to AI agents. Needed if you use MCP clients (e.g. to let an AI agent manage your store remotely). | ~210 KB uncompressed |
+| **LuwiPress Open Claw** | In-admin AI chat assistant with slash commands. Needed if you want natural-language store management from the WordPress admin. | ~26 KB uncompressed |
+
+Both companions require the core LuwiPress plugin. They attach to the same admin menu, reuse the core's authentication, and share the daily AI budget.
 
 ---
 
@@ -187,12 +212,13 @@ All themes include: Elementor, WooCommerce, WPML/RTL, dark mode, custom palettes
 All endpoints under namespace `luwipress/v1`.
 
 **Core:** `/status`, `/health`, `/webhook`, `/token-usage`, `/token-stats`
-**Products:** `/product/enrich`, `/product/enrich-batch`, `/product/enrich-batch/status`
+**Products:** `/product/enrich`, `/product/enrich-batch`, `/product/enrich-batch/status`, `/enrich/settings` (GET/POST — remote read/write of the custom prompt and meta constraints)
 **SEO:** `/seo/meta`, `/seo/schema`
 **AEO:** `/aeo/generate-faq`, `/aeo/generate-howto`, `/aeo/coverage`, `/aeo/save-*`
-**Translation:** `/translation/missing`, `/translation/request`, `/translation/quality-check`
+**Translation:** `/translation/missing`, `/translation/missing-all`, `/translation/request`, `/translation/batch` (bulk N posts × M languages), `/translation/quality-check`, `/translation/settings` (GET/POST)
 **Content:** `/content/stale`, `/content/opportunities`, `/content/resolve-links`
-**Chat:** `/chat/message`, `/chat/session/{id}`, `/chat/config`, `/chat/session/escalate`
+**Scheduler:** `/schedule/list`, `/schedule/callback`, `/schedule/settings` (GET/POST)
+**Chat:** `/chat/message`, `/chat/session/{id}`, `/chat/config`, `/chat/session/escalate`, `/chat/settings` (GET/POST)
 **Elementor (31 endpoints):** `/elementor/page/{id}`, `/outline/{id}`, `/widget`, `/style`, `/bulk-update`, `/add-widget`, `/add-section`, `/delete`, `/move`, `/clone`, `/custom-css`, `/responsive`, `/global-style`, `/sync-styles`, `/snapshot`, `/rollback`, `/snapshots/{id}`, `/audit/{id}`, `/responsive-audit/{id}`, `/auto-fix`, `/translate`, `/translate-queue`, `/global-css`, `/batch-css`, `/kit`, `/flush-css`, `/print-method`, `/google-fonts`, `/reorder-sections`, `/find-replace`, `/sync-structure`, `/css-vars`, `/templates`, `/apply-template`
 **CRM:** `/crm/overview`, `/crm/segments`, `/crm/customer/{id}`
 **Reviews:** `/review/sentiment-callback`, `/review/analytics`
@@ -210,7 +236,7 @@ All endpoints under namespace `luwipress/v1`.
 | **SEO** | Rank Math · Yoast · All in One SEO · SEOPress |
 | **Translation** | WPML · Polylang · TranslatePress |
 | **Email / SMTP** | WP Mail SMTP · FluentSMTP · Post SMTP |
-| **CRM** | FluentCRM · Mailchimp for WC |
+| **CRM** | FluentCRM · Mailchimp for WC *(detected only — LuwiPress never writes to their contact lists)* |
 | **Customer Support** | Chatwoot |
 | **Page Builder** | Elementor (full integration) · Divi (detection) |
 | **Cache** | WP Rocket · LiteSpeed · W3 Total Cache (auto-purge) |
@@ -235,14 +261,15 @@ All endpoints under namespace `luwipress/v1`.
 ## 🖥️ Admin Pages
 
 1. **Dashboard** — Hero stats, content health ring, 7-day cost chart, workflow breakdown, translation coverage, recent logs
-2. **Settings** — 11 tabs (AI providers, API keys, budgets, chat tone, webhooks, IP whitelist, etc.)
-3. **Open Claw** — AI chat assistant with slash commands
-4. **Usage & Logs** — Token tracking, cost breakdown, API call history
-5. **Knowledge Graph** — D3.js interactive store intelligence visualization
-6. **WebMCP** — MCP tool catalog, connection tester
-7. **Theme Manager** — Install, activate, setup Luwi themes
-8. **Content Scheduler** — Blog automation
-9. **Translation Manager** — Missing translations by language
+2. **Settings** — 9 tabs (Connection, General, AI API Keys, AI Content, Translation, CRM, Customer Chat, Marketplaces, Security)
+3. **Usage & Logs** — Token tracking, cost breakdown, API call history
+4. **Knowledge Graph** — D3.js interactive store intelligence visualization
+5. **Content Scheduler** — Blog automation
+6. **Translation Manager** — Missing translations by language
+
+Add the companion plugins to light up:
+- **Open Claw** menu item (via LuwiPress Open Claw companion)
+- **WebMCP** menu item (via LuwiPress WebMCP companion)
 
 ---
 
@@ -253,7 +280,7 @@ All endpoints under namespace `luwipress/v1`.
 | **WordPress** | 5.6+ (tested up to 6.9) |
 | **PHP** | 7.4+ |
 | **WooCommerce** | 5.0+ (optional) |
-| **Bundle Size** | ~416 KB (68 files) |
+| **Core bundle size** | ~365 KB (60 files) · WebMCP companion ~210 KB · Open Claw companion ~26 KB |
 | **Database** | Automatic cleanup, indexed tables |
 | **Caching** | Transient + object cache compatible |
 | **Cron** | WP Cron job queue for async work |
@@ -275,4 +302,4 @@ All endpoints under namespace `luwipress/v1`.
 
 ---
 
-*Document version 2.0.10 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference.*
+*Document version 3.1.0 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*

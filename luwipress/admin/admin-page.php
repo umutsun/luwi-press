@@ -71,7 +71,9 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 
 		// SEO
 		$seo = $environment['seo'];
-		if ( 'none' !== $seo['plugin'] ) {
+		if ( 'luwipress-native' === $seo['plugin'] ) {
+			$pills[] = array( 'ok', 'dashicons-search', __( 'LuwiPress SEO', 'luwipress' ) );
+		} elseif ( 'none' !== $seo['plugin'] ) {
 			$pills[] = array( 'ok', 'dashicons-search', ucwords( str_replace( '-', ' ', $seo['plugin'] ) ) );
 		}
 

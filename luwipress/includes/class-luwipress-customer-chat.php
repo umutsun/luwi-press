@@ -140,6 +140,112 @@ class LuwiPress_Customer_Chat {
 				),
 			),
 		) );
+
+		// Read chat module settings (admin-only, mirrors Customer Chat tab)
+		register_rest_route( 'luwipress/v1', '/chat/settings', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'handle_get_settings' ),
+			'permission_callback' => array( $this, 'check_admin_permission' ),
+		) );
+
+		// Write chat module settings — partial update
+		register_rest_route( 'luwipress/v1', '/chat/settings', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'handle_set_settings' ),
+			'permission_callback' => array( $this, 'check_admin_permission' ),
+			'args'                => array(
+				'enabled'             => array( 'required' => false, 'type' => 'boolean' ),
+				'greeting'            => array( 'required' => false, 'type' => 'string' ),
+				'tone'                => array( 'required' => false, 'type' => 'string' ),
+				'custom_instructions' => array( 'required' => false, 'type' => 'string' ),
+				'shipping_policy'     => array( 'required' => false, 'type' => 'string' ),
+				'returns_policy'      => array( 'required' => false, 'type' => 'string' ),
+				'escalation_channel'  => array( 'required' => false, 'type' => 'string' ),
+				'daily_budget'        => array( 'required' => false, 'type' => 'number' ),
+				'max_messages'        => array( 'required' => false, 'type' => 'integer' ),
+				'rate_limit'          => array( 'required' => false, 'type' => 'integer' ),
+			),
+		) );
+	}
+
+	/**
+	 * Admin-only permission for settings read/write.
+	 */
+	public function check_admin_permission( $request ) {
+		return LuwiPress_Permission::check_token_or_admin( $request );
+	}
+
+	/**
+	 * GET /chat/settings — mirrors the Customer Chat tab.
+	 */
+	public function handle_get_settings( $request ) {
+		return array(
+			'enabled'             => (bool) get_option( 'luwipress_chat_enabled', 0 ),
+			'greeting'            => (string) get_option( 'luwipress_chat_greeting', 'Hi! How can I help you today?' ),
+			'tone'                => (string) get_option( 'luwipress_chat_tone', 'friendly' ),
+			'custom_instructions' => (string) get_option( 'luwipress_chat_custom_instructions', '' ),
+			'shipping_policy'     => (string) get_option( 'luwipress_chat_shipping_policy', '' ),
+			'returns_policy'      => (string) get_option( 'luwipress_chat_returns_policy', '' ),
+			'escalation_channel'  => (string) get_option( 'luwipress_chat_escalation_channel', 'whatsapp' ),
+			'daily_budget'        => (float) get_option( 'luwipress_chat_daily_budget', 0.50 ),
+			'max_messages'        => absint( get_option( 'luwipress_chat_max_messages', 10 ) ),
+			'rate_limit'          => absint( get_option( 'luwipress_chat_rate_limit', 30 ) ),
+		);
+	}
+
+	/**
+	 * POST /chat/settings — partial update.
+	 */
+	public function handle_set_settings( $request ) {
+		$data = $request->get_json_params();
+		if ( empty( $data ) ) {
+			$data = $request->get_body_params();
+		}
+		$updated = array();
+
+		$text_keys = array(
+			'greeting'            => 'sanitize_textarea_field',
+			'custom_instructions' => 'sanitize_textarea_field',
+			'shipping_policy'     => 'sanitize_textarea_field',
+			'returns_policy'      => 'sanitize_textarea_field',
+			'tone'                => 'sanitize_text_field',
+			'escalation_channel'  => 'sanitize_text_field',
+		);
+
+		foreach ( $text_keys as $key => $sanitizer ) {
+			if ( array_key_exists( $key, $data ) ) {
+				update_option( 'luwipress_chat_' . $key, call_user_func( $sanitizer, (string) $data[ $key ] ) );
+				$updated[] = $key;
+			}
+		}
+
+		if ( array_key_exists( 'enabled', $data ) ) {
+			update_option( 'luwipress_chat_enabled', ! empty( $data['enabled'] ) ? 1 : 0 );
+			$updated[] = 'enabled';
+		}
+
+		if ( array_key_exists( 'daily_budget', $data ) ) {
+			update_option( 'luwipress_chat_daily_budget', max( 0, floatval( $data['daily_budget'] ) ) );
+			$updated[] = 'daily_budget';
+		}
+
+		if ( array_key_exists( 'max_messages', $data ) ) {
+			update_option( 'luwipress_chat_max_messages', max( 1, min( 100, absint( $data['max_messages'] ) ) ) );
+			$updated[] = 'max_messages';
+		}
+
+		if ( array_key_exists( 'rate_limit', $data ) ) {
+			update_option( 'luwipress_chat_rate_limit', max( 1, min( 600, absint( $data['rate_limit'] ) ) ) );
+			$updated[] = 'rate_limit';
+		}
+
+		LuwiPress_Logger::log( 'Chat settings updated via REST: ' . implode( ', ', $updated ), 'info' );
+
+		return array(
+			'success'  => true,
+			'updated'  => $updated,
+			'settings' => $this->handle_get_settings( $request ),
+		);
 	}
 
 	/**

@@ -60,7 +60,9 @@ class LuwiPress_AI_Content {
      * Register REST API endpoints
      */
     public function register_endpoints() {
-        // Trigger product enrichment → sends for AI processing
+        // Trigger product enrichment → sends for AI processing.
+        // options may include: target_language, focus_keyword, custom_instructions,
+        // target_words, meta_title_max, meta_desc_max.
         register_rest_route('luwipress/v1', '/product/enrich', array(
             'methods'             => 'POST',
             'callback'            => array($this, 'handle_enrich_request'),
@@ -110,6 +112,27 @@ class LuwiPress_AI_Content {
             'permission_callback' => array($this, 'check_admin_permission'),
             'args'                => array(
                 'batch_id' => array('required' => true, 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field'),
+            ),
+        ));
+
+        // Read current enrichment settings (custom prompt + constraints)
+        register_rest_route('luwipress/v1', '/enrich/settings', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'handle_get_settings'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+        ));
+
+        // Write enrichment settings — mirrors the AI tab in Settings → Enrichment Prompt & Constraints
+        register_rest_route('luwipress/v1', '/enrich/settings', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'handle_set_settings'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+            'args'                => array(
+                'system_prompt'   => array('required' => false, 'type' => 'string'),
+                'target_words'    => array('required' => false, 'type' => 'integer'),
+                'meta_title_max'  => array('required' => false, 'type' => 'integer'),
+                'meta_desc_max'   => array('required' => false, 'type' => 'integer'),
+                'meta_desc_cta'   => array('required' => false, 'type' => 'string'),
             ),
         ));
 
@@ -358,12 +381,22 @@ class LuwiPress_AI_Content {
         if (!empty($data['meta_title']) || !empty($data['meta_description'])) {
             $detector = LuwiPress_Plugin_Detector::get_instance();
             $seo_data = array();
+            $title_max = absint( get_option( 'luwipress_enrich_meta_title_max', 60 ) );
+            $desc_max  = absint( get_option( 'luwipress_enrich_meta_desc_max', 160 ) );
+            $desc_cta  = trim( (string) get_option( 'luwipress_enrich_meta_desc_cta', '' ) );
+
             if (!empty($data['meta_title'])) {
-                $seo_data['title'] = $data['meta_title'];
+                $seo_data['title'] = self::trim_meta( (string) $data['meta_title'], $title_max );
                 $updated_fields[] = 'meta_title';
             }
             if (!empty($data['meta_description'])) {
-                $seo_data['description'] = $data['meta_description'];
+                $desc = (string) $data['meta_description'];
+                if ( '' !== $desc_cta && false === mb_stripos( $desc, $desc_cta ) ) {
+                    // Reserve space for " <cta>" (with leading space) when appending.
+                    $body = self::trim_meta( $desc, max( 0, $desc_max - ( mb_strlen( $desc_cta ) + 1 ) ) );
+                    $desc = rtrim( $body ) . ' ' . $desc_cta;
+                }
+                $seo_data['description'] = self::trim_meta( $desc, $desc_max );
                 $updated_fields[] = 'meta_description';
             }
             if (!empty($data['focus_keyword'])) {
@@ -467,6 +500,74 @@ class LuwiPress_AI_Content {
         update_post_meta($post_id, '_luwipress_faq', $faq);
 
         return array('success' => true, 'post_id' => $post_id, 'faq_count' => count($faq));
+    }
+
+    // ─── ENRICHMENT SETTINGS endpoints ──────────────────────────────────
+
+    /**
+     * Read current enrichment prompt + constraint options. Mirrors the AI tab.
+     */
+    public function handle_get_settings( $request ) {
+        return array(
+            'system_prompt'  => (string) get_option( 'luwipress_enrich_system_prompt', '' ),
+            'target_words'   => absint( get_option( 'luwipress_enrich_target_words', 0 ) ),
+            'meta_title_max' => absint( get_option( 'luwipress_enrich_meta_title_max', 60 ) ),
+            'meta_desc_max'  => absint( get_option( 'luwipress_enrich_meta_desc_max', 160 ) ),
+            'meta_desc_cta'  => (string) get_option( 'luwipress_enrich_meta_desc_cta', '' ),
+        );
+    }
+
+    /**
+     * Write enrichment settings. Only keys present in the request are touched,
+     * so callers can update a single field without resetting the others.
+     * Bounds mirror admin/settings-page.php save handler.
+     */
+    public function handle_set_settings( $request ) {
+        $data    = $request->get_json_params();
+        if ( empty( $data ) ) {
+            $data = $request->get_body_params();
+        }
+        $updated = array();
+
+        if ( array_key_exists( 'system_prompt', $data ) ) {
+            $prompt = wp_kses_post( (string) $data['system_prompt'] );
+            if ( mb_strlen( $prompt ) > 4000 ) {
+                $prompt = mb_substr( $prompt, 0, 4000 );
+            }
+            update_option( 'luwipress_enrich_system_prompt', $prompt );
+            $updated[] = 'system_prompt';
+        }
+
+        if ( array_key_exists( 'target_words', $data ) ) {
+            $val = max( 0, min( 3000, absint( $data['target_words'] ) ) );
+            update_option( 'luwipress_enrich_target_words', $val );
+            $updated[] = 'target_words';
+        }
+
+        if ( array_key_exists( 'meta_title_max', $data ) ) {
+            $val = max( 40, min( 80, absint( $data['meta_title_max'] ) ) );
+            update_option( 'luwipress_enrich_meta_title_max', $val );
+            $updated[] = 'meta_title_max';
+        }
+
+        if ( array_key_exists( 'meta_desc_max', $data ) ) {
+            $val = max( 120, min( 200, absint( $data['meta_desc_max'] ) ) );
+            update_option( 'luwipress_enrich_meta_desc_max', $val );
+            $updated[] = 'meta_desc_max';
+        }
+
+        if ( array_key_exists( 'meta_desc_cta', $data ) ) {
+            update_option( 'luwipress_enrich_meta_desc_cta', sanitize_text_field( (string) $data['meta_desc_cta'] ) );
+            $updated[] = 'meta_desc_cta';
+        }
+
+        LuwiPress_Logger::log( 'Enrichment settings updated via REST: ' . implode( ', ', $updated ), 'info' );
+
+        return array(
+            'success'  => true,
+            'updated'  => $updated,
+            'settings' => $this->handle_get_settings( $request ),
+        );
     }
 
     // ─── STALE CONTENT endpoint ─────────────────────────────────────────
@@ -951,6 +1052,23 @@ class LuwiPress_AI_Content {
     }
 
     // ─── HELPERS ────────────────────────────────────────────────────────
+
+    /**
+     * Trim a meta field to a max character count without breaking mid-word.
+     * Returns $text unchanged if already within limit.
+     */
+    private static function trim_meta( $text, $max ) {
+        $text = trim( $text );
+        if ( $max <= 0 || mb_strlen( $text ) <= $max ) {
+            return $text;
+        }
+        $cut = mb_substr( $text, 0, $max );
+        $sp  = mb_strrpos( $cut, ' ' );
+        if ( false !== $sp && $sp > $max - 15 ) {
+            $cut = mb_substr( $cut, 0, $sp );
+        }
+        return rtrim( $cut, " .,;:-" );
+    }
 
     private function get_product_attributes($product) {
         $attrs = array();

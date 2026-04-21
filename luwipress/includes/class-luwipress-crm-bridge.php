@@ -2,14 +2,14 @@
 /**
  * LuwiPress CRM Bridge — Customer Intelligence Layer
  *
- * Adds AI-powered customer intelligence on top of WooCommerce data.
- * If a CRM plugin (FluentCRM, Mailchimp, Klaviyo) exists, reads their
- * tags/segments and enriches — never duplicates contact management.
+ * Pure-WooCommerce customer segmentation and lifecycle event generation.
+ * Segments are computed from order history; lifecycle events (post-purchase,
+ * review request, win-back) are queued for consumption by the LuwiPress
+ * email pipeline or any downstream automation via REST.
  *
- * If no CRM plugin exists, provides lightweight customer segmentation
- * and lifecycle automation through n8n workflows.
- *
- * Requires Open Claw to be active for natural language customer queries.
+ * No third-party CRM plugin integration. If the store uses FluentCRM,
+ * Mailchimp, Klaviyo, etc., let those plugins own their own automations —
+ * LuwiPress reports on WooCommerce data only.
  *
  * @package LuwiPress
  * @since 1.3.0
@@ -89,30 +89,25 @@ class LuwiPress_CRM_Bridge {
 			'permission_callback' => array( $this, 'check_permission' ),
 		) );
 
-		// Lifecycle events ready for n8n automation
+		// Lifecycle events ready for downstream processing
 		register_rest_route( 'luwipress/v1', '/crm/lifecycle-queue', array(
 			'methods'             => 'GET',
 			'callback'            => array( $this, 'handle_lifecycle_queue' ),
-			'permission_callback' => array( $this, 'check_n8n_token' ),
+			'permission_callback' => array( $this, 'check_token' ),
 		) );
 
-		// n8n callback: mark lifecycle event as processed
+		// Mark a lifecycle event as processed
 		register_rest_route( 'luwipress/v1', '/crm/lifecycle-callback', array(
 			'methods'             => 'POST',
 			'callback'            => array( $this, 'handle_lifecycle_callback' ),
-			'permission_callback' => array( $this, 'check_n8n_token' ),
+			'permission_callback' => array( $this, 'check_token' ),
 		) );
 	}
 
 	// ─── OVERVIEW: Store-wide customer intelligence ────────────────────
 
 	public function handle_overview( $request ) {
-		$detector = LuwiPress_Plugin_Detector::get_instance();
-		$crm      = $detector->detect_crm();
-
 		$data = array(
-			'crm_plugin'       => $crm['plugin'],
-			'crm_version'      => $crm['version'],
 			'total_customers'  => $this->count_customers(),
 			'segments'         => $this->get_segment_counts(),
 			'revenue_summary'  => $this->get_revenue_summary(),
@@ -120,17 +115,10 @@ class LuwiPress_CRM_Bridge {
 			'last_refresh'     => get_option( 'luwipress_crm_last_refresh', '' ),
 		);
 
-		// If CRM plugin exists, add its tag/list info
-		if ( 'fluentcrm' === $crm['plugin'] ) {
-			$data['crm_info'] = $this->get_fluentcrm_info();
-		} elseif ( 'mailchimp-for-woocommerce' === $crm['plugin'] ) {
-			$data['crm_info'] = $this->get_mailchimp_info();
-		}
-
 		return rest_ensure_response( $data );
 	}
 
-	// ─── SEGMENTS: AI-computed customer segments ───────────────────────
+	// ─── SEGMENTS: WooCommerce-derived customer segments ───────────────
 
 	public function handle_segments( $request ) {
 		return rest_ensure_response( array(
@@ -173,7 +161,7 @@ class LuwiPress_CRM_Bridge {
 		return rest_ensure_response( $profile );
 	}
 
-	// ─── LIFECYCLE QUEUE: Events ready for n8n automation ──────────────
+	// ─── LIFECYCLE QUEUE ───────────────────────────────────────────────
 
 	public function handle_lifecycle_queue( $request ) {
 		$events = $this->get_pending_lifecycle_events();
@@ -211,20 +199,7 @@ class LuwiPress_CRM_Bridge {
 			return;
 		}
 
-		$detector = LuwiPress_Plugin_Detector::get_instance();
-		$crm      = $detector->detect_crm();
-
-		// If a CRM plugin handles segmentation, skip heavy computation
-		if ( 'none' !== $crm['plugin'] ) {
-			LuwiPress_Logger::log( 'CRM segment refresh skipped — ' . $crm['plugin'] . ' handles segmentation', 'info' );
-			update_option( 'luwipress_crm_last_refresh', current_time( 'mysql' ) );
-			return;
-		}
-
-		// Compute segments from WooCommerce data
 		$this->compute_all_segments();
-
-		// Generate lifecycle events
 		$this->generate_lifecycle_events();
 
 		update_option( 'luwipress_crm_last_refresh', current_time( 'mysql' ) );
@@ -324,14 +299,6 @@ class LuwiPress_CRM_Bridge {
 
 	private function generate_lifecycle_events() {
 		global $wpdb;
-
-		$detector = LuwiPress_Plugin_Detector::get_instance();
-		$crm      = $detector->detect_crm();
-
-		// Don't generate lifecycle events if CRM plugin handles automations
-		if ( 'none' !== $crm['plugin'] ) {
-			return;
-		}
 
 		$events = get_option( 'luwipress_crm_lifecycle_events', array() );
 
@@ -607,9 +574,6 @@ class LuwiPress_CRM_Bridge {
 			);
 		}
 
-		// CRM plugin data
-		$crm_data = $this->get_crm_plugin_data( $user_id );
-
 		return array(
 			'id'            => $user_id,
 			'name'          => $customer->get_first_name() . ' ' . $customer->get_last_name(),
@@ -620,7 +584,6 @@ class LuwiPress_CRM_Bridge {
 			'stats'         => $stats ?: array(),
 			'recent_orders' => $recent_orders,
 			'reviews'       => $review_list,
-			'crm_plugin'    => $crm_data,
 			'location'      => array(
 				'city'    => $customer->get_billing_city(),
 				'state'   => $customer->get_billing_state(),
@@ -629,60 +592,10 @@ class LuwiPress_CRM_Bridge {
 		);
 	}
 
-	private function get_crm_plugin_data( $user_id ) {
-		$detector = LuwiPress_Plugin_Detector::get_instance();
-		$crm      = $detector->detect_crm();
-
-		if ( 'fluentcrm' === $crm['plugin'] && function_exists( 'FluentCrmApi' ) ) {
-			$contact = FluentCrmApi( 'contacts' )->getContactByUserRef( $user_id );
-			if ( $contact ) {
-				return array(
-					'source' => 'fluentcrm',
-					'tags'   => $contact->tags ? $contact->tags->pluck( 'title' )->toArray() : array(),
-					'lists'  => $contact->lists ? $contact->lists->pluck( 'title' )->toArray() : array(),
-					'status' => $contact->status,
-				);
-			}
-		}
-
-		return null;
-	}
-
-	private function get_fluentcrm_info() {
-		if ( ! function_exists( 'FluentCrmApi' ) ) {
-			return array();
-		}
-
-		$tags  = FluentCrmApi( 'tags' )->all();
-		$lists = FluentCrmApi( 'lists' )->all();
-
-		return array(
-			'total_contacts' => FluentCrmApi( 'contacts' )->getInstance()->count(),
-			'tags'           => $tags ? $tags->pluck( 'title' )->toArray() : array(),
-			'lists'          => $lists ? $lists->pluck( 'title' )->toArray() : array(),
-		);
-	}
-
-	private function get_mailchimp_info() {
-		$store_id = get_option( 'mailchimp-woocommerce-store_id', '' );
-		return array(
-			'store_connected' => ! empty( $store_id ),
-			'store_id'        => $store_id,
-		);
-	}
-
 	/**
-	 * Get pending lifecycle events for n8n processing.
-	 * If a CRM plugin exists, returns empty (CRM handles automations).
+	 * Get pending lifecycle events for downstream processing.
 	 */
 	private function get_pending_lifecycle_events() {
-		$detector = LuwiPress_Plugin_Detector::get_instance();
-		$crm      = $detector->detect_crm();
-
-		if ( 'none' !== $crm['plugin'] ) {
-			return array(); // CRM plugin handles lifecycle automation
-		}
-
 		$events  = get_option( 'luwipress_crm_lifecycle_events', array() );
 		$pending = array();
 
@@ -702,7 +615,7 @@ class LuwiPress_CRM_Bridge {
 		return LuwiPress_Permission::check_token_or_admin( $request );
 	}
 
-	public function check_n8n_token( $request ) {
+	public function check_token( $request ) {
 		return LuwiPress_Permission::check_token( $request );
 	}
 }

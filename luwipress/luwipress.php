@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 2.0.10
+ * Version: 3.1.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '2.0.10');
+define('LUWIPRESS_VERSION', '3.1.0');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -67,9 +67,12 @@ class LuwiPress {
         add_action('admin_init', array($this, 'admin_init'));
         add_action('admin_init', array($this, 'handle_cron_notice_dismiss'));
         add_action('admin_notices', array($this, 'render_cron_notices'));
+        add_action('admin_notices', array($this, 'render_webmcp_moved_notice'));
+        add_action('admin_init', array($this, 'handle_webmcp_notice_dismiss'));
+        add_action('admin_notices', array($this, 'render_open_claw_moved_notice'));
+        add_action('admin_init', array($this, 'handle_open_claw_notice_dismiss'));
         add_action('wp_footer', array($this, 'render_chat_assets'), 1);
         add_action('admin_enqueue_scripts', array($this, 'admin_enqueue_scripts'));
-        add_action('wp_ajax_luwipress_test_connection', array($this, 'ajax_test_connection'));
         add_action('wp_ajax_luwipress_scan_opportunities', array($this, 'ajax_scan_opportunities'));
         add_action('wp_ajax_luwipress_get_thin_products', array($this, 'ajax_get_thin_products'));
         add_action('wp_ajax_luwipress_emergency_stop', array($this, 'ajax_emergency_stop'));
@@ -93,6 +96,7 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-plugin-detector.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-site-config.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-email-proxy.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-seo-writer.php';
 
         // AI Engine: provider interface, providers, prompts, dispatcher, image handler
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-ai-provider.php';
@@ -108,17 +112,11 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-aeo.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-translation.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-content-scheduler.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-hreflang.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-internal-linker.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-review-analytics.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-open-claw.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-crm-bridge.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-knowledge-graph.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-elementor.php';
-
-        // Theme management and demo content
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-theme-manager.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-demo-import.php';
 
         // Marketplace integration
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-adapter.php';
@@ -138,8 +136,6 @@ class LuwiPress {
         // Customer-facing chat
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-customer-chat.php';
 
-        // WebMCP server (MCP Streamable HTTP transport)
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-webmcp.php';
     }
     
     /**
@@ -198,6 +194,7 @@ class LuwiPress {
         LuwiPress_Plugin_Detector::get_instance();
         LuwiPress_Site_Config::get_instance();
         LuwiPress_Email_Proxy::get_instance();
+        LuwiPress_SEO_Writer::get_instance();
 
         // Content & automation modules
         LuwiPress_AI_Content::get_instance();
@@ -205,15 +202,11 @@ class LuwiPress {
         LuwiPress_AEO::get_instance();
         LuwiPress_Translation::get_instance();
         LuwiPress_Content_Scheduler::get_instance();
-        LuwiPress_Hreflang::get_instance();
         LuwiPress_Internal_Linker::get_instance();
         LuwiPress_Review_Analytics::get_instance();
-        LuwiPress_Open_Claw::get_instance();
         LuwiPress_CRM_Bridge::get_instance();
         LuwiPress_Knowledge_Graph::get_instance();
         LuwiPress_Marketplace::get_instance();
-        LuwiPress_Theme_Manager::get_instance();
-        LuwiPress_Demo_Import::get_instance();
         LuwiPress_Search_Index::get_instance();
         LuwiPress_Customer_Chat::get_instance();
 
@@ -222,10 +215,6 @@ class LuwiPress {
             LuwiPress_Elementor::get_instance();
         }
 
-        // WebMCP server
-        if ( LuwiPress_WebMCP::is_enabled() ) {
-            LuwiPress_WebMCP::get_instance();
-        }
     }
     
     /**
@@ -274,15 +263,6 @@ class LuwiPress {
         
         add_submenu_page(
             'luwipress',
-            'Open Claw',
-            'Open Claw',
-            'manage_options',
-            'luwipress-claw',
-            array($this, 'open_claw_page')
-        );
-
-        add_submenu_page(
-            'luwipress',
             __( 'Usage & Logs', 'luwipress' ),
             __( 'Usage & Logs', 'luwipress' ),
             'manage_options',
@@ -299,14 +279,6 @@ class LuwiPress {
             array( $this, 'knowledge_graph_page' )
         );
 
-        add_submenu_page(
-            'luwipress',
-            __( 'WebMCP', 'luwipress' ),
-            __( 'WebMCP', 'luwipress' ),
-            'manage_options',
-            'luwipress-webmcp',
-            array( $this, 'webmcp_page' )
-        );
     }
     
     /**
@@ -324,13 +296,6 @@ class LuwiPress {
     }
     
     /**
-     * Open Claw page
-     */
-    public function open_claw_page() {
-        include LUWIPRESS_PLUGIN_DIR . 'admin/open-claw-page.php';
-    }
-
-    /**
      * Unified Usage & Logs page
      */
     public function usage_page() {
@@ -342,13 +307,6 @@ class LuwiPress {
      */
     public function knowledge_graph_page() {
         include LUWIPRESS_PLUGIN_DIR . 'admin/knowledge-graph-page.php';
-    }
-
-    /**
-     * WebMCP admin page
-     */
-    public function webmcp_page() {
-        include LUWIPRESS_PLUGIN_DIR . 'admin/webmcp-page.php';
     }
 
     /**
@@ -483,6 +441,96 @@ class LuwiPress {
                 }
             }
         }
+    }
+
+    /**
+     * One-time migration notice: Open Claw moved to a companion plugin in 3.1.0.
+     */
+    public function render_open_claw_moved_notice() {
+        if ( ! current_user_can( 'activate_plugins' ) ) return;
+        if ( class_exists( 'LuwiPress_Open_Claw' ) || defined( 'LUWIPRESS_OPEN_CLAW_VERSION' ) ) return;
+        if ( get_option( 'luwipress_open_claw_moved_dismissed', false ) ) return;
+        $dismiss_url = wp_nonce_url(
+            add_query_arg( 'luwipress_dismiss_open_claw_notice', '1' ),
+            'luwipress_dismiss_open_claw_notice'
+        );
+        ?>
+        <div class="notice notice-warning">
+            <p>
+                <strong><?php esc_html_e( 'LuwiPress 3.1 — Open Claw has moved to a companion plugin.', 'luwipress' ); ?></strong>
+                <?php esc_html_e( 'The admin AI assistant now lives in the separate "LuwiPress Open Claw" plugin. Install and activate it to keep the LuwiPress → Open Claw menu.', 'luwipress' ); ?>
+            </p>
+            <p><a href="<?php echo esc_url( $dismiss_url ); ?>" class="button button-secondary"><?php esc_html_e( 'Dismiss — companion is installed or no longer needed', 'luwipress' ); ?></a></p>
+        </div>
+        <?php
+    }
+
+    public function handle_open_claw_notice_dismiss() {
+        if ( empty( $_GET['luwipress_dismiss_open_claw_notice'] ) ) return;
+        if ( ! current_user_can( 'activate_plugins' ) ) return;
+        $nonce = isset( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
+        if ( ! wp_verify_nonce( $nonce, 'luwipress_dismiss_open_claw_notice' ) ) return;
+        update_option( 'luwipress_open_claw_moved_dismissed', true );
+        wp_safe_redirect( remove_query_arg( array( 'luwipress_dismiss_open_claw_notice', '_wpnonce' ) ) );
+        exit;
+    }
+
+    /**
+     * One-time migration notice: WebMCP moved to a companion plugin in 3.0.0.
+     * Only shown if the site was previously using WebMCP (enabled option present)
+     * and the companion isn't installed yet. Dismissable.
+     */
+    public function render_webmcp_moved_notice() {
+        if ( ! current_user_can( 'activate_plugins' ) ) {
+            return;
+        }
+        // Only show if the old enabled flag exists (site had WebMCP turned on before 3.0.0)
+        if ( false === get_option( 'luwipress_webmcp_enabled', false ) ) {
+            return;
+        }
+        // Hide if companion is active
+        if ( class_exists( 'LuwiPress_WebMCP' ) || defined( 'LUWIPRESS_WEBMCP_VERSION' ) ) {
+            return;
+        }
+        // Hide if dismissed
+        if ( get_option( 'luwipress_webmcp_moved_dismissed', false ) ) {
+            return;
+        }
+
+        $dismiss_url = wp_nonce_url(
+            add_query_arg( 'luwipress_dismiss_webmcp_notice', '1' ),
+            'luwipress_dismiss_webmcp_notice'
+        );
+        ?>
+        <div class="notice notice-warning">
+            <p>
+                <strong><?php esc_html_e( 'LuwiPress 3.0 — WebMCP has moved to a companion plugin.', 'luwipress' ); ?></strong>
+                <?php esc_html_e( 'Your MCP configuration is preserved, but the WebMCP endpoint and admin page now live in the separate "LuwiPress WebMCP" plugin. Install and activate it to restore AI-agent integration.', 'luwipress' ); ?>
+            </p>
+            <p>
+                <a href="<?php echo esc_url( $dismiss_url ); ?>" class="button button-secondary"><?php esc_html_e( 'Dismiss — WebMCP companion is installed or no longer needed', 'luwipress' ); ?></a>
+            </p>
+        </div>
+        <?php
+    }
+
+    /**
+     * Handle dismissal of the WebMCP migration notice.
+     */
+    public function handle_webmcp_notice_dismiss() {
+        if ( empty( $_GET['luwipress_dismiss_webmcp_notice'] ) ) {
+            return;
+        }
+        if ( ! current_user_can( 'activate_plugins' ) ) {
+            return;
+        }
+        $nonce = isset( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
+        if ( ! wp_verify_nonce( $nonce, 'luwipress_dismiss_webmcp_notice' ) ) {
+            return;
+        }
+        update_option( 'luwipress_webmcp_moved_dismissed', true );
+        wp_safe_redirect( remove_query_arg( array( 'luwipress_dismiss_webmcp_notice', '_wpnonce' ) ) );
+        exit;
     }
 
     /**
@@ -638,61 +686,14 @@ class LuwiPress {
                 'nonce'        => wp_create_nonce('luwipress_dashboard_nonce'),
                 'claw_nonce'   => wp_create_nonce('luwipress_claw_nonce'),
                 'user_initial' => mb_strtoupper( mb_substr( $user->display_name, 0, 1 ) ),
+                'rest_root'    => esc_url_raw( rest_url() ),
+                'rest_base'    => esc_url_raw( rest_url( 'luwipress/v1/' ) ),
             ));
         }
 
-        // WebMCP client JS on WebMCP page
-        if ( strpos( $hook, 'luwipress-webmcp' ) !== false ) {
-            wp_enqueue_script(
-                'luwipress-webmcp-client',
-                LUWIPRESS_PLUGIN_URL . 'assets/js/webmcp-client.js',
-                array(),
-                LUWIPRESS_VERSION,
-                true
-            );
-        }
     }
-    
+
     /**
-     * AJAX: Test webhook connection
-     */
-    public function ajax_test_connection() {
-        check_ajax_referer('luwipress_settings_nonce');
-
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(__('Unauthorized', 'luwipress'));
-        }
-
-        $webhook_url = sanitize_url($_POST['webhook_url'] ?? '');
-        if (empty($webhook_url)) {
-            wp_send_json_error(__('Webhook URL is required', 'luwipress'));
-        }
-
-        // Test by calling a known webhook path (product-enrich) with a ping action
-        $test_url = trailingslashit( $webhook_url ) . 'product-enrich';
-        $response = wp_remote_post($test_url, array(
-            'timeout' => 10,
-            'headers' => array('Content-Type' => 'application/json'),
-            'body'    => wp_json_encode(array(
-                'action' => 'ping',
-                'source' => 'luwipress',
-                'site'   => get_site_url(),
-                'time'   => current_time('mysql'),
-            )),
-        ));
-
-        if (is_wp_error($response)) {
-            wp_send_json_error($response->get_error_message());
-        }
-
-        $code = wp_remote_retrieve_response_code($response);
-        if ($code >= 200 && $code < 400) {
-            wp_send_json_success(array('status_code' => $code));
-        } else {
-            wp_send_json_error(sprintf(__('HTTP %d response from webhook', 'luwipress'), $code));
-        }
-    }
-
     /**
      * AJAX: Scan content opportunities
      */
@@ -958,8 +959,6 @@ class LuwiPress {
             'luwipress_anthropic_model'   => 'claude-haiku-4-5-20241022',
             'luwipress_openai_model'      => 'gpt-4o-mini',
             'luwipress_google_model'      => 'gemini-2.0-flash',
-            // WebMCP
-            'luwipress_webmcp_enabled'    => 1,
         );
         
         foreach ($defaults as $option => $value) {

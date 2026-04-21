@@ -313,81 +313,117 @@
         });
 
         // ========================================
-        // Connection test
+        // Copy-to-clipboard helper (endpoint URLs)
         // ========================================
-        $('#luwipress-test-connection').on('click', function() {
+        $(document).on('click', '.luwipress-copy-btn', function() {
+            var text = $(this).data('copy');
+            if (!text) return;
             var $btn = $(this);
-            var $result = $('#luwipress-connection-result');
-            var webhookUrl = $('#luwipress_webhook_url').val();
+            var original = $btn.html();
+            var done = function() {
+                $btn.html('<span class="dashicons dashicons-yes"></span> Copied');
+                setTimeout(function(){ $btn.html(original); }, 1500);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done);
+            } else {
+                var $t = $('<textarea>').val(text).appendTo('body').select();
+                try { document.execCommand('copy'); done(); } catch (e) {}
+                $t.remove();
+            }
+        });
 
-            if (!webhookUrl) {
-                $result.html('<span style="color:#dc2626;">Please enter a webhook URL first.</span>');
+        // ========================================
+        // REST API health check (hits /health with current token)
+        // ========================================
+        $('#luwipress-rest-health-check').on('click', function() {
+            var $btn = $(this);
+            var $result = $('#luwipress-rest-health-result');
+            var token = $('#luwipress_api_token').val();
+            if (!token) {
+                $result.html('<span style="color:#dc2626;">Save a token first, then re-test.</span>');
                 return;
             }
 
             $btn.prop('disabled', true).find('.dashicons').addClass('spin');
-            $result.html('<span style="color:#6b7280;">Testing...</span>');
+            $result.html('<span style="color:#6b7280;">Pinging /health...</span>');
 
-            $.ajax({
-                url: ajaxurl,
-                type: 'POST',
-                data: {
-                    action: 'luwipress_test_connection',
-                    webhook_url: webhookUrl,
-                    _wpnonce: $('input[name="_wpnonce"]').val()
+            var restBase = (window.luwipress && window.luwipress.rest_base) || '/wp-json/luwipress/v1/';
+            fetch(restBase + 'health', {
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Accept': 'application/json'
                 },
-                success: function(response) {
-                    if (response.success) {
-                        $result.html('<span style="color:#16a34a;">&#10003; Connection successful!</span>');
-                    } else {
-                        $result.html('<span style="color:#dc2626;">&#10007; ' + (response.data || 'Connection failed') + '</span>');
-                    }
-                },
-                error: function() {
-                    $result.html('<span style="color:#dc2626;">&#10007; Request failed</span>');
-                },
-                complete: function() {
-                    $btn.prop('disabled', false).find('.dashicons').removeClass('spin');
+                credentials: 'same-origin'
+            }).then(function(r) {
+                if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                return r.json();
+            }).then(function(data) {
+                var ok = data && (data.status === 'ok' || data.status === 'healthy' || data.success === true || data.plugin);
+                if (ok) {
+                    $result.html('<span style="color:#16a34a;">&#10003; Healthy &mdash; ' + (data.plugin || 'LuwiPress') + ' ' + (data.version || '') + '</span>');
+                } else {
+                    $result.html('<span style="color:#dc2626;">&#10007; Unexpected response</span>');
                 }
+            }).catch(function(err) {
+                $result.html('<span style="color:#dc2626;">&#10007; ' + err.message + '</span>');
+            }).finally(function() {
+                $btn.prop('disabled', false).find('.dashicons').removeClass('spin');
             });
         });
 
         // ========================================
-        // Open Claw test connection
+        // MCP tools/list ping (verifies WebMCP companion)
         // ========================================
-        $('#luwipress-test-openclaw').on('click', function() {
+        $('#luwipress-mcp-ping').on('click', function() {
             var $btn = $(this);
-            var $status = $('#luwipress-openclaw-status');
-            var clawUrl = $('#luwipress_openclaw_url').val();
-
-            if (!clawUrl) {
-                $status.html('<span style="color:#dc2626;">Please enter an Open Claw URL first.</span>');
+            var $result = $('#luwipress-mcp-ping-result');
+            var token = $('#luwipress_api_token').val();
+            if (!token) {
+                $result.html('<span style="color:#dc2626;">Save a token first, then re-test.</span>');
                 return;
             }
 
             $btn.prop('disabled', true).find('.dashicons').addClass('spin');
-            $status.html('<span style="color:#6b7280;">Testing connection...</span>');
+            $result.html('<span style="color:#6b7280;">Calling tools/list...</span>');
 
-            $.ajax({
-                url: ajaxurl,
-                type: 'POST',
-                data: {
-                    action: 'luwipress_claw_test_connection',
-                    nonce: typeof luwipress !== 'undefined' && luwipress.claw_nonce ? luwipress.claw_nonce : $('input[name="_wpnonce"]').val()
-                },
-                success: function(response) {
-                    if (response.success) {
-                        $status.html('<span style="color:#16a34a;">&#10003; ' + response.data.message + '</span>');
-                    } else {
-                        $status.html('<span style="color:#dc2626;">&#10007; ' + (response.data || 'Connection failed') + '</span>');
-                    }
-                },
-                error: function() {
-                    $status.html('<span style="color:#dc2626;">&#10007; Request failed. Save settings first.</span>');
-                },
-                complete: function() {
-                    $btn.prop('disabled', false).find('.dashicons').removeClass('spin');
-                }
+            var restBase = (window.luwipress && window.luwipress.rest_base) || '/wp-json/luwipress/v1/';
+            var endpoint = restBase + 'mcp';
+
+            var countTools = function(cursor, total) {
+                return fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json, text/event-stream'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: 'ping-' + Date.now(),
+                        method: 'tools/list',
+                        params: cursor ? { cursor: cursor } : {}
+                    })
+                }).then(function(r) {
+                    if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                    return r.json();
+                }).then(function(data) {
+                    if (data.error) { throw new Error(data.error.message || 'MCP error'); }
+                    var tools = (data.result && data.result.tools) || [];
+                    var next  = data.result && data.result.nextCursor;
+                    var sum   = total + tools.length;
+                    if (next) { return countTools(next, sum); }
+                    return sum;
+                });
+            };
+
+            countTools(null, 0).then(function(total) {
+                $result.html('<span style="color:#16a34a;">&#10003; ' + total + ' tools registered</span>');
+            }).catch(function(err) {
+                $result.html('<span style="color:#dc2626;">&#10007; ' + err.message + '</span>');
+            }).finally(function() {
+                $btn.prop('disabled', false).find('.dashicons').removeClass('spin');
             });
         });
 

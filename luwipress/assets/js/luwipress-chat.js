@@ -7,9 +7,40 @@
         hasMessages: false,
         opened: false,
 
+        /**
+         * Minimal critical CSS guarantees the launcher is visible even if the
+         * main stylesheet was stripped / deferred by a cache or optimizer plugin.
+         * Covers: button pill, icon, position, z-index. Full styles still come
+         * from luwipress-chat.css when available.
+         */
+        criticalCss:
+            '#lp-chat-widget{position:fixed;bottom:20px;right:20px;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}' +
+            '#lp-chat-widget.lp-chat-left{right:auto;left:20px}' +
+            '#lp-chat-widget .lp-chat-toggle{display:inline-flex;align-items:center;justify-content:center;height:44px;min-width:44px;padding:0 14px;border:0;border-radius:24px;cursor:pointer;background:var(--lp-primary,#6366f1);color:var(--lp-text,#fff);font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.18);gap:8px}' +
+            '#lp-chat-widget .lp-chat-toggle::before{content:"";display:inline-block;width:18px;height:18px;background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23ffffff\'%3E%3Cpath d=\'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z\'/%3E%3C/svg%3E");background-size:contain;background-repeat:no-repeat;background-position:center}' +
+            '#lp-chat-widget:not(.lp-chat-closed) .lp-chat-toggle{display:none}' +
+            '#lp-chat-widget.lp-chat-closed .lp-chat-window{display:none}',
+
+        ensureCss: function() {
+            if (document.getElementById('lp-chat-critical-css')) return;
+            var style = document.createElement('style');
+            style.id = 'lp-chat-critical-css';
+            style.setAttribute('data-no-optimize', '1');
+            style.textContent = this.criticalCss;
+            // Prepend so full stylesheet (when present) can still override.
+            var head = document.head || document.getElementsByTagName('head')[0];
+            if (head.firstChild) {
+                head.insertBefore(style, head.firstChild);
+            } else {
+                head.appendChild(style);
+            }
+        },
+
         init: function() {
             if (!window.lpChat) return;
             if (lpChat.enabled === false) return;
+
+            this.ensureCss();
 
             var stored = localStorage.getItem('lp_chat_session');
             if (stored) {
@@ -25,6 +56,15 @@
             if (stored) {
                 this.restoreSession();
             }
+
+            // Self-check: if the launcher didn't mount within 3 s, log a warning.
+            setTimeout(function() {
+                if (!document.getElementById('lp-chat-widget')) {
+                    if (window.console && console.warn) {
+                        console.warn('[LuwiPress] Chat widget failed to mount — check optimizer/cache exclusions for luwipress-chat assets.');
+                    }
+                }
+            }, 3000);
         },
 
         generateSessionId: function() {

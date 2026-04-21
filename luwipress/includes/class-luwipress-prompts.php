@@ -30,7 +30,33 @@ class LuwiPress_Prompts {
 		$attributes = is_array( $product['attributes'] ?? null ) ? wp_json_encode( $product['attributes'] ) : ( $product['attributes'] ?? '{}' );
 		$dimensions = is_array( $product['dimensions'] ?? null ) ? wp_json_encode( $product['dimensions'] ) : ( $product['dimensions'] ?? '{}' );
 
-		$system = 'You are an e-commerce SEO expert. Generate SEO-optimized content for the given product. Respond ONLY in JSON format, no extra text.';
+		// Per-request overrides win over site-wide options. See admin/settings-page.php "Enrichment Prompt & Constraints".
+		$custom_system     = (string) ( $options['custom_instructions'] ?? get_option( 'luwipress_enrich_system_prompt', '' ) );
+		$target_words      = absint( $options['target_words'] ?? get_option( 'luwipress_enrich_target_words', 0 ) );
+		$meta_title_max    = absint( $options['meta_title_max'] ?? get_option( 'luwipress_enrich_meta_title_max', 60 ) );
+		$meta_desc_max     = absint( $options['meta_desc_max'] ?? get_option( 'luwipress_enrich_meta_desc_max', 160 ) );
+
+		$default_system = 'You are an e-commerce SEO expert. Generate SEO-optimized content for the given product. Respond ONLY in JSON format, no extra text.';
+
+		if ( '' !== trim( $custom_system ) ) {
+			$vars = array(
+				'{product_title}'    => $product['name'] ?? '',
+				'{category}'         => $categories,
+				'{focus_keyword}'    => $options['focus_keyword'] ?? ( $product['name'] ?? '' ),
+				'{price}'            => $product['price'] ?? '',
+				'{currency}'         => $currency,
+				'{site_name}'        => get_bloginfo( 'name' ),
+				'{target_language}'  => $language,
+			);
+			$system = strtr( $custom_system, $vars );
+			$system .= "\n\nRespond ONLY with valid JSON matching the schema in the user message. No markdown fences, no prose.";
+		} else {
+			$system = $default_system;
+		}
+
+		$length_hint = $target_words > 0
+			? sprintf( 'approximately %d words', $target_words )
+			: 'min 200 words';
 
 		$user = sprintf(
 			'Generate SEO-optimized content for the following product in %1$s:
@@ -47,10 +73,10 @@ Dimensions: %11$s
 
 Respond in JSON:
 {
-  "description": "Detailed HTML product description (min 200 words, use <h3>, <p>, <ul>)",
+  "description": "Detailed HTML product description (%12$s, use <h2>, <h3>, <p>, <ul>, <strong>, <table> where appropriate)",
   "short_description": "Short description (1-2 sentences with keyword)",
-  "meta_title": "SEO title (max 60 chars)",
-  "meta_description": "SEO meta description (max 155 chars)",
+  "meta_title": "SEO title (max %13$d chars)",
+  "meta_description": "SEO meta description (max %14$d chars)",
   "faq": [
     { "question": "Q1", "answer": "A1" },
     { "question": "Q2", "answer": "A2" },
@@ -71,7 +97,10 @@ Respond in JSON:
 			$product['short_description'] ?? 'None',
 			$attributes,
 			$product['weight'] ?? 'Not specified',
-			$dimensions
+			$dimensions,
+			$length_hint,
+			$meta_title_max,
+			$meta_desc_max
 		);
 
 		$prompt = array( 'system' => $system, 'user' => $user );

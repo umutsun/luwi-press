@@ -104,6 +104,25 @@ class LuwiPress_API {
             'permission_callback' => array($this, 'check_admin_permission'),
         ));
 
+        // Cache purge — Elementor CSS + LiteSpeed + WP Rocket + W3TC + WP Super Cache
+        register_rest_route( 'luwipress/v1', '/cache/purge', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'handle_cache_purge' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            'args'                => array(
+                'targets' => array(
+                    'type'        => 'array',
+                    'default'     => array( 'all' ),
+                    'description' => 'Which caches to purge: all, elementor, litespeed, litespeed-ucss, rocket, w3tc, wp-super-cache, object',
+                ),
+                'post_id' => array(
+                    'type'        => 'integer',
+                    'default'     => 0,
+                    'description' => 'Optional post ID for targeted Elementor CSS regen',
+                ),
+            ),
+        ) );
+
         // Diagnostic: Recent log entries
         register_rest_route('luwipress/v1', '/logs', array(
             'methods'             => 'GET',
@@ -837,6 +856,128 @@ class LuwiPress_API {
             return new WP_Error( 'not_available', 'AEO module not loaded', array( 'status' => 500 ) );
         }
         return LuwiPress_AEO::get_instance()->get_aeo_coverage( $request );
+    }
+
+    /**
+     * POST /cache/purge
+     * Purges caches across LiteSpeed, WP Rocket, W3TC, WP Super Cache, Elementor CSS,
+     * and object cache. Accepts targets array; 'all' triggers every available system.
+     */
+    public function handle_cache_purge( $request ) {
+        $targets = (array) $request->get_param( 'targets' );
+        if ( empty( $targets ) ) { $targets = array( 'all' ); }
+        $post_id = absint( $request->get_param( 'post_id' ) );
+        $wanted  = array_flip( $targets );
+        $all     = isset( $wanted['all'] );
+
+        $results = array();
+
+        // Elementor — regenerate per-post CSS and kit CSS
+        if ( $all || isset( $wanted['elementor'] ) ) {
+            $done = array();
+            if ( class_exists( '\\Elementor\\Plugin' ) ) {
+                try {
+                    $plugin_class = '\\Elementor\\Plugin';
+                    if ( isset( $plugin_class::$instance->files_manager ) ) {
+                        $plugin_class::$instance->files_manager->clear_cache();
+                        $done[] = 'files_manager.clear_cache';
+                    }
+                    $post_css_class = '\\Elementor\\Core\\Files\\CSS\\Post';
+                    if ( class_exists( $post_css_class ) ) {
+                        if ( $post_id > 0 ) {
+                            $post_css = new $post_css_class( $post_id );
+                            $post_css->update();
+                            $done[] = 'post_css.update(' . $post_id . ')';
+                        }
+                        $kit_id = (int) get_option( 'elementor_active_kit', 0 );
+                        if ( $kit_id > 0 ) {
+                            $kit_css = new $post_css_class( $kit_id );
+                            $kit_css->update();
+                            $done[] = 'kit_css.update(' . $kit_id . ')';
+                        }
+                    }
+                } catch ( \Throwable $e ) {
+                    $done[] = 'error:' . $e->getMessage();
+                }
+                $results['elementor'] = $done;
+            } else {
+                $results['elementor'] = 'not_installed';
+            }
+        }
+
+        // LiteSpeed Cache — full purge
+        if ( $all || isset( $wanted['litespeed'] ) ) {
+            if ( class_exists( '\\LiteSpeed\\Purge' ) || defined( 'LSCWP_V' ) ) {
+                do_action( 'litespeed_purge_all' );
+                $results['litespeed'] = 'purged_all';
+            } else {
+                $results['litespeed'] = 'not_installed';
+            }
+        }
+
+        // LiteSpeed UCSS — targeted Unique CSS purge
+        if ( $all || isset( $wanted['litespeed-ucss'] ) ) {
+            if ( defined( 'LSCWP_V' ) ) {
+                do_action( 'litespeed_purged_ucss' );
+                do_action( 'litespeed_purge_ucss' );
+                $results['litespeed_ucss'] = 'purged_ucss';
+            } else {
+                $results['litespeed_ucss'] = 'not_installed';
+            }
+        }
+
+        // WP Rocket
+        if ( $all || isset( $wanted['rocket'] ) ) {
+            if ( function_exists( 'rocket_clean_domain' ) ) {
+                rocket_clean_domain();
+                if ( function_exists( 'rocket_clean_minify' ) ) { rocket_clean_minify(); }
+                $results['wp_rocket'] = 'cleaned';
+            } else {
+                $results['wp_rocket'] = 'not_installed';
+            }
+        }
+
+        // W3 Total Cache
+        if ( $all || isset( $wanted['w3tc'] ) ) {
+            if ( function_exists( 'w3tc_pgcache_flush' ) ) {
+                w3tc_pgcache_flush();
+                if ( function_exists( 'w3tc_minify_flush' ) ) { w3tc_minify_flush(); }
+                $results['w3tc'] = 'flushed';
+            } else {
+                $results['w3tc'] = 'not_installed';
+            }
+        }
+
+        // WP Super Cache
+        if ( $all || isset( $wanted['wp-super-cache'] ) ) {
+            if ( function_exists( 'wp_cache_clear_cache' ) ) {
+                wp_cache_clear_cache();
+                $results['wp_super_cache'] = 'cleared';
+            } else {
+                $results['wp_super_cache'] = 'not_installed';
+            }
+        }
+
+        // Object cache (Redis, Memcached)
+        if ( $all || isset( $wanted['object'] ) ) {
+            if ( function_exists( 'wp_cache_flush' ) ) {
+                wp_cache_flush();
+                $results['object_cache'] = 'flushed';
+            } else {
+                $results['object_cache'] = 'not_available';
+            }
+        }
+
+        if ( class_exists( 'LuwiPress_Logger' ) ) {
+            LuwiPress_Logger::log( 'Cache purge requested', 'info', array( 'targets' => $targets, 'results' => $results ) );
+        }
+
+        return rest_ensure_response( array(
+            'status'  => 'ok',
+            'targets' => $targets,
+            'results' => $results,
+            'time'    => current_time( 'mysql' ),
+        ) );
     }
 
     /**

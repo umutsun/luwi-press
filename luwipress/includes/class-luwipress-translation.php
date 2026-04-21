@@ -105,6 +105,19 @@ class LuwiPress_Translation {
             ],
         ]);
 
+        // Batch: translate N untranslated posts for one or more target languages.
+        // Used by the Knowledge Graph "Translate N missing products" button.
+        register_rest_route($namespace, '/translation/batch', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'batch_translate_missing'],
+            'permission_callback' => [$this, 'check_permission'],
+            'args' => [
+                'languages' => ['required' => true],
+                'post_type' => ['default' => 'product', 'sanitize_callback' => 'sanitize_text_field'],
+                'limit'     => ['default' => 50, 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
         register_rest_route($namespace, '/translation/callback', [
             'methods'             => 'POST',
             'callback'            => [$this, 'handle_translation_callback'],
@@ -170,6 +183,78 @@ class LuwiPress_Translation {
                 'language'  => ['default' => '', 'sanitize_callback' => 'sanitize_text_field'],
             ],
         ]);
+
+        // Read translation module settings (target + active language list + hreflang mode)
+        register_rest_route($namespace, '/translation/settings', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'handle_get_settings'],
+            'permission_callback' => [$this, 'check_permission'],
+        ]);
+
+        // Write translation module settings — partial update, only provided keys are touched
+        register_rest_route($namespace, '/translation/settings', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'handle_set_settings'],
+            'permission_callback' => [$this, 'check_permission'],
+            'args' => [
+                'target_language'       => ['required' => false, 'type' => 'string'],
+                'translation_languages' => ['required' => false, 'type' => 'array'],
+                'hreflang_mode'         => ['required' => false, 'type' => 'string'],
+            ],
+        ]);
+    }
+
+    /**
+     * GET /translation/settings — mirrors the Translation tab in Settings.
+     */
+    public function handle_get_settings( $request ) {
+        return array(
+            'target_language'       => (string) get_option( 'luwipress_target_language', 'en' ),
+            'translation_languages' => (array) get_option( 'luwipress_translation_languages', array() ),
+            'hreflang_mode'         => (string) get_option( 'luwipress_hreflang_mode', 'auto' ),
+        );
+    }
+
+    /**
+     * POST /translation/settings — partial update.
+     */
+    public function handle_set_settings( $request ) {
+        $data = $request->get_json_params();
+        if ( empty( $data ) ) {
+            $data = $request->get_body_params();
+        }
+        $updated = array();
+
+        if ( array_key_exists( 'target_language', $data ) ) {
+            update_option( 'luwipress_target_language', sanitize_text_field( (string) $data['target_language'] ) );
+            $updated[] = 'target_language';
+        }
+
+        if ( array_key_exists( 'translation_languages', $data ) ) {
+            $langs = is_array( $data['translation_languages'] )
+                ? $data['translation_languages']
+                : array_filter( array_map( 'trim', explode( ',', (string) $data['translation_languages'] ) ) );
+            $langs = array_values( array_filter( array_map( 'sanitize_text_field', $langs ) ) );
+            update_option( 'luwipress_translation_languages', $langs );
+            $updated[] = 'translation_languages';
+        }
+
+        if ( array_key_exists( 'hreflang_mode', $data ) ) {
+            $mode = sanitize_text_field( (string) $data['hreflang_mode'] );
+            if ( ! in_array( $mode, array( 'auto', 'always', 'never' ), true ) ) {
+                return new WP_Error( 'invalid_mode', 'hreflang_mode must be auto, always, or never.', array( 'status' => 400 ) );
+            }
+            update_option( 'luwipress_hreflang_mode', $mode );
+            $updated[] = 'hreflang_mode';
+        }
+
+        LuwiPress_Logger::log( 'Translation settings updated via REST: ' . implode( ', ', $updated ), 'info' );
+
+        return array(
+            'success'  => true,
+            'updated'  => $updated,
+            'settings' => $this->handle_get_settings( $request ),
+        );
     }
 
     /**
@@ -544,6 +629,41 @@ class LuwiPress_Translation {
      * @param int             $limit     Max items to translate.
      * @return array|WP_Error Result with 'translated' count.
      */
+    /**
+     * POST /translation/batch — Translate N untranslated posts for one or more target languages.
+     *
+     * Used by the Knowledge Graph "Translate N missing products" button. Thin
+     * REST wrapper around handle_bulk_translation() which does the heavy lifting
+     * (fetches missing items via /translation/missing-all, fires request_translation
+     * for each).
+     */
+    public function batch_translate_missing( $request ) {
+        $languages = $request->get_param( 'languages' );
+        $post_type = $request->get_param( 'post_type' );
+        $limit     = min( max( 1, absint( $request->get_param( 'limit' ) ) ), 200 );
+
+        if ( is_string( $languages ) ) {
+            $languages = array_map( 'trim', explode( ',', $languages ) );
+        }
+        $languages = array_values( array_filter( array_map( 'sanitize_text_field', (array) $languages ) ) );
+
+        if ( empty( $languages ) ) {
+            return new WP_Error( 'missing_languages', 'languages parameter is required (array or comma-separated).', array( 'status' => 400 ) );
+        }
+
+        $result = $this->handle_bulk_translation( $request, $post_type, $languages, $limit );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
+        return rest_ensure_response( array_merge( array(
+            'status'    => 'queued',
+            'languages' => $languages,
+            'post_type' => $post_type,
+        ), (array) $result ) );
+    }
+
     public function handle_bulk_translation( $request, $post_type, $languages, $limit = 20 ) {
         if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
             return new WP_Error( 'no_wpml', 'WPML is required for translation.', array( 'status' => 400 ) );

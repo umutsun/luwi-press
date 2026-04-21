@@ -1,20 +1,35 @@
 <?php
 /**
- * LuwiPress hreflang Tag Generator
+ * LuwiPress SEO Writer — fallback meta handler + hreflang output
  *
- * Generates hreflang link tags for multilingual content.
- * Respects WPML/Polylang native hreflang output — only activates
- * when the translation plugin doesn't handle it.
+ * Two responsibilities, both off-by-default when a third-party handles them:
+ *
+ * 1. META FALLBACK — active only when no third-party SEO plugin (Rank Math,
+ *    Yoast, AIOSEO, SEOPress) is detected. Stores SEO meta in LuwiPress-owned
+ *    post meta keys and outputs <title> + <meta name="description"> in wp_head.
+ *
+ * 2. HREFLANG — respects the store's preference. In `auto` mode, checks whether
+ *    WPML/Polylang already output hreflang and stays out of the way if so.
+ *    In `always`, forces LuwiPress tags. In `never`, disabled entirely.
+ *
+ * Meta keys (fallback):
+ *   _luwipress_seo_title
+ *   _luwipress_seo_description
+ *   _luwipress_seo_focus_keyword
  *
  * @package LuwiPress
- * @since 1.2.0
+ * @since   2.1.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class LuwiPress_Hreflang {
+class LuwiPress_SEO_Writer {
+
+	const META_TITLE       = '_luwipress_seo_title';
+	const META_DESCRIPTION = '_luwipress_seo_description';
+	const META_FOCUS_KW    = '_luwipress_seo_focus_keyword';
 
 	private static $instance = null;
 
@@ -25,17 +40,116 @@ class LuwiPress_Hreflang {
 		return self::$instance;
 	}
 
+	/**
+	 * Is the LuwiPress fallback SEO meta writer active?
+	 * True when Plugin Detector reports the "luwipress-native" branch, which
+	 * triggers only when no third-party SEO plugin (Rank Math, Yoast, AIOSEO,
+	 * SEOPress) is installed.
+	 */
+	public static function is_active() {
+		if ( ! class_exists( 'LuwiPress_Plugin_Detector' ) ) {
+			return false;
+		}
+		$seo = LuwiPress_Plugin_Detector::get_instance()->detect_seo();
+		return 'luwipress-native' === ( $seo['plugin'] ?? '' );
+	}
+
 	private function __construct() {
-		$mode = get_option( 'luwipress_hreflang_mode', 'auto' );
-		if ( 'never' === $mode ) {
-			return;
+		// Meta fallback hooks — only when no SEO plugin is active
+		if ( self::is_active() ) {
+			add_filter( 'pre_get_document_title', array( $this, 'filter_document_title' ), 20 );
+			add_action( 'wp_head', array( $this, 'output_meta_description' ), 2 );
 		}
 
-		add_action( 'wp_head', array( $this, 'output_hreflang_tags' ), 1 );
+		// Hreflang hook — respects mode option, independent of is_active()
+		if ( 'never' !== get_option( 'luwipress_hreflang_mode', 'auto' ) ) {
+			add_action( 'wp_head', array( $this, 'output_hreflang_tags' ), 1 );
+		}
+	}
+
+	// ─── META FALLBACK ─────────────────────────────────────────────────
+
+	/**
+	 * Persist SEO meta for a post. Mirrors the plugin-agnostic signature used
+	 * by enrichment callbacks: ['title' => ..., 'description' => ..., 'focus_keyword' => ...].
+	 *
+	 * @param int   $post_id
+	 * @param array $data
+	 * @return bool
+	 */
+	public static function set_meta( $post_id, $data ) {
+		$post_id = absint( $post_id );
+		if ( ! $post_id ) {
+			return false;
+		}
+
+		if ( isset( $data['title'] ) ) {
+			update_post_meta( $post_id, self::META_TITLE, sanitize_text_field( $data['title'] ) );
+		}
+		if ( isset( $data['description'] ) ) {
+			update_post_meta( $post_id, self::META_DESCRIPTION, sanitize_text_field( $data['description'] ) );
+		}
+		if ( isset( $data['focus_keyword'] ) ) {
+			update_post_meta( $post_id, self::META_FOCUS_KW, sanitize_text_field( $data['focus_keyword'] ) );
+		}
+
+		return true;
 	}
 
 	/**
-	 * Output hreflang link tags in <head>
+	 * Read SEO meta for a post.
+	 */
+	public static function get_meta( $post_id ) {
+		$post_id = absint( $post_id );
+		if ( ! $post_id ) {
+			return array();
+		}
+
+		return array(
+			'title'         => (string) get_post_meta( $post_id, self::META_TITLE, true ),
+			'description'   => (string) get_post_meta( $post_id, self::META_DESCRIPTION, true ),
+			'focus_keyword' => (string) get_post_meta( $post_id, self::META_FOCUS_KW, true ),
+		);
+	}
+
+	/**
+	 * Filter the document title when a LuwiPress-stored title exists.
+	 */
+	public function filter_document_title( $title ) {
+		if ( ! is_singular() ) {
+			return $title;
+		}
+		$stored = get_post_meta( get_queried_object_id(), self::META_TITLE, true );
+		if ( ! empty( $stored ) ) {
+			return $stored;
+		}
+		return $title;
+	}
+
+	/**
+	 * Output <meta name="description"> for singular posts when we have one stored.
+	 */
+	public function output_meta_description() {
+		if ( is_admin() || ! is_singular() ) {
+			return;
+		}
+		$desc = get_post_meta( get_queried_object_id(), self::META_DESCRIPTION, true );
+		if ( empty( $desc ) ) {
+			return;
+		}
+		printf(
+			'<meta name="description" content="%s" />' . "\n",
+			esc_attr( $desc )
+		);
+	}
+
+	// ─── HREFLANG OUTPUT ───────────────────────────────────────────────
+
+	/**
+	 * Output hreflang link tags in <head>. Mode controls behaviour:
+	 *   - auto   (default): output only if WPML/Polylang don't already handle it
+	 *   - always: force LuwiPress output regardless
+	 *   - never : disabled (hook not registered)
 	 */
 	public function output_hreflang_tags() {
 		if ( is_admin() || ! is_singular() ) {
@@ -44,7 +158,6 @@ class LuwiPress_Hreflang {
 
 		$mode = get_option( 'luwipress_hreflang_mode', 'auto' );
 
-		// In auto mode, check if WPML/Polylang already outputs hreflang
 		if ( 'auto' === $mode && $this->plugin_handles_hreflang() ) {
 			return;
 		}
@@ -84,16 +197,15 @@ class LuwiPress_Hreflang {
 	}
 
 	/**
-	 * Check if the active translation plugin already outputs hreflang tags
+	 * Check if the active translation plugin already outputs hreflang tags.
 	 */
 	private function plugin_handles_hreflang() {
 		// WPML: check if the SEO module is active (it handles hreflang)
 		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
-			// WPML SEO module adds hreflang via wpml-seo class
 			if ( class_exists( 'WPML_SEO_HeadLangs' ) || has_action( 'wp_head', 'wpml_add_hreflang_header' ) ) {
 				return true;
 			}
-			// WPML itself may add hreflang
+			// WPML itself may add hreflang via a class-based head_langs method
 			global $wp_filter;
 			if ( isset( $wp_filter['wp_head'] ) ) {
 				foreach ( $wp_filter['wp_head']->callbacks as $priority => $hooks ) {
@@ -118,26 +230,18 @@ class LuwiPress_Hreflang {
 	}
 
 	/**
-	 * Get all language URLs for a given post
+	 * Resolve all language URLs for a post via the active translation plugin.
 	 */
 	private function get_language_alternates( $post_id, $trans ) {
-		$alternates = array();
-
 		if ( 'wpml' === $trans['plugin'] ) {
-			$alternates = $this->get_wpml_alternates( $post_id, $trans );
-		} elseif ( 'polylang' === $trans['plugin'] ) {
-			$alternates = $this->get_polylang_alternates( $post_id, $trans );
-		} else {
-			// LuwiPress native translation tracking
-			$alternates = $this->get_native_alternates( $post_id, $trans );
+			return $this->get_wpml_alternates( $post_id, $trans );
 		}
-
-		return $alternates;
+		if ( 'polylang' === $trans['plugin'] ) {
+			return $this->get_polylang_alternates( $post_id, $trans );
+		}
+		return $this->get_native_alternates( $post_id, $trans );
 	}
 
-	/**
-	 * WPML: get all translations of a post
-	 */
 	private function get_wpml_alternates( $post_id, $trans ) {
 		$alternates = array();
 
@@ -170,9 +274,6 @@ class LuwiPress_Hreflang {
 		return $alternates;
 	}
 
-	/**
-	 * Polylang: get all translations of a post
-	 */
 	private function get_polylang_alternates( $post_id, $trans ) {
 		$alternates = array();
 
@@ -192,18 +293,18 @@ class LuwiPress_Hreflang {
 	}
 
 	/**
-	 * LuwiPress native: check translation meta
+	 * Native translation tracking fallback — uses LuwiPress-owned meta keys
+	 * when neither WPML nor Polylang is present.
 	 */
 	private function get_native_alternates( $post_id, $trans ) {
 		$alternates   = array();
 		$default_lang = $trans['default_language'] ?? '';
 
-		// Add current post as the default language
 		if ( $default_lang ) {
 			$alternates[ $default_lang ] = get_permalink( $post_id );
 		}
 
-		// Prime the meta cache once — all subsequent get_post_meta calls are free
+		// Prime the meta cache once — subsequent get_post_meta calls are free
 		get_post_meta( $post_id );
 
 		// Collect translated post IDs for batch permalink resolution

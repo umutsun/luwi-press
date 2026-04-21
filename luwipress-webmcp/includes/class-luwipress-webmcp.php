@@ -820,6 +820,31 @@ class LuwiPress_WebMCP {
             $data    = $config->get_site_config( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
+
+        $this->register_tool( 'cache_purge', array(
+            'description' => 'Purge caches across LiteSpeed, WP Rocket, W3TC, WP Super Cache, Elementor CSS, and WordPress object cache. Use after bulk content or style updates to make new output visible immediately.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'targets' => array(
+                        'type'        => 'array',
+                        'items'       => array( 'type' => 'string', 'enum' => array( 'all', 'elementor', 'litespeed', 'wp_rocket', 'w3tc', 'super_cache', 'object_cache' ) ),
+                        'description' => 'Which caches to clear. Default: ["all"].',
+                    ),
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Optional post ID for per-post regeneration (Elementor CSS).' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Purge Caches', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $api     = LuwiPress_API::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/cache/purge' );
+            $request->set_param( 'targets', $args['targets'] ?? array( 'all' ) );
+            if ( ! empty( $args['post_id'] ) ) {
+                $request->set_param( 'post_id', absint( $args['post_id'] ) );
+            }
+            $data = $api->handle_cache_purge( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
     }
 
     /* ───────────────────── Content Tools ────────────────────────────── */
@@ -1309,6 +1334,28 @@ class LuwiPress_WebMCP {
                 $request->set_param( 'taxonomy', $args['taxonomy'] );
             }
             $data = $trans->get_missing_taxonomy_terms_api( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'translation_batch', array(
+            'description' => 'Translate N untranslated posts for one or more target languages in a single call. Powers the "Translate N missing products" action on Knowledge Graph language nodes.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'languages' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Target language codes (required)' ),
+                    'post_type' => array( 'type' => 'string', 'description' => 'Post type to translate (default: product)' ),
+                    'limit'     => array( 'type' => 'integer', 'description' => 'Max posts to translate (default 50, max 200)' ),
+                ),
+                'required' => array( 'languages' ),
+            ),
+            'annotations' => array( 'title' => 'Batch Translate', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $trans   = LuwiPress_Translation::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/batch' );
+            $request->set_param( 'languages', $args['languages'] ?? array() );
+            $request->set_param( 'post_type', $args['post_type'] ?? 'product' );
+            $request->set_param( 'limit', $args['limit'] ?? 50 );
+            $data = $trans->batch_translate_missing( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
     }
@@ -3551,6 +3598,56 @@ class LuwiPress_WebMCP {
             update_option( $key, sanitize_text_field( $args['value'] ) );
             return array( 'key' => $key, 'old_value' => $old, 'new_value' => $args['value'], 'updated' => true );
         } );
+
+        /* LuwiPress module settings — thin proxies to /<module>/settings REST endpoints */
+
+        $module_settings = array(
+            'enrich'      => array( 'class' => 'LuwiPress_AI_Content',         'route' => '/enrich/settings',      'title' => 'Enrichment Settings' ),
+            'translation' => array( 'class' => 'LuwiPress_Translation',        'route' => '/translation/settings', 'title' => 'Translation Settings' ),
+            'chat'        => array( 'class' => 'LuwiPress_Customer_Chat',      'route' => '/chat/settings',        'title' => 'Customer Chat Settings' ),
+            'schedule'    => array( 'class' => 'LuwiPress_Content_Scheduler',  'route' => '/schedule/settings',    'title' => 'Content Scheduler Settings' ),
+        );
+
+        foreach ( $module_settings as $module => $cfg ) {
+            $class = $cfg['class'];
+            $route = $cfg['route'];
+            $title = $cfg['title'];
+
+            $this->register_tool( "{$module}_settings_get", array(
+                'description' => "Read the current {$module} module settings. Returns the same keys the POST endpoint accepts.",
+                'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+                'annotations' => array( 'title' => "Get {$title}", 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+            ), function () use ( $class, $route ) {
+                if ( ! class_exists( $class ) ) {
+                    return array( 'error' => "{$class} not active" );
+                }
+                $instance = call_user_func( array( $class, 'get_instance' ) );
+                $request  = new WP_REST_Request( 'GET', "/luwipress/v1{$route}" );
+                $data     = $instance->handle_get_settings( $request );
+                return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+            } );
+
+            $this->register_tool( "{$module}_settings_set", array(
+                'description' => "Update the {$module} module settings. Partial update — only keys present in the request body are written; other keys stay unchanged.",
+                'inputSchema' => array(
+                    'type'       => 'object',
+                    'properties' => array(
+                        'settings' => array( 'type' => 'object', 'description' => 'Settings object; keys match the module shape.' ),
+                    ),
+                    'required' => array( 'settings' ),
+                ),
+                'annotations' => array( 'title' => "Update {$title}", 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+            ), function ( $args ) use ( $class, $route ) {
+                if ( ! class_exists( $class ) ) {
+                    return array( 'error' => "{$class} not active" );
+                }
+                $instance = call_user_func( array( $class, 'get_instance' ) );
+                $request  = new WP_REST_Request( 'POST', "/luwipress/v1{$route}" );
+                $request->set_body_params( (array) ( $args['settings'] ?? array() ) );
+                $data = $instance->handle_set_settings( $request );
+                return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+            } );
+        }
     }
 
     /* ───────────────────── Plugin & Theme Tools ────────────────────── */

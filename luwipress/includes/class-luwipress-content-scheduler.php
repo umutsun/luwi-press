@@ -93,6 +93,92 @@ class LuwiPress_Content_Scheduler {
             'callback'            => array($this, 'get_schedule_list'),
             'permission_callback' => array($this, 'verify_token'),
         ));
+
+        // Read scheduler defaults (what UI pre-fills when a new item is created)
+        register_rest_route('luwipress/v1', '/schedule/settings', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'handle_get_settings'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+        ));
+
+        // Write scheduler defaults — partial update
+        register_rest_route('luwipress/v1', '/schedule/settings', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'handle_set_settings'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+            'args'                => array(
+                'default_language'       => array('required' => false, 'type' => 'string'),
+                'default_tone'           => array('required' => false, 'type' => 'string'),
+                'default_word_count'     => array('required' => false, 'type' => 'integer'),
+                'default_generate_image' => array('required' => false, 'type' => 'boolean'),
+                'default_post_type'      => array('required' => false, 'type' => 'string'),
+            ),
+        ));
+    }
+
+    /**
+     * Admin-only permission for scheduler settings.
+     */
+    public function check_admin_permission( $request ) {
+        return LuwiPress_Permission::check_token_or_admin( $request );
+    }
+
+    /**
+     * GET /schedule/settings — default values pre-filled when creating a new scheduled item.
+     * These are site-wide defaults; per-item values can override at create time.
+     */
+    public function handle_get_settings( $request ) {
+        return array(
+            'default_language'       => (string) get_option( 'luwipress_scheduler_default_language', get_option( 'luwipress_target_language', 'en' ) ),
+            'default_tone'           => (string) get_option( 'luwipress_scheduler_default_tone', 'professional' ),
+            'default_word_count'     => absint( get_option( 'luwipress_scheduler_default_word_count', 1500 ) ),
+            'default_generate_image' => (bool) get_option( 'luwipress_scheduler_default_generate_image', 1 ),
+            'default_post_type'      => (string) get_option( 'luwipress_scheduler_default_post_type', 'post' ),
+        );
+    }
+
+    /**
+     * POST /schedule/settings — partial update.
+     */
+    public function handle_set_settings( $request ) {
+        $data = $request->get_json_params();
+        if ( empty( $data ) ) {
+            $data = $request->get_body_params();
+        }
+        $updated = array();
+
+        if ( array_key_exists( 'default_language', $data ) ) {
+            update_option( 'luwipress_scheduler_default_language', sanitize_text_field( (string) $data['default_language'] ) );
+            $updated[] = 'default_language';
+        }
+
+        if ( array_key_exists( 'default_tone', $data ) ) {
+            update_option( 'luwipress_scheduler_default_tone', sanitize_text_field( (string) $data['default_tone'] ) );
+            $updated[] = 'default_tone';
+        }
+
+        if ( array_key_exists( 'default_word_count', $data ) ) {
+            update_option( 'luwipress_scheduler_default_word_count', max( 100, min( 5000, absint( $data['default_word_count'] ) ) ) );
+            $updated[] = 'default_word_count';
+        }
+
+        if ( array_key_exists( 'default_generate_image', $data ) ) {
+            update_option( 'luwipress_scheduler_default_generate_image', ! empty( $data['default_generate_image'] ) ? 1 : 0 );
+            $updated[] = 'default_generate_image';
+        }
+
+        if ( array_key_exists( 'default_post_type', $data ) ) {
+            update_option( 'luwipress_scheduler_default_post_type', sanitize_text_field( (string) $data['default_post_type'] ) );
+            $updated[] = 'default_post_type';
+        }
+
+        LuwiPress_Logger::log( 'Scheduler settings updated via REST: ' . implode( ', ', $updated ), 'info' );
+
+        return array(
+            'success'  => true,
+            'updated'  => $updated,
+            'settings' => $this->handle_get_settings( $request ),
+        );
     }
 
     /**
