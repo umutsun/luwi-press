@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.5
+Stable tag: 3.1.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,31 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.9 — Content Scheduler Bulk Queue + KG Dropdown Fix =
+* NEW: Content Scheduler → "Bulk Queue" section. Paste up to 50 topics (one per line) with optional `| keywords` pipe syntax on each line. Set a start date, a publish spacing (e.g. "1 day" or "6 hours"), an AI stagger interval (default: 5 minutes between generation runs so you don't burst your AI budget), shared tone / word count / language / post type, and the whole batch is queued in one click. Each topic becomes an individual schedule row with its own `wp_schedule_single_event` worker, so AI calls are spread out automatically. A "Run N pending now" button lets operators kick the queue forward without waiting for wp-cron.
+* NEW: Budget-aware deferral — if the daily AI budget is exhausted when a scheduled generation fires, the task automatically reschedules itself for 1 hour later instead of failing. Operators can raise the cap and the queue picks up from where it left off.
+* NEW: `luwipress_generate_single` cron hook — single-item AI generation handler reused by the bulk queue and available for any third-party code that wants to queue content from its own context.
+* FIX: Knowledge Graph Preset/Export dropdowns — when one dropdown was open and the other was clicked, the first one wouldn't close. `e.stopPropagation()` was blocking the document-level outside-click listener used by sibling dropdowns. Now only one dropdown is ever open; a new opener explicitly closes its peers.
+
+= 3.1.8 — Dead Code Removal (n8n residue cleanup) =
+* CLEANUP: Removed the `LuwiPress_AI_Engine::MODE_N8N` constant and the `forward_to_n8n()` stub entirely. These had been deprecated since 2.0.1 (n8n integration removed, all AI handled natively) but were kept as stubs for backward compatibility. They were unreachable in practice — `get_mode()` always returned `'local'` — so removing them has no runtime effect.
+* CLEANUP: Five dead `if ( MODE_N8N === $mode )` branches in AEO generation, single-product enrichment, batch enrichment, per-post translation, and taxonomy translation call sites are gone. Each had lived alongside the real local-AI path since 2.0.1.
+* CLEANUP: `LuwiPress_AI_Engine::get_mode()` and the `MODE_LOCAL` constant also removed — no callers left in the core plugin.
+* CLEANUP: `luwipress_processing_mode` option is no longer written on save or read on load. `luwipress_seo_webhook_url` no longer surfaces in `/site-config` responses. The old Translation Manager "Webhook" engine badge was dropped — the badge now always reads "Local AI".
+* CLEANUP: `LuwiPress_AI_Content::$webhook_url` and `$webhook_api_token` properties (only ever written, never read) removed.
+* NO BREAKING CHANGE for end users: the affected code paths were already dead. If a third-party integration was still calling `forward_to_n8n()` or `get_mode()` directly, it would have been receiving a deprecation error / `'local'` constant anyway. File a ticket if you hit unexpected fatal errors — there's an easy shim to add back.
+
+= 3.1.7 — Batch Monitor, CSV Round-trip, Layout Memory =
+* NEW: Enrichment batch monitor — when you queue "Enrich all products in category" (or any `/product/enrich-batch` call), a floating progress panel appears in the bottom-right corner with a live striped progress bar, elapsed time, and per-status chips (queued / running / done / failed). Polls `/product/enrich-batch/status` every 3 seconds until complete, then refreshes the graph automatically.
+* NEW: CSV round-trip for SEO meta — the Export dropdown now has an "Upload CSV → apply SEO meta" option. Export the "CSV — Opportunity list" or "CSV — Missing SEO" file, edit it offline (Excel, Sheets, any tool), then re-upload. The frontend parses the CSV (flexible column detection: `ID` / `post_id`, `SEO Title` / `Meta Title` / `Title`, `Meta Desc` / `Description`, `Focus Keyword`), previews the count, and dispatches the batch to the new `POST /seo/meta-bulk` endpoint. Up to 500 rows per request. Writes go through the detected SEO plugin (Rank Math / Yoast / AIOSEO / SEOPress) exactly as the single-row `/seo/meta` endpoint does.
+* NEW: Knowledge Graph layout memory — when you drag a node to a preferred position, the position is pinned and saved to localStorage per view (Products / Posts / Pages / Customers). Reopen the graph and your layout is where you left it. A new reset button (↺) in the zoom controls clears the saved layout for the current view and re-flows the simulation.
+* IMPROVED: Design Health stat card now reads "N/A" instead of "0%" on sites without Elementor installed. The card becomes non-interactive (no click-through, no hover cue) when the metric doesn't apply. Server-side `design_audit.elementor_available` flag surfaces this cleanly.
+* IMPROVED: `/knowledge-graph` endpoint description updated to list `design_audit` as a valid section (it was always accepted by the handler, but the args description was missing it).
+
+= 3.1.6 — Knowledge Graph Asset Split (performance) =
+* IMPROVED: Knowledge Graph admin page is now served as a separate `assets/js/knowledge-graph.js` (~93 KB) + `assets/css/knowledge-graph.css` (~26 KB) bundle. These load only on the Knowledge Graph page, not on every LuwiPress admin screen. Page templates drop from 2,466 lines to 174 lines; `admin.css` drops 1,000+ lines (~22% smaller) for every non-KG admin page load. Config (REST URL, API token, nonce) is injected via `wp_localize_script` as `window.lpKgConfig` — no more inline PHP-generated JSON.
+* NO BREAKING CHANGE: no functional or behaviour change — refactor only. The KG page behaves exactly like 3.1.5.
 
 = 3.1.5 — Customers & Elementor Audit Drill-down =
 * NEW: Knowledge Graph fourth view — **Customers**. Shows eight customer segments (VIP, Loyal, Active, New, One-Time, At Risk, Dormant, Lost) as color-coded nodes sized by cohort count. Each segment has its own detail panel with segment definition, priority action, and targeted recommendations (e.g. win-back campaign for One-Time buyers, reactivation offer for Dormant, VIP perk program for VIPs). Keyboard shortcut `4` added for quick switch.

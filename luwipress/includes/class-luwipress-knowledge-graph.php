@@ -90,7 +90,7 @@ class LuwiPress_Knowledge_Graph {
 				'section' => array(
 					'type'              => 'string',
 					'sanitize_callback' => 'sanitize_text_field',
-					'description'       => 'Comma-separated sections: products,categories,translation,seo,aeo,crm,store,plugins,taxonomy,environment,opportunities,posts,pages,content_taxonomy,media_inventory,menus,product_attributes,authors,order_analytics',
+					'description'       => 'Comma-separated sections: products,categories,translation,seo,aeo,crm,store,plugins,taxonomy,environment,opportunities,posts,pages,content_taxonomy,media_inventory,menus,product_attributes,authors,order_analytics,design_audit',
 				),
 				'sections' => array(
 					'type'              => 'string',
@@ -2219,11 +2219,25 @@ class LuwiPress_Knowledge_Graph {
 	 * @return array Design audit data per page type.
 	 */
 	private function build_design_audit_nodes() {
+		$elementor_active = defined( 'ELEMENTOR_VERSION' ) || class_exists( '\\Elementor\\Plugin' );
+
 		$audit = array(
-			'kit'        => $this->audit_kit_css(),
-			'page_types' => $this->audit_page_types(),
-			'summary'    => array(),
+			'elementor_available' => $elementor_active,
+			'kit'                 => $elementor_active ? $this->audit_kit_css() : array( 'has_kit' => false, 'scopes' => array() ),
+			'page_types'          => $elementor_active ? $this->audit_page_types() : array(),
+			'summary'             => array(),
 		);
+
+		if ( ! $elementor_active ) {
+			$audit['summary'] = array(
+				'overall_health'  => null,
+				'total_issues'    => 0,
+				'critical_issues' => 0,
+				'pages_audited'   => 0,
+				'note'            => 'Elementor not installed — design audit disabled.',
+			);
+			return $audit;
+		}
 
 		// Calculate overall design health score
 		$scores = wp_list_pluck( $audit['page_types'], 'health_score' );

@@ -146,6 +146,20 @@ class LuwiPress_API {
                 'focus_keyword' => array( 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ),
             ),
         ) );
+
+        // Bulk SEO meta update — powers the CSV reverse flow (export, edit, re-upload).
+        register_rest_route( 'luwipress/v1', '/seo/meta-bulk', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'handle_bulk_seo_meta' ),
+            'permission_callback' => array( $this, 'check_admin_permission' ),
+            'args'                => array(
+                'rows' => array(
+                    'required'    => true,
+                    'type'        => 'array',
+                    'description' => 'Array of { post_id, title?, description?, focus_keyword? }. Missing fields leave existing values untouched.',
+                ),
+            ),
+        ) );
     }
     
     private function get_webhook_args() {
@@ -1044,6 +1058,74 @@ class LuwiPress_API {
             'success' => true,
             'post_id' => $post_id,
             'updated' => array_keys( $data ),
+        ) );
+    }
+
+    /**
+     * POST /seo/meta-bulk — Apply SEO meta updates to N posts in a single call.
+     *
+     * Body: { rows: [ { post_id, title?, description?, focus_keyword? }, ... ] }
+     * Cap: 500 rows per request so one call cannot monopolise the worker.
+     */
+    public function handle_bulk_seo_meta( $request ) {
+        $rows = $request->get_param( 'rows' );
+        if ( ! is_array( $rows ) || empty( $rows ) ) {
+            return new WP_Error( 'no_rows', 'rows array is required', array( 'status' => 400 ) );
+        }
+        if ( count( $rows ) > 500 ) {
+            return new WP_Error( 'too_many_rows', 'Max 500 rows per request; split your CSV and retry.', array( 'status' => 400 ) );
+        }
+
+        $detector = LuwiPress_Plugin_Detector::get_instance();
+        $applied  = 0;
+        $skipped  = 0;
+        $errors   = array();
+
+        foreach ( $rows as $i => $row ) {
+            $post_id = isset( $row['post_id'] ) ? absint( $row['post_id'] ) : 0;
+            if ( ! $post_id || ! get_post( $post_id ) ) {
+                $errors[] = array( 'row' => $i, 'post_id' => $post_id, 'error' => 'not_found' );
+                $skipped++;
+                continue;
+            }
+
+            $data = array();
+            if ( isset( $row['title'] ) && '' !== $row['title'] ) {
+                $data['title'] = sanitize_text_field( $row['title'] );
+            }
+            if ( isset( $row['description'] ) && '' !== $row['description'] ) {
+                $data['description'] = sanitize_text_field( $row['description'] );
+            }
+            if ( isset( $row['focus_keyword'] ) && '' !== $row['focus_keyword'] ) {
+                $data['focus_keyword'] = sanitize_text_field( $row['focus_keyword'] );
+            }
+
+            if ( empty( $data ) ) {
+                $skipped++;
+                continue;
+            }
+
+            $result = $detector->set_seo_meta( $post_id, $data );
+            if ( $result ) {
+                $applied++;
+            } else {
+                $errors[] = array( 'row' => $i, 'post_id' => $post_id, 'error' => 'seo_plugin_write_failed' );
+                $skipped++;
+            }
+        }
+
+        LuwiPress_Logger::log( 'Bulk SEO meta update', 'info', array(
+            'applied' => $applied,
+            'skipped' => $skipped,
+            'errors'  => count( $errors ),
+        ) );
+
+        return rest_ensure_response( array(
+            'success'    => true,
+            'applied'    => $applied,
+            'skipped'    => $skipped,
+            'error_rows' => array_slice( $errors, 0, 20 ),
+            'total'      => count( $rows ),
         ) );
     }
 }

@@ -23,8 +23,6 @@ $plugin_name    = ucwords( str_replace( '-', ' ', $translation['plugin'] ) );
 $default_lang   = $translation['default_language'] ?? 'en';
 $active_langs   = $translation['active_languages'] ?? array();
 $target_langs   = array_diff( $active_langs, array( $default_lang ) );
-$webhook_url    = get_option( 'luwipress_seo_webhook_url', '' );
-$processing_mode = LuwiPress_AI_Engine::get_mode();
 $is_wpml        = 'wpml' === $translation['plugin'];
 
 $language_names = array(
@@ -48,39 +46,22 @@ if ( isset( $_POST['luwipress_trigger_translation'] ) && check_admin_referer( 'l
 	$limit = absint( $_POST['translate_limit'] ?? 10 );
 
 	if ( ! empty( $lang ) ) {
-		if ( 'local' === $processing_mode ) {
-			// Local AI mode: call the REST endpoint internally
-			$request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
-			$request->set_param( 'product_id', 0 ); // 0 = bulk mode
-			$request->set_param( 'target_languages', array( $lang ) );
-			$request->set_param( 'post_type', $type );
-			$request->set_param( 'limit', $limit );
+		// Call the REST endpoint internally (local AI mode is the only mode).
+		$request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
+		$request->set_param( 'product_id', 0 ); // 0 = bulk mode
+		$request->set_param( 'target_languages', array( $lang ) );
+		$request->set_param( 'post_type', $type );
+		$request->set_param( 'limit', $limit );
 
-			$translation_instance = LuwiPress_Translation::get_instance();
-			$result = $translation_instance->handle_bulk_translation( $request, $type, array( $lang ), $limit );
+		$translation_instance = LuwiPress_Translation::get_instance();
+		$result = $translation_instance->handle_bulk_translation( $request, $type, array( $lang ), $limit );
 
-			$type_label = get_post_type_object( $type )->labels->name ?? $type;
-			if ( is_wp_error( $result ) ) {
-				echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Translation failed: %s', 'luwipress' ), esc_html( $result->get_error_message() ) ) . '</p></div>';
-			} else {
-				$count = is_array( $result ) ? ( $result['translated'] ?? 0 ) : 0;
-				echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Translation completed: %s %s — %d items translated via Local AI.', 'luwipress' ), strtoupper( $lang ), esc_html( $type_label ), $count ) . '</p></div>';
-			}
-		} elseif ( ! empty( $webhook_url ) ) {
-			$url = trailingslashit( $webhook_url ) . 'translation-request';
-			$response = wp_remote_post( $url, array(
-				'timeout' => 15,
-				'headers' => array( 'Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . get_option( 'luwipress_seo_api_token', '' ) ),
-				'body'    => wp_json_encode( array( 'event' => 'translate_missing', 'target_languages' => $lang, 'post_type' => $type, 'limit' => $limit, 'fetch_pending' => true, 'site_url' => get_site_url() ) ),
-			) );
-			$code = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
-			if ( ! is_wp_error( $response ) && $code >= 200 && $code < 300 ) {
-				$type_label = get_post_type_object( $type )->labels->name ?? $type;
-				echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Translation started: %s %s, up to %d items.', 'luwipress' ), strtoupper( $lang ), esc_html( $type_label ), $limit ) . '</p></div>';
-			} else {
-				$err = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP ' . $code;
-				echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Translation trigger failed: %s', 'luwipress' ), esc_html( $err ) ) . '</p></div>';
-			}
+		$type_label = get_post_type_object( $type )->labels->name ?? $type;
+		if ( is_wp_error( $result ) ) {
+			echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Translation failed: %s', 'luwipress' ), esc_html( $result->get_error_message() ) ) . '</p></div>';
+		} else {
+			$count = is_array( $result ) ? ( $result['translated'] ?? 0 ) : 0;
+			echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Translation completed: %s %s — %d items translated.', 'luwipress' ), strtoupper( $lang ), esc_html( $type_label ), $count ) . '</p></div>';
 		}
 	}
 }
@@ -94,48 +75,22 @@ if ( isset( $_POST['luwipress_trigger_taxonomy_translation'] ) && check_admin_re
 	$tax_languages = sanitize_text_field( $_POST['translate_tax_languages'] ?? '' );
 
 	if ( ! empty( $tax_slug ) ) {
-		if ( 'local' === $processing_mode ) {
-			// Local AI mode: call taxonomy translation via REST endpoint internally
-			$tax_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/taxonomy' );
-			$tax_request->set_param( 'taxonomy', $tax_slug );
-			$tax_request->set_param( 'target_languages', $tax_languages );
-			$tax_request->set_param( 'limit', 200 );
+		// Call taxonomy translation via REST endpoint internally.
+		$tax_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/taxonomy' );
+		$tax_request->set_param( 'taxonomy', $tax_slug );
+		$tax_request->set_param( 'target_languages', $tax_languages );
+		$tax_request->set_param( 'limit', 200 );
 
-			$translation_instance = LuwiPress_Translation::get_instance();
-			$result = $translation_instance->request_taxonomy_translation( $tax_request );
-			$result_data = is_object( $result ) && method_exists( $result, 'get_data' ) ? $result->get_data() : $result;
+		$translation_instance = LuwiPress_Translation::get_instance();
+		$result = $translation_instance->request_taxonomy_translation( $tax_request );
+		$result_data = is_object( $result ) && method_exists( $result, 'get_data' ) ? $result->get_data() : $result;
 
-			$tax_label = $tax_types[ $tax_slug ] ?? $tax_slug;
-			if ( is_wp_error( $result ) ) {
-				echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation failed: %s', 'luwipress' ), esc_html( $result->get_error_message() ) ) . '</p></div>';
-			} else {
-				$terms_sent = $result_data['terms_sent'] ?? 0;
-				echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation completed: %s — %d terms translated via Local AI.', 'luwipress' ), esc_html( $tax_label ), $terms_sent ) . '</p></div>';
-			}
-		} elseif ( ! empty( $webhook_url ) ) {
-			$url = trailingslashit( $webhook_url ) . 'translation-request';
-			$response = wp_remote_post( $url, array(
-				'timeout' => 15,
-				'headers' => array( 'Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . get_option( 'luwipress_seo_api_token', '' ) ),
-				'body'    => wp_json_encode( array(
-					'event'            => 'taxonomy_translation_request',
-					'taxonomy'         => $tax_slug,
-					'target_languages' => $tax_languages,
-					'source_language'  => $default_lang,
-					'site_url'         => get_site_url(),
-					'callback_url'     => rest_url( 'luwipress/v1/translation/taxonomy-callback' ),
-					'api_token'        => get_option( 'luwipress_seo_api_token', '' ),
-					'fetch_endpoint'   => rest_url( 'luwipress/v1/translation/taxonomy-missing' ),
-				) ),
-			) );
-			$code = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
-			if ( ! is_wp_error( $response ) && $code >= 200 && $code < 300 ) {
-				$tax_label = $tax_types[ $tax_slug ] ?? $tax_slug;
-				echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation started: %s for all languages.', 'luwipress' ), esc_html( $tax_label ) ) . '</p></div>';
-			} else {
-				$err = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP ' . $code;
-				echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation failed: %s', 'luwipress' ), esc_html( $err ) ) . '</p></div>';
-			}
+		$tax_label = $tax_types[ $tax_slug ] ?? $tax_slug;
+		if ( is_wp_error( $result ) ) {
+			echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation failed: %s', 'luwipress' ), esc_html( $result->get_error_message() ) ) . '</p></div>';
+		} else {
+			$terms_sent = $result_data['terms_sent'] ?? 0;
+			echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( esc_html__( 'Taxonomy translation completed: %s — %d terms translated.', 'luwipress' ), esc_html( $tax_label ), $terms_sent ) . '</p></div>';
 		}
 	}
 }
@@ -288,11 +243,7 @@ if ( $is_wpml ) {
 				<?php esc_html_e( 'Translation Manager', 'luwipress' ); ?>
 			</h1>
 			<span class="tm-engine-badge">
-				<?php if ( 'local' === $processing_mode ) : ?>
-					<span class="dashicons dashicons-desktop" style="font-size:14px;width:14px;height:14px;"></span> <?php esc_html_e( 'Local AI', 'luwipress' ); ?>
-				<?php else : ?>
-					<span class="dashicons dashicons-cloud" style="font-size:14px;width:14px;height:14px;"></span> Webhook
-				<?php endif; ?>
+				<span class="dashicons dashicons-desktop" style="font-size:14px;width:14px;height:14px;"></span> <?php esc_html_e( 'Local AI', 'luwipress' ); ?>
 			</span>
 		</div>
 		<div class="tm-header-right">

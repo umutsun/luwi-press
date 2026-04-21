@@ -278,6 +278,82 @@
                     location.reload();
                 }, 15000);
             }
+
+            // Bulk queue form
+            var $bulkForm = $('#sched-bulk-form');
+            var $bulkTextarea = $('#sched-bulk-topics');
+            var $bulkCount = $('#sched-bulk-count');
+
+            function updateBulkCount() {
+                var lines = ($bulkTextarea.val() || '').split('\n').filter(function(l) { return l.trim().length > 0; }).length;
+                $bulkCount.text(lines + ' / 50');
+                if (lines > 50) $bulkCount.css('color', 'var(--lp-error)'); else $bulkCount.css('color', '');
+            }
+            $bulkTextarea.on('input', updateBulkCount);
+            updateBulkCount();
+
+            $bulkForm.on('submit', function(e) {
+                e.preventDefault();
+                var $form = $(this);
+                var $btn = $form.find('.sched-submit');
+                var $result = $('#sched-bulk-result');
+                var lineCount = ($bulkTextarea.val() || '').split('\n').filter(function(l) { return l.trim().length > 0; }).length;
+
+                if (lineCount === 0) {
+                    $result.html('<div class="notice notice-error" style="border-radius:6px;"><p>Please add at least one topic.</p></div>');
+                    return;
+                }
+                if (lineCount > 50) {
+                    $result.html('<div class="notice notice-error" style="border-radius:6px;"><p>Maximum 50 topics per batch.</p></div>');
+                    return;
+                }
+
+                $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Queuing...');
+                $result.html('');
+
+                $.ajax({
+                    url: luwipress.ajax_url,
+                    type: 'POST',
+                    data: $form.serialize(),
+                    success: function(res) {
+                        if (res.success) {
+                            var d = res.data;
+                            var msg = 'Queued ' + d.queued + ' topic' + (d.queued !== 1 ? 's' : '');
+                            if (d.skipped) msg += ' · ' + d.skipped + ' skipped';
+                            msg += '. Refreshing…';
+                            $result.html('<div class="notice notice-success" style="border-radius:6px;"><p>' + msg + '</p></div>');
+                            setTimeout(function() { location.reload(); }, 1800);
+                        } else {
+                            $result.html('<div class="notice notice-error" style="border-radius:6px;"><p>' + (res.data || 'Error') + '</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $result.html('<div class="notice notice-error" style="border-radius:6px;"><p>Request failed</p></div>');
+                    },
+                    complete: function() {
+                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt"></span> Queue All Topics');
+                    }
+                });
+            });
+
+            // "Run pending now" — fires the AI generation immediately for up to 10 pending items
+            $('#sched-run-now').on('click', function() {
+                var $btn = $(this);
+                if (!confirm('Run up to 10 pending items through AI generation right now?')) return;
+                $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Running…');
+                $.post(luwipress.ajax_url, {
+                    action: 'luwipress_run_pending_now',
+                    _wpnonce: $('#sched-bulk-form input[name="_wpnonce"]').val()
+                }, function(res) {
+                    if (res.success) {
+                        alert('Processed ' + res.data.processed + ' item(s). Refreshing…');
+                        location.reload();
+                    } else {
+                        alert(res.data || 'Error');
+                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-controls-play"></span> Run pending now');
+                    }
+                });
+            });
         }
 
         // ========================================

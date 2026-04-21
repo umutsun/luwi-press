@@ -15,8 +15,7 @@ if ( ! current_user_can( 'manage_options' ) ) {
 
 // Handle settings save
 if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipress_settings_nonce' ) ) {
-	// Processing Mode
-	update_option( 'luwipress_processing_mode', 'local' );
+	// AI Provider
 	update_option( 'luwipress_default_provider', sanitize_text_field( $_POST['luwipress_default_provider'] ?? 'anthropic' ) );
 
 	// API Token
@@ -285,7 +284,6 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		<div class="luwipress-tab-content <?php echo 'connection' === $active_tab ? 'tab-active' : ''; ?>" id="tab-connection">
 
 			<?php
-			$processing_mode = get_option( 'luwipress_processing_mode', 'local' );
 			$webmcp_active   = class_exists( 'LuwiPress_WebMCP' ) || defined( 'LUWIPRESS_WEBMCP_VERSION' );
 			// Mirror the companion's default (enabled when the option isn't yet persisted).
 			// Companion default is `true`; core default when companion absent is `false`.

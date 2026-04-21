@@ -51,16 +51,6 @@ parameters:
 			path: luwipress/includes/class-luwipress-ai-content.php
 
 		-
-			message: "#^Property LuwiPress_AI_Content\\:\\:\\$webhook_api_token is never read, only written\\.$#"
-			count: 1
-			path: luwipress/includes/class-luwipress-ai-content.php
-
-		-
-			message: "#^Property LuwiPress_AI_Content\\:\\:\\$webhook_url is never read, only written\\.$#"
-			count: 1
-			path: luwipress/includes/class-luwipress-ai-content.php
-
-		-
 			message: "#^Parameter \\#1 \\$post of function get_the_title expects int\\|WP_Post, string given\\.$#"
 			count: 1
 			path: luwipress/includes/class-luwipress-ai-engine.php

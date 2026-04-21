@@ -17,12 +17,6 @@ class LuwiPress_AI_Content {
 
     private static $instance = null;
 
-    /** Legacy external webhook URL (kept for back-compat with existing installs). */
-    private $webhook_url;
-
-    /** Legacy external webhook API token. */
-    private $webhook_api_token;
-
     public static function get_instance() {
         if (null === self::$instance) {
             self::$instance = new self();
@@ -31,9 +25,6 @@ class LuwiPress_AI_Content {
     }
 
     private function __construct() {
-        $this->webhook_url       = get_option('luwipress_seo_webhook_url', '');
-        $this->webhook_api_token = get_option('luwipress_seo_api_token', '');
-
         add_action('rest_api_init', array($this, 'register_endpoints'));
         add_action('add_meta_boxes', array($this, 'add_product_meta_box'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_product_scripts'));
@@ -216,56 +207,6 @@ class LuwiPress_AI_Content {
             return new WP_Error( 'already_processing', 'Product #' . $product_id . ' is already being enriched.' );
         }
         set_transient( $lock_key, true, 300 ); // 5-minute lock
-
-        $mode = LuwiPress_AI_Engine::get_mode();
-
-        if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            // Legacy webhook mode (deprecated): forward to webhook, callback returns via /product/enrich-callback
-            $image_url = wp_get_attachment_url( $product->get_image_id() );
-            $gallery   = array_map( 'wp_get_attachment_url', $product->get_gallery_image_ids() );
-
-            $result = LuwiPress_AI_Engine::forward_to_n8n( 'product_enrich', array(
-                'product' => array(
-                    'id'                => $product_id,
-                    'name'              => $product->get_name(),
-                    'short_description' => $product->get_short_description(),
-                    'description'       => $product->get_description(),
-                    'sku'               => $product->get_sku(),
-                    'price'             => $product->get_price(),
-                    'regular_price'     => $product->get_regular_price(),
-                    'sale_price'        => $product->get_sale_price(),
-                    'categories'        => wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'names' ) ),
-                    'tags'              => wp_get_post_terms( $product_id, 'product_tag', array( 'fields' => 'names' ) ),
-                    'attributes'        => $this->get_product_attributes( $product ),
-                    'image_url'         => $image_url ?: '',
-                    'gallery_urls'      => array_filter( $gallery ),
-                    'weight'            => $product->get_weight(),
-                    'dimensions'        => array(
-                        'length' => $product->get_length(),
-                        'width'  => $product->get_width(),
-                        'height' => $product->get_height(),
-                    ),
-                    'stock_status'      => $product->get_stock_status(),
-                    'permalink'         => get_permalink( $product_id ),
-                ),
-                'options' => wp_parse_args( $options, array(
-                    'generate_description'       => true,
-                    'generate_short_description' => true,
-                    'generate_meta_title'        => true,
-                    'generate_meta_description'  => true,
-                    'generate_faq'               => true,
-                    'generate_schema'            => true,
-                    'generate_alt_text'          => true,
-                    'generate_image'             => (bool) get_option( 'luwipress_enrich_generate_image', false ),
-                    'target_language'            => get_option( 'luwipress_target_language', 'tr' ),
-                ) ),
-            ), rest_url( 'luwipress/v1/product/enrich-callback' ) );
-
-            if ( is_wp_error( $result ) ) {
-                delete_transient( $lock_key );
-            }
-            return $result;
-        }
 
         // Local mode: call AI directly and feed result into existing callback handler
         $product_data = array(
@@ -715,34 +656,7 @@ class LuwiPress_AI_Content {
             update_post_meta( $pid, '_luwipress_enrich_requested', current_time( 'mysql' ) );
         }
 
-        $mode = LuwiPress_AI_Engine::get_mode();
-
-        if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            // webhook mode: send entire batch to webhook
-            $result = LuwiPress_AI_Engine::forward_to_n8n( 'product_enrich_batch', array(
-                'batch_id' => $batch_id,
-                'products' => $products_data,
-                'options'  => wp_parse_args( $options, array(
-                    'generate_description'       => true,
-                    'generate_short_description' => true,
-                    'generate_meta_title'        => true,
-                    'generate_meta_description'  => true,
-                    'generate_faq'               => true,
-                    'generate_schema'            => true,
-                    'generate_alt_text'          => true,
-                    'target_language'            => get_option( 'luwipress_target_language', 'tr' ),
-                ) ),
-            ), rest_url( 'luwipress/v1/product/enrich-callback' ) );
-
-            if ( is_wp_error( $result ) ) {
-                LuwiPress_Logger::log( 'Batch enrichment send failed: ' . $result->get_error_message(), 'error', array( 'batch_id' => $batch_id ) );
-            } else {
-                LuwiPress_Logger::log( 'Batch enrichment sent for AI processing: ' . count( $product_ids ) . ' products', 'info', array( 'batch_id' => $batch_id ) );
-            }
-            return;
-        }
-
-        // Local mode: process each product sequentially via AI Engine
+        // Process each product sequentially via AI Engine
         foreach ( $products_data as $p ) {
             $product = wc_get_product( $p['id'] );
             if ( ! $product ) {

@@ -31,6 +31,9 @@ exec*.json
 # Editor/tool scratch
 .kilo/
 
+# Per-client working files (Tapadum Kit CSS backups, JSON dumps, scripts)
+temp/
+
 # Parked (out-of-focus) companion work
 parked/
 

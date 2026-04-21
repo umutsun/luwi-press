@@ -2,9 +2,9 @@
 /**
  * AI Engine — Central dispatcher for all AI operations.
  *
- * Replaces per-class webhook helpers with a unified dispatch()
- * call that routes to the configured local AI provider
- * based on the configured processing mode.
+ * All AI calls (product enrichment, translation, FAQ, review responses, chat, etc.)
+ * flow through `dispatch()` or `dispatch_json()`. Providers (OpenAI, Anthropic,
+ * Google, OpenAI-Compatible) are resolved from the configured settings.
  *
  * @package LuwiPress
  * @since   2.0.0
@@ -15,9 +15,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class LuwiPress_AI_Engine {
-
-	const MODE_LOCAL = 'local';
-	const MODE_N8N   = 'n8n';
 
 	/**
 	 * Provider instances cache.
@@ -66,14 +63,6 @@ class LuwiPress_AI_Engine {
 	);
 
 	// ─── PUBLIC API ───────────────────────────────────────────────
-
-	/**
-	 * Always returns 'local' — external webhook mode removed in v2.0.
-	 * Kept for backward compatibility with modules that still check mode.
-	 */
-	public static function get_mode() {
-		return self::MODE_LOCAL;
-	}
 
 	/**
 	 * Main dispatch — calls AI provider directly, parses response, returns structured result.
@@ -384,14 +373,6 @@ class LuwiPress_AI_Engine {
 		);
 
 		return $parsed;
-	}
-
-	/**
-	 * Stub — external webhook forwarding removed in v2.0. Returns error if called.
-	 * Kept as a stable API surface so legacy call sites compile; real routing is local.
-	 */
-	public static function forward_to_n8n( $event, array $payload = array(), $callback_url = '' ) {
-		return new WP_Error( 'luwipress_webhook_disabled', __( 'External webhook forwarding has been removed. All AI processing is handled natively.', 'luwipress' ) );
 	}
 
 	// ─── PROVIDER MANAGEMENT ──────────────────────────────────────

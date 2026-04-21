@@ -476,132 +476,118 @@ class LuwiPress_Translation {
             'permalink'  => get_permalink($product_id),
         ];
 
-        $mode = LuwiPress_AI_Engine::get_mode();
+        // Translate directly via AI Engine for each language
+        $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese', 'pt-pt' => 'Portuguese', 'ko' => 'Korean' );
+        $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
 
-        if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            // Legacy webhook mode (dead path — get_mode() always returns 'local').
-            $result = LuwiPress_AI_Engine::forward_to_n8n( 'translation_request', $payload, rest_url( 'luwipress/v1/translation/callback' ) );
-            if ( is_wp_error( $result ) ) {
-                return $result;
-            }
+        // Elementor pages: ALWAYS use cron background job (never sync — avoids timeout)
+        $is_elementor_page = class_exists( 'LuwiPress_Elementor' ) && LuwiPress_Elementor::is_elementor_page( $product_id );
+
+        if ( $is_elementor_page ) {
             foreach ( $target_languages as $lang ) {
-                update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'processing' );
-                update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_requested', current_time( 'c' ) );
+                update_post_meta( $product_id, '_luwipress_translation_status', wp_json_encode( array(
+                    'status'   => 'queued',
+                    'language' => $lang,
+                    'queued'   => current_time( 'mysql' ),
+                ) ) );
+                wp_schedule_single_event( time(), 'luwipress_elementor_translate_single', array( $product_id, $lang ) );
             }
-        } else {
-            // Local mode: translate directly via AI Engine for each language
-            $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese', 'pt-pt' => 'Portuguese', 'ko' => 'Korean' );
-            $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
+            spawn_cron();
+            LuwiPress_Logger::log( 'Elementor page #' . $product_id . ' queued for background translation → ' . implode( ',', $target_languages ), 'info' );
+            return rest_ensure_response( array(
+                'status'      => 'queued',
+                'post_id'     => $product_id,
+                'languages'   => $target_languages,
+                'message'     => 'Elementor page queued for background translation',
+            ) );
+        }
 
-            // Elementor pages: ALWAYS use cron background job (never sync — avoids timeout)
-            $is_elementor_page = class_exists( 'LuwiPress_Elementor' ) && LuwiPress_Elementor::is_elementor_page( $product_id );
+        foreach ( $target_languages as $lang ) {
+            update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'processing' );
+            update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_requested', current_time( 'c' ) );
 
-            if ( $is_elementor_page ) {
-                foreach ( $target_languages as $lang ) {
-                    update_post_meta( $product_id, '_luwipress_translation_status', wp_json_encode( array(
-                        'status'   => 'queued',
-                        'language' => $lang,
-                        'queued'   => current_time( 'mysql' ),
-                    ) ) );
-                    wp_schedule_single_event( time(), 'luwipress_elementor_translate_single', array( $product_id, $lang ) );
-                }
-                spawn_cron();
-                LuwiPress_Logger::log( 'Elementor page #' . $product_id . ' queued for background translation → ' . implode( ',', $target_languages ), 'info' );
-                return rest_ensure_response( array(
-                    'status'      => 'queued',
-                    'post_id'     => $product_id,
-                    'languages'   => $target_languages,
-                    'message'     => 'Elementor page queued for background translation',
-                ) );
-            }
+            $target_name = $lang_names[ $lang ] ?? ucfirst( $lang );
 
-            foreach ( $target_languages as $lang ) {
-                update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'processing' );
-                update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_requested', current_time( 'c' ) );
+            // ── Standard Translation Path (non-Elementor or short content) ──
 
-                $target_name = $lang_names[ $lang ] ?? ucfirst( $lang );
+            // Calculate max_tokens based on content length
+            $content_length = strlen( $payload['content']['description'] ?? '' );
+            $estimated_tokens = max( 4096, intval( $content_length / 3 ) );
+            $max_tokens = min( $estimated_tokens, 16000 ); // GPT-4o-mini limit
 
-                // ── Standard Translation Path (non-Elementor or short content) ──
+            $prompt   = LuwiPress_Prompts::translation( $payload['content'], $source_name, $target_name, $product_id );
+            $messages = LuwiPress_AI_Engine::build_messages( $prompt );
+            $ai_result = LuwiPress_AI_Engine::dispatch_json( 'translation-pipeline', $messages, array(
+                'max_tokens' => $max_tokens,
+                'timeout'    => 180,
+            ) );
 
-                // Calculate max_tokens based on content length
-                $content_length = strlen( $payload['content']['description'] ?? '' );
-                $estimated_tokens = max( 4096, intval( $content_length / 3 ) );
-                $max_tokens = min( $estimated_tokens, 16000 ); // GPT-4o-mini limit
+            // If JSON parse failed, extract from error data or retry
+            if ( is_wp_error( $ai_result ) && strpos( $ai_result->get_error_message(), 'parse JSON' ) !== false ) {
+                $raw_text = $ai_result->get_error_data()['raw'] ?? '';
 
-                $prompt   = LuwiPress_Prompts::translation( $payload['content'], $source_name, $target_name, $product_id );
-                $messages = LuwiPress_AI_Engine::build_messages( $prompt );
-                $ai_result = LuwiPress_AI_Engine::dispatch_json( 'translation-pipeline', $messages, array(
-                    'max_tokens' => $max_tokens,
-                    'timeout'    => 180,
-                ) );
-
-                // If JSON parse failed, extract from error data or retry
-                if ( is_wp_error( $ai_result ) && strpos( $ai_result->get_error_message(), 'parse JSON' ) !== false ) {
-                    $raw_text = $ai_result->get_error_data()['raw'] ?? '';
-
-                    // If no raw text in error, do a single retry with dispatch (non-JSON)
-                    if ( empty( $raw_text ) ) {
-                        $raw_result = LuwiPress_AI_Engine::dispatch( 'translation-pipeline', $messages, array(
-                            'max_tokens' => $max_tokens,
-                            'timeout'    => 180,
-                        ) );
-                        if ( ! is_wp_error( $raw_result ) ) {
-                            $raw_text = $raw_result['content'] ?? '';
-                        }
-                    }
-
-                    if ( ! empty( $raw_text ) ) {
-                        // Try to extract JSON
-                        $parsed = LuwiPress_AI_Engine::extract_json( $raw_text );
-                        if ( $parsed ) {
-                            $ai_result = $parsed;
-                        } else {
-                            // JSON parse failed AND extract_json failed. NEVER write raw text to
-                            // post_content — it could be a literal JSON payload dump (bug history:
-                            // corrupted IT copies on tapadum.com, 2026-04-20). Fail the translation
-                            // and preserve existing content untouched.
-                            update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'failed' );
-                            LuwiPress_Logger::log(
-                                'Translation JSON parse failed for ' . $lang . ' (product #' . $product_id . '): raw response could not be parsed, translation rejected to protect existing content. raw_len=' . strlen( $raw_text ),
-                                'error',
-                                array( 'product_id' => $product_id, 'language' => $lang, 'raw_head' => mb_substr( $raw_text, 0, 200 ) )
-                            );
-                            continue;
-                        }
+                // If no raw text in error, do a single retry with dispatch (non-JSON)
+                if ( empty( $raw_text ) ) {
+                    $raw_result = LuwiPress_AI_Engine::dispatch( 'translation-pipeline', $messages, array(
+                        'max_tokens' => $max_tokens,
+                        'timeout'    => 180,
+                    ) );
+                    if ( ! is_wp_error( $raw_result ) ) {
+                        $raw_text = $raw_result['content'] ?? '';
                     }
                 }
 
-                if ( is_wp_error( $ai_result ) ) {
-                    update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'failed' );
-                    LuwiPress_Logger::log( 'Translation failed for ' . $lang . ': ' . $ai_result->get_error_message(), 'error', array( 'product_id' => $product_id ) );
-                    continue;
+                if ( ! empty( $raw_text ) ) {
+                    // Try to extract JSON
+                    $parsed = LuwiPress_AI_Engine::extract_json( $raw_text );
+                    if ( $parsed ) {
+                        $ai_result = $parsed;
+                    } else {
+                        // JSON parse failed AND extract_json failed. NEVER write raw text to
+                        // post_content — it could be a literal JSON payload dump (bug history:
+                        // corrupted IT copies on tapadum.com, 2026-04-20). Fail the translation
+                        // and preserve existing content untouched.
+                        update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'failed' );
+                        LuwiPress_Logger::log(
+                            'Translation JSON parse failed for ' . $lang . ' (product #' . $product_id . '): raw response could not be parsed, translation rejected to protect existing content. raw_len=' . strlen( $raw_text ),
+                            'error',
+                            array( 'product_id' => $product_id, 'language' => $lang, 'raw_head' => mb_substr( $raw_text, 0, 200 ) )
+                        );
+                        continue;
+                    }
                 }
-
-                // Feed into existing callback handler
-                // If title is empty (JSON fallback), keep original title rather than leaving blank
-                $translated_title = $ai_result['title'] ?? $ai_result['name'] ?? '';
-                if ( empty( $translated_title ) ) {
-                    $translated_title = $post ? ( $product ? $product->get_name() : $post->post_title ) : '';
-                    LuwiPress_Logger::log( 'Translation title empty for ' . $lang . ', keeping original: "' . mb_substr( $translated_title, 0, 50 ) . '"', 'warning' );
-                }
-
-                $callback_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/callback' );
-                $callback_request->set_body_params( array(
-                    'product_id' => $product_id,
-                    'language'   => $lang,
-                    'content'    => array(
-                        'name'             => $translated_title,
-                        'description'      => $ai_result['description'] ?? '',
-                        'short_description' => $ai_result['short_description'] ?? '',
-                        'meta_title'       => $ai_result['meta_title'] ?? '',
-                        'meta_description' => $ai_result['meta_description'] ?? '',
-                        'focus_keyword'    => $ai_result['focus_keyword'] ?? '',
-                        'slug'             => $ai_result['slug'] ?? '',
-                    ),
-                    'status' => 'completed',
-                ) );
-                $this->handle_translation_callback( $callback_request );
             }
+
+            if ( is_wp_error( $ai_result ) ) {
+                update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'failed' );
+                LuwiPress_Logger::log( 'Translation failed for ' . $lang . ': ' . $ai_result->get_error_message(), 'error', array( 'product_id' => $product_id ) );
+                continue;
+            }
+
+            // Feed into existing callback handler
+            // If title is empty (JSON fallback), keep original title rather than leaving blank
+            $translated_title = $ai_result['title'] ?? $ai_result['name'] ?? '';
+            if ( empty( $translated_title ) ) {
+                $translated_title = $post ? ( $product ? $product->get_name() : $post->post_title ) : '';
+                LuwiPress_Logger::log( 'Translation title empty for ' . $lang . ', keeping original: "' . mb_substr( $translated_title, 0, 50 ) . '"', 'warning' );
+            }
+
+            $callback_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/callback' );
+            $callback_request->set_body_params( array(
+                'product_id' => $product_id,
+                'language'   => $lang,
+                'content'    => array(
+                    'name'             => $translated_title,
+                    'description'      => $ai_result['description'] ?? '',
+                    'short_description' => $ai_result['short_description'] ?? '',
+                    'meta_title'       => $ai_result['meta_title'] ?? '',
+                    'meta_description' => $ai_result['meta_description'] ?? '',
+                    'focus_keyword'    => $ai_result['focus_keyword'] ?? '',
+                    'slug'             => $ai_result['slug'] ?? '',
+                ),
+                'status' => 'completed',
+            ) );
+            $this->handle_translation_callback( $callback_request );
         }
 
         LuwiPress_Logger::log( 'Translation requested for: ' . ( $product ? $product->get_name() : $post->post_title ), 'info', array(
@@ -609,11 +595,10 @@ class LuwiPress_Translation {
             'source_post_id'  => $source_post_id,
             'source_language' => $source_language,
             'languages'       => $target_languages,
-            'mode'            => $mode,
         ) );
 
         return rest_ensure_response( array(
-            'status'           => LuwiPress_AI_Engine::MODE_N8N === $mode ? 'queued' : 'completed',
+            'status'           => 'completed',
             'product_id'       => $product_id,
             'target_languages' => $target_languages,
         ) );
@@ -2315,69 +2300,58 @@ class LuwiPress_Translation {
             'terms'            => $missing_terms,
         ];
 
-        $mode = LuwiPress_AI_Engine::get_mode();
+        // Translate directly via AI Engine for each language
+        $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian' );
+        $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
 
-        if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            // Legacy webhook mode (dead path — get_mode() always returns 'local').
-            $result = LuwiPress_AI_Engine::forward_to_n8n( 'taxonomy_translation_request', $payload, rest_url( 'luwipress/v1/translation/taxonomy-callback' ) );
-            if ( is_wp_error( $result ) ) {
-                return $result;
-            }
-        } else {
-            // Local mode: translate directly via AI Engine for each language
-            $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian' );
-            $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
+        $all_translations = array();
+        foreach ( $target_languages as $lang ) {
+            $target_name = $lang_names[ $lang ] ?? ucfirst( $lang );
 
-            $all_translations = array();
-            foreach ( $target_languages as $lang ) {
-                $target_name = $lang_names[ $lang ] ?? ucfirst( $lang );
-
-                // Build terms array for prompt
-                $terms_for_prompt = array();
-                foreach ( $missing_terms as $term ) {
-                    $terms_for_prompt[] = array(
-                        'term_id' => $term['term_id'] ?? 0,
-                        'name'    => $term['name'] ?? '',
-                        'slug'    => $term['slug'] ?? '',
-                    );
-                }
-
-                $prompt   = LuwiPress_Prompts::taxonomy_translation( $terms_for_prompt, $taxonomy, $source_name, $target_name );
-                $messages = LuwiPress_AI_Engine::build_messages( $prompt );
-                $ai_result = LuwiPress_AI_Engine::dispatch_json( 'translation-pipeline', $messages, array(
-                    'max_tokens' => 2000,
-                ) );
-
-                if ( is_wp_error( $ai_result ) ) {
-                    LuwiPress_Logger::log( 'Taxonomy translation failed for ' . $lang, 'error', array( 'taxonomy' => $taxonomy ) );
-                    continue;
-                }
-
-                // Ensure result is an array of translations
-                $translated = is_array( $ai_result ) && isset( $ai_result[0] ) ? $ai_result : ( $ai_result['translations'] ?? array() );
-                $all_translations = array_merge( $all_translations, $translated );
+            // Build terms array for prompt
+            $terms_for_prompt = array();
+            foreach ( $missing_terms as $term ) {
+                $terms_for_prompt[] = array(
+                    'term_id' => $term['term_id'] ?? 0,
+                    'name'    => $term['name'] ?? '',
+                    'slug'    => $term['slug'] ?? '',
+                );
             }
 
-            // Feed into existing callback handler
-            if ( ! empty( $all_translations ) ) {
-                $callback_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/taxonomy-callback' );
-                $callback_request->set_body_params( array(
-                    'taxonomy'     => $taxonomy,
-                    'translations' => $all_translations,
-                ) );
-                $this->handle_taxonomy_callback( $callback_request );
+            $prompt   = LuwiPress_Prompts::taxonomy_translation( $terms_for_prompt, $taxonomy, $source_name, $target_name );
+            $messages = LuwiPress_AI_Engine::build_messages( $prompt );
+            $ai_result = LuwiPress_AI_Engine::dispatch_json( 'translation-pipeline', $messages, array(
+                'max_tokens' => 2000,
+            ) );
+
+            if ( is_wp_error( $ai_result ) ) {
+                LuwiPress_Logger::log( 'Taxonomy translation failed for ' . $lang, 'error', array( 'taxonomy' => $taxonomy ) );
+                continue;
             }
+
+            // Ensure result is an array of translations
+            $translated = is_array( $ai_result ) && isset( $ai_result[0] ) ? $ai_result : ( $ai_result['translations'] ?? array() );
+            $all_translations = array_merge( $all_translations, $translated );
+        }
+
+        // Feed into existing callback handler
+        if ( ! empty( $all_translations ) ) {
+            $callback_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/taxonomy-callback' );
+            $callback_request->set_body_params( array(
+                'taxonomy'     => $taxonomy,
+                'translations' => $all_translations,
+            ) );
+            $this->handle_taxonomy_callback( $callback_request );
         }
 
         LuwiPress_Logger::log( 'Taxonomy translation requested: ' . $taxonomy, 'info', array(
             'taxonomy'  => $taxonomy,
             'languages' => $target_languages,
             'count'     => count( $missing_terms ),
-            'mode'      => $mode,
         ) );
 
         return rest_ensure_response( array(
-            'status'           => LuwiPress_AI_Engine::MODE_N8N === $mode ? 'queued' : 'completed',
+            'status'           => 'completed',
             'taxonomy'         => $taxonomy,
             'target_languages' => $target_languages,
             'terms_sent'       => count( $missing_terms ),

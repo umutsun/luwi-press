@@ -1,6 +1,6 @@
 # LuwiPress — Complete Feature Overview
 
-**Version:** 3.1.5 · **License:** GPLv2+ · **Target:** WooCommerce stores
+**Version:** 3.1.9 · **License:** GPLv2+ · **Target:** WooCommerce stores
 
 LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerce. It generates content, optimizes SEO, translates products, and automates store management — integrating seamlessly with existing plugins (Rank Math, WPML, Elementor, etc.) without replacing them.
 
@@ -8,6 +8,8 @@ Shipped as a lean **365 KB core** plus two optional companion plugins — instal
 
 ## 🆕 What's new in 3.x
 
+- **Bulk content queue (3.1.9)** — Content Scheduler now accepts up to 50 topics in one go. Paste your list (one topic per line, optional `| keywords` pipe syntax), pick a start date and publish spacing (e.g. "1 post per day" or "every 6 hours"), and the whole batch is queued. AI generation is staggered so the daily budget doesn't burst; if the cap is hit mid-batch, pending jobs auto-defer by an hour and pick up when there's room. A "Run N pending now" button shortcuts wp-cron for operators who want immediate processing.
+- **Batch monitor + CSV round-trip + layout memory (3.1.7)** — three operational power-features round out the Knowledge Graph. When you queue a category-wide enrichment, a live progress bar appears in the corner and tracks the job until it finishes (queued → running → done, with failure counts). The Export dropdown now round-trips: export a CSV of opportunities or missing SEO, edit it offline in Excel or Sheets, re-upload — the new `POST /seo/meta-bulk` endpoint applies up to 500 row updates through your SEO plugin in one call. And when you drag a node to a preferred position, the graph remembers it per view (Products / Posts / Pages / Customers) via localStorage so your layout persists across sessions; a reset button reverts to the auto-layout when you want a fresh start. Design Health now reads "N/A" instead of "0%" on sites without Elementor.
 - **Customers view + Elementor audit drill-down (3.1.5)** — the Knowledge Graph gets a fourth view tab focused on customer segments (VIP / Loyal / Active / New / One-Time / At Risk / Dormant / Lost), each with a dedicated detail panel that explains the cohort and recommends a targeted action (win-back campaign, onboarding sequence, VIP perks). The Design Health panel now drills down: click any audited page to see every Elementor issue grouped by severity and type, with affected element IDs and one-click "Open in Elementor" buttons.
 - **Knowledge Graph overhaul (3.1.4)** — the interactive store intelligence page got a major upgrade:
   - **Search** — type any product, post, or category name; `/` focuses the input, arrows navigate, Enter zooms straight to the node and opens its detail panel.
@@ -330,4 +332,4 @@ Add the companion plugins to light up:
 
 ---
 
-*Document version 3.1.5 — updated 2026-04-21 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*
+*Document version 3.1.9 — updated 2026-04-21 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*

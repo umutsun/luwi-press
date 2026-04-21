@@ -179,6 +179,104 @@ foreach ( $scheduled_items as $item ) {
 		<div id="sched-result"></div>
 	</div>
 
+	<!-- Bulk Queue -->
+	<div class="lp-card sched-bulk-card">
+		<div class="lp-card-header">
+			<h3><span class="dashicons dashicons-editor-ul"></span> <?php esc_html_e( 'Bulk Queue', 'luwipress' ); ?></h3>
+			<span class="lp-card-badge"><?php esc_html_e( 'Queue up to 50 topics', 'luwipress' ); ?></span>
+		</div>
+
+		<p class="sched-bulk-help">
+			<?php esc_html_e( 'One topic per line. Optional: add "| keywords" after the topic separated by a pipe. Publish dates are auto-spread across your chosen interval. AI generation is staggered to avoid bursts.', 'luwipress' ); ?>
+		</p>
+
+		<form id="sched-bulk-form">
+			<?php wp_nonce_field( 'luwipress_scheduler_nonce' ); ?>
+			<input type="hidden" name="action" value="luwipress_bulk_schedule_content">
+
+			<div class="sched-bulk-grid">
+				<div class="sched-bulk-main">
+					<div class="sched-field">
+						<label for="sched-bulk-topics">
+							<?php esc_html_e( 'Topics (one per line)', 'luwipress' ); ?>
+							<span id="sched-bulk-count" class="sched-bulk-count">0 / 50</span>
+						</label>
+						<textarea id="sched-bulk-topics" name="topics" rows="10" class="large-text" placeholder="<?php esc_attr_e( "How to maintain a darbuka\nHistory of the santur | ethnic instruments, turkish music\nBeginner's guide to the ney\n10 tips for kanun care", 'luwipress' ); ?>"></textarea>
+					</div>
+				</div>
+
+				<div class="sched-bulk-side">
+					<div class="sched-field">
+						<label><?php esc_html_e( 'Start date', 'luwipress' ); ?></label>
+						<input type="date" name="start_date" min="<?php echo esc_attr( wp_date( 'Y-m-d' ) ); ?>" value="<?php echo esc_attr( wp_date( 'Y-m-d', strtotime( '+1 day' ) ) ); ?>" />
+					</div>
+					<div class="sched-field">
+						<label><?php esc_html_e( 'Publish time', 'luwipress' ); ?></label>
+						<input type="time" name="start_time" value="09:00" />
+					</div>
+					<div class="sched-field">
+						<label><?php esc_html_e( 'Spacing', 'luwipress' ); ?></label>
+						<div class="sched-bulk-interval">
+							<input type="number" name="interval_value" value="1" min="1" max="30" />
+							<select name="interval_unit">
+								<option value="day"><?php esc_html_e( 'day(s)', 'luwipress' ); ?></option>
+								<option value="hour"><?php esc_html_e( 'hour(s)', 'luwipress' ); ?></option>
+							</select>
+						</div>
+					</div>
+					<div class="sched-field">
+						<label><?php esc_html_e( 'AI stagger (min between runs)', 'luwipress' ); ?></label>
+						<input type="number" name="generate_offset" value="5" min="0" max="60" />
+					</div>
+					<div class="sched-field">
+						<label><?php esc_html_e( 'Tone', 'luwipress' ); ?></label>
+						<select name="tone">
+							<?php foreach ( $tone_options as $val => $label ) : ?>
+							<option value="<?php echo esc_attr( $val ); ?>"><?php echo esc_html( $label ); ?></option>
+							<?php endforeach; ?>
+						</select>
+					</div>
+					<div class="sched-row-2">
+						<div class="sched-field">
+							<label><?php esc_html_e( 'Words', 'luwipress' ); ?></label>
+							<input type="number" name="word_count" value="1500" min="300" max="5000" />
+						</div>
+						<div class="sched-field">
+							<label><?php esc_html_e( 'Language', 'luwipress' ); ?></label>
+							<select name="language">
+								<?php foreach ( $language_options as $code => $name ) : ?>
+								<option value="<?php echo esc_attr( $code ); ?>" <?php selected( $target_language, $code ); ?>><?php echo esc_html( $name ); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+					</div>
+					<div class="sched-field">
+						<label><?php esc_html_e( 'Post Type', 'luwipress' ); ?></label>
+						<select name="target_post_type">
+							<option value="post"><?php esc_html_e( 'Blog Post', 'luwipress' ); ?></option>
+							<option value="page"><?php esc_html_e( 'Page', 'luwipress' ); ?></option>
+						</select>
+					</div>
+					<label class="sched-checkbox">
+						<input type="checkbox" name="generate_image" value="1" checked />
+						<?php esc_html_e( 'Generate featured image', 'luwipress' ); ?>
+					</label>
+					<button type="submit" class="button button-primary sched-submit" <?php echo $has_ai_key ? '' : 'disabled'; ?>>
+						<span class="dashicons dashicons-plus-alt"></span>
+						<?php esc_html_e( 'Queue All Topics', 'luwipress' ); ?>
+					</button>
+					<?php if ( $counts['pending'] > 0 ) : ?>
+					<button type="button" class="button sched-run-now" id="sched-run-now">
+						<span class="dashicons dashicons-controls-play"></span>
+						<?php printf( esc_html__( 'Run %d pending now', 'luwipress' ), absint( $counts['pending'] ) ); ?>
+					</button>
+					<?php endif; ?>
+				</div>
+			</div>
+		</form>
+		<div id="sched-bulk-result"></div>
+	</div>
+
 	<!-- Content List -->
 	<div class="lp-card">
 		<div class="lp-card-header">

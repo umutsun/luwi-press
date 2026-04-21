@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.1.5
+ * Version: 3.1.9
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.1.5');
+define('LUWIPRESS_VERSION', '3.1.9');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -672,7 +672,7 @@ class LuwiPress {
                 array(),
                 LUWIPRESS_VERSION
             );
-            
+
             wp_enqueue_script(
                 'luwipress-admin',
                 LUWIPRESS_PLUGIN_URL . 'assets/js/admin.js',
@@ -690,6 +690,30 @@ class LuwiPress {
                 'rest_root'    => esc_url_raw( rest_url() ),
                 'rest_base'    => esc_url_raw( rest_url( 'luwipress/v1/' ) ),
             ));
+        }
+
+        // Knowledge Graph page — separate script + style bundle.
+        // 2,200+ lines of D3 code and 1,000+ lines of CSS; no point loading on every admin page.
+        if ( false !== strpos( $hook, 'luwipress-knowledge-graph' ) ) {
+            wp_enqueue_style(
+                'luwipress-knowledge-graph',
+                LUWIPRESS_PLUGIN_URL . 'assets/css/knowledge-graph.css',
+                array( 'luwipress-admin' ),
+                LUWIPRESS_VERSION
+            );
+            wp_enqueue_script(
+                'luwipress-knowledge-graph',
+                LUWIPRESS_PLUGIN_URL . 'assets/js/knowledge-graph.js',
+                array(),
+                LUWIPRESS_VERSION,
+                true
+            );
+            wp_localize_script( 'luwipress-knowledge-graph', 'lpKgConfig', array(
+                'apiUrl'   => esc_url_raw( rest_url( 'luwipress/v1/knowledge-graph' ) ),
+                'apiToken' => (string) get_option( 'luwipress_seo_api_token', '' ),
+                'nonce'    => wp_create_nonce( 'wp_rest' ),
+                'restBase' => esc_url_raw( rest_url( 'luwipress/v1/' ) ),
+            ) );
         }
 
     }
@@ -955,7 +979,6 @@ class LuwiPress {
             'luwipress_ai_model'          => 'gpt-4o-mini',
             'luwipress_daily_token_limit' => 1.00,
             // AI Engine defaults (v2.0)
-            'luwipress_processing_mode'   => 'local',
             'luwipress_default_provider'  => 'anthropic',
             'luwipress_anthropic_model'   => 'claude-haiku-4-5-20241022',
             'luwipress_openai_model'      => 'gpt-4o-mini',

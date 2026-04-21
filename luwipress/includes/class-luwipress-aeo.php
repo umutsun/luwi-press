@@ -161,20 +161,7 @@ class LuwiPress_AEO {
      */
     private function dispatch_aeo_generation( $product, $options = array() ) {
         $product_id = $product->get_id();
-        $mode       = LuwiPress_AI_Engine::get_mode();
 
-        if ( LuwiPress_AI_Engine::MODE_N8N === $mode ) {
-            return LuwiPress_AI_Engine::forward_to_n8n( 'aeo_generate_faq', array(
-                'product_id'      => $product_id,
-                'name'            => $product->get_name(),
-                'description'     => wp_strip_all_tags( $product->get_description() ),
-                'categories'      => wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'names' ) ),
-                'price'           => $product->get_price(),
-                'target_language' => get_option( 'luwipress_target_language', 'en' ),
-            ), rest_url( 'luwipress/v1/aeo/save-faq' ) );
-        }
-
-        // Local mode: call AI directly
         $context = array(
             'name'        => $product->get_name(),
             'description' => wp_strip_all_tags( $product->get_description() ),

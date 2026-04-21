@@ -147,7 +147,6 @@ class LuwiPress_Site_Config {
 
 		$info = array(
 			'version'               => defined( 'LUWIPRESS_VERSION' ) ? LUWIPRESS_VERSION : null,
-			'webhook_url'           => get_option( 'luwipress_seo_webhook_url', '' ),
 			'api_token_configured'  => ! empty( $api_token ),
 			'api_token_hint'        => self::mask_secret( $api_token ),
 			'modules_active'        => $this->get_active_modules(),
