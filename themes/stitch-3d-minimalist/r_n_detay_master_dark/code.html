@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&amp;family=Inter:wght@300;400;500;600&amp;family=Noto+Serif:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed": "#241a00",
+                        "on-surface-variant": "#4d4635",
+                        "tertiary-fixed-dim": "#ffb3b1",
+                        "tertiary-fixed": "#ffdad8",
+                        "surface-container": "#f0eded",
+                        "secondary": "#545e76",
+                        "on-tertiary-fixed": "#410007",
+                        "inverse-primary": "#e9c349",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#ff9594",
+                        "outline-variant": "#d0c5af",
+                        "secondary-fixed": "#d7e2ff",
+                        "on-error-container": "#93000a",
+                        "on-secondary-container": "#5a647c",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#812227",
+                        "primary-container": "#d4af37",
+                        "surface-bright": "#fcf9f8",
+                        "on-background": "#1b1c1c",
+                        "surface-dim": "#dcd9d9",
+                        "tertiary": "#a33b3e",
+                        "background": "#fcf9f8",
+                        "primary-fixed-dim": "#e9c349",
+                        "on-primary-container": "#554300",
+                        "secondary-container": "#d7e2ff",
+                        "secondary-fixed-dim": "#bbc6e2",
+                        "on-tertiary-fixed-variant": "#832329",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#eae7e7",
+                        "surface-container-highest": "#e4e2e1",
+                        "on-surface": "#1b1c1c",
+                        "on-secondary-fixed": "#101b30",
+                        "surface-variant": "#e4e2e1",
+                        "on-primary": "#ffffff",
+                        "inverse-on-surface": "#f3f0f0",
+                        "surface-tint": "#735c00",
+                        "primary": "#735c00",
+                        "outline": "#7f7663",
+                        "surface-container-low": "#f6f3f2",
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed-variant": "#3c475d",
+                        "surface": "#fcf9f8",
+                        "primary-fixed": "#ffe088",
+                        "inverse-surface": "#303030",
+                        "on-primary-fixed-variant": "#574500"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Noto Serif"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #1A1614;
+            color: #dcd9d9;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(26, 22, 20, 0.7);
+            backdrop-filter: blur(20px);
+        }
+        .text-amber-gold { color: #D4AF37; }
+        .bg-amber-gold { background-color: #D4AF37; }
+        .border-amber-gold { border-color: #D4AF37; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body selection:bg-primary-container/30">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 shadow-[0_20px_50px_rgba(27,28,28,0.04)] bg-[#1A1614]/80 backdrop-blur-md">
+<div class="flex justify-between items-center px-6 md:px-12 py-6 w-full max-w-[1920px] mx-auto">
+<div class="flex items-center gap-4">
+<button class="text-[#D4AF37] hover:scale-95 transition-transform duration-500">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+<h1 class="text-3xl font-serif tracking-[0.2em] text-[#D4AF37] uppercase">Luwi</h1>
+<div class="flex items-center gap-4">
+<button class="text-[#D4AF37] hover:scale-95 transition-transform duration-500">
+<span class="material-symbols-outlined">shopping_bag</span>
+</button>
+</div>
+</div>
+</header>
+<main class="pt-24 pb-32 max-w-[1920px] mx-auto px-4 md:px-12">
+<!-- Hero Section: Asymmetric Layout -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-24 items-start pt-12">
+<!-- Gallery: Left Column -->
+<div class="lg:col-span-7 grid grid-cols-12 gap-4">
+<div class="col-span-12 relative group overflow-hidden bg-surface-container-low/10 aspect-[4/5] md:aspect-[3/4]">
+<img class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" data-alt="Macro 3D-like studio shot of a master artisan violin highlighting flamed maple back and burnished amber varnish texture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzV31PDaWOdcwqz5BVAMZ_3R7OdJ61QeMFg2nbqcBR1a-U6sW0iGKvVjIDCGBBJJlE2zZJnN6S0mM3ODIKLVD6A6I3a4vxTCrjGdXnqCKGMdoysNM0re0umjbbKWTVFZdYdYUess-LKyzIKdHJPdqG5RAToiyc8JRTjlLDPJfTtWP3FSv893Akg1wQrC25d9jlGkLVzg3fXESO-LIipUlNwdJ0I8gBIJ5VsjOP_vYB4haAknrg6ShWWphZWnHn_K4B_GtatOJVTm4"/>
+<div class="absolute inset-0 bg-gradient-to-t from-[#1A1614] via-transparent to-transparent opacity-40"></div>
+</div>
+<div class="col-span-6 aspect-square overflow-hidden bg-surface-container-low/10">
+<img class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700" data-alt="Extreme close-up of violin scroll and pegbox with ebony fittings and warm artisan lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3UkibIprkd9jM4_qQhTr2mxpY5tgmHOSM9v0Zkqh9DQoWy_o8Bu-o-1TqJXlh3EC-CD2mlAtcwjqtD-O5ljjQ4UzDYOJuYzk2THnurTaz5AotC2lohGSlNdurJnybxLV9evL0cq7blYJBiRIE358js9A8QvdeoKMsf0urrB1O_rOersCum4C_AEGlpiRl3EDFX9gahP5HCNMz0pE_rLf0JzEsC6v0g4T9630zpJPJCpzYF-Mn4MpvrUhOuy3ZJ_-6iYrqJke4GY8"/>
+</div>
+<div class="col-span-6 aspect-square overflow-hidden bg-surface-container-low/10">
+<img class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700" data-alt="Detailed shot of violin strings and bridge with fine wood grain and soft cinematic shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhUSmdWq6cIXOjQHxWxMwtYVOC7lu2lBT6sLcLXYJX_AJvn7YvCL0_6Y5xRdw2wP6QLgFqyTihFZXr3vMRHVHSwVp2hueb5HJVR7hJBC6u-YwJscWHz904zN-2jKGite9GSWrFk2vNgFpkZhbmzCLbiGPiNACbD7mAjXWe3q0KEHNKEO_YnzxMpPACZlSlTOGonNBke9L-aSG5iBaFIgROgpSROZTaQYxqrxLhjCG56R8UTQWyhQvyEXJHmCIT996UQ6wu9s6dghs"/>
+</div>
+</div>
+<!-- Content: Right Column -->
+<div class="lg:col-span-5 flex flex-col space-y-12 lg:sticky lg:top-36">
+<div class="space-y-4">
+<span class="font-label text-[10px] tracking-[0.2em] uppercase text-on-surface-variant/60">Cremona Collection</span>
+<h2 class="text-5xl md:text-6xl font-['Playfair_Display'] leading-tight text-white italic">Master Artisan Violin</h2>
+<p class="text-3xl font-['Playfair_Display'] text-amber-gold tracking-wide">$4,250.00</p>
+</div>
+<div class="space-y-6">
+<p class="font-['Playfair_Display'] text-xl leading-relaxed text-on-surface-variant italic">
+                        Individually carved from aged spruce and flamed maple, this masterwork captures the resonance of centuries. Finished with a proprietary amber-gold oil varnish that breathes with the wood.
+                    </p>
+<!-- Spec List -->
+<div class="grid grid-cols-1 gap-4 pt-8">
+<div class="flex items-center justify-between py-4 border-b border-white/5">
+<span class="font-label text-[11px] tracking-widest uppercase text-on-surface-variant">Tonewood Origin</span>
+<span class="text-white text-sm">Alpine Spruce</span>
+</div>
+<div class="flex items-center justify-between py-4 border-b border-white/5">
+<span class="font-label text-[11px] tracking-widest uppercase text-on-surface-variant">Seasoning</span>
+<span class="text-white text-sm">Aged 15 Years</span>
+</div>
+<div class="flex items-center justify-between py-4 border-b border-white/5">
+<span class="font-label text-[11px] tracking-widest uppercase text-on-surface-variant">Fingerboard</span>
+<span class="text-white text-sm">Hand-Polished Ebony</span>
+</div>
+<div class="flex items-center justify-between py-4 border-b border-white/5">
+<span class="font-label text-[11px] tracking-widest uppercase text-on-surface-variant">Fittings</span>
+<span class="text-white text-sm">Boxwood &amp; Brass</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<button class="w-full bg-[#D4AF37] text-[#241a00] py-6 px-8 rounded-none font-label uppercase tracking-[0.2em] text-sm font-semibold hover:translate-y-[-2px] transition-transform duration-500 shadow-xl hover:shadow-amber-gold/20">
+                        Add to Collection
+                    </button>
+<button class="w-full border border-white/10 text-white py-6 px-8 rounded-none font-label uppercase tracking-[0.2em] text-sm hover:bg-white/5 transition-colors duration-500">
+                        Request Private Viewing
+                    </button>
+</div>
+</div>
+</section>
+<!-- The Story of the Wood Section -->
+<section class="mt-48 space-y-24">
+<div class="flex flex-col items-center text-center max-w-3xl mx-auto space-y-8">
+<span class="font-label text-[10px] tracking-[0.3em] uppercase text-amber-gold">The Provenance</span>
+<h3 class="text-4xl md:text-5xl font-['Playfair_Display'] text-white">The Story of the Wood</h3>
+<p class="text-on-surface-variant leading-loose font-light">
+                    Every violin begins with the selection of the tree. Our master luthiers travel to the high-altitude forests of the Dolomites to select spruce that has grown slowly, producing the tight grain necessary for superior acoustic projection.
+                </p>
+</div>
+<!-- Bento Texture Grid -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-8 h-[800px]">
+<div class="md:col-span-8 relative group overflow-hidden bg-[#1A1614]">
+<img class="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-[2000ms] ease-out" data-alt="Macro texture of flamed maple wood grain with shimmering chatoyancy under professional studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCq5XFbBX3KJ19f3mu86Uy_qR3G4Hs2gsFdOAsvR1qGIx-LV7ZYXJRuYoUpB90EonrSf1GBawwfjnfwKGwyZyj1-6hdOuUtt3MzXvacsCe-vsMkKWvPNsAnt82Z5qCK3A-OXJyLTnJIDOzoU6e9fwSjbeEE5eoTpzyN-qntR9-lO97oyBP77Nsq24u0Gfj7dM2SRoV0fMh6DzeJeO1msk_wp6VWFHZ0kdwBaSQbxz6iRbq8mzdUl3euns-QEJ6VAJHdalU4_namitA"/>
+<div class="absolute bottom-10 left-10 p-8 glass-panel border border-white/5 max-w-sm">
+<h4 class="font-['Playfair_Display'] text-2xl text-white mb-4 italic">Flamed Maple</h4>
+<p class="text-sm text-on-surface-variant leading-relaxed">The back and ribs are carved from Bosnia-sourced maple, chosen for its visual depth and structural density.</p>
+</div>
+</div>
+<div class="md:col-span-4 grid grid-rows-2 gap-8">
+<div class="relative overflow-hidden bg-[#1A1614]">
+<img class="w-full h-full object-cover opacity-60" data-alt="Close-up of a luthier's hands using a traditional finger plane on a spruce violin top in a dusty workshop" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4v0a_JEE-7NzAmzqvKiJkynFv5nH_3jf6WqUrsGlumyO0yv6WWCOk-8TKTrXio1r-JKWuka-OKYNGeXBo1VlkqZ9LxjsMR61W6WmSMOtCFLaA5OxhUIOAVoY7sdGJCdSO6l-7ffvV7Nry4pnEliACzeH3VQMK29RKYa8U2b-Nqo8acMNb7i4F-p2dMRvr7yyuyEniztDMg4PvVCKlHrbVME7mEhiRE_J0MWbGcuT3QFAZoFO99zzGZmzOiQVwEDfnI_ZXNp4g1eE"/>
+<div class="absolute inset-0 flex items-center justify-center p-6 text-center">
+<span class="text-xs uppercase tracking-[0.4em] font-label text-amber-gold">Precision Carving</span>
+</div>
+</div>
+<div class="relative overflow-hidden bg-[#1A1614]">
+<img class="w-full h-full object-cover opacity-60" data-alt="Vials of traditional oil varnish, resins, and pigments in an artisan luthier workshop" src="https://lh3.googleusercontent.com/aida-public/AB6AXuApEkn9PeIYjPwRbLbjUBuArmixBJzygi00OhHvk4NDLiAuWEK_MFpf5QIYwSGgZgPIticgC-hAj3OyYXmMZvF9P13YfjF55yLlIgeNEOal3AjRgHxLq1Nm7ao_hd-Vc9zHCsKHzMfP8ImuiNOIYs2vwgKbJBnqM-P8lRFRVjGF4nI2uo2FXnu-VPBqRwlCb9m9Qs2Fx5EpDOZD19UUoVsruIVkhHMF4vnvC8llMyOEmMhrVgYO3qaI7pvv3NhQfAncoes2IBRzh3c"/>
+<div class="absolute inset-0 flex items-center justify-center p-6 text-center">
+<span class="text-xs uppercase tracking-[0.4em] font-label text-amber-gold">Organic Resin Varnish</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Technical Specs Section -->
+<section class="mt-48 pb-24 border-t border-white/5 pt-24">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+<div class="lg:col-span-4">
+<h4 class="text-3xl font-['Playfair_Display'] text-white italic mb-4">Technical Details</h4>
+<p class="text-on-surface-variant text-sm tracking-wide leading-relaxed">Each instrument is measured to precise millimeter tolerances to ensure effortless playability and tonal balance.</p>
+</div>
+<div class="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-16">
+<ul class="space-y-6">
+<li class="flex flex-col gap-1">
+<span class="text-[10px] tracking-widest uppercase text-amber-gold/60 font-label">Body Length</span>
+<span class="text-white font-['Playfair_Display'] text-xl">356mm</span>
+</li>
+<li class="flex flex-col gap-1">
+<span class="text-[10px] tracking-widest uppercase text-amber-gold/60 font-label">Upper Bout</span>
+<span class="text-white font-['Playfair_Display'] text-xl">167mm</span>
+</li>
+<li class="flex flex-col gap-1">
+<span class="text-[10px] tracking-widest uppercase text-amber-gold/60 font-label">Lower Bout</span>
+<span class="text-white font-['Playfair_Display'] text-xl">208mm</span>
+</li>
+</ul>
+<ul class="space-y-6">
+<li class="flex flex-col gap-1">
+<span class="text-[10px] tracking-widest uppercase text-amber-gold/60 font-label">Varnish</span>
+<span class="text-white font-['Playfair_Display'] text-xl">Antiqued Oil Resin</span>
+</li>
+<li class="flex flex-col gap-1">
+<span class="text-[10px] tracking-widest uppercase text-amber-gold/60 font-label">Strings</span>
+<span class="text-white font-['Playfair_Display'] text-xl">Evah Pirazzi Gold</span>
+</li>
+<li class="flex flex-col gap-1">
+<span class="text-[10px] tracking-widest uppercase text-amber-gold/60 font-label">Tailpiece</span>
+<span class="text-white font-['Playfair_Display'] text-xl">Harmonic Boxwood</span>
+</li>
+</ul>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Visible on Mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center py-6 px-4 bg-[#1A1614]/90 backdrop-blur-xl z-50 border-t border-white/5">
+<div class="flex flex-col items-center justify-center text-[#545e76] dark:text-[#dcd9d9]/60">
+<span class="material-symbols-outlined">storefront</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light mt-1">Atelier</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#545e76] dark:text-[#dcd9d9]/60">
+<span class="material-symbols-outlined">search</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light mt-1">Search</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#545e76] dark:text-[#dcd9d9]/60">
+<span class="material-symbols-outlined">auto_awesome</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light mt-1">Curations</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#D4AF37] font-semibold">
+<span class="material-symbols-outlined">local_mall</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light mt-1">Cart</span>
+</div>
+</nav>
+<!-- FAB for Quick Contact (Task-Specific for Master Craftsmanship) -->
+<button class="fixed bottom-24 right-8 md:bottom-12 md:right-12 bg-amber-gold text-on-primary-fixed w-16 h-16 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform duration-500 z-40">
+<span class="material-symbols-outlined">history_edu</span>
+</button>
+</body></html>

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&amp;family=Inter:wght@300;400;500;600&amp;family=Noto+Serif:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed": "#241a00",
+                        "on-surface-variant": "#4d4635",
+                        "tertiary-fixed-dim": "#ffb3b1",
+                        "tertiary-fixed": "#ffdad8",
+                        "surface-container": "#f0eded",
+                        "secondary": "#545e76",
+                        "on-tertiary-fixed": "#410007",
+                        "inverse-primary": "#e9c349",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#ff9594",
+                        "outline-variant": "#d0c5af",
+                        "secondary-fixed": "#d7e2ff",
+                        "on-error-container": "#93000a",
+                        "on-secondary-container": "#5a647c",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#812227",
+                        "primary-container": "#d4af37",
+                        "surface-bright": "#fcf9f8",
+                        "on-background": "#1b1c1c",
+                        "surface-dim": "#dcd9d9",
+                        "tertiary": "#a33b3e",
+                        "background": "#fcf9f8",
+                        "primary-fixed-dim": "#e9c349",
+                        "on-primary-container": "#554300",
+                        "secondary-container": "#d7e2ff",
+                        "secondary-fixed-dim": "#bbc6e2",
+                        "on-tertiary-fixed-variant": "#832329",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#eae7e7",
+                        "surface-container-highest": "#e4e2e1",
+                        "on-surface": "#1b1c1c",
+                        "on-secondary-fixed": "#101b30",
+                        "surface-variant": "#e4e2e1",
+                        "on-primary": "#ffffff",
+                        "inverse-on-surface": "#f3f0f0",
+                        "surface-tint": "#735c00",
+                        "primary": "#735c00",
+                        "outline": "#7f7663",
+                        "surface-container-low": "#f6f3f2",
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed-variant": "#3c475d",
+                        "surface": "#fcf9f8",
+                        "primary-fixed": "#ffe088",
+                        "inverse-surface": "#303030",
+                        "on-primary-fixed-variant": "#574500"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Noto Serif"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #fcf9f8;
+            color: #1b1c1c;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#fcf9f8] dark:bg-[#1A1614] shadow-[0_20px_50px_rgba(27,28,28,0.04)]">
+<div class="flex justify-between items-center px-6 md:px-12 py-6 w-full max-w-[1920px] mx-auto">
+<button class="text-[#735c00] dark:text-[#D4AF37] transition-transform duration-500 hover:scale-95">
+<span class="material-symbols-outlined text-3xl">menu</span>
+</button>
+<h1 class="font-['Playfair_Display'] tracking-[0.2em] uppercase text-3xl font-serif text-[#735c00] dark:text-[#D4AF37]">Luwi</h1>
+<div class="flex items-center gap-6">
+<button class="text-[#735c00] dark:text-[#D4AF37] transition-transform duration-500 hover:scale-95 relative">
+<span class="material-symbols-outlined text-3xl">shopping_bag</span>
+<span class="absolute -top-1 -right-1 bg-tertiary text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">2</span>
+</button>
+</div>
+</div>
+</header>
+<main class="pt-32 pb-32 px-4 md:px-12 max-w-[1440px] mx-auto min-h-screen">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-16">
+<!-- Shopping Cart List -->
+<div class="lg:col-span-8">
+<div class="mb-12">
+<h2 class="font-['Playfair_Display'] text-4xl md:text-5xl text-on-surface mb-2">Sepetim</h2>
+<p class="font-label text-on-surface-variant uppercase tracking-[0.2em] text-xs">2 Items Selected for Your Collection</p>
+</div>
+<div class="space-y-0">
+<!-- Item 1: Hand-carved Violin Bow -->
+<div class="group py-10 flex flex-col md:flex-row gap-8 items-start border-b border-on-surface/5">
+<div class="w-full md:w-48 aspect-[4/5] bg-surface-container-low overflow-hidden rounded-sm">
+<img alt="Hand-carved Violin Bow" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="Close-up of a professional hand-carved violin bow made of dark pernambuco wood with silver fittings on a linen surface" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6wiB63r5XveQ4xXA13lAPEqFFcvglUO8J925Fh0GtTvQ3gbHtkbKO54t7wDCsH7BOyNHdODH93YMWTwXVet4Ir4sm4gvRhPaQfTuZiuqYO2lspcCtSKvfnpfCIYvfukHhSJeUp0O-bKl4PLIgSEnwiiylQLcImrjBGLyLhi7fGRBS0GhJW92ntAKO8LdOfeQ50JvpLzfn46Tf6N_AugvaIK4YLD0RP7WiviUolT7ZX6ZwTyYI4Ts1cVjMEHbW4vU0thAx52tbCQk"/>
+</div>
+<div class="flex-1 space-y-4">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-['Playfair_Display'] text-2xl text-on-surface">Hand-carved Violin Bow</h3>
+<p class="font-label text-xs text-on-surface-variant uppercase tracking-widest mt-1">Select Pernambuco • Silver Mounted</p>
+</div>
+<span class="font-['Playfair_Display'] text-xl text-primary">€1,240.00</span>
+</div>
+<div class="flex items-center gap-12 pt-4">
+<div class="flex items-center border border-outline-variant/30 rounded-full px-4 py-2">
+<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined text-sm">remove</span></button>
+<span class="px-6 font-medium text-sm">1</span>
+<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined text-sm">add</span></button>
+</div>
+<button class="text-on-surface-variant hover:text-tertiary transition-colors flex items-center gap-2 text-xs uppercase tracking-tighter">
+<span class="material-symbols-outlined text-lg">delete</span> Remove
+                                </button>
+</div>
+</div>
+</div>
+<!-- Item 2: Premium Rosin -->
+<div class="group py-10 flex flex-col md:flex-row gap-8 items-start border-b border-on-surface/5">
+<div class="w-full md:w-48 aspect-[4/5] bg-surface-container-low overflow-hidden rounded-sm">
+<img alt="Premium Rosin" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="Macro detail of high-quality amber-colored violin rosin in a dark wooden box on a workshop table" src="https://lh3.googleusercontent.com/aida-public/AB6AXuALnvRgDXFWd4xTkq6SJ-hYafbwjFLZBeeb5Rg4M2ledx864_7jBQnh6sKYQFH0ACZ_lmHN5skPDBqXhzWuj54pnfRwGD88srHua6qM3h2jj4eoHMGUgZR01ePB4oz1uzFwzrfmQS0vB3oRpvL5TmM2Az3WOJKFWx3ENyavlztZSYOTYc8ezPCaOn9LxcPzBmgFfqd8XMUCntHNB6gLaERNy7hF3N7B9iM7yChKm7Ns57x8wXPYeuF7p5y2X_buqOjaP0bi5DDBGXM"/>
+</div>
+<div class="flex-1 space-y-4">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-['Playfair_Display'] text-2xl text-on-surface">Premium Rosin</h3>
+<p class="font-label text-xs text-on-surface-variant uppercase tracking-widest mt-1">Artisan Gold Blend • Large Cake</p>
+</div>
+<span class="font-['Playfair_Display'] text-xl text-primary">€45.00</span>
+</div>
+<div class="flex items-center gap-12 pt-4">
+<div class="flex items-center border border-outline-variant/30 rounded-full px-4 py-2">
+<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined text-sm">remove</span></button>
+<span class="px-6 font-medium text-sm">2</span>
+<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined text-sm">add</span></button>
+</div>
+<button class="text-on-surface-variant hover:text-tertiary transition-colors flex items-center gap-2 text-xs uppercase tracking-tighter">
+<span class="material-symbols-outlined text-lg">delete</span> Remove
+                                </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Trust Badge Section -->
+<div class="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8 p-10 bg-surface-container-low/50 rounded-xl">
+<div class="flex flex-col items-center text-center space-y-3">
+<span class="material-symbols-outlined text-primary text-3xl">verified_user</span>
+<h4 class="font-['Playfair_Display'] text-lg">Authenticity Guaranteed</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">Each instrument and accessory is certified by our master luthiers.</p>
+</div>
+<div class="flex flex-col items-center text-center space-y-3">
+<span class="material-symbols-outlined text-primary text-3xl">local_shipping</span>
+<h4 class="font-['Playfair_Display'] text-lg">Insured Global Shipping</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">Specialized climate-controlled packaging for delicate items.</p>
+</div>
+<div class="flex flex-col items-center text-center space-y-3">
+<span class="material-symbols-outlined text-primary text-3xl">history_edu</span>
+<h4 class="font-['Playfair_Display'] text-lg">Expert Consultation</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">Schedule a private session to find your perfect match.</p>
+</div>
+</div>
+</div>
+<!-- Order Summary Section -->
+<div class="lg:col-span-4">
+<div class="sticky top-40 bg-white p-8 md:p-10 shadow-[0_20px_60px_rgba(27,28,28,0.06)] rounded-sm space-y-8">
+<h3 class="font-['Playfair_Display'] text-2xl border-b border-on-surface/5 pb-6">Summary</h3>
+<div class="space-y-4 font-label text-sm">
+<div class="flex justify-between text-on-surface-variant">
+<span>Subtotal</span>
+<span>€1,330.00</span>
+</div>
+<div class="flex justify-between text-on-surface-variant">
+<span>Shipping</span>
+<span>Calculated at checkout</span>
+</div>
+<div class="flex justify-between text-on-surface-variant">
+<span>Tax (VAT)</span>
+<span>€266.00</span>
+</div>
+<div class="pt-6 border-t border-on-surface/5 flex justify-between text-xl font-['Playfair_Display'] text-on-surface">
+<span>Total</span>
+<span>€1,596.00</span>
+</div>
+</div>
+<div class="pt-4">
+<button class="w-full bg-[#735c00] text-white py-5 rounded-sm font-label uppercase tracking-[0.2em] text-xs font-semibold hover:bg-[#554300] transition-all duration-500 shadow-lg shadow-[#735c00]/10 flex items-center justify-center gap-3 group">
+                            Proceed to Checkout
+                            <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward_ios</span>
+</button>
+<p class="text-center text-[10px] text-on-surface-variant uppercase tracking-widest mt-6">Secure Encrypted Payment</p>
+</div>
+<div class="pt-4 space-y-4">
+<div class="flex items-center gap-4 p-4 border border-outline-variant/20 rounded-sm">
+<span class="material-symbols-outlined text-on-surface-variant">confirmation_number</span>
+<input class="bg-transparent border-none text-xs tracking-widest focus:ring-0 w-full p-0" placeholder="GIFT CODE" type="text"/>
+<button class="text-primary font-bold text-xs uppercase tracking-tighter">Apply</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center py-6 px-4 bg-[#fcf9f8]/90 backdrop-blur-xl z-50 shadow-[0_-10px_40px_rgba(27,28,28,0.05)]">
+<div class="flex flex-col items-center justify-center text-[#545e76] transition-opacity duration-300 hover:opacity-80">
+<span class="material-symbols-outlined">storefront</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light mt-1">Atelier</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#545e76] transition-opacity duration-300 hover:opacity-80">
+<span class="material-symbols-outlined">search</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light mt-1">Search</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#545e76] transition-opacity duration-300 hover:opacity-80">
+<span class="material-symbols-outlined">auto_awesome</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light mt-1">Curations</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#735c00] font-semibold translate-y-[-2px] transition-transform duration-500">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">local_mall</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light mt-1">Cart</span>
+</div>
+</nav>
+<!-- Footer for large screens -->
+<footer class="hidden md:block py-20 border-t border-on-surface/5 bg-surface-container-low/30">
+<div class="max-w-[1440px] mx-auto px-12 grid grid-cols-4 gap-12">
+<div class="col-span-1 space-y-6">
+<h2 class="font-['Playfair_Display'] text-2xl text-primary tracking-widest uppercase">Luwi</h2>
+<p class="text-sm text-on-surface-variant leading-relaxed">Dedicated to the preservation and provision of fine stringed instruments since 1984.</p>
+</div>
+<div class="col-span-1 space-y-6">
+<h3 class="font-label text-xs uppercase tracking-[0.2em] font-semibold">Collections</h3>
+<ul class="space-y-4 text-sm text-on-surface-variant">
+<li><a class="hover:text-primary transition-colors" href="#">Violins</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Cellos</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Bows</a></li>
+</ul>
+</div>
+<div class="col-span-1 space-y-6">
+<h3 class="font-label text-xs uppercase tracking-[0.2em] font-semibold">Services</h3>
+<ul class="space-y-4 text-sm text-on-surface-variant">
+<li><a class="hover:text-primary transition-colors" href="#">The Workshop</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Appraisals</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Restoration</a></li>
+</ul>
+</div>
+<div class="col-span-1 space-y-6">
+<h3 class="font-label text-xs uppercase tracking-[0.2em] font-semibold">Journal</h3>
+<div class="space-y-4">
+<p class="text-xs text-on-surface-variant">Subscribe for exclusive artisan updates and event invitations.</p>
+<div class="flex border-b border-on-surface/20 pb-2">
+<input class="bg-transparent border-none p-0 text-xs focus:ring-0 w-full uppercase tracking-widest" placeholder="Email Address" type="email"/>
+<button class="material-symbols-outlined text-primary text-xl">east</button>
+</div>
+</div>
+</div>
+</div>
+</footer>
+</body></html>

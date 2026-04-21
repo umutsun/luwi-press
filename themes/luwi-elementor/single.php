@@ -9,6 +9,7 @@ get_header();
 ?>
 
 <main id="content" class="site-main luwi-container" role="main">
+	<?php if ( function_exists( 'woocommerce_breadcrumb' ) ) { woocommerce_breadcrumb(); } ?>
 	<?php
 	while ( have_posts() ) :
 		the_post();

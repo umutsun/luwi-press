@@ -28,6 +28,12 @@ CONTINUATION-PROMPT.md
 # n8n execution debug exports
 exec*.json
 
+# Editor/tool scratch
+.kilo/
+
+# Parked (out-of-focus) companion work
+parked/
+
 # Legacy plugins (deprecated)
 n8npress-seo-off/
 n8npress-seo-woo/

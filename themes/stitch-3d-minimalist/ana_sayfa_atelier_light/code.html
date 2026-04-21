@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&amp;family=Inter:wght@300;400;500;600&amp;family=Noto+Serif:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed": "#241a00",
+                    "on-surface-variant": "#4d4635",
+                    "tertiary-fixed-dim": "#ffb3b1",
+                    "tertiary-fixed": "#ffdad8",
+                    "surface-container": "#f0eded",
+                    "secondary": "#545e76",
+                    "on-tertiary-fixed": "#410007",
+                    "inverse-primary": "#e9c349",
+                    "surface-container-lowest": "#ffffff",
+                    "error": "#ba1a1a",
+                    "tertiary-container": "#ff9594",
+                    "outline-variant": "#d0c5af",
+                    "secondary-fixed": "#d7e2ff",
+                    "on-error-container": "#93000a",
+                    "on-secondary-container": "#5a647c",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-container": "#812227",
+                    "primary-container": "#d4af37",
+                    "surface-bright": "#fcf9f8",
+                    "on-background": "#1b1c1c",
+                    "surface-dim": "#dcd9d9",
+                    "tertiary": "#a33b3e",
+                    "background": "#fcf9f8",
+                    "primary-fixed-dim": "#e9c349",
+                    "on-primary-container": "#554300",
+                    "secondary-container": "#d7e2ff",
+                    "secondary-fixed-dim": "#bbc6e2",
+                    "on-tertiary-fixed-variant": "#832329",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-high": "#eae7e7",
+                    "surface-container-highest": "#e4e2e1",
+                    "on-surface": "#1b1c1c",
+                    "on-secondary-fixed": "#101b30",
+                    "surface-variant": "#e4e2e1",
+                    "on-primary": "#ffffff",
+                    "inverse-on-surface": "#f3f0f0",
+                    "surface-tint": "#735c00",
+                    "primary": "#735c00",
+                    "outline": "#7f7663",
+                    "surface-container-low": "#f6f3f2",
+                    "on-error": "#ffffff",
+                    "on-secondary-fixed-variant": "#3c475d",
+                    "surface": "#fcf9f8",
+                    "primary-fixed": "#ffe088",
+                    "inverse-surface": "#303030",
+                    "on-primary-fixed-variant": "#574500"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {},
+            "fontFamily": {
+                    "headline": ["Noto Serif"],
+                    "body": ["Inter"],
+                    "label": ["Inter"],
+                    "serif": ["Playfair Display", "serif"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .editorial-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-fixed-dim selection:text-on-primary-fixed">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#fcf9f8] dark:bg-[#1A1614] shadow-[0_20px_50px_rgba(27,28,28,0.04)]">
+<nav class="flex justify-between items-center px-6 md:px-12 py-6 md:py-8 w-full max-w-[1920px] mx-auto">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-[#735c00] dark:text-[#D4AF37] cursor-pointer">menu</span>
+<div class="hidden md:flex gap-8 ml-8">
+<a class="text-[#735c00] dark:text-[#D4AF37] border-b border-[#735c00]/20 font-['Playfair_Display'] tracking-widest uppercase text-xs" href="#">Atelier</a>
+<a class="text-[#545e76] dark:text-[#dcd9d9] hover:text-[#735c00] transition-colors duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] font-['Playfair_Display'] tracking-widest uppercase text-xs" href="#">Instruments</a>
+<a class="text-[#545e76] dark:text-[#dcd9d9] hover:text-[#735c00] transition-colors duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] font-['Playfair_Display'] tracking-widest uppercase text-xs" href="#">Journal</a>
+</div>
+</div>
+<h1 class="text-3xl font-serif tracking-[0.2em] text-[#735c00] dark:text-[#D4AF37] uppercase">Luwi</h1>
+<div class="flex items-center gap-6">
+<span class="material-symbols-outlined text-[#735c00] dark:text-[#D4AF37] cursor-pointer">search</span>
+<span class="material-symbols-outlined text-[#735c00] dark:text-[#D4AF37] cursor-pointer">shopping_bag</span>
+</div>
+</nav>
+</header>
+<main class="pt-[92px]">
+<!-- Hero Section -->
+<section class="relative h-[795px] min-h-[700px] flex items-center overflow-hidden bg-surface">
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover opacity-90 scale-105" data-alt="Close-up of a hand-carved violin in a dimly lit artisan workshop, warm golden light catching the wood grain and varnish texture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVvGbAaR5HlJMwsbWReQym5y8u2amxGDhfzutwBaTOzKsdNBV42DZyCai4ph8Gxpjxf-_ncLeS1ddScjCh0bHDIxNF-fWkYl5R0elmrfCQ1d-zec7u3q6ZYOh5w9EdRYdW6OfhadjuFOx_uY4wRTthXzPgvWnbPfpOQdmTJjVPG3Q9ULqPGqh7D1T7KYvk96RTtXlb1-2d1gmHgl9uA24TxGIbEX6lPOm7PMypL_F0v72lssbOg2QykCDtDj_UT4K2J6oGrzwHaYM"/>
+<div class="absolute inset-0 bg-gradient-to-r from-surface via-surface/40 to-transparent"></div>
+</div>
+<div class="container mx-auto px-6 md:px-12 relative z-10">
+<div class="max-w-3xl">
+<span class="label-sm uppercase tracking-[0.3em] text-secondary mb-6 block font-light">Established in Cremona</span>
+<h2 class="text-6xl md:text-8xl font-serif text-on-surface leading-[1.1] mb-8">
+                        The Soul <br/> <span class="italic pl-12 md:pl-24">of Sound</span>
+</h2>
+<p class="text-lg md:text-xl text-on-surface-variant max-w-md mb-10 leading-relaxed font-light">
+                        Experience the resonant legacy of master luthiers, where every curve is carved with intention and every string holds a story.
+                    </p>
+<div class="flex flex-col sm:flex-row gap-6">
+<button class="bg-primary text-on-primary px-10 py-5 rounded-lg text-sm uppercase tracking-widest font-medium hover:translate-y-[-2px] transition-transform duration-500 shadow-lg shadow-primary/20">
+                            Explore the Atelier
+                        </button>
+<button class="border border-outline-variant/30 text-on-surface px-10 py-5 rounded-lg text-sm uppercase tracking-widest font-medium hover:bg-surface-container transition-colors duration-500">
+                            Watch the Process
+                        </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Trust Badges -->
+<section class="py-16 bg-surface-container-low">
+<div class="container mx-auto px-6 md:px-12">
+<div class="flex flex-wrap justify-between items-center gap-8 opacity-70">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-xl">workspace_premium</span>
+<span class="text-xs uppercase tracking-widest font-medium">Handcrafted</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-xl">eco</span>
+<span class="text-xs uppercase tracking-widest font-medium">Ethical Materials</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-xl">public</span>
+<span class="text-xs uppercase tracking-widest font-medium">Global Shipping</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-xl">verified_user</span>
+<span class="text-xs uppercase tracking-widest font-medium">Lifetime Support</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Our Craft Section -->
+<section class="py-32 bg-surface-container-low overflow-hidden">
+<div class="container mx-auto px-6 md:px-12">
+<div class="editorial-grid gap-12 items-center">
+<div class="col-span-12 md:col-span-5 order-2 md:order-1">
+<span class="text-primary font-serif italic text-2xl mb-4 block">The Materiality</span>
+<h3 class="text-4xl md:text-5xl font-serif mb-8 leading-tight">Our Craft</h3>
+<p class="text-on-surface-variant text-lg leading-relaxed mb-8 font-light">
+                            We believe that a masterpiece begins in the forest. Our wood is hand-selected from the Dolomites, seasoned for decades under natural conditions to ensure a stability and resonance that modern kilns can never replicate.
+                        </p>
+<p class="text-on-surface-variant text-lg leading-relaxed mb-12 font-light">
+                            From the amber resins of the varnish to the precision of the bridge, every Luwi instrument is a testament to the patient pursuit of acoustic perfection.
+                        </p>
+<a class="inline-flex items-center gap-4 text-primary group" href="#">
+<span class="uppercase tracking-widest text-xs font-bold">Discover our process</span>
+<span class="material-symbols-outlined group-hover:translate-x-2 transition-transform duration-300">east</span>
+</a>
+</div>
+<div class="col-span-12 md:col-span-6 md:col-start-7 order-1 md:order-2">
+<div class="relative">
+<div class="aspect-[4/5] bg-surface-container-highest rounded-xl overflow-hidden shadow-2xl">
+<img class="w-full h-full object-cover" data-alt="Artisan luthier hands working with a small plane on a raw maple wood violin back, fine wood shavings visible on linen cloth" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJJfENdVbc7gWGhMTKtJLVlnFNCZZ5nAVtmHX8GGVFitpneqNgIDoVbOUeIrjHuyQ2zMWX0ZtxxCJ7IwLGM00CGgklGz16DvPdsofPRRPX0BtFFYPvcs6aULqjt0u3ipoOZerq0rJ0rRqmqlkqRI_ZAZdDQdyzoBMQYrf8KtH7xDMvt0Wu07F_BQOQ7vqGJvJ9fGfVFtslgveSGZ1QHXnvZtzAKtm0L9AW4gViji63A8Y0081IK3smdnJHuFGJqLLfUJCJaAVb6WI"/>
+</div>
+<div class="absolute -bottom-12 -left-12 hidden lg:block w-64 aspect-square rounded-lg overflow-hidden border-[12px] border-surface-container-low shadow-xl">
+<img class="w-full h-full object-cover" data-alt="Macro texture of premium spruce wood showing the tight vertical grain and natural golden tone" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRXqQTc2A3nwmUulnUekFGB0L1KmIZBFbRQeZ34tfS6R8sS_dTm9VWLlLUrzeVc6xwsePZZ_l9PK0IvB5ljgINVokkEl0CzOd3ceDhhL1qY-g_pH9K6wYkZ_tgJv3ZaQlWjqZ7xMehP33TRM1c_rQgDkUrk-sOfeeWCUEBEpmPuEW8QY698Mxt6DZ2LBEfCNijePOcVSqRkddsAg6lD9AP5HHXkIv4EJi765uhEiXGGvG2rDuHJ4nmnGpvI40FTsJKb9DgsmLH4_s"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Featured Curations -->
+<section class="py-32 bg-surface">
+<div class="container mx-auto px-6 md:px-12">
+<div class="flex flex-col md:flex-row justify-between items-end mb-20 gap-8">
+<div class="max-w-xl">
+<h3 class="text-4xl md:text-5xl font-serif mb-6">Featured Curations</h3>
+<p class="text-on-surface-variant font-light">The pinnacle of our workshop’s current collection, curated for discerning soloists and collectors.</p>
+</div>
+<div class="flex gap-4">
+<button class="w-12 h-12 rounded-full border border-outline-variant/30 flex items-center justify-center hover:bg-surface-container transition-colors duration-300">
+<span class="material-symbols-outlined">west</span>
+</button>
+<button class="w-12 h-12 rounded-full border border-outline-variant/30 flex items-center justify-center hover:bg-surface-container transition-colors duration-300">
+<span class="material-symbols-outlined">east</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+<!-- Product Card 1 -->
+<div class="group cursor-pointer">
+<div class="aspect-square bg-surface-container rounded-lg overflow-hidden mb-6 relative">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]" data-alt="Antique finished cello standing against a minimalist warm white wall, dramatic shadow and polished wood highlights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAUAwqSiB0DfY14ROkB9XAOIbP5XbULAUk9RSczXm_PJYAcAG_UbB2UaUjx5AraicBPEoFLHvj9loa8AYBhzDSMshkVoX8zGvxCwCQZW1adGPAwwHqegvLIlh2XKL7Qbd1PRBP1TO810NTOoxmAVqYt1GsENOWfkGwHHenCYyVJPmIULPxHmbCu2M41iQDRNl4oJluDYIVJBpOcOIMEfo5BIsMrZ750wywc_mvIWv7gXSYEN7MVUVTcpFejcz5vhryTuWo8aXFrN6A"/>
+<div class="absolute top-4 right-4">
+<span class="bg-surface/90 backdrop-blur-md px-3 py-1 text-[10px] uppercase tracking-widest font-bold">Limited Edition</span>
+</div>
+</div>
+<div class="flex justify-between items-start">
+<div>
+<h4 class="text-xl font-serif mb-1">Antique Finished Cello</h4>
+<p class="text-xs uppercase tracking-widest text-on-surface-variant font-medium">Model 1742 Revision</p>
+</div>
+<span class="text-primary font-medium">$12,400</span>
+</div>
+</div>
+<!-- Product Card 2 -->
+<div class="group cursor-pointer">
+<div class="aspect-square bg-surface-container rounded-lg overflow-hidden mb-6 relative">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]" data-alt="Polished brass trumpet with complex valves and artisanal engravings, warm studio lighting reflecting off metal surfaces" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1wHo1atSKPPNoOhZ2f_8ZFY_2j6drSNQ9JDIzVPuerNw24LxRiS6B8yMMp8WN3nmIcoNfUx0ZYh8rxadElcCZKsPDxnunVrdOY7u56wBkNUXsJ5ZKODXi9PgcsC1WCCK8UJ-6NXBP1xdb6qiIDH3N8shF2XtVZjL52f88PF8ppRAL-KOWHPEAX0VXJ67-zHabcBa-1mYT2VNzDdTzwEQYahrppJRs8WlwWDb_IB9_DwMJ2HNok5vJg9nPr_Bk02XsSCnrm9OwtEk"/>
+</div>
+<div class="flex justify-between items-start">
+<div>
+<h4 class="text-xl font-serif mb-1">Brass Muted Trumpet</h4>
+<p class="text-xs uppercase tracking-widest text-on-surface-variant font-medium">Professional Series</p>
+</div>
+<span class="text-primary font-medium">$4,250</span>
+</div>
+</div>
+<!-- Product Card 3 -->
+<div class="group cursor-pointer">
+<div class="aspect-square bg-surface-container rounded-lg overflow-hidden mb-6 relative">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]" data-alt="Luxury violin chin rest and tailpiece details, showing dark ebony wood and fine silver hardware adjustment screws" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoP7aamFFDTGYQi-mWcMx9Rj9xsMBcAVnuj_f--bLvM99tFy1XZZe6E-lERW9c8LM_za18LgPov3VGdRgB4_Z0SZ9LZhDgZOVrsa5azsZygIDBSgo7aZkQMmS2K3zP1K687QmV2pul4oh4uGPAQocLOtJezhm9AqiERaLKadqXbI4zvJa7bSOiWVCyCBHBi1l9LPzkwpI5ni0cXpaixqnc6uFL9NUti2ZLgPWXBwYOPv2ZJihx0SpM7iFiJD2q6gGotuodRiUHxTU"/>
+</div>
+<div class="flex justify-between items-start">
+<div>
+<h4 class="text-xl font-serif mb-1">The Soloist Violin</h4>
+<p class="text-xs uppercase tracking-widest text-on-surface-variant font-medium">Guaneri Pattern</p>
+</div>
+<span class="text-primary font-medium">$8,900</span>
+</div>
+</div>
+</div>
+<div class="mt-20 text-center">
+<button class="border-b border-outline-variant text-on-surface pb-2 text-sm uppercase tracking-[0.3em] font-bold hover:text-primary transition-colors duration-300">
+                        View Complete Inventory
+                    </button>
+</div>
+</div>
+</section>
+<!-- Journal Teaser -->
+<section class="py-32 bg-surface-container-lowest">
+<div class="container mx-auto px-6 md:px-12">
+<div class="flex flex-col items-center text-center mb-20">
+<span class="text-xs uppercase tracking-[0.4em] text-primary font-bold mb-4">The Workshop Journal</span>
+<h3 class="text-4xl md:text-5xl font-serif">Stories in Sound</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-16">
+<div class="relative group cursor-pointer overflow-hidden rounded-xl">
+<div class="aspect-[16/9] overflow-hidden">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" data-alt="Overhead shot of a luthier's workbench with various chisels, planes, and instrument components in natural light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMvR6gM2zfZbRIEj15LunR33aqd_wGdj8sz3MXOSO8M4yEs4t1NEqB52DZH1FhZKcxMzmZUyFfQ1avq73pgjKOnHXmYv2JFIKXADMCBwQo7WhWPeTliq6tNUQL--ZBMm1RDw2PpNx6KGGX5m5p5iX93_K1cxFpUD8w9egEpVGbp7vLygVzXW-bfl2vx01QNRHq2IRkty-XiUusl8IrRJcREy7SIgFtUMs9FjHFU7Eyn7iv3jwYbLaOjkj5Z51IMbOJDcn1fKTaFzM"/>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
+<div class="absolute bottom-8 left-8 right-8 text-white">
+<span class="text-[10px] uppercase tracking-widest font-bold mb-3 block opacity-80">January 2024</span>
+<h4 class="text-2xl font-serif mb-2">The Longevity of Spruce</h4>
+<p class="text-sm opacity-80 font-light max-w-sm">Exploring the acoustic properties of high-altitude tone woods.</p>
+</div>
+</div>
+<div class="relative group cursor-pointer overflow-hidden rounded-xl">
+<div class="aspect-[16/9] overflow-hidden">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" data-alt="Cello silhouette in a grand concert hall, backlighting highlighting the elegant curves against the stage lights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRkbLOdnFvO8VmrdmekLhLh_aNip9LUJXcFoJwjYhGoVLYkLG3P2mMpbmHhQiY4cgFYgXg4i92d1-_kya9pSzsj7Bm2NCUi4tCKxFsvxbO4nrGXzAx2nO7rUzMLZrYX-lJji0syuqBmWX2hBjClYtvQ1cFef0SNi0K1vtJK01S6H3l4X_zE8I1YCyHukccsJiIOXDxQBI7s99HHYccu-uYmEoddBgKhd0ZV7KaQq9QXACVqN7QKLriHGwbTb0oFPoIMvcRU_Gh18M"/>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
+<div class="absolute bottom-8 left-8 right-8 text-white">
+<span class="text-[10px] uppercase tracking-widest font-bold mb-3 block opacity-80">December 2023</span>
+<h4 class="text-2xl font-serif mb-2">Cremona’s Living Legacy</h4>
+<p class="text-sm opacity-80 font-light max-w-sm">A conversation with our founding master artisan.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-[#1A1614] text-[#dcd9d9] py-24">
+<div class="container mx-auto px-6 md:px-12">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-16 mb-24">
+<div class="col-span-1 md:col-span-2">
+<h2 class="text-4xl font-serif tracking-[0.2em] text-[#D4AF37] uppercase mb-8">Luwi</h2>
+<p class="max-w-sm text-sm leading-relaxed opacity-60 font-light mb-8">
+                        The intersection of Italian heritage and acoustic innovation. Crafting instruments for the modern virtuoso since 1984.
+                    </p>
+<div class="flex gap-6">
+<a class="opacity-60 hover:opacity-100 transition-opacity" href="#">Instagram</a>
+<a class="opacity-60 hover:opacity-100 transition-opacity" href="#">Vimeo</a>
+<a class="opacity-60 hover:opacity-100 transition-opacity" href="#">Journal</a>
+</div>
+</div>
+<div>
+<h5 class="text-xs uppercase tracking-widest font-bold mb-8 text-[#D4AF37]">Explore</h5>
+<ul class="space-y-4 text-sm font-light opacity-60">
+<li><a class="hover:opacity-100 transition-opacity" href="#">Instruments</a></li>
+<li><a class="hover:opacity-100 transition-opacity" href="#">The Atelier</a></li>
+<li><a class="hover:opacity-100 transition-opacity" href="#">Restoration</a></li>
+<li><a class="hover:opacity-100 transition-opacity" href="#">Curations</a></li>
+</ul>
+</div>
+<div>
+<h5 class="text-xs uppercase tracking-widest font-bold mb-8 text-[#D4AF37]">Support</h5>
+<ul class="space-y-4 text-sm font-light opacity-60">
+<li><a class="hover:opacity-100 transition-opacity" href="#">Contact Us</a></li>
+<li><a class="hover:opacity-100 transition-opacity" href="#">Global Shipping</a></li>
+<li><a class="hover:opacity-100 transition-opacity" href="#">Lifetime Guarantee</a></li>
+<li><a class="hover:opacity-100 transition-opacity" href="#">Privacy Policy</a></li>
+</ul>
+</div>
+</div>
+<div class="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8 text-[10px] uppercase tracking-widest opacity-40 font-medium">
+<p>© 2024 Luwi Elementor. All Rights Reserved.</p>
+<p>Designed for the Soul of Sound</p>
+</div>
+</div>
+</footer>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-[#fcf9f8]/90 dark:bg-[#1A1614]/90 backdrop-blur-xl flex justify-around items-center py-6 px-4 z-50 shadow-[0_-10px_40px_rgba(27,28,28,0.05)]">
+<div class="flex flex-col items-center justify-center text-[#735c00] dark:text-[#D4AF37] font-semibold translate-y-[-2px] transition-transform duration-500">
+<span class="material-symbols-outlined mb-1">storefront</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light">Atelier</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#545e76] dark:text-[#dcd9d9]/60 hover:opacity-80 transition-opacity duration-300">
+<span class="material-symbols-outlined mb-1">search</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light">Search</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#545e76] dark:text-[#dcd9d9]/60 hover:opacity-80 transition-opacity duration-300">
+<span class="material-symbols-outlined mb-1">auto_awesome</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light">Curations</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#545e76] dark:text-[#dcd9d9]/60 hover:opacity-80 transition-opacity duration-300">
+<span class="material-symbols-outlined mb-1">local_mall</span>
+<span class="font-['Inter'] text-[10px] tracking-[0.1em] uppercase font-light">Cart</span>
+</div>
+</nav>
+</body></html>
