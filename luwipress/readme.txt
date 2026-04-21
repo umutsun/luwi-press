@@ -130,11 +130,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 
 == Changelog ==
 
-= 3.1.16 — Chat header contrast + taller body =
-* UI: WhatsApp icon button in the chat header now has a 2.5px white border and uses a white pulse ring instead of green. The plain green ring was invisible on red / dark-primary headers — the white halo now reads against any brand color. Button also bumped 32→34px and the hover state adds a thicker white glow.
+= 3.1.16 — Chat header contrast + taller, bolder widget =
+* UI: WhatsApp icon button in the chat header now has a 2.5px white border and uses a white pulse ring instead of green. The plain green ring was invisible on red / dark-primary headers — the white halo now reads against any brand color. Button bumped 32→38px, inner WhatsApp glyph 16→18px. Hover adds a thicker white glow.
 * UI: The "online" status dot next to the subtitle also gained a white outline + white pulse for the same contrast reason — it was fading into the red gradient.
-* UI: Chat widget feels less cramped — window max-height bumped 520→640px, body min-height 240→360px and max 340→460px. Earlier pass over-minimized the message area; this restores breathing room for 3–4 turns before scroll kicks in.
-* UI: Window width also bumped 360→380px for a bit more horizontal comfort.
+* UI: Close button matched the WhatsApp button size (30→34px), glyph 18→20px, and the gap between them widened slightly.
+* UI: Chat widget feels noticeably more generous — window width 360→390px, max-height 520→720px, body min-height 240→420px and max 340→540px. Earlier pass over-minimized the message area; this restores breathing room for 5–6 turns before scroll kicks in.
 
 = 3.1.15 — Customer chat UI polish =
 * UI: Removed the bottom "Prefer WhatsApp?" CTA bar — it crowded the chat area and duplicated intent. The WhatsApp escalation now lives solely as a compact icon-only circle in the header (32px, official brand green, breathing pulse) next to the close button. Minimal footprint, still obvious.
