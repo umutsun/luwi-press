@@ -22,9 +22,15 @@ $ai_provider = get_option( 'luwipress_ai_provider', 'openai' );
 $ai_model    = get_option( 'luwipress_ai_model', 'gpt-4o-mini' );
 $ai_key      = get_option( 'luwipress_openai_api_key', '' )
             ?: get_option( 'luwipress_anthropic_api_key', '' )
-            ?: get_option( 'luwipress_google_ai_api_key', '' );
+            ?: get_option( 'luwipress_google_ai_api_key', '' )
+            ?: get_option( 'luwipress_openai_compatible_api_key', '' );
 
-$provider_labels = array( 'openai' => 'OpenAI', 'anthropic' => 'Anthropic', 'google' => 'Google AI' );
+$provider_labels = array(
+	'openai'             => 'OpenAI',
+	'anthropic'          => 'Anthropic',
+	'google'             => 'Google AI',
+	'openai_compatible'  => 'OpenAI-Compatible',
+);
 $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 ?>
 
@@ -40,8 +46,8 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			<span class="lp-version">v<?php echo esc_html( LUWIPRESS_VERSION ); ?></span>
 		</div>
 		<div class="lp-header-actions">
-			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-claw' ) ); ?>" class="button button-primary lp-btn-glow">
-				<span class="dashicons dashicons-superhero-alt"></span> <?php esc_html_e( 'Open Claw AI', 'luwipress' ); ?>
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-knowledge-graph' ) ); ?>" class="button button-primary lp-btn-glow">
+				<span class="dashicons dashicons-networking"></span> <?php esc_html_e( 'Knowledge Graph', 'luwipress' ); ?>
 			</a>
 			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-settings' ) ); ?>" class="button">
 				<span class="dashicons dashicons-admin-generic"></span>
@@ -60,9 +66,6 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 		} else {
 			$pills[] = array( 'err', 'dashicons-warning', __( 'No AI key', 'luwipress' ) );
 		}
-
-		// AI Engine
-		$pills[] = array( 'ok', 'dashicons-laptop', __( 'Local AI Engine', 'luwipress' ) );
 
 		// WooCommerce
 		if ( $wc_active ) {
@@ -102,21 +105,26 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			$pills[] = array( 'ok', 'dashicons-chart-bar', ucwords( str_replace( '-', ' ', $analytics['plugin'] ) ) );
 		}
 
+		// Track plugin slugs already shown to avoid duplicates across ads/feed categories
+		$seen_plugins = array();
+
 		// Google Ads
 		$gads = $environment['google_ads'] ?? array();
 		if ( ! empty( $gads['plugin'] ) && 'none' !== $gads['plugin'] ) {
 			$pills[] = array( 'ok', 'dashicons-megaphone', ucwords( str_replace( '-', ' ', $gads['plugin'] ) ) );
+			$seen_plugins[ $gads['plugin'] ] = true;
 		}
 
 		// Meta Ads (Facebook/Instagram Pixel)
 		$meta = $environment['meta_ads'] ?? array();
-		if ( ! empty( $meta['plugin'] ) && 'none' !== $meta['plugin'] ) {
+		if ( ! empty( $meta['plugin'] ) && 'none' !== $meta['plugin'] && empty( $seen_plugins[ $meta['plugin'] ] ) ) {
 			$pills[] = array( 'ok', 'dashicons-share', ucwords( str_replace( '-', ' ', $meta['plugin'] ) ) );
+			$seen_plugins[ $meta['plugin'] ] = true;
 		}
 
-		// Product Feed
+		// Product Feed — skip if already shown as Google Ads (same plugin often covers both)
 		$feed = $environment['product_feed'] ?? array();
-		if ( ! empty( $feed['plugin'] ) && 'none' !== $feed['plugin'] ) {
+		if ( ! empty( $feed['plugin'] ) && 'none' !== $feed['plugin'] && empty( $seen_plugins[ $feed['plugin'] ] ) ) {
 			$pills[] = array( 'ok', 'dashicons-rss', ucwords( str_replace( '-', ' ', $feed['plugin'] ) ) );
 		}
 
