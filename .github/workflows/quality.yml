@@ -1,0 +1,70 @@
+name: quality
+
+# Runs LuwiPress quality gates on every push and PR:
+#   - static  : fast, offline — security + quality + preflight
+#   - contract: slow, live   — REST + WebMCP against staging site
+#
+# See tools/README.md for what each script checks.
+
+on:
+  push:
+    branches: [master, staging]
+  pull_request:
+    branches: [master]
+
+jobs:
+  static:
+    name: Static audits (security + quality + preflight)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.1
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+          tools: composer:v2
+
+      # security-audit.php — CRITICAL findings diff'ed against baseline.
+      # Exit code > 0 iff NEW CRITICAL security pattern introduced.
+      - name: Security audit
+        run: php tools/security-audit.php --diff --only=CRITICAL
+
+      # quality-check.php — HIGH findings diff'ed against baseline.
+      - name: Quality check
+        run: php tools/quality-check.php --diff --only=HIGH
+
+      # release-preflight.sh composes version consistency, PHP lint,
+      # debug-marker scan, secret-leak scan, scaffolding + the two
+      # audits above. Catches "bumped header but forgot readme" mistakes.
+      - name: Release preflight
+        run: ./tools/release-preflight.sh
+
+  contract:
+    name: Contract tests (REST + WebMCP, staging)
+    # Only run on protected branches — hits a live site, needs secrets.
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Every REST endpoint asserts: AUTH_GATE + CACHE_HEADER + VALIDATION.
+      # CACHE_HEADER is the permanent regression guard for the 3.1.36 P0 fix.
+      - name: REST contract test
+        env:
+          LUWI_SITE: ${{ secrets.STAGING_SITE }}
+          LUWI_TOKEN: ${{ secrets.STAGING_TOKEN }}
+        run: python tools/rest-contract-test.py
+
+      # JSON-RPC 2.0 spec compliance + 138-tool catalog shape + UTF-8 hygiene.
+      - name: WebMCP contract test
+        env:
+          LUWI_SITE: ${{ secrets.STAGING_SITE }}
+          LUWI_TOKEN: ${{ secrets.STAGING_TOKEN }}
+        run: python tools/webmcp-contract-test.py
