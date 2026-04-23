@@ -115,6 +115,18 @@ class LuwiPress_Content_Scheduler {
             'permission_callback' => array($this, 'verify_token'),
         ));
 
+        // Delta polling — returns only rows whose status has changed since a given timestamp.
+        // Used by the admin UI to update in-place without full page reload.
+        register_rest_route('luwipress/v1', '/schedule/delta', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'handle_delta'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+            'args'                => array(
+                'since' => array( 'required' => false, 'type' => 'integer', 'default' => 0 ),
+                'ids'   => array( 'required' => false, 'type' => 'string' ),
+            ),
+        ));
+
         // Read scheduler defaults (what UI pre-fills when a new item is created)
         register_rest_route('luwipress/v1', '/schedule/settings', array(
             'methods'             => 'GET',
@@ -1545,6 +1557,72 @@ class LuwiPress_Content_Scheduler {
                 'output_tokens_per' => $output_tokens_per,
                 'image_cost_per'    => $image_cost_per,
             ),
+        ) );
+    }
+
+    /**
+     * REST: delta polling — return rows that changed since a timestamp.
+     *
+     * Replaces full-page reload polling with targeted row updates.
+     * The admin UI calls this every 20s while `generating` or `outline_pending`
+     * rows are present, and patches the DOM in place.
+     */
+    public function handle_delta( $request ) {
+        $since = (int) $request->get_param( 'since' );
+        $ids_param = (string) $request->get_param( 'ids' );
+        $only_ids  = array();
+        if ( '' !== $ids_param ) {
+            $only_ids = array_filter( array_map( 'absint', explode( ',', $ids_param ) ) );
+        }
+
+        $args = array(
+            'post_type'      => self::POST_TYPE,
+            'posts_per_page' => 100,
+            'post_status'    => 'publish',
+            'orderby'        => 'modified',
+            'order'          => 'DESC',
+        );
+        if ( $since > 0 ) {
+            $args['date_query'] = array(
+                'column' => 'post_modified_gmt',
+                'after'  => gmdate( 'Y-m-d H:i:s', $since ),
+            );
+        }
+        if ( ! empty( $only_ids ) ) {
+            $args['post__in'] = $only_ids;
+        }
+
+        $posts = get_posts( $args );
+        $now   = time();
+
+        $items = array();
+        foreach ( $posts as $p ) {
+            $id       = (int) $p->ID;
+            $status   = (string) get_post_meta( $id, '_luwipress_schedule_status', true );
+            $pub_id   = (int)    get_post_meta( $id, '_luwipress_published_post_id', true );
+            $error    = (string) get_post_meta( $id, '_luwipress_schedule_error', true );
+            $mode     = (string) get_post_meta( $id, '_luwipress_schedule_publish_mode', true );
+            $is_draft = false;
+            $post_status_str = '';
+            if ( $pub_id ) {
+                $ps = get_post_status( $pub_id );
+                $post_status_str = $ps ?: '';
+                $is_draft = ( 'draft' === $mode ) && ( 'draft' === $ps );
+            }
+            $items[] = array(
+                'id'            => $id,
+                'status'        => $status,
+                'published_id'  => $pub_id,
+                'post_status'   => $post_status_str,
+                'is_draft'      => $is_draft,
+                'error'         => $error,
+                'modified_gmt'  => get_post_modified_time( 'U', true, $p ),
+            );
+        }
+
+        return rest_ensure_response( array(
+            'now'   => $now,
+            'items' => $items,
         ) );
     }
 

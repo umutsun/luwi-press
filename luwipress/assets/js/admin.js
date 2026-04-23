@@ -219,339 +219,648 @@
             });
         });
 
+
         // ========================================
-        // Content Scheduler — Wizard
+        // Content Scheduler — hybrid tab layout (3.1.15)
         // ========================================
-        if ($('#sched-wizard-form').length) {
-            var $wizForm      = $('#sched-wizard-form');
-            var $wizSteps     = $('.sched-step');
-            var $wizPanels    = $('.sched-wiz-panel');
-            var $wizBack      = $('.sched-wiz-back');
-            var $wizNext      = $('.sched-wiz-next');
-            var $wizSubmit    = $('.sched-wiz-submit');
-            var $wizProgress  = $('.sched-wiz-progress-bar');
-            var $wizTopics    = $('#sched-wiz-topics');
-            var $wizCount     = $('#sched-wiz-count');
-            var $wizBulkOnly  = $('.sched-bulk-only');
-            var $wizSummary   = $('#sched-wiz-summary');
-            var $wizResult    = $('#sched-wiz-result');
-            var totalSteps    = 4;
-            var currentStep   = 1;
+        if ($('.sched-shell').length) {
 
-            function countTopics() {
-                return ($wizTopics.val() || '').split('\n').filter(function(l) { return l.trim().length > 0; }).length;
+            // ──────── i18n + toast helpers ────────
+            var I18N = (luwipress && luwipress.i18n) || {};
+            function t(key, fallback) { return I18N[key] || fallback || ''; }
+            function tf(key, fallback) {
+                // sprintf-lite for %d and %s replacements
+                var template = I18N[key] || fallback || '';
+                var args = Array.prototype.slice.call(arguments, 2);
+                var i = 0;
+                return template.replace(/%(\d+\$)?[ds]/g, function() { return args[i++]; });
             }
-
-            function updateTopicCount() {
-                var n = countTopics();
-                $wizCount.text(n + ' / 50');
-                $wizCount.toggleClass('over-limit', n > 50);
-                $wizBulkOnly.prop('hidden', n <= 1);
-            }
-
-            function showStep(n) {
-                n = Math.max(1, Math.min(totalSteps, n));
-                currentStep = n;
-                $wizPanels.each(function() {
-                    var p = parseInt($(this).attr('data-panel'), 10);
-                    $(this).prop('hidden', p !== n).toggleClass('is-active', p === n);
-                });
-                $wizSteps.each(function() {
-                    var s = parseInt($(this).attr('data-step'), 10);
-                    $(this).toggleClass('is-active', s === n).toggleClass('is-done', s < n);
-                });
-                $wizProgress.css('width', (n / totalSteps * 100) + '%');
-                $wizBack.prop('disabled', n === 1);
-                if (n === totalSteps) {
-                    $wizNext.prop('hidden', true);
-                    $wizSubmit.prop('hidden', false);
-                    renderSummary();
-                    fetchBudgetPreview();
+            function notify(message, type) {
+                type = type || 'info';
+                if (window.luwipress_toast) {
+                    window.luwipress_toast(message, type);
                 } else {
-                    $wizNext.prop('hidden', false);
-                    $wizSubmit.prop('hidden', true);
+                    if (type === 'error') alert(message);
                 }
-                // Scroll wizard card into view on step change
-                try {
-                    var card = document.querySelector('.sched-wizard-card');
-                    if (card && n > 1) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                } catch (e) {}
             }
-
-            function fetchBudgetPreview() {
-                var $box = $('#sched-wiz-budget');
-                var $body = $('#sched-wiz-budget-body');
-                var $provider = $('#sched-wiz-budget-provider');
-                var topicCount = countTopics();
-                var depth = $wizForm.find('input[name="depth"]:checked').val() || 'standard';
-                var words = parseInt($wizForm.find('input[name="word_count"]').val(), 10) || 1500;
-                var generateImage = $wizForm.find('input[name="generate_image"]').is(':checked') ? 1 : 0;
-                // Multilingual: each extra language = one additional article per topic.
-                var extraLangs = $wizForm.find('input[name="additional_languages[]"]:checked').length;
-                var langMultiplier = 1 + extraLangs;
-                var effectiveTopicCount = topicCount * langMultiplier;
-
-                $box.prop('hidden', false);
-                $body.html('<span class="sched-wiz-budget-loading">Calculating…</span>');
-
-                $.post(luwipress.ajax_url, {
-                    action: 'luwipress_estimate_batch_cost',
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val(),
-                    topic_count: effectiveTopicCount,
-                    word_count: words,
-                    depth: depth,
-                    generate_image: generateImage
-                }, function(res) {
-                    if (!res || !res.success) {
-                        $body.html('<span class="sched-wiz-budget-err">Unable to estimate</span>');
-                        return;
-                    }
-                    var d = res.data;
-                    $provider.text(d.provider + ' · ' + d.model);
-                    var parts = [
-                        '<div class="sched-wiz-budget-total">$' + d.grand_total.toFixed(2) + '</div>',
-                        '<div class="sched-wiz-budget-breakdown">' +
-                            '<span>' + d.topic_count + ' × $' + d.per_topic.toFixed(4) + ' text</span>' +
-                            (d.image_total > 0 ? '<span>+ $' + d.image_total.toFixed(2) + ' images</span>' : '') +
-                        '</div>'
-                    ];
-                    $body.html(parts.join(''));
-                }).fail(function() {
-                    $body.html('<span class="sched-wiz-budget-err">Unable to estimate</span>');
-                });
-            }
-
-            function validateStep(n) {
-                if (n === 1) {
-                    var c = countTopics();
-                    if (c === 0) {
-                        flashError('Add at least one topic to continue.');
-                        $wizTopics.focus();
-                        return false;
-                    }
-                    if (c > 50) {
-                        flashError('Maximum 50 topics per batch. Please trim the list.');
-                        return false;
-                    }
-                }
-                if (n === 3) {
-                    var d = $wizForm.find('input[name="start_date"]').val();
-                    if (!d) {
-                        flashError('Pick a start date.');
-                        return false;
-                    }
-                }
-                return true;
-            }
-
-            function flashError(msg) {
-                $wizResult.html('<div class="notice notice-error sched-wiz-notice"><p>' + escapeHtml(msg) + '</p></div>');
-                setTimeout(function() { $wizResult.empty(); }, 4000);
-            }
-
             function escapeHtml(s) {
                 return (s + '').replace(/[&<>"']/g, function(c) {
                     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
                 });
             }
 
-            function formatDate(dateStr, timeStr) {
-                if (!dateStr) return '';
-                try {
-                    var dt = new Date(dateStr + 'T' + (timeStr || '09:00'));
-                    if (isNaN(dt.getTime())) return dateStr + (timeStr ? ' ' + timeStr : '');
-                    var opts = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-                    return dt.toLocaleString(undefined, opts);
-                } catch (e) {
-                    return dateStr;
-                }
-            }
+            // ──────── Confirm modal (replaces native window.confirm) ────────
+            var $confirmModal = $('#sched-confirm-modal');
+            var $confirmTitle = $('#sched-confirm-title');
+            var $confirmMessage = $('#sched-confirm-message');
+            var $confirmIcon = $('#sched-confirm-icon');
+            var $confirmOk = $('#sched-confirm-ok');
+            var $confirmCancel = $('#sched-confirm-cancel');
+            var confirmPrevFocus = null;
+            var confirmResolver = null;
 
-            function renderSummary() {
-                var topics        = ($wizTopics.val() || '').split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
-                var depth         = $wizForm.find('input[name="depth"]:checked').val() || 'standard';
-                var tone          = $wizForm.find('select[name="tone"]').val();
-                var toneLabel     = $wizForm.find('select[name="tone"] option:selected').text();
-                var words         = $wizForm.find('input[name="word_count"]').val();
-                var lang          = $wizForm.find('select[name="language"]').val();
-                var langLabel     = $wizForm.find('select[name="language"] option:selected').text();
-                var postType      = $wizForm.find('select[name="target_post_type"] option:selected').text();
-                var generateImage = $wizForm.find('input[name="generate_image"]').is(':checked');
-                var startDate     = $wizForm.find('input[name="start_date"]').val();
-                var startTime     = $wizForm.find('input[name="start_time"]').val() || '09:00';
-                var intervalVal   = parseInt($wizForm.find('input[name="interval_value"]').val(), 10) || 1;
-                var intervalUnit  = $wizForm.find('select[name="interval_unit"]').val() || 'day';
-                var stagger       = parseInt($wizForm.find('input[name="generate_offset"]').val(), 10) || 0;
+            function schedConfirm(opts) {
+                opts = opts || {};
+                var msg      = opts.message || '';
+                var title    = opts.title || t('err_generic', 'Are you sure?');
+                var variant  = opts.variant || 'warning'; // warning | danger | info
+                var okLabel  = opts.okLabel || (variant === 'danger' ? t('lbl_confirm_delete', 'Delete') : t('lbl_confirm', 'Confirm'));
+                var cancelLb = opts.cancelLabel || t('lbl_cancel', 'Cancel');
+                var iconCls  = variant === 'danger' ? 'dashicons-trash' : (variant === 'info' ? 'dashicons-info-outline' : 'dashicons-warning');
 
-                var isBulk = topics.length > 1;
-                var spacingMin = intervalVal * (intervalUnit === 'day' ? 1440 : 60);
-                var lastOffsetMin = (topics.length - 1) * spacingMin;
-                var endStr = '';
-                if (isBulk && startDate) {
-                    var startDT = new Date(startDate + 'T' + startTime);
-                    if (!isNaN(startDT.getTime())) {
-                        var endDT = new Date(startDT.getTime() + lastOffsetMin * 60000);
-                        endStr = endDT.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-                    }
-                }
+                $confirmModal.removeClass('is-danger is-info is-warning').addClass('is-' + variant);
+                $confirmTitle.text(title);
+                $confirmMessage.text(msg);
+                $confirmIcon.find('.dashicons').attr('class', 'dashicons ' + iconCls);
+                $confirmOk.text(okLabel);
+                $confirmCancel.text(cancelLb);
 
-                var topicsPreview = topics.slice(0, 6).map(function(t) {
-                    return '<li>' + escapeHtml(t) + '</li>';
-                }).join('');
-                if (topics.length > 6) {
-                    topicsPreview += '<li class="sched-sum-more">+ ' + (topics.length - 6) + ' more</li>';
-                }
+                confirmPrevFocus = document.activeElement;
+                $confirmModal.prop('hidden', false).attr('aria-hidden', 'false');
+                focusTrapActivate($confirmModal);
+                setTimeout(function() { $confirmOk.focus(); }, 20);
 
-                var publishMode = $wizForm.find('input[name="publish_mode"]:checked').val() || 'draft';
-                var modeLabel = publishMode === 'draft'
-                    ? 'Save as draft for review'
-                    : 'Auto-publish on schedule';
-
-                var extraLangsArr = $wizForm.find('input[name="additional_languages[]"]:checked').map(function() { return ($(this).val() || '').toUpperCase(); }).get();
-                var langSummary = langLabel;
-                if (extraLangsArr.length) {
-                    langSummary = langLabel + ' + ' + extraLangsArr.join(', ') + ' (' + (1 + extraLangsArr.length) + '× per topic)';
-                }
-
-                var rows = [
-                    ['Depth',            depth.charAt(0).toUpperCase() + depth.slice(1)],
-                    ['Tone',             toneLabel],
-                    ['Target length',    words + ' words'],
-                    ['Language',         langSummary],
-                    ['Post type',        postType],
-                    ['Featured image',   generateImage ? 'Generated per post' : 'No'],
-                    ['After generation', modeLabel],
-                    ['First publish',    formatDate(startDate, startTime)]
-                ];
-                if (isBulk) {
-                    rows.push(['Cadence', 'Every ' + intervalVal + ' ' + intervalUnit + (intervalVal === 1 ? '' : 's')]);
-                    rows.push(['AI stagger', stagger + ' min between runs']);
-                    if (endStr) rows.push(['Last publish', endStr]);
-                }
-
-                var rowsHtml = rows.map(function(r) {
-                    return '<div class="sched-sum-row"><strong>' + escapeHtml(r[0]) + '</strong><span>' + escapeHtml(r[1]) + '</span></div>';
-                }).join('');
-
-                $wizSummary.html(
-                    '<div class="sched-sum-top">' +
-                        '<div class="sched-sum-num">' + topics.length + '</div>' +
-                        '<div class="sched-sum-lbl">topic' + (topics.length !== 1 ? 's' : '') + ' to queue</div>' +
-                    '</div>' +
-                    '<div class="sched-sum-grid">' + rowsHtml + '</div>' +
-                    '<div class="sched-sum-topics"><strong>Topics</strong><ol>' + topicsPreview + '</ol></div>'
-                );
-            }
-
-            // Events
-            $wizTopics.on('input', updateTopicCount);
-            updateTopicCount();
-
-            // Multilingual chips — hide the primary language (selected in the language dropdown)
-            // so it can't be picked as its own "additional" language.
-            function syncI18nChips() {
-                var primary = ($wizForm.find('select[name="language"]').val() || '').toLowerCase();
-                $('#sched-i18n-chips .sched-i18n-chip').each(function() {
-                    var $chip = $(this);
-                    var code = ($chip.data('lang') || '').toString().toLowerCase();
-                    if (code === primary) {
-                        $chip.prop('hidden', true);
-                        $chip.find('input').prop('checked', false);
-                    } else {
-                        $chip.prop('hidden', false);
-                    }
+                return new Promise(function(resolve) {
+                    confirmResolver = resolve;
                 });
             }
-            $wizForm.find('select[name="language"]').on('change', syncI18nChips);
-            syncI18nChips();
 
-            $wizNext.on('click', function() {
-                if (!validateStep(currentStep)) return;
-                showStep(currentStep + 1);
-            });
-            $wizBack.on('click', function() {
-                showStep(currentStep - 1);
-            });
-
-            $wizSteps.on('click', function() {
-                var target = parseInt($(this).attr('data-step'), 10);
-                if (target < currentStep) {
-                    showStep(target);
-                } else if (target > currentStep) {
-                    var ok = true;
-                    for (var s = currentStep; s < target; s++) {
-                        if (!validateStep(s)) { ok = false; break; }
-                    }
-                    if (ok) showStep(target);
+            function confirmClose(result) {
+                $confirmModal.prop('hidden', true).attr('aria-hidden', 'true');
+                focusTrapRelease();
+                if (confirmPrevFocus && confirmPrevFocus.focus) {
+                    try { confirmPrevFocus.focus(); } catch (e) {}
                 }
+                if (confirmResolver) {
+                    var r = confirmResolver;
+                    confirmResolver = null;
+                    r(result === true);
+                }
+            }
+
+            $confirmOk.on('click', function() { confirmClose(true); });
+            $confirmCancel.on('click', function() { confirmClose(false); });
+            $confirmModal.on('click', '[data-close="1"]', function() { confirmClose(false); });
+
+            // Back-compat shim — keeps old call sites working during migration
+            function confirmed(message) { return window.confirm(message); }
+
+            // ──────── Focus trap (shared by all scheduler modals) ────────
+            var focusTrapState = { $modal: null, handler: null };
+            function focusableIn($modal) {
+                return $modal.find(
+                    'a[href], button:not([disabled]), textarea:not([disabled]), ' +
+                    'input:not([disabled]):not([type="hidden"]), select:not([disabled]), ' +
+                    '[tabindex]:not([tabindex="-1"])'
+                ).filter(':visible');
+            }
+            function focusTrapActivate($modal) {
+                focusTrapRelease();
+                var handler = function(e) {
+                    if (e.key !== 'Tab') return;
+                    var $f = focusableIn($modal);
+                    if (!$f.length) { e.preventDefault(); return; }
+                    var first = $f[0], last = $f[$f.length - 1];
+                    if (e.shiftKey && document.activeElement === first) {
+                        last.focus(); e.preventDefault();
+                    } else if (!e.shiftKey && document.activeElement === last) {
+                        first.focus(); e.preventDefault();
+                    }
+                };
+                document.addEventListener('keydown', handler);
+                focusTrapState = { $modal: $modal, handler: handler };
+            }
+            function focusTrapRelease() {
+                if (focusTrapState.handler) {
+                    document.removeEventListener('keydown', focusTrapState.handler);
+                }
+                focusTrapState = { $modal: null, handler: null };
+            }
+
+            // ──────── Main tab switching ────────
+            var $tabs = $('.sched-tab');
+            var $panels = $('.sched-tabpanel');
+            var defaultTab = $('.sched-shell').data('default-tab') || 'queue';
+
+            function activateTab(name, pushHash) {
+                var matched = false;
+                $tabs.each(function() {
+                    var is = $(this).data('tab') === name;
+                    $(this).attr('aria-selected', is ? 'true' : 'false');
+                    if (is) matched = true;
+                });
+                if (!matched) { name = defaultTab; }
+                $panels.each(function() {
+                    var is = $(this).attr('id') === 'sched-tabpanel-' + name;
+                    $(this).prop('hidden', !is);
+                });
+                if (pushHash !== false && window.history && window.history.replaceState) {
+                    try { window.history.replaceState(null, '', '#' + name); } catch (e) {}
+                }
+            }
+
+            $tabs.on('click', function() { activateTab($(this).data('tab')); });
+            $(document).on('click', '[data-goto-tab]', function() { activateTab($(this).data('goto-tab')); });
+
+            // Initial tab from hash or default
+            var hashTab = (location.hash || '').replace('#', '');
+            activateTab(['queue', 'plans', 'create'].indexOf(hashTab) !== -1 ? hashTab : defaultTab, false);
+
+            // ──────── Wizard ────────
+            if ($('#sched-wizard-form').length) {
+                var $wizForm     = $('#sched-wizard-form');
+                var $wizSteps    = $('.sched-wiz-step');
+                var $wizPanels   = $('.sched-wiz-panel');
+                var $wizBack     = $('.sched-wiz-back');
+                var $wizNext     = $('.sched-wiz-next');
+                var $wizSubmit   = $('.sched-wiz-submit');
+                var $wizProgress = $('.sched-wiz-progress-bar');
+                var $wizTopics   = $('#sched-wiz-topics');
+                var $wizCount    = $('#sched-wiz-count');
+                var $wizBulkOnly = $('.sched-bulk-only');
+                var $wizSummary  = $('#sched-wiz-summary');
+                var $wizResult   = $('#sched-wiz-result');
+                var totalSteps   = 4;
+                var currentStep  = 1;
+
+                function countTopics() {
+                    return ($wizTopics.val() || '').split('\n').filter(function(l) { return l.trim().length > 0; }).length;
+                }
+                function updateTopicCount() {
+                    var n = countTopics();
+                    $wizCount.text(n + ' / 50');
+                    $wizCount.toggleClass('over-limit', n > 50);
+                    $wizBulkOnly.prop('hidden', n <= 1);
+                }
+
+                function clearFieldError($field) { $field.closest('.sched-field').removeClass('has-error'); }
+                function markFieldError($field) {
+                    var $f = $field.closest('.sched-field');
+                    $f.addClass('has-error');
+                    $field.one('input change', function() { clearFieldError($(this)); });
+                }
+
+                function showStep(n) {
+                    n = Math.max(1, Math.min(totalSteps, n));
+                    currentStep = n;
+                    $wizPanels.each(function() {
+                        var p = parseInt($(this).attr('data-panel'), 10);
+                        $(this).prop('hidden', p !== n).toggleClass('is-active', p === n);
+                    });
+                    $wizSteps.each(function() {
+                        var s = parseInt($(this).attr('data-step'), 10);
+                        $(this).toggleClass('is-active', s === n).toggleClass('is-done', s < n);
+                    });
+                    $wizProgress.css('width', (n / totalSteps * 100) + '%');
+                    $wizBack.prop('disabled', n === 1);
+                    if (n === totalSteps) {
+                        $wizNext.prop('hidden', true);
+                        $wizSubmit.prop('hidden', false);
+                        renderSummary();
+                        fetchBudgetPreview();
+                    } else {
+                        $wizNext.prop('hidden', false);
+                        $wizSubmit.prop('hidden', true);
+                    }
+                }
+
+                function fetchBudgetPreview() {
+                    var $box = $('#sched-wiz-budget');
+                    var $body = $('#sched-wiz-budget-body');
+                    var $provider = $('#sched-wiz-budget-provider');
+                    var topicCount = countTopics();
+                    var depth = $wizForm.find('input[name="depth"]:checked').val() || 'standard';
+                    var words = parseInt($wizForm.find('input[name="word_count"]').val(), 10) || 1500;
+                    var generateImage = $wizForm.find('input[name="generate_image"]').is(':checked') ? 1 : 0;
+                    var extraLangs = $wizForm.find('input[name="additional_languages[]"]:checked').length;
+                    var langMultiplier = 1 + extraLangs;
+                    var effectiveTopicCount = topicCount * langMultiplier;
+
+                    $box.prop('hidden', false);
+                    $body.html('<span class="sched-wiz-budget-loading">' + escapeHtml(t('loading_calc', 'Calculating…')) + '</span>');
+
+                    $.post(luwipress.ajax_url, {
+                        action: 'luwipress_estimate_batch_cost',
+                        _wpnonce: $wizForm.find('input[name="_wpnonce"]').val(),
+                        topic_count: effectiveTopicCount,
+                        word_count: words,
+                        depth: depth,
+                        generate_image: generateImage
+                    }, function(res) {
+                        if (!res || !res.success) {
+                            $body.html('<span class="sched-wiz-budget-err">' + escapeHtml(t('err_estimate', 'Unable to estimate.')) + '</span>');
+                            return;
+                        }
+                        var d = res.data;
+                        $provider.text(d.provider + ' · ' + d.model);
+                        var parts = [
+                            '<div class="sched-wiz-budget-total">$' + d.grand_total.toFixed(2) + '</div>',
+                            '<div class="sched-wiz-budget-breakdown">' +
+                                '<span>' + d.topic_count + ' × $' + d.per_topic.toFixed(4) + ' text</span>' +
+                                (d.image_total > 0 ? '<span>+ $' + d.image_total.toFixed(2) + ' images</span>' : '') +
+                            '</div>'
+                        ];
+                        $body.html(parts.join(''));
+                    }).fail(function() {
+                        $body.html('<span class="sched-wiz-budget-err">' + escapeHtml(t('err_estimate', 'Unable to estimate.')) + '</span>');
+                    });
+                }
+
+                function flashStepError(n) {
+                    var $step = $wizSteps.filter('[data-step="' + n + '"]');
+                    $step.addClass('has-error');
+                    setTimeout(function() { $step.removeClass('has-error'); }, 1200);
+                }
+
+                function validateStep(n) {
+                    if (n === 1) {
+                        var c = countTopics();
+                        if (c === 0) {
+                            markFieldError($wizTopics);
+                            flashStepError(n);
+                            notify(t('err_need_topic', 'Add at least one topic to continue.'), 'error');
+                            $wizTopics.focus();
+                            return false;
+                        }
+                        if (c > 50) {
+                            markFieldError($wizTopics);
+                            flashStepError(n);
+                            notify(t('err_topic_limit', 'Maximum 50 topics per batch.'), 'error');
+                            return false;
+                        }
+                        clearFieldError($wizTopics);
+                    }
+                    if (n === 3) {
+                        var $date = $wizForm.find('input[name="start_date"]');
+                        if (!$date.val()) {
+                            markFieldError($date);
+                            flashStepError(n);
+                            notify(t('err_need_date', 'Pick a start date.'), 'error');
+                            $date.focus();
+                            return false;
+                        }
+                        clearFieldError($date);
+                    }
+                    return true;
+                }
+
+                function formatDate(dateStr, timeStr) {
+                    if (!dateStr) return '';
+                    try {
+                        var dt = new Date(dateStr + 'T' + (timeStr || '09:00'));
+                        if (isNaN(dt.getTime())) return dateStr + (timeStr ? ' ' + timeStr : '');
+                        return dt.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    } catch (e) { return dateStr; }
+                }
+
+                function renderSummary() {
+                    var topics        = ($wizTopics.val() || '').split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+                    var depth         = $wizForm.find('input[name="depth"]:checked').val() || 'standard';
+                    var toneLabel     = $wizForm.find('select[name="tone"] option:selected').text();
+                    var words         = $wizForm.find('input[name="word_count"]').val();
+                    var langLabel     = $wizForm.find('select[name="language"] option:selected').text();
+                    var postType      = $wizForm.find('select[name="target_post_type"] option:selected').text();
+                    var generateImage = $wizForm.find('input[name="generate_image"]').is(':checked');
+                    var startDate     = $wizForm.find('input[name="start_date"]').val();
+                    var startTime     = $wizForm.find('input[name="start_time"]').val() || '09:00';
+                    var intervalVal   = parseInt($wizForm.find('input[name="interval_value"]').val(), 10) || 1;
+                    var intervalUnit  = $wizForm.find('select[name="interval_unit"]').val() || 'day';
+                    var stagger       = parseInt($wizForm.find('input[name="generate_offset"]').val(), 10) || 0;
+
+                    var isBulk = topics.length > 1;
+                    var spacingMin = intervalVal * (intervalUnit === 'day' ? 1440 : 60);
+                    var lastOffsetMin = (topics.length - 1) * spacingMin;
+                    var endStr = '';
+                    if (isBulk && startDate) {
+                        var startDT = new Date(startDate + 'T' + startTime);
+                        if (!isNaN(startDT.getTime())) {
+                            var endDT = new Date(startDT.getTime() + lastOffsetMin * 60000);
+                            endStr = endDT.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+                        }
+                    }
+
+                    var topicsPreview = topics.slice(0, 6).map(function(t) {
+                        return '<li>' + escapeHtml(t) + '</li>';
+                    }).join('');
+                    if (topics.length > 6) {
+                        topicsPreview += '<li class="sched-sum-more">+ ' + (topics.length - 6) + ' more</li>';
+                    }
+
+                    var publishMode = $wizForm.find('input[name="publish_mode"]:checked').val() || 'draft';
+                    var modeLabel = publishMode === 'draft'
+                        ? 'Save as draft for review'
+                        : 'Auto-publish on schedule';
+
+                    var extraLangsArr = $wizForm.find('input[name="additional_languages[]"]:checked').map(function() { return ($(this).val() || '').toUpperCase(); }).get();
+                    var langSummary = langLabel;
+                    if (extraLangsArr.length) {
+                        langSummary = langLabel + ' + ' + extraLangsArr.join(', ') + ' (' + (1 + extraLangsArr.length) + '× per topic)';
+                    }
+
+                    var rows = [
+                        ['Depth',            depth.charAt(0).toUpperCase() + depth.slice(1)],
+                        ['Tone',             toneLabel],
+                        ['Target length',    words + ' words'],
+                        ['Language',         langSummary],
+                        ['Post type',        postType],
+                        ['Featured image',   generateImage ? 'Generated per post' : 'No'],
+                        ['After generation', modeLabel],
+                        ['First publish',    formatDate(startDate, startTime)]
+                    ];
+                    if (isBulk) {
+                        rows.push(['Cadence', 'Every ' + intervalVal + ' ' + intervalUnit + (intervalVal === 1 ? '' : 's')]);
+                        rows.push(['AI stagger', stagger + ' min between runs']);
+                        if (endStr) rows.push(['Last publish', endStr]);
+                    }
+                    var rowsHtml = rows.map(function(r) {
+                        return '<div class="sched-sum-row"><strong>' + escapeHtml(r[0]) + '</strong><span>' + escapeHtml(r[1]) + '</span></div>';
+                    }).join('');
+
+                    $wizSummary.html(
+                        '<div class="sched-sum-top">' +
+                            '<div class="sched-sum-num">' + topics.length + '</div>' +
+                            '<div class="sched-sum-lbl">topic' + (topics.length !== 1 ? 's' : '') + ' to queue</div>' +
+                        '</div>' +
+                        '<div class="sched-sum-grid">' + rowsHtml + '</div>' +
+                        '<div class="sched-sum-topics"><strong>Topics</strong><ol>' + topicsPreview + '</ol></div>'
+                    );
+                }
+
+                $wizTopics.on('input', function() { clearFieldError($(this)); updateTopicCount(); });
+                updateTopicCount();
+
+                // Multilingual chips: hide primary language so it can't be picked twice
+                function syncI18nChips() {
+                    var primary = ($wizForm.find('select[name="language"]').val() || '').toLowerCase();
+                    $('#sched-i18n-chips .sched-i18n-chip').each(function() {
+                        var $chip = $(this);
+                        var code = ($chip.data('lang') || '').toString().toLowerCase();
+                        if (code === primary) {
+                            $chip.prop('hidden', true);
+                            $chip.find('input').prop('checked', false);
+                        } else {
+                            $chip.prop('hidden', false);
+                        }
+                    });
+                }
+                $wizForm.find('select[name="language"]').on('change', syncI18nChips);
+                syncI18nChips();
+
+                $wizNext.on('click', function() {
+                    if (!validateStep(currentStep)) return;
+                    showStep(currentStep + 1);
+                });
+                $wizBack.on('click', function() { showStep(currentStep - 1); });
+
+                $wizSteps.on('click keydown', function(e) {
+                    if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+                    if (e.type === 'keydown') e.preventDefault();
+                    var target = parseInt($(this).attr('data-step'), 10);
+                    if (target < currentStep) { showStep(target); return; }
+                    if (target > currentStep) {
+                        var ok = true;
+                        for (var s = currentStep; s < target; s++) {
+                            if (!validateStep(s)) { ok = false; break; }
+                        }
+                        if (ok) showStep(target);
+                    }
+                });
+
+                $wizForm.on('submit', function(e) {
+                    e.preventDefault();
+                    if (!validateStep(1)) { showStep(1); return; }
+
+                    $wizSubmit.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> ' + escapeHtml(t('loading_queuing', 'Queuing…')));
+                    $wizResult.empty();
+
+                    $.ajax({
+                        url: luwipress.ajax_url,
+                        type: 'POST',
+                        data: $wizForm.serialize(),
+                        success: function(res) {
+                            if (res && res.success) {
+                                var d = res.data || {};
+                                var queued = d.queued || 0;
+                                var msg = d.skipped
+                                    ? tf('ok_queued_with_skip', 'Queued %1$d topic(s) · %2$d skipped.', queued, d.skipped)
+                                    : tf('ok_queued', 'Queued %d topic(s).', queued);
+                                notify(msg + ' ' + t('ok_refreshing', 'Refreshing…'), 'success');
+                                setTimeout(function() { location.reload(); }, 1400);
+                            } else {
+                                var errMsg = (res && res.data) ? res.data : t('err_generic', 'Error');
+                                notify(errMsg, 'error');
+                                $wizSubmit.prop('disabled', false).html('<span class="dashicons dashicons-controls-play"></span> ' + escapeHtml(t('lbl_queue_all', 'Queue all topics')));
+                            }
+                        },
+                        error: function() {
+                            notify(t('err_request_failed', 'Request failed.'), 'error');
+                            $wizSubmit.prop('disabled', false).html('<span class="dashicons dashicons-controls-play"></span> ' + escapeHtml(t('lbl_queue_all', 'Queue all topics')));
+                        }
+                    });
+                });
+
+                // ──────── Brainstorm ────────
+                var $brainToggle = $('#sched-brainstorm-toggle');
+                var $brainPanel  = $('#sched-brainstorm');
+                var $brainRun    = $('#sched-brainstorm-run');
+                var $brainResults= $('#sched-brainstorm-results');
+
+                $brainToggle.on('click', function() {
+                    var open = $brainPanel.is(':visible');
+                    $brainPanel.prop('hidden', open).toggle(!open);
+                    if (!open) $('#sched-brainstorm-theme').focus();
+                });
+
+                $brainRun.on('click', function() {
+                    var theme = ($('#sched-brainstorm-theme').val() || '').trim();
+                    var count = parseInt($('#sched-brainstorm-count').val(), 10) || 10;
+                    var style = ($('#sched-brainstorm-style').val() || '').trim();
+                    var lang  = $wizForm.find('select[name="language"]').val() || 'en';
+                    if (!theme) {
+                        markFieldError($('#sched-brainstorm-theme'));
+                        notify(t('err_need_theme', 'Please enter a theme.'), 'error');
+                        return;
+                    }
+                    clearFieldError($('#sched-brainstorm-theme'));
+
+                    $brainRun.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> ' + escapeHtml(t('loading_thinking', 'Thinking…')));
+                    $brainResults.html('<div class="sched-brainstorm-loading"><span class="dashicons dashicons-update spin"></span> ' + escapeHtml(t('loading_ideas', 'Generating ideas…')) + '</div>');
+
+                    $.post(luwipress.ajax_url, {
+                        action: 'luwipress_brainstorm_topics',
+                        _wpnonce: $wizForm.find('input[name="_wpnonce"]').val(),
+                        theme: theme, count: count, style_hint: style, language: lang
+                    }, function(res) {
+                        $brainRun.prop('disabled', false).html('<span class="dashicons dashicons-admin-customizer"></span> ' + escapeHtml(t('lbl_generate_ideas', 'Generate ideas')));
+                        if (!res || !res.success) {
+                            $brainResults.html('<div class="sched-brainstorm-err">' + escapeHtml((res && res.data) || t('err_brainstorm', 'Brainstorm failed.')) + '</div>');
+                            return;
+                        }
+                        var topics = (res.data && res.data.topics) || [];
+                        if (!topics.length) {
+                            $brainResults.html('<div class="sched-brainstorm-err">' + escapeHtml(t('err_brainstorm_empty', 'No topics returned.')) + '</div>');
+                            return;
+                        }
+                        var html = '<div class="sched-brainstorm-picks-head">'
+                                 + '<label><input type="checkbox" class="sched-brainstorm-all" checked> ' + escapeHtml(tf('lbl_select_all', 'Select all (%d)', topics.length)) + '</label>'
+                                 + '<button type="button" class="button button-primary sched-brainstorm-add"><span class="dashicons dashicons-plus-alt"></span> ' + escapeHtml(t('lbl_add_picked', 'Add picked to queue')) + '</button>'
+                                 + '</div><ul class="sched-brainstorm-picks">';
+                        topics.forEach(function(t) {
+                            var depthTag = t.depth ? '<span class="sched-brainstorm-depth">' + escapeHtml(t.depth) + '</span>' : '';
+                            var pipe = t.depth ? (' | depth=' + t.depth) : '';
+                            html += '<li>'
+                                 +   '<label>'
+                                 +     '<input type="checkbox" class="sched-brainstorm-pick" checked data-title="' + escapeHtml(t.title) + '" data-pipe="' + escapeHtml(pipe) + '">'
+                                 +     '<span class="sched-brainstorm-title">' + escapeHtml(t.title) + '</span>'
+                                 +     depthTag
+                                 +     (t.angle ? '<span class="sched-brainstorm-angle">' + escapeHtml(t.angle) + '</span>' : '')
+                                 +   '</label>'
+                                 + '</li>';
+                        });
+                        html += '</ul>';
+                        $brainResults.html(html);
+                    }).fail(function() {
+                        $brainRun.prop('disabled', false).html('<span class="dashicons dashicons-admin-customizer"></span> ' + escapeHtml(t('lbl_generate_ideas', 'Generate ideas')));
+                        $brainResults.html('<div class="sched-brainstorm-err">' + escapeHtml(t('err_request_failed', 'Request failed.')) + '</div>');
+                    });
+                });
+
+                $brainResults.on('change', '.sched-brainstorm-all', function() {
+                    $brainResults.find('.sched-brainstorm-pick').prop('checked', $(this).is(':checked'));
+                });
+                $brainResults.on('click', '.sched-brainstorm-add', function() {
+                    var picked = $brainResults.find('.sched-brainstorm-pick:checked');
+                    if (!picked.length) { notify(t('err_pick_topic', 'Pick at least one topic.'), 'error'); return; }
+                    var lines = picked.map(function() {
+                        return ($(this).data('title') || '') + ($(this).data('pipe') || '');
+                    }).get();
+                    var existing = ($wizTopics.val() || '').trim();
+                    var merged = (existing ? existing + '\n' : '') + lines.join('\n');
+                    $wizTopics.val(merged).trigger('input');
+                    $brainResults.empty();
+                    $brainPanel.hide().prop('hidden', true);
+                    try { $wizTopics[0].scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+                });
+
+                showStep(1);
+            }
+
+            // ──────── Queue list interactions ────────
+            var $bulkToolbar = $('#sched-bulk-toolbar');
+            var $bulkCount = $('#sched-bulk-toolbar-count');
+            var $bulkAll = $('#sched-bulk-all');
+            var nonce = $('#sched-wizard-form input[name="_wpnonce"]').val() || '';
+
+            function refreshBulkToolbar() {
+                var $picked = $('.sched-item-check:checked');
+                var n = $picked.length;
+                $bulkToolbar.prop('hidden', n === 0);
+                $bulkCount.text(n + ' selected');
+                var hasPublishable = false;
+                $picked.each(function() {
+                    var $row = $(this).closest('.sched-item');
+                    if ($row.attr('data-post-status') === 'draft') hasPublishable = true;
+                });
+                $('.sched-bulk-run[data-bulk="publish"]').prop('disabled', !hasPublishable);
+                var total = $('.sched-item-check:visible').length;
+                $bulkAll.prop('checked', total > 0 && n === total).prop('indeterminate', n > 0 && n < total);
+            }
+
+            $(document).on('change', '.sched-item-check', refreshBulkToolbar);
+            $bulkAll.on('change', function() {
+                $('.sched-item-check:visible').prop('checked', $(this).is(':checked'));
+                refreshBulkToolbar();
             });
 
-            // Submit — always uses the bulk endpoint (handles 1..50 topics)
-            $wizForm.on('submit', function(e) {
-                e.preventDefault();
-                if (!validateStep(1)) { showStep(1); return; }
+            // Status sub-tabs (single combined handler — no duplicate)
+            $('#sched-queue-filters .sched-subtab').on('click', function() {
+                var f = $(this).attr('data-filter');
+                $('#sched-queue-filters .sched-subtab').removeClass('is-active').attr('aria-selected', 'false');
+                $(this).addClass('is-active').attr('aria-selected', 'true');
+                $('#sched-list .sched-item').each(function() {
+                    var s = $(this).attr('data-status');
+                    $(this).toggle(f === 'all' || s === f);
+                });
+                refreshBulkToolbar();
+            });
 
-                $wizSubmit.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Queuing…');
-                $wizResult.empty();
+            // Bulk actions
+            $('.sched-bulk-run').on('click', function() {
+                var $btn = $(this);
+                var op = $btn.data('bulk');
+                var ids = $('.sched-item-check:checked').map(function() { return $(this).data('id'); }).get();
+                if (!ids.length) return;
 
-                $.ajax({
-                    url: luwipress.ajax_url,
-                    type: 'POST',
-                    data: $wizForm.serialize(),
-                    success: function(res) {
+                var msg = {
+                    publish: tf('confirm_bulk_publish', 'Publish %d selected draft(s)?', ids.length),
+                    retry:   tf('confirm_bulk_retry', 'Retry %d selected item(s)?', ids.length),
+                    'delete':tf('confirm_bulk_delete', 'Delete %d selected item(s)?', ids.length)
+                }[op];
+                var titleKey = { publish: 'title_confirm_bulk_pub', retry: 'title_confirm_bulk_retry', 'delete': 'title_confirm_bulk_del' }[op];
+                var variant = op === 'delete' ? 'danger' : 'info';
+                schedConfirm({
+                    message: msg,
+                    title: t(titleKey, 'Are you sure?'),
+                    variant: variant,
+                    okLabel: op === 'delete' ? t('lbl_confirm_delete', 'Delete') : t('lbl_confirm', 'Confirm')
+                }).then(function(ok) {
+                    if (!ok) return;
+
+                    $('.sched-bulk-run').prop('disabled', true);
+                    $btn.html('<span class="dashicons dashicons-update spin"></span>');
+
+                    $.post(luwipress.ajax_url, {
+                        action: 'luwipress_bulk_schedule_action',
+                        bulk_action: op, ids: ids, _wpnonce: nonce
+                    }, function(res) {
                         if (res && res.success) {
-                            var d = res.data || {};
-                            var msg = 'Queued ' + (d.queued || 0) + ' topic' + ((d.queued || 0) !== 1 ? 's' : '');
-                            if (d.skipped) msg += ' · ' + d.skipped + ' skipped';
-                            msg += '. Refreshing…';
-                            $wizResult.html('<div class="notice notice-success sched-wiz-notice"><p>' + msg + '</p></div>');
-                            setTimeout(function() { location.reload(); }, 1600);
+                            location.reload();
                         } else {
-                            var errMsg = (res && res.data) ? res.data : 'Error';
-                            $wizResult.html('<div class="notice notice-error sched-wiz-notice"><p>' + escapeHtml(errMsg) + '</p></div>');
-                            $wizSubmit.prop('disabled', false).html('<span class="dashicons dashicons-controls-play"></span> Queue all topics');
+                            notify((res && res.data) ? res.data : t('err_bulk_failed', 'Bulk action failed.'), 'error');
+                            $('.sched-bulk-run').prop('disabled', false);
                         }
-                    },
-                    error: function() {
-                        $wizResult.html('<div class="notice notice-error sched-wiz-notice"><p>Request failed</p></div>');
-                        $wizSubmit.prop('disabled', false).html('<span class="dashicons dashicons-controls-play"></span> Queue all topics');
-                    }
+                    });
                 });
             });
 
             // Delete queue item
             $(document).on('click', '.sched-delete', function() {
-                if (!confirm('Delete this scheduled item?')) return;
-                var $item = $(this).closest('.sched-item');
-                var id = $(this).data('id');
-                $.post(luwipress.ajax_url, {
-                    action: 'luwipress_delete_schedule',
-                    schedule_id: id,
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val()
-                }, function(res) {
-                    if (res && res.success) {
-                        $item.css({ opacity: 0, transform: 'translateX(20px)' });
-                        setTimeout(function() { $item.remove(); }, 300);
-                    }
+                var $btn = $(this);
+                schedConfirm({
+                    message: t('confirm_delete_item', 'Delete this scheduled item?'),
+                    title: t('title_confirm_delete', 'Delete item'),
+                    variant: 'danger',
+                    okLabel: t('lbl_confirm_delete', 'Delete')
+                }).then(function(ok) {
+                    if (!ok) return;
+                    var $item = $btn.closest('.sched-item');
+                    var id = $btn.data('id');
+                    $.post(luwipress.ajax_url, {
+                        action: 'luwipress_delete_schedule', schedule_id: id, _wpnonce: nonce
+                    }, function(res) {
+                        if (res && res.success) {
+                            $item.css({ opacity: 0, transform: 'translateX(20px)' });
+                            setTimeout(function() { $item.remove(); refreshBulkToolbar(); }, 300);
+                        } else {
+                            notify((res && res.data) ? res.data : t('err_generic', 'Error'), 'error');
+                        }
+                    });
                 });
             });
 
-            // Enrich draft — runs internal link resolution + taxonomy suggestion
+            // Enrich draft
             $(document).on('click', '.sched-enrich', function() {
                 var $btn = $(this);
                 var id = $btn.data('id');
                 var $item = $btn.closest('.sched-item');
                 $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span>');
                 $.post(luwipress.ajax_url, {
-                    action: 'luwipress_enrich_schedule_draft',
-                    schedule_id: id,
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val()
+                    action: 'luwipress_enrich_schedule_draft', schedule_id: id, _wpnonce: nonce
                 }, function(res) {
                     if (res && res.success) {
                         var summary = res.data.summary || 'Enrichment complete';
                         $btn.html('<span class="dashicons dashicons-yes"></span>');
                         $btn.attr('title', summary);
-                        // Flash a toast-like inline hint
                         var $hint = $('<div class="sched-enrich-toast">' + escapeHtml(summary) + '</div>');
                         $item.append($hint);
                         setTimeout(function() {
@@ -559,86 +868,16 @@
                             setTimeout(function() { $hint.remove(); }, 400);
                         }, 3500);
                         setTimeout(function() {
-                            $btn.prop('disabled', false).html('<span class="dashicons dashicons-admin-customizer"></span> Enrich');
+                            $btn.prop('disabled', false).html('<span class="dashicons dashicons-admin-customizer"></span> ' + escapeHtml(t('lbl_enrich', 'Enrich')));
                         }, 1000);
                     } else {
-                        alert((res && res.data) ? res.data : 'Enrich failed');
-                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-admin-customizer"></span> Enrich');
+                        notify((res && res.data) ? res.data : t('err_enrich_failed', 'Enrich failed.'), 'error');
+                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-admin-customizer"></span> ' + escapeHtml(t('lbl_enrich', 'Enrich')));
                     }
                 }).fail(function() {
-                    alert('Request failed');
-                    $btn.prop('disabled', false).html('<span class="dashicons dashicons-admin-customizer"></span> Enrich');
+                    notify(t('err_request_failed', 'Request failed.'), 'error');
+                    $btn.prop('disabled', false).html('<span class="dashicons dashicons-admin-customizer"></span> ' + escapeHtml(t('lbl_enrich', 'Enrich')));
                 });
-            });
-
-            // Bulk selection — per-row checkbox, select-all, toolbar visibility
-            var $bulkToolbar = $('#sched-bulk-toolbar');
-            var $bulkCount = $('#sched-bulk-toolbar-count');
-            var $bulkAll = $('#sched-bulk-all');
-
-            function refreshBulkToolbar() {
-                var $picked = $('.sched-item-check:checked');
-                var n = $picked.length;
-                if (n > 0) {
-                    $bulkToolbar.prop('hidden', false);
-                    $bulkCount.text(n + ' selected');
-                } else {
-                    $bulkToolbar.prop('hidden', true);
-                }
-                // Update publish button enabled state — only drafts can be published
-                var hasPublishable = false;
-                $picked.each(function() {
-                    var $row = $(this).closest('.sched-item');
-                    if ($row.attr('data-post-status') === 'draft') hasPublishable = true;
-                });
-                $('.sched-bulk-run[data-bulk="publish"]').prop('disabled', !hasPublishable);
-                // Sync the all-check
-                var total = $('.sched-item-check:visible').length;
-                $bulkAll.prop('checked', total > 0 && n === total).prop('indeterminate', n > 0 && n < total);
-            }
-
-            $(document).on('change', '.sched-item-check', refreshBulkToolbar);
-
-            $bulkAll.on('change', function() {
-                var checked = $(this).is(':checked');
-                $('.sched-item-check:visible').prop('checked', checked);
-                refreshBulkToolbar();
-            });
-
-            $('.sched-bulk-run').on('click', function() {
-                var $btn = $(this);
-                var op = $btn.data('bulk');
-                var ids = $('.sched-item-check:checked').map(function() { return $(this).data('id'); }).get();
-                if (!ids.length) return;
-
-                var confirmMsg = {
-                    publish: 'Publish ' + ids.length + ' selected draft(s)?',
-                    retry:   'Retry ' + ids.length + ' selected item(s)?',
-                    'delete':'Delete ' + ids.length + ' selected item(s)? This cannot be undone.'
-                }[op];
-                if (!confirm(confirmMsg)) return;
-
-                $('.sched-bulk-run').prop('disabled', true);
-                $btn.html('<span class="dashicons dashicons-update spin"></span>');
-
-                $.post(luwipress.ajax_url, {
-                    action: 'luwipress_bulk_schedule_action',
-                    bulk_action: op,
-                    ids: ids,
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val()
-                }, function(res) {
-                    if (res && res.success) {
-                        location.reload();
-                    } else {
-                        alert((res && res.data) ? res.data : 'Bulk action failed');
-                        $('.sched-bulk-run').prop('disabled', false);
-                    }
-                });
-            });
-
-            // Re-run bulk toolbar refresh when filters change (hidden rows shouldn't count)
-            $('#sched-queue-filters .sched-filter').on('click', function() {
-                setTimeout(refreshBulkToolbar, 50);
             });
 
             // Retry failed queue item
@@ -647,15 +886,13 @@
                 var id = $btn.data('id');
                 $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span>');
                 $.post(luwipress.ajax_url, {
-                    action: 'luwipress_retry_schedule',
-                    schedule_id: id,
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val()
+                    action: 'luwipress_retry_schedule', schedule_id: id, _wpnonce: nonce
                 }, function(res) {
                     if (res && res.success) {
                         location.reload();
                     } else {
-                        alert((res && res.data) ? res.data : 'Retry failed');
-                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-update"></span> Retry');
+                        notify((res && res.data) ? res.data : t('err_retry_failed', 'Retry failed.'), 'error');
+                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-update"></span> ' + escapeHtml(t('lbl_retry', 'Retry')));
                     }
                 });
             });
@@ -663,130 +900,159 @@
             // Run pending now
             $('#sched-run-now').on('click', function() {
                 var $btn = $(this);
-                if (!confirm('Run up to 10 pending items through AI generation right now?')) return;
-                $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Running…');
-                $.post(luwipress.ajax_url, {
-                    action: 'luwipress_run_pending_now',
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val()
-                }, function(res) {
-                    if (res && res.success) {
-                        alert('Processed ' + res.data.processed + ' item(s). Refreshing…');
-                        location.reload();
-                    } else {
-                        alert((res && res.data) ? res.data : 'Error');
-                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-controls-play"></span> Run pending now');
-                    }
+                schedConfirm({
+                    message: t('confirm_run_pending', 'Run up to 10 pending items now?'),
+                    title: t('title_confirm_run_now', 'Run pending now'),
+                    variant: 'info',
+                    okLabel: t('lbl_run_pending', 'Run pending now')
+                }).then(function(ok) {
+                    if (!ok) return;
+                    $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> ' + escapeHtml(t('loading_running', 'Running…')));
+                    $.post(luwipress.ajax_url, {
+                        action: 'luwipress_run_pending_now', _wpnonce: nonce
+                    }, function(res) {
+                        if (res && res.success) {
+                            notify(tf('ok_processed', 'Processed %d item(s).', res.data.processed) + ' ' + t('ok_refreshing', 'Refreshing…'), 'success');
+                            setTimeout(function() { location.reload(); }, 1200);
+                        } else {
+                            notify((res && res.data) ? res.data : t('err_generic', 'Error'), 'error');
+                            $btn.prop('disabled', false).html('<span class="dashicons dashicons-controls-play"></span> ' + escapeHtml(t('lbl_run_pending', 'Run pending now')));
+                        }
+                    });
                 });
             });
 
-            // Queue filter tabs
-            $('#sched-queue-filters .sched-filter').on('click', function() {
-                var f = $(this).attr('data-filter');
-                $('#sched-queue-filters .sched-filter').removeClass('is-active');
-                $(this).addClass('is-active');
-                $('#sched-list .sched-item').each(function() {
-                    var s = $(this).attr('data-status');
-                    $(this).toggle(f === 'all' || s === f);
-                });
-            });
+            // ──────── Delta polling (in-place row updates, no reload) ────────
+            var $outlineModal = $('#sched-outline-modal');
+            var pollTimer = null;
+            var pollInterval = 20000;
+            var pollSince = Math.floor(Date.now() / 1000) - 60;
+            var statusConfig = {
+                pending:         { accent: 'muted',   icon: 'clock',                lbl: 'Pending' },
+                generating:      { accent: 'warning', icon: 'update',               lbl: 'Generating' },
+                outline_pending: { accent: 'info',    icon: 'welcome-write-blog',   lbl: 'Outline review' },
+                ready:           { accent: 'info',    icon: 'yes-alt',              lbl: 'Ready' },
+                published:       { accent: 'success', icon: 'admin-post',           lbl: 'Published' },
+                failed:          { accent: 'error',   icon: 'dismiss',              lbl: 'Failed' }
+            };
 
-            // Poll while generating OR outline_pending (so ready outlines pop up automatically)
-            if ($('.sched-item[data-status="generating"]').length) {
-                setInterval(function() { location.reload(); }, 15000);
+            function shouldPoll() {
+                if (document.hidden) return false;
+                if ($outlineModal.is(':visible') && !$outlineModal.prop('hidden')) return false;
+                if ($('#sched-plan-modal').is(':visible') && !$('#sched-plan-modal').prop('hidden')) return false;
+                if (!$confirmModal.prop('hidden')) return false;
+                return $('.sched-item[data-status="generating"], .sched-item[data-status="outline_pending"]').length > 0;
             }
 
-            // ─── Topic brainstorm ──────────────────────────────────────────
-            var $brainToggle = $('#sched-brainstorm-toggle');
-            var $brainPanel  = $('#sched-brainstorm');
-            var $brainRun    = $('#sched-brainstorm-run');
-            var $brainResults= $('#sched-brainstorm-results');
+            function applyDelta(items) {
+                if (!items || !items.length) return;
+                var changedStatusToTerminal = false;
+                items.forEach(function(row) {
+                    var $row = $('.sched-item[data-id="' + row.id + '"]');
+                    if (!$row.length) return;
+                    var oldStatus = $row.attr('data-status');
+                    if (oldStatus === row.status && $row.attr('data-post-status') === (row.post_status || '')) return;
 
-            $brainToggle.on('click', function() {
-                var open = $brainPanel.is(':visible');
-                $brainPanel.prop('hidden', open).toggle(!open);
-                if (!open) $('#sched-brainstorm-theme').focus();
-            });
+                    $row.attr('data-status', row.status);
+                    $row.attr('data-post-status', row.is_draft ? 'draft' : (row.published_id ? 'publish' : ''));
+                    $row.toggleClass('sched-pulse', row.status === 'generating');
 
-            $brainRun.on('click', function() {
-                var theme = ($('#sched-brainstorm-theme').val() || '').trim();
-                var count = parseInt($('#sched-brainstorm-count').val(), 10) || 10;
-                var style = ($('#sched-brainstorm-style').val() || '').trim();
-                var lang  = $wizForm.find('select[name="language"]').val() || 'en';
-                if (!theme) { alert('Give me a theme'); return; }
+                    // Update status badge icon + accent
+                    var cfg = statusConfig[row.status] || statusConfig.pending;
+                    var $badge = $row.find('.sched-item-status');
+                    $badge.removeClass('sched-item-status--muted sched-item-status--warning sched-item-status--info sched-item-status--success sched-item-status--error')
+                          .addClass('sched-item-status--' + cfg.accent)
+                          .attr('title', cfg.lbl);
+                    $badge.find('.dashicons').attr('class', 'dashicons dashicons-' + cfg.icon);
 
-                $brainRun.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Thinking…');
-                $brainResults.html('<div class="sched-brainstorm-loading"><span class="dashicons dashicons-update spin"></span> Generating ideas…</div>');
-
-                $.post(luwipress.ajax_url, {
-                    action: 'luwipress_brainstorm_topics',
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val(),
-                    theme: theme,
-                    count: count,
-                    style_hint: style,
-                    language: lang
-                }, function(res) {
-                    $brainRun.prop('disabled', false).html('<span class="dashicons dashicons-admin-customizer"></span> Generate ideas');
-                    if (!res || !res.success) {
-                        $brainResults.html('<div class="sched-brainstorm-err">' + escapeHtml((res && res.data) || 'Brainstorm failed') + '</div>');
-                        return;
+                    // Error band
+                    if (row.error) {
+                        var $err = $row.find('.sched-error');
+                        if (!$err.length) {
+                            $row.find('.sched-item-body').append(
+                                '<div class="sched-error"><span class="dashicons dashicons-warning"></span> ' + escapeHtml(row.error) + '</div>'
+                            );
+                        } else {
+                            $err.find(':not(.dashicons)').text(' ' + row.error);
+                        }
+                    } else {
+                        $row.find('.sched-error').remove();
                     }
-                    var topics = (res.data && res.data.topics) || [];
-                    if (!topics.length) {
-                        $brainResults.html('<div class="sched-brainstorm-err">No topics returned — try a more specific theme.</div>');
-                        return;
+
+                    // Terminal status change → user-visible notification once
+                    if (['ready', 'published', 'outline_pending', 'failed'].indexOf(row.status) !== -1) {
+                        changedStatusToTerminal = true;
                     }
-                    var html = '<div class="sched-brainstorm-picks-head">'
-                             + '<label><input type="checkbox" class="sched-brainstorm-all" checked> Select all (' + topics.length + ')</label>'
-                             + '<button type="button" class="button button-primary sched-brainstorm-add"><span class="dashicons dashicons-plus-alt"></span> Add picked to queue</button>'
-                             + '</div><ul class="sched-brainstorm-picks">';
-                    topics.forEach(function(t, i) {
-                        var depthTag = t.depth ? '<span class="sched-brainstorm-depth">' + escapeHtml(t.depth) + '</span>' : '';
-                        var pipe = t.depth ? (' | depth=' + t.depth) : '';
-                        html += '<li>'
-                             +   '<label>'
-                             +     '<input type="checkbox" class="sched-brainstorm-pick" checked data-title="' + escapeHtml(t.title) + '" data-pipe="' + escapeHtml(pipe) + '">'
-                             +     '<span class="sched-brainstorm-title">' + escapeHtml(t.title) + '</span>'
-                             +     depthTag
-                             +     (t.angle ? '<span class="sched-brainstorm-angle">' + escapeHtml(t.angle) + '</span>' : '')
-                             +   '</label>'
-                             + '</li>';
-                    });
-                    html += '</ul>';
-                    $brainResults.html(html);
-                }).fail(function() {
-                    $brainRun.prop('disabled', false).html('<span class="dashicons dashicons-admin-customizer"></span> Generate ideas');
-                    $brainResults.html('<div class="sched-brainstorm-err">Request failed</div>');
                 });
-            });
+                if (changedStatusToTerminal) {
+                    // Refresh sub-tab counts + surface new actions by doing a soft reload only when nothing is being edited.
+                    // Simpler: just surface a toast prompting the user to refresh for fresh action buttons if they care.
+                    // For now, action buttons require a reload to re-render server-side — flag it subtly.
+                    if (!$('.sched-item-check:checked').length) {
+                        // No selections mid-flight — safe to reload in background to pick up new action buttons.
+                        // But we avoid hijacking scroll: only reload if user is at/near top.
+                        if (window.scrollY < 200) location.reload();
+                    }
+                }
+            }
 
-            $brainResults.on('change', '.sched-brainstorm-all', function() {
-                $brainResults.find('.sched-brainstorm-pick').prop('checked', $(this).is(':checked'));
-            });
+            function tick() {
+                if (!shouldPoll()) { scheduleNext(); return; }
+                var activeIds = $('.sched-item[data-status="generating"], .sched-item[data-status="outline_pending"]')
+                    .map(function() { return $(this).data('id'); }).get();
+                $.ajax({
+                    url: (luwipress.rest_base || '/wp-json/luwipress/v1/') + 'schedule/delta',
+                    method: 'GET',
+                    data: { since: pollSince, ids: activeIds.join(',') },
+                    beforeSend: function(xhr) {
+                        xhr.setRequestHeader('X-WP-Nonce', luwipress.nonce_rest || '');
+                    },
+                    success: function(res) {
+                        if (res && res.items) applyDelta(res.items);
+                        if (res && res.now) pollSince = res.now;
+                    },
+                    complete: scheduleNext
+                });
+            }
 
-            $brainResults.on('click', '.sched-brainstorm-add', function() {
-                var picked = $brainResults.find('.sched-brainstorm-pick:checked');
-                if (!picked.length) { alert('Pick at least one topic'); return; }
-                var lines = picked.map(function() {
-                    return ($(this).data('title') || '') + ($(this).data('pipe') || '');
-                }).get();
-                var existing = ($wizTopics.val() || '').trim();
-                var merged = (existing ? existing + '\n' : '') + lines.join('\n');
-                $wizTopics.val(merged).trigger('input');
-                // Collapse the panel, clear picks, scroll to textarea
-                $brainResults.empty();
-                $brainPanel.hide().prop('hidden', true);
-                $wizTopics[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            });
+            function scheduleNext() {
+                if (pollTimer) clearTimeout(pollTimer);
+                pollTimer = setTimeout(tick, pollInterval);
+            }
 
-            // ─── Outline review modal ──────────────────────────────────────
-            var $outlineModal = $('#sched-outline-modal');
+            if ($('.sched-item[data-status="generating"], .sched-item[data-status="outline_pending"]').length) {
+                scheduleNext();
+                document.addEventListener('visibilitychange', function() {
+                    if (!document.hidden) scheduleNext();
+                });
+            }
+
+            // ──────── Outline modal ────────
             var $outlineBody  = $('#sched-outline-modal-body');
             var $outlineTopic = $('#sched-outline-modal-topic');
             var currentOutlineId = 0;
 
+            var outlinePrevFocus = null;
             function outlineClose() {
-                $outlineModal.attr('hidden', true).attr('aria-hidden', 'true').removeClass('is-open');
+                $outlineModal.prop('hidden', true).attr('aria-hidden', 'true');
+                focusTrapRelease();
+                if (outlinePrevFocus && outlinePrevFocus.focus) {
+                    try { outlinePrevFocus.focus(); } catch (e) {}
+                }
                 currentOutlineId = 0;
+            }
+
+            function outlineSectionHtml(sec, i) {
+                var heading = (sec && sec.heading) || '';
+                var points = (sec && sec.points) ? sec.points.join('\n') : '';
+                return '<li class="sched-outline-section" data-idx="' + i + '">'
+                     +   '<div class="sched-outline-section-bar">'
+                     +     '<span class="sched-outline-section-num">' + (i + 1) + '</span>'
+                     +     '<input type="text" class="sched-outline-heading" value="' + escapeHtml(heading) + '" placeholder="H2 heading — specific, advances the topic">'
+                     +     '<button type="button" class="sched-outline-section-del" aria-label="Remove section"><span class="dashicons dashicons-trash"></span></button>'
+                     +   '</div>'
+                     +   '<textarea class="sched-outline-points" rows="3" placeholder="One concrete point per line.">' + escapeHtml(points) + '</textarea>'
+                     + '</li>';
             }
 
             function outlineRender(outline) {
@@ -801,39 +1067,23 @@
                          + '</div>'
                          + '<div class="sched-outline-field sched-outline-field--full">'
                          +   '<label>Hook (opening idea)</label>'
-                         +   '<textarea class="sched-outline-hook" rows="2" placeholder="1-2 sentence opening idea — anecdote, contrast, vivid image">' + escapeHtml(outline.hook || '') + '</textarea>'
+                         +   '<textarea class="sched-outline-hook" rows="2" placeholder="1-2 sentence opening idea">' + escapeHtml(outline.hook || '') + '</textarea>'
                          + '</div>'
                          + '</div>'
                          + '<div class="sched-outline-sections-wrap">'
                          +   '<div class="sched-outline-sections-head"><h4>Sections</h4><button type="button" class="button button-small sched-outline-section-add"><span class="dashicons dashicons-plus-alt"></span> Add section</button></div>'
                          +   '<ol class="sched-outline-sections" id="sched-outline-sections">';
-                sections.forEach(function(sec, i) {
-                    html += outlineSectionHtml(sec, i);
-                });
-                html += '  </ol>'
-                     + '</div>'
+                sections.forEach(function(sec, i) { html += outlineSectionHtml(sec, i); });
+                html += '  </ol></div>'
                      + '<div class="sched-outline-field sched-outline-field--full">'
                      +   '<label>FAQ questions (one per line — leave blank to skip FAQ)</label>'
-                     +   '<textarea class="sched-outline-faq" rows="4" placeholder="Questions readers actually search for.">' + escapeHtml(faq.join('\n')) + '</textarea>'
+                     +   '<textarea class="sched-outline-faq" rows="4">' + escapeHtml(faq.join('\n')) + '</textarea>'
                      + '</div>'
                      + '<div class="sched-outline-field sched-outline-field--full">'
                      +   '<label>Closing approach</label>'
-                     +   '<textarea class="sched-outline-closing" rows="2" placeholder="How the article ends — reflective line, memorable image, CTA, etc.">' + escapeHtml(outline.closing_approach || '') + '</textarea>'
+                     +   '<textarea class="sched-outline-closing" rows="2">' + escapeHtml(outline.closing_approach || '') + '</textarea>'
                      + '</div>';
                 $outlineBody.html(html);
-            }
-
-            function outlineSectionHtml(sec, i) {
-                var heading = (sec && sec.heading) || '';
-                var points = (sec && sec.points) ? sec.points.join('\n') : '';
-                return '<li class="sched-outline-section" data-idx="' + i + '">'
-                     +   '<div class="sched-outline-section-bar">'
-                     +     '<span class="sched-outline-section-num">' + (i + 1) + '</span>'
-                     +     '<input type="text" class="sched-outline-heading" value="' + escapeHtml(heading) + '" placeholder="H2 heading — specific, advances the topic">'
-                     +     '<button type="button" class="sched-outline-section-del" aria-label="Remove section"><span class="dashicons dashicons-trash"></span></button>'
-                     +   '</div>'
-                     +   '<textarea class="sched-outline-points" rows="3" placeholder="One concrete point per line. Each point should name a fact, example, date, or concept.">' + escapeHtml(points) + '</textarea>'
-                     + '</li>';
             }
 
             function outlineCollect() {
@@ -859,29 +1109,34 @@
             $(document).on('click', '.sched-outline-open', function() {
                 var id = $(this).data('id');
                 currentOutlineId = id;
-                $outlineModal.prop('hidden', false).attr('aria-hidden', 'false').addClass('is-open');
-                $outlineBody.html('<div class="sched-outline-loading"><span class="dashicons dashicons-update spin"></span> Loading outline…</div>');
+                outlinePrevFocus = document.activeElement;
+                $outlineModal.prop('hidden', false).attr('aria-hidden', 'false');
+                focusTrapActivate($outlineModal);
+                $outlineBody.html('<div class="sched-outline-loading"><span class="dashicons dashicons-update spin"></span> ' + escapeHtml(t('loading_outline', 'Loading outline…')) + '</div>');
                 $outlineTopic.text('');
 
                 $.post(luwipress.ajax_url, {
-                    action: 'luwipress_get_outline',
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val(),
-                    schedule_id: id
+                    action: 'luwipress_get_outline', _wpnonce: nonce, schedule_id: id
                 }, function(res) {
                     if (!res || !res.success) {
-                        $outlineBody.html('<div class="sched-outline-err">' + escapeHtml((res && res.data) || 'Could not load outline') + '</div>');
+                        $outlineBody.html('<div class="sched-outline-err">' + escapeHtml((res && res.data) || t('err_outline_load', 'Could not load outline.')) + '</div>');
                         return;
                     }
                     $outlineTopic.text(res.data.topic + '  ·  ' + (res.data.depth || '').toUpperCase() + '  ·  ~' + (res.data.word_count || 0) + ' words');
                     outlineRender(res.data.outline);
                 }).fail(function() {
-                    $outlineBody.html('<div class="sched-outline-err">Request failed</div>');
+                    $outlineBody.html('<div class="sched-outline-err">' + escapeHtml(t('err_request_failed', 'Request failed.')) + '</div>');
                 });
             });
 
             $outlineModal.on('click', '[data-close="1"]', outlineClose);
             $(document).on('keydown', function(e) {
-                if (e.key === 'Escape' && $outlineModal.is(':visible')) outlineClose();
+                if (e.key === 'Escape') {
+                    // Topmost-first: confirm > outline > plan
+                    if (!$confirmModal.prop('hidden')) { confirmClose(false); return; }
+                    if ($outlineModal.is(':visible') && !$outlineModal.prop('hidden')) outlineClose();
+                    if ($('#sched-plan-modal').is(':visible') && !$('#sched-plan-modal').prop('hidden')) planModalClose();
+                }
             });
 
             $outlineBody.on('click', '.sched-outline-section-add', function() {
@@ -891,11 +1146,10 @@
 
             $outlineBody.on('click', '.sched-outline-section-del', function() {
                 if ($('#sched-outline-sections .sched-outline-section').length <= 1) {
-                    alert('Keep at least one section');
+                    notify(t('err_keep_one_section', 'Keep at least one section.'), 'warning');
                     return;
                 }
                 $(this).closest('.sched-outline-section').remove();
-                // renumber
                 $('#sched-outline-sections .sched-outline-section').each(function(i) {
                     $(this).find('.sched-outline-section-num').text(i + 1);
                 });
@@ -903,51 +1157,60 @@
 
             $outlineModal.on('click', '.sched-outline-approve', function() {
                 var outline = outlineCollect();
-                if (!outline.title) { alert('Give the article a title first'); return; }
-                if (!outline.sections.length) { alert('Outline needs at least one section'); return; }
+                if (!outline.title) { notify(t('err_need_title', 'Give the article a title first.'), 'error'); return; }
+                if (!outline.sections.length) { notify(t('err_need_section', 'Outline needs at least one section.'), 'error'); return; }
 
                 var $btn = $(this);
-                $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Queuing…');
+                var $regen = $outlineModal.find('.sched-outline-regen');
+                $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> ' + escapeHtml(t('loading_queuing', 'Queuing…')));
+                $regen.prop('disabled', true);
 
                 $.post(luwipress.ajax_url, {
-                    action: 'luwipress_save_outline',
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val(),
-                    schedule_id: currentOutlineId,
-                    outline: JSON.stringify(outline)
+                    action: 'luwipress_save_outline', _wpnonce: nonce,
+                    schedule_id: currentOutlineId, outline: JSON.stringify(outline)
                 }, function(res) {
                     if (res && res.success) {
                         outlineClose();
                         location.reload();
                     } else {
-                        alert((res && res.data) ? res.data : 'Save failed');
-                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-yes"></span> Approve & generate article');
+                        notify((res && res.data) ? res.data : t('err_save_failed', 'Save failed.'), 'error');
+                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-yes"></span> ' + escapeHtml(t('lbl_approve_generate', 'Approve & generate article')));
+                        $regen.prop('disabled', false);
                     }
                 }).fail(function() {
-                    alert('Request failed');
-                    $btn.prop('disabled', false).html('<span class="dashicons dashicons-yes"></span> Approve & generate article');
+                    notify(t('err_request_failed', 'Request failed.'), 'error');
+                    $btn.prop('disabled', false).html('<span class="dashicons dashicons-yes"></span> ' + escapeHtml(t('lbl_approve_generate', 'Approve & generate article')));
+                    $regen.prop('disabled', false);
                 });
             });
 
             $outlineModal.on('click', '.sched-outline-regen', function() {
-                if (!confirm('Discard this outline and regenerate from scratch?')) return;
                 var $btn = $(this);
-                $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Regenerating…');
-                $.post(luwipress.ajax_url, {
-                    action: 'luwipress_regenerate_outline',
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val(),
-                    schedule_id: currentOutlineId
-                }, function(res) {
-                    if (res && res.success) {
-                        outlineClose();
-                        location.reload();
-                    } else {
-                        alert((res && res.data) ? res.data : 'Regenerate failed');
-                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-image-rotate"></span> Regenerate outline');
-                    }
+                var $approve = $outlineModal.find('.sched-outline-approve');
+                schedConfirm({
+                    message: t('confirm_regen_outline', 'Discard this outline and regenerate?'),
+                    title: t('title_confirm_regen', 'Regenerate outline'),
+                    variant: 'warning'
+                }).then(function(ok) {
+                    if (!ok) return;
+                    $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> ' + escapeHtml(t('loading_regen', 'Regenerating…')));
+                    $approve.prop('disabled', true);
+                    $.post(luwipress.ajax_url, {
+                        action: 'luwipress_regenerate_outline', _wpnonce: nonce, schedule_id: currentOutlineId
+                    }, function(res) {
+                        if (res && res.success) {
+                            outlineClose();
+                            location.reload();
+                        } else {
+                            notify((res && res.data) ? res.data : t('err_regen_failed', 'Regenerate failed.'), 'error');
+                            $btn.prop('disabled', false).html('<span class="dashicons dashicons-image-rotate"></span> ' + escapeHtml(t('lbl_regen_outline', 'Regenerate outline')));
+                            $approve.prop('disabled', false);
+                        }
+                    });
                 });
             });
 
-            // ─── Recurring plans ──────────────────────────────────────────
+            // ──────── Recurring plans ────────
             var $planModal = $('#sched-plan-modal');
             var $planForm  = $('#sched-plan-form');
 
@@ -972,14 +1235,21 @@
                 } else {
                     $('#sched-plan-modal-title').text('New recurring plan');
                 }
-                $planModal.prop('hidden', false).attr('aria-hidden', 'false').addClass('is-open');
+                planPrevFocus = document.activeElement;
+                $planModal.prop('hidden', false).attr('aria-hidden', 'false');
+                focusTrapActivate($planModal);
                 setTimeout(function() { $planForm.find('input[name="name"]').focus(); }, 50);
             }
+            var planPrevFocus = null;
             function planModalClose() {
-                $planModal.attr('hidden', true).attr('aria-hidden', 'true').removeClass('is-open');
+                $planModal.prop('hidden', true).attr('aria-hidden', 'true');
+                focusTrapRelease();
+                if (planPrevFocus && planPrevFocus.focus) {
+                    try { planPrevFocus.focus(); } catch (e) {}
+                }
             }
 
-            $('#sched-plan-new').on('click', function() { planModalOpen(null); });
+            $('#sched-plan-new, #sched-plan-new-empty').on('click', function() { planModalOpen(null); });
             $planModal.on('click', '[data-close="1"]', planModalClose);
             $(document).on('click', '.sched-plan-edit', function() {
                 var raw = $(this).attr('data-plan') || '{}';
@@ -990,54 +1260,65 @@
 
             $planModal.on('click', '.sched-plan-save', function() {
                 var $btn = $(this);
-                var data = $planForm.serializeArray();
-                data.push({ name: 'action', value: 'luwipress_save_recurring_plan' });
-                data.push({ name: '_wpnonce', value: $wizForm.find('input[name="_wpnonce"]').val() });
-
-                var name = $planForm.find('input[name="name"]').val() || '';
-                var theme = $planForm.find('input[name="theme"]').val() || '';
-                if (!name.trim() || !theme.trim()) {
-                    alert('Name and theme are required.');
+                var name = ($planForm.find('input[name="name"]').val() || '').trim();
+                var theme = ($planForm.find('input[name="theme"]').val() || '').trim();
+                if (!name) {
+                    markFieldError($planForm.find('input[name="name"]'));
+                    notify(t('err_plan_required', 'Name and theme are required.'), 'error');
                     return;
                 }
+                if (!theme) {
+                    markFieldError($planForm.find('input[name="theme"]'));
+                    notify(t('err_plan_required', 'Name and theme are required.'), 'error');
+                    return;
+                }
+                var data = $planForm.serializeArray();
+                data.push({ name: 'action', value: 'luwipress_save_recurring_plan' });
+                data.push({ name: '_wpnonce', value: nonce });
 
-                $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Saving…');
+                $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> ' + escapeHtml(t('loading_saving', 'Saving…')));
                 $.post(luwipress.ajax_url, data, function(res) {
                     if (res && res.success) {
                         planModalClose();
                         location.reload();
                     } else {
-                        alert((res && res.data) ? res.data : 'Save failed');
-                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-yes"></span> Save plan');
+                        notify((res && res.data) ? res.data : t('err_save_failed', 'Save failed.'), 'error');
+                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-yes"></span> ' + escapeHtml(t('lbl_save_plan', 'Save plan')));
                     }
                 });
             });
 
+            function markFieldError($f) {
+                var $w = $f.closest('.sched-field'); $w.addClass('has-error');
+                $f.one('input change', function() { $w.removeClass('has-error'); });
+            }
+
             $(document).on('click', '.sched-plan-toggle', function() {
                 var id = $(this).data('id');
                 $.post(luwipress.ajax_url, {
-                    action: 'luwipress_toggle_recurring_plan',
-                    plan_id: id,
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val()
+                    action: 'luwipress_toggle_recurring_plan', plan_id: id, _wpnonce: nonce
                 }, function(res) {
                     if (res && res.success) location.reload();
                 });
             });
-
             $(document).on('click', '.sched-plan-delete', function() {
                 var id = $(this).data('id');
-                if (!confirm('Delete this recurring plan? Already-queued topics are kept — only the auto-brainstorm stops.')) return;
-                $.post(luwipress.ajax_url, {
-                    action: 'luwipress_delete_recurring_plan',
-                    plan_id: id,
-                    _wpnonce: $wizForm.find('input[name="_wpnonce"]').val()
-                }, function(res) {
-                    if (res && res.success) location.reload();
+                schedConfirm({
+                    message: t('confirm_delete_plan', 'Delete this recurring plan?'),
+                    title: t('title_confirm_plan_del', 'Delete recurring plan'),
+                    variant: 'danger',
+                    okLabel: t('lbl_confirm_delete', 'Delete')
+                }).then(function(ok) {
+                    if (!ok) return;
+                    $.post(luwipress.ajax_url, {
+                        action: 'luwipress_delete_recurring_plan', plan_id: id, _wpnonce: nonce
+                    }, function(res) {
+                        if (res && res.success) location.reload();
+                    });
                 });
             });
-
-            showStep(1);
         }
+
 
         // ========================================
         // Password toggle

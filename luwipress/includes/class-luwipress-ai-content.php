@@ -604,6 +604,21 @@ class LuwiPress_AI_Content {
             $queued[] = $pid;
         }
 
+        // Persist a batch-level summary so /status can answer even after the
+        // postmeta join returns zero rows (e.g. when status meta is replaced
+        // by other workflows). 24h TTL — long enough for an admin to confirm
+        // what ran without keeping the option table around forever.
+        if (!empty($queued)) {
+            set_transient(
+                'luwipress_batch_summary_' . $batch_id,
+                array(
+                    'product_ids' => $queued,
+                    'queued_at'   => current_time('mysql'),
+                ),
+                DAY_IN_SECONDS
+            );
+        }
+
         // Send for AI enrichment as a single payload
         if (!empty($queued)) {
             $this->send_batch_for_enrichment($queued, $options, $batch_id);
@@ -686,6 +701,7 @@ class LuwiPress_AI_Content {
 
         $statuses = array('queued' => 0, 'processing' => 0, 'completed' => 0, 'failed' => 0);
         $products = array();
+        $seen_ids = array();
 
         foreach ($results as $row) {
             $s = $row->status;
@@ -697,6 +713,33 @@ class LuwiPress_AI_Content {
                 'title'      => get_the_title($row->post_id),
                 'status'     => $s,
             );
+            $seen_ids[(int) $row->post_id] = true;
+        }
+
+        // Transient fallback / merge — the postmeta JOIN can return zero rows
+        // when downstream workflows replace _luwipress_enrich_status (or the
+        // batch_id meta is rewritten by a later batch). Re-hydrate from the
+        // batch summary captured at queue time so the endpoint stays useful.
+        $summary = get_transient('luwipress_batch_summary_' . $batch_id);
+        if (is_array($summary) && !empty($summary['product_ids'])) {
+            foreach ($summary['product_ids'] as $pid) {
+                $pid = (int) $pid;
+                if (isset($seen_ids[$pid])) {
+                    continue;
+                }
+                $current = get_post_meta($pid, '_luwipress_enrich_status', true);
+                if (!isset($statuses[$current])) {
+                    // Unknown / empty meta after this batch finished — treat as completed.
+                    $current = 'completed';
+                }
+                $statuses[$current]++;
+                $products[] = array(
+                    'product_id' => $pid,
+                    'title'      => get_the_title($pid),
+                    'status'     => $current,
+                );
+                $seen_ids[$pid] = true;
+            }
         }
 
         $total     = count($products);
@@ -756,6 +799,15 @@ class LuwiPress_AI_Content {
             update_post_meta($pid, '_luwipress_enrich_batch_id', $batch_id);
         }
 
+        set_transient(
+            'luwipress_batch_summary_' . $batch_id,
+            array(
+                'product_ids' => array_map('absint', $thin_products),
+                'queued_at'   => current_time('mysql'),
+            ),
+            DAY_IN_SECONDS
+        );
+
         $this->send_batch_for_enrichment($thin_products, array(), $batch_id);
 
         LuwiPress_Logger::log('Thin content auto-enrichment triggered', 'info', array(
@@ -802,6 +854,14 @@ class LuwiPress_AI_Content {
         }
 
         if (!empty($queued)) {
+            set_transient(
+                'luwipress_batch_summary_' . $batch_id,
+                array(
+                    'product_ids' => $queued,
+                    'queued_at'   => current_time('mysql'),
+                ),
+                DAY_IN_SECONDS
+            );
             $this->send_batch_for_enrichment($queued, array(), $batch_id);
         }
 

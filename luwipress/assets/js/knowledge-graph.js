@@ -323,32 +323,98 @@ function buildGraph(data, viewFilter) {
 		});
 	});
 
-	// Customer segments (radial cluster by cohort)
+	// Customer segments — lifecycle chain with a central hub. New → Active →
+	// Loyal → VIP on the "healthy" left side; At-risk → Dormant → One-time →
+	// Lost on the "drift" right side. Empty segments (count=0) are skipped
+	// so the visual isn't cluttered with empty buckets; the hub label shows
+	// the total population for context.
+	var segmentOrder = { new: 0, active: 1, loyal: 2, vip: 3, at_risk: 4, dormant: 5, one_time: 6, lost: 7 };
+	var populated = segmentNodes.filter(function(s){ return (s.count || 0) > 0; });
+	var hasSegments = populated.length > 0 && viewFilter === 'customer';
+	if (hasSegments) {
+		var totalCustomers = segmentNodes.reduce(function(acc, s){ return acc + (s.count || 0); }, 0);
+		var hubNode = {
+			id: 'segment_hub',
+			type: 'segment_hub',
+			label: 'All customers (' + totalCustomers + ')',
+			radius: 28,
+			score: totalCustomers,
+			data: { total: totalCustomers, segments: segmentNodes },
+			_hub: true
+		};
+		nodes.push(hubNode);
+		nodeMap[hubNode.id] = hubNode;
+	}
+	// Logarithmic-ish scaling so 37-count one_time doesn't dwarf 2-count lost.
+	var maxCount = populated.reduce(function(m, s){ return Math.max(m, s.count || 0); }, 1);
+	// Sort populated segments by lifecycle order.
+	var populatedSorted = populated.slice().sort(function(a, b){
+		return (segmentOrder[a.segment] || 0) - (segmentOrder[b.segment] || 0);
+	});
+	// Radial layout around the hub: each populated segment gets an angle on a
+	// circle. This reads as "hub in the middle, lifecycle rotating around it"
+	// — far more compact than a horizontal chain and reliably stays inside
+	// the viewport regardless of how many cohorts are populated.
+	var n = populatedSorted.length;
+	var radialRadius = Math.min(width, height) * 0.3; // 30% of the smaller dimension
+	var populatedAngles = {};
+	populatedSorted.forEach(function(s, i) {
+		// Start at top (-90°) and walk clockwise. Evenly spaced around 360°.
+		var angle = -Math.PI / 2 + (i / n) * Math.PI * 2;
+		populatedAngles[s.segment] = angle;
+	});
 	(segmentNodes).forEach(function(s) {
 		var count = s.count || 0;
-		var r = 14 + Math.min(count / 3, 30); // scale by customer count
+		if (viewFilter === 'customer' && count === 0) return;
+		var normalized = Math.sqrt(count / maxCount);
+		var r = 14 + Math.round(normalized * 14); // 14..28, slightly smaller than before
+		var angle = populatedAngles[s.segment];
 		var node = {
 			id: s.id || ('segment_' + s.segment),
 			type: 'segment',
 			label: s.label + ' (' + count + ')',
 			radius: r,
 			score: count,
-			data: s
+			data: s,
+			_cohortIdx: segmentOrder[s.segment],
+			_targetAngle: angle,
+			_targetRadius: radialRadius
 		};
 		nodes.push(node);
 		nodeMap[node.id] = node;
+		if (hasSegments) {
+			edges.push({ source: node.id, target: 'segment_hub', type: 'member_of', _count: count });
+		}
 	});
 
-	// Pages (parent-child hierarchy)
+	// Pages — the raw WP pages list is mostly orphaned (parent_id=0) so a
+	// pure parent-child graph renders as 60+ isolated dots. In the pages
+	// view we add a virtual "Site pages" hub so every page has at least one
+	// edge and the graph has structure. Special roles (front / shop / blog)
+	// get bigger radii + become secondary hubs if they have children.
+	var pageHubId = null;
+	if (viewFilter === 'page' && pageNodes.length > 0) {
+		pageHubId = 'page_hub';
+		var hubNode = {
+			id: pageHubId,
+			type: 'page_hub',
+			label: 'Site pages (' + pageNodes.length + ')',
+			radius: 20,
+			score: 0,
+			_hub: true
+		};
+		nodes.push(hubNode);
+		nodeMap[hubNode.id] = hubNode;
+	}
 	(pageNodes).forEach(function(p) {
 		var score = 0;
 		if (p.content_length < 300) score += 10;
 		if (p.template === 'default' || !p.template) score += 2;
-		var r = 7;
+		var r = 6;
 		if (p.is_front_page)  r = 16;
 		else if (p.is_shop_page) r = 14;
 		else if (p.is_blog_page) r = 12;
-		else if (p.parent_id === 0) r = 10;
+		else if (p.parent_id === 0 && (p.children_ids || []).length > 0) r = 10;
 		var node = {
 			id: 'page:' + p.id,
 			type: 'page',
@@ -360,10 +426,14 @@ function buildGraph(data, viewFilter) {
 		nodes.push(node);
 		nodeMap[node.id] = node;
 	});
-	// Page parent-child edges (second pass so both endpoints exist)
+	// Page edges: (1) real parent-child, (2) fallback hub edge for orphans in pages view.
 	(pageNodes).forEach(function(p) {
 		if (p.parent_id && nodeMap['page:' + p.parent_id]) {
 			edges.push({ source: 'page:' + p.id, target: 'page:' + p.parent_id, type: 'child_of' });
+		} else if (pageHubId) {
+			// Orphan (top-level) page — attach to the virtual hub so the force
+			// simulation gives it structure instead of letting it drift alone.
+			edges.push({ source: 'page:' + p.id, target: pageHubId, type: 'member_of' });
 		}
 	});
 
@@ -380,6 +450,8 @@ function buildGraph(data, viewFilter) {
 
 	// Color scale
 	function nodeColor(d) {
+		if (d.type === 'segment_hub') return '#6366f1'; // indigo — the central customer hub
+		if (d.type === 'page_hub')    return '#0ea5e9'; // sky — pages hub
 		if (d.type === 'category') return '#f59e0b';
 		if (d.type === 'language') return '#2563eb';
 		if (d.type === 'post') {
@@ -455,6 +527,40 @@ function buildGraph(data, viewFilter) {
 			return chargeProd;
 		}))
 		.force('center', d3.forceCenter(width / 2, height / 2))
+		// Radial pull toward the center so orphan nodes (no edges, disconnected
+		// categories like Tongue Drum with 0 products) don't drift to the
+		// canvas edge. Strength raised substantially for non-connected nodes.
+		// Customers view uses cohort-order x-bias so segments lay out
+		// left-to-right as a lifecycle chain.
+		.force('x', d3.forceX(function(d) {
+			// Radial layout for customer segments: each populated segment gets
+			// a target position on a circle around the hub, computed at build
+			// time and stored on the node as _targetAngle + _targetRadius.
+			if (viewFilter === 'customer' && d.type === 'segment' && d._targetAngle !== undefined) {
+				return width / 2 + Math.cos(d._targetAngle) * d._targetRadius;
+			}
+			if (d._hub) return width / 2;
+			return width / 2;
+		}).strength(function(d) {
+			if (viewFilter === 'customer' && d.type === 'segment') return 0.6;
+			if (d.type === 'category') return 0.15;
+			return 0.12;
+		}))
+		.force('y', d3.forceY(function(d) {
+			if (viewFilter === 'customer' && d.type === 'segment' && d._targetAngle !== undefined) {
+				return height / 2 + Math.sin(d._targetAngle) * d._targetRadius;
+			}
+			if (viewFilter === 'customer' && d._hub) return height / 2;
+			return height / 2;
+		}).strength(function(d) {
+			if (viewFilter === 'customer' && d._hub) return 0.8; // hub nailed to center
+			if (viewFilter === 'customer' && d.type === 'segment') return 0.6;
+			return 0.14;
+		}))
+		// Hard boundary — nodes that somehow escape the centering force get
+		// clamped inside a 40px inner margin on each tick. Eliminates the
+		// "single node at the edge of the canvas 1000px away" problem that
+		// the force pull alone couldn't solve for truly-isolated nodes.
 		.force('collision', d3.forceCollide().radius(function(d){ return d.radius + collPad; }).strength(collStr))
 		.alphaDecay(decay);
 
@@ -534,16 +640,45 @@ function buildGraph(data, viewFilter) {
 		.attr('stroke-width', 1.5)
 		.attr('class', 'kg-pulse-ring');
 
-	// Labels for categories and languages
+	// Labels — short types (categories, languages, segments) get full names;
+	// posts/pages with long titles are trimmed aggressively (full title is
+	// still in the hover tooltip). Prevents the "wall of text" look when
+	// dozens of blog post titles overlap each other.
+	function shortLabel(d) {
+		var raw = d.label || '';
+		if (d.type === 'category' || d.type === 'language' || d.type === 'segment' || d.type === 'segment_hub') {
+			return raw.length > 24 ? raw.slice(0, 23) + '…' : raw;
+		}
+		// Posts and pages: 22 chars is plenty for a skim — full title on hover.
+		if (d.type === 'post' || d.type === 'page') {
+			return raw.length > 22 ? raw.slice(0, 20) + '…' : raw;
+		}
+		return raw;
+	}
+	function labelClass(d) {
+		// Anchors (categories, languages, hubs, segments) stay bigger/bolder
+		// and always visible — they're the navigational structure.
+		// Posts/pages are the "long tail" — label renders but is hidden unless
+		// the node is hovered so the canvas isn't a wall of text.
+		var base = 'kg-label';
+		if (d.type === 'category' || d.type === 'language' || d.type === 'segment' ||
+			d.type === 'segment_hub' || d.type === 'page_hub') {
+			return base + ' kg-label-anchor';
+		}
+		if (d.type === 'post' || d.type === 'page') {
+			return base + ' kg-label-hoverable';
+		}
+		return base;
+	}
 	node.filter(function(d){ return d.type !== 'product'; })
 		.append('text')
-		.attr('dy', function(d){ return d.radius + 14; })
+		.attr('dy', function(d){ return d.radius + 11; })
 		.attr('text-anchor', 'middle')
-		.attr('class', 'kg-label')
-		.text(function(d){ return d.label; })
+		.attr('class', labelClass)
+		.text(shortLabel)
 		.style('opacity', 0)
 		.transition().duration(400).delay(800)
-		.style('opacity', 1);
+		.style('opacity', null); // let CSS drive the final opacity
 
 	// Tooltip
 	var tooltip = document.getElementById('kg-tooltip');
@@ -624,11 +759,26 @@ function buildGraph(data, viewFilter) {
 	})
 	.on('click', function(event, d) {
 		event.stopPropagation();
+		// Hubs are visual anchors only — clicking them opens nothing (the
+		// tooltip already explains what they are).
+		if (d.type === 'segment_hub' || d.type === 'page_hub') return;
 		showDetailPanel(d);
 	});
 
 	// Tick
 	simulation.on('tick', function() {
+		// Boundary clamp — any node that's drifted outside the inner margin
+		// gets nudged back. Prevents the "one orphan node 1500px to the
+		// right" problem for unconnected categories.
+		var margin = 40;
+		nodes.forEach(function(n) {
+			var r = n.radius || 10;
+			if (n.x < margin + r)         n.x = margin + r;
+			if (n.x > width - margin - r) n.x = width - margin - r;
+			if (n.y < margin + r)         n.y = margin + r;
+			if (n.y > height - margin - r) n.y = height - margin - r;
+		});
+
 		link
 			.attr('x1', function(d){ return d.source.x; })
 			.attr('y1', function(d){ return d.source.y; })
@@ -749,6 +899,12 @@ function buildTooltip(d) {
 		h += '<div class="kg-tt-row">Customers: <b>' + (sg.count || 0) + '</b></div>';
 		h += '<div class="kg-tt-row">Share: ' + (sg.share_pct || 0).toFixed(1) + '%</div>';
 		if (sg.segment) h += '<div class="kg-tt-row">Cohort: ' + escHtml(sg.segment) + '</div>';
+	} else if (d.type === 'segment_hub') {
+		var hd = d.data || {};
+		h += '<div class="kg-tt-row">Total customers: <b>' + (hd.total || 0) + '</b></div>';
+		h += '<div class="kg-tt-row">Click a segment around the hub for a breakdown.</div>';
+	} else if (d.type === 'page_hub') {
+		h += '<div class="kg-tt-row">Site pages overview — click a page for its detail panel.</div>';
 	}
 	return h;
 }
@@ -959,60 +1115,56 @@ function showDetailPanel(d) {
 		});
 		h += '</div>';
 
-		// ── Category Recommendations ──
+		// ── Category Recommendations (all clickable, fire kgAction) ──
+		// Each rec ships with an action ({a: kgAction key, langs?: code}) so
+		// the operator can enrich/translate the whole category in one click.
 		var catRecs = [];
 		if (cSeo < 50) {
-			catRecs.push({ p: 'high', l: 'Improve SEO Coverage', d: 'Only ' + cSeo + '% of products have SEO meta — enrich products in this category' });
+			catRecs.push({ p: 'high', l: 'Improve SEO Coverage', d: 'Only ' + cSeo + '% of products have SEO meta — enrich products in this category', a: 'enrich_category' });
 		} else if (cSeo < 80) {
-			catRecs.push({ p: 'medium', l: 'Complete SEO Coverage', d: cSeo + '% covered — a few products still missing SEO meta' });
+			catRecs.push({ p: 'medium', l: 'Complete SEO Coverage', d: cSeo + '% covered — a few products still missing SEO meta', a: 'enrich_category' });
 		}
 		if (cEnrich < 50) {
-			catRecs.push({ p: 'high', l: 'AI Enrich Products', d: 'Only ' + cEnrich + '% enriched — generate descriptions, FAQ, schema' });
+			catRecs.push({ p: 'high', l: 'AI Enrich Products', d: 'Only ' + cEnrich + '% enriched — generate descriptions, FAQ, schema', a: 'enrich_category' });
 		} else if (cEnrich < 80) {
-			catRecs.push({ p: 'medium', l: 'Complete Enrichment', d: cEnrich + '% enriched — finish remaining products' });
+			catRecs.push({ p: 'medium', l: 'Complete Enrichment', d: cEnrich + '% enriched — finish remaining products', a: 'enrich_category' });
 		}
 		Object.keys(c.translation_pct || {}).forEach(function(l) {
 			var tp = c.translation_pct[l] || 0;
 			if (tp < 80) {
-				catRecs.push({ p: 'high', l: 'Translate to ' + l.toUpperCase(), d: 'Only ' + tp + '% translated — ' + Math.round(c.product_count * (100 - tp) / 100) + ' products missing' });
+				catRecs.push({ p: 'high', l: 'Translate to ' + l.toUpperCase(), d: 'Only ' + tp + '% translated — ' + Math.round(c.product_count * (100 - tp) / 100) + ' products missing', a: 'translate_category', langs: l });
 			} else if (tp < 100) {
-				catRecs.push({ p: 'medium', l: 'Complete ' + l.toUpperCase() + ' Translation', d: tp + '% done — almost there' });
+				catRecs.push({ p: 'medium', l: 'Complete ' + l.toUpperCase() + ' Translation', d: tp + '% done — almost there', a: 'translate_category', langs: l });
 			}
 		});
 
+		// Dedupe: SEO + Enrichment both map to enrich_category. Keep the
+		// highest-priority rec per action/lang combination so operators see
+		// one button per concrete operation, not three telling them the same
+		// thing. Preserves the top-priority label and description.
+		var seenKey = {};
+		var pri = {high:0,medium:1,low:2};
+		catRecs.sort(function(a,b){ return (pri[a.p]||9)-(pri[b.p]||9); });
+		catRecs = catRecs.filter(function(r) {
+			var key = r.a + ':' + (r.langs || '');
+			if (seenKey[key]) return false;
+			seenKey[key] = true;
+			return true;
+		});
+
 		if (catRecs.length > 0) {
-			var pri = {high:0,medium:1,low:2};
-			catRecs.sort(function(a,b){ return (pri[a.p]||9)-(pri[b.p]||9); });
 			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
 			catRecs.forEach(function(r) {
-				h += '<div class="kg-rec kg-rec-' + r.p + '">';
+				var extra = r.langs ? ",'" + r.langs + "'" : '';
+				h += '<button class="kg-rec kg-rec-' + r.p + '" onclick="kgAction(\'' + r.a + '\',' + c.id + ',this' + extra + ')">';
 				h += '<span class="kg-rec-dot"></span>';
 				h += '<span class="kg-rec-body"><strong>' + r.l + '</strong><br><small>' + r.d + '</small></span>';
-				h += '</div>';
+				h += '</button>';
 			});
 			h += '</div>';
 		} else {
 			h += '<div class="kg-p-allgood">All optimizations complete for this category</div>';
 		}
-
-		// ── Category Batch Actions ──
-		h += '<div class="kg-p-section"><div class="kg-p-section-title">Batch Actions</div>';
-		if (cEnrich < 100) {
-			h += '<button class="kg-rec kg-rec-medium" onclick="kgAction(\'enrich_category\',' + c.id + ',this)">';
-			h += '<span class="kg-rec-dot"></span>';
-			h += '<span class="kg-rec-body"><strong>Enrich all products in this category</strong><br><small>Queues every product missing enrichment</small></span>';
-			h += '</button>';
-		}
-		Object.keys(c.translation_pct || {}).forEach(function(l) {
-			var tp = c.translation_pct[l] || 0;
-			if (tp < 100) {
-				h += '<button class="kg-rec kg-rec-medium" onclick="kgAction(\'translate_category\',' + c.id + ',this,\'' + l + '\')">';
-				h += '<span class="kg-rec-dot"></span>';
-				h += '<span class="kg-rec-body"><strong>Translate category to ' + l.toUpperCase() + '</strong><br><small>Queues every product missing ' + l.toUpperCase() + ' translation</small></span>';
-				h += '</button>';
-			}
-		});
-		h += '</div>';
 
 	} else if (d.type === 'page') {
 		var pg = d.data;
@@ -1088,10 +1240,13 @@ function showDetailPanel(d) {
 		var translated = l.products_translated || 0;
 		var missing = l.products_missing || 0;
 		var total = translated + missing;
+		var isPrimary = !!l.is_primary;
+		var displayName = l.name || l.code.toUpperCase();
+		var subtitle = (l.english_name && l.english_name !== displayName) ? l.english_name + ' · ' + l.code.toUpperCase() : l.code.toUpperCase();
 
-		h += '<div class="kg-p-type-badge kg-type-language">Language</div>';
-		h += '<h3 class="kg-p-name">' + (l.name || l.code.toUpperCase()) + '</h3>';
-		h += '<div class="kg-p-meta">' + total + ' total products</div>';
+		h += '<div class="kg-p-type-badge kg-type-language">' + (isPrimary ? 'Source language' : 'Language') + '</div>';
+		h += '<h3 class="kg-p-name">' + displayName + '</h3>';
+		h += '<div class="kg-p-meta">' + subtitle + ' · ' + total + ' total products</div>';
 
 		h += '<div class="kg-p-health kg-h-' + covCls + '">';
 		h += '<div class="kg-p-health-bar" style="width:' + covPct + '%"></div>';
@@ -1104,12 +1259,14 @@ function showDetailPanel(d) {
 		h += '<div class="kg-p-stat-row"><span>Total</span><strong>' + total + '</strong></div>';
 		h += '</div>';
 
-		// Recommendations
-		if (missing > 0) {
+		// Recommendations — primary language is the source, nothing to translate
+		if (isPrimary) {
+			h += '<div class="kg-p-allgood">Source language — all products originate here</div>';
+		} else if (missing > 0) {
 			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
 			h += '<button class="kg-rec kg-rec-high" onclick="kgAction(\'translate_lang\',0,this,\'' + l.code + '\')">';
 			h += '<span class="kg-rec-dot"></span>';
-			h += '<span class="kg-rec-body"><strong>Translate ' + missing + ' missing products</strong><br><small>Complete ' + l.code.toUpperCase() + ' coverage to 100%</small></span>';
+			h += '<span class="kg-rec-body"><strong>Translate ' + missing + ' missing products</strong><br><small>Complete ' + displayName + ' coverage to 100%</small></span>';
 			h += '</button></div>';
 		} else {
 			h += '<div class="kg-p-allgood">Full coverage — all products translated</div>';
@@ -1426,6 +1583,16 @@ function updateStats(data) {
 
 	// design_health may be null when Elementor isn't installed — treat that as N/A rather than 0%.
 	var designUnavailable = designAudit.elementor_available === false || designSummary.overall_health === null;
+
+	// Media health: penalise missing alt text (primary SEO/accessibility metric).
+	// null → no images at all → N/A rather than 0%.
+	var media = (data.nodes && data.nodes.media_inventory) || null;
+	var mediaHealth = null;
+	if (media && (media.total_images || 0) > 0) {
+		var altCoverage = 100 - ((media.missing_alt_count || 0) / media.total_images * 100);
+		mediaHealth = Math.max(0, Math.round(altCoverage));
+	}
+
 	var stats = {
 		total_products: summary.total_products || 0,
 		total_posts: summary.total_posts || 0,
@@ -1435,8 +1602,13 @@ function updateStats(data) {
 		design_health: designUnavailable ? null : (designSummary.overall_health || 0),
 		plugin_readiness: Math.round(pluginHealth.readiness_score || 0),
 		revenue_30d: Math.round(revenue30),
-		taxonomy_coverage: taxCoverage
+		taxonomy_coverage: taxCoverage,
+		media_health: mediaHealth
 	};
+
+	renderStoreHealthHero(stats, summary);
+	renderActionQueue(data);
+	renderAchievements(stats, summary, data);
 
 	document.querySelectorAll('.kg-stat').forEach(function(el) {
 		el.classList.remove('kg-stat-skeleton');
@@ -1468,6 +1640,493 @@ function updateStats(data) {
 		}
 		animateCounter(el, Math.round(stats[key]), suffix);
 	});
+}
+
+// ── Store Health Hero ──
+// Weighted average of every "health" metric the graph exposes. The goal is
+// a single anchor number the operator can come back to: "my store is 71%
+// healthy today." Individual metrics are still one click away in the stat
+// bar below. Weights reflect what actually moves the SEO/UX needle.
+function renderStoreHealthHero(stats, summary) {
+	// New DOM (3.1.28): health is a header-embedded pill (#kg-hero-toggle) with
+	// inline score + progress bar; details panel (#kg-hero-detail) holds the
+	// subtitle, chip breakdown, and achievements and is hidden at rest.
+	var pill = document.getElementById('kg-hero-toggle');
+	var scoreEl = document.getElementById('kg-hero-score');
+	var barEl = document.getElementById('kg-hero-bar');
+	var metaEl = document.getElementById('kg-hero-meta');
+	var subtitleEl = document.getElementById('kg-hero-subtitle');
+	if (!pill || !scoreEl || !barEl) return;
+
+	// Translation coverage: average across target languages only (primary = 100%).
+	var transCov = summary.translation_coverage || {};
+	var transVals = Object.keys(transCov).map(function(k){ return Number(transCov[k]) || 0; });
+	var transAvg = transVals.length > 0 ? transVals.reduce(function(a,b){return a+b;}, 0) / transVals.length : null;
+
+	// Weight table — higher weight = bigger contribution to overall health.
+	// null values drop out; remaining weights are renormalised so missing
+	// dimensions (e.g. no Elementor) don't artificially punish the score.
+	var parts = [
+		{ key: 'seo',        label: 'SEO',          value: stats.seo_coverage,        weight: 2 },
+		{ key: 'enrichment', label: 'Enrichment',   value: stats.enrichment_coverage, weight: 2 },
+		{ key: 'translation',label: 'Translation',  value: transAvg,                  weight: 1 },
+		{ key: 'taxonomy',   label: 'Taxonomy',     value: stats.taxonomy_coverage,   weight: 1 },
+		{ key: 'design',     label: 'Design',       value: stats.design_health,       weight: 1 },
+		{ key: 'media',      label: 'Media',        value: stats.media_health,        weight: 1 },
+		{ key: 'plugins',    label: 'Plugins',      value: stats.plugin_readiness,    weight: 1 }
+	].filter(function(p) { return p.value !== null && p.value !== undefined && !isNaN(p.value); });
+
+	var totalWeight = parts.reduce(function(a,p){ return a + p.weight; }, 0);
+	var weightedSum = parts.reduce(function(a,p){ return a + (p.value * p.weight); }, 0);
+	var score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+
+	// Colour band: ≥80 green, ≥50 amber, else red. Matches the kg-h-* system used everywhere.
+	scoreEl.classList.remove('kg-h-good','kg-h-warn','kg-h-bad');
+	if (score >= 80) scoreEl.classList.add('kg-h-good');
+	else if (score >= 50) scoreEl.classList.add('kg-h-warn');
+	else scoreEl.classList.add('kg-h-bad');
+
+	scoreEl.textContent = score;
+	barEl.style.width = Math.max(2, score) + '%';
+
+	// Qualitative subtitle matching the band, so the operator sees a
+	// direction ("you're on track" vs "needs attention"), not just a number.
+	if (subtitleEl) {
+		var msg = 'Weighted across content, translation, design, and media.';
+		if (score >= 80) msg = 'Your store is in solid shape — keep closing the small gaps to hit 100%.';
+		else if (score >= 50) msg = 'Decent foundation with room to grow. Target the weakest dimension below first.';
+		else msg = 'Significant gaps across several dimensions. Start with the highest-weight weakness (SEO or enrichment).';
+
+		// Trend delta — appended only when we have ≥7-day history. Positive
+		// SEO/enrichment movement or dropping opportunity count is progress.
+		var trend = summary.trend || {};
+		if (trend.points_count && trend.points_count >= 2 && trend.opportunities_delta !== null) {
+			var parts = [];
+			if (trend.seo_delta !== null && Math.abs(trend.seo_delta) >= 0.1) {
+				parts.push((trend.seo_delta > 0 ? '+' : '') + trend.seo_delta + '% SEO');
+			}
+			if (trend.enrichment_delta !== null && Math.abs(trend.enrichment_delta) >= 0.1) {
+				parts.push((trend.enrichment_delta > 0 ? '+' : '') + trend.enrichment_delta + '% enriched');
+			}
+			if (trend.opportunities_delta !== 0) {
+				// Negative delta = fewer opportunities = progress.
+				var oppSign = trend.opportunities_delta > 0 ? '+' : '';
+				parts.push(oppSign + trend.opportunities_delta + ' opportunity pts');
+			}
+			if (parts.length > 0) {
+				msg += ' · Last 7 days: ' + parts.join(', ') + '.';
+			}
+		}
+		subtitleEl.textContent = msg;
+	}
+
+	// Breakdown chips — show the weakest dimensions first so the operator
+	// knows where one click gives them the biggest lift.
+	if (metaEl) {
+		var sorted = parts.slice().sort(function(a,b){ return a.value - b.value; });
+		metaEl.innerHTML = sorted.map(function(p) {
+			var cls = p.value >= 80 ? 'kg-h-good' : p.value >= 50 ? 'kg-h-warn' : 'kg-h-bad';
+			return '<span class="kg-hero-meta-chip"><strong>' + escHtml(p.label) + '</strong> <span class="' + cls + '">' + Math.round(p.value) + '%</span></span>';
+		}).join('');
+	}
+
+	pill.hidden = false;
+}
+
+// ── Activity Feed ──
+// Pulls the latest N entries from /logs and renders a compact list below the
+// graph. Auto-polls every 30s while the page is visible; pauses when hidden
+// (document.visibilityState === 'hidden') so background tabs don't burn quota.
+var _kgActivityPoll = null;
+var _kgActivityLastCount = -1;
+
+function initActivityFeed() {
+	fetchActivity();
+	if (_kgActivityPoll) clearInterval(_kgActivityPoll);
+	_kgActivityPoll = setInterval(function() {
+		if (document.visibilityState === 'hidden') return; // don't poll when tab hidden
+		fetchActivity();
+	}, 30000);
+}
+
+function fetchActivity() {
+	var base = (window.lpKgConfig && window.lpKgConfig.restBase) || '';
+	if (!base) return;
+	var url = base + 'logs?limit=25';
+	var headers = { 'X-WP-Nonce': (window.lpKgConfig && window.lpKgConfig.nonce) || '' };
+	var apiToken = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
+	if (apiToken) headers['Authorization'] = 'Bearer ' + apiToken;
+
+	fetch(url, { headers: headers, credentials: 'same-origin' })
+		.then(function(r) { return r.ok ? r.json() : null; })
+		.then(function(resp) {
+			if (!resp || !Array.isArray(resp.logs)) return;
+			renderActivityFeed(resp.logs);
+		})
+		.catch(function(err) {
+			// Silent fail — activity feed is non-critical.
+			if (window.console) console.warn('[lpKg] activity fetch failed:', err);
+		});
+}
+
+function renderActivityFeed(logs) {
+	var wrap = document.getElementById('kg-activity');
+	var list = document.getElementById('kg-activity-list');
+	var sub  = document.getElementById('kg-activity-sub');
+	if (!wrap || !list) return;
+
+	if (!logs || logs.length === 0) {
+		list.innerHTML = '<div class="kg-activity-empty">No recent activity. Fire an enrichment or translation above and watch it land here.</div>';
+		if (sub) sub.textContent = '';
+		wrap.hidden = false;
+		return;
+	}
+
+	// Subtle "new activity" hint when the count grows between polls.
+	if (_kgActivityLastCount >= 0 && logs.length > _kgActivityLastCount) {
+		var delta = logs.length - _kgActivityLastCount;
+		if (sub) sub.textContent = '+' + delta + ' new';
+		setTimeout(function(){ if (sub) sub.textContent = logs.length + ' entries'; }, 2500);
+	} else {
+		if (sub) sub.textContent = logs.length + ' entries';
+	}
+	_kgActivityLastCount = logs.length;
+
+	// Render the 20 most-recent entries (backend returns newest first).
+	var html = logs.slice(0, 20).map(function(entry) {
+		var ts = entry.timestamp ? formatActivityTime(entry.timestamp) : '';
+		var level = (entry.level || 'info').toLowerCase();
+		var msg = entry.message || '';
+		return '<div class="kg-activity-row">'
+			+ '<span class="kg-activity-time" title="' + escHtml(entry.timestamp || '') + '">' + escHtml(ts) + '</span>'
+			+ '<span class="kg-activity-level" data-level="' + escHtml(level) + '">' + escHtml(level) + '</span>'
+			+ '<span class="kg-activity-msg" title="' + escHtml(msg) + '">' + escHtml(msg) + '</span>'
+			+ '</div>';
+	}).join('');
+	list.innerHTML = html;
+	wrap.hidden = false;
+}
+
+function formatActivityTime(ts) {
+	// Relative time for recent, fallback to HH:MM for older-than-1h.
+	var d = new Date(ts.replace(' ', 'T'));
+	if (isNaN(d.getTime())) return ts;
+	var now = Date.now();
+	var diffS = Math.max(0, Math.round((now - d.getTime()) / 1000));
+	if (diffS < 60)       return diffS + 's ago';
+	if (diffS < 3600)     return Math.floor(diffS / 60) + 'm ago';
+	if (diffS < 86400)    return Math.floor(diffS / 3600) + 'h ago';
+	if (diffS < 7 * 86400) return Math.floor(diffS / 86400) + 'd ago';
+	// Older than a week — fall back to HH:MM.
+	var hh = String(d.getHours()).padStart(2, '0');
+	var mm = String(d.getMinutes()).padStart(2, '0');
+	return d.toLocaleDateString() + ' ' + hh + ':' + mm;
+}
+
+// ── Achievements ──
+// Lightweight milestone badges derived from current coverage. No persistence:
+// badges earned are always displayed, ones not yet earned are hidden. The
+// reward here is visual confirmation of a crossed threshold — gamification
+// without an ops-heavy achievements database. Tier colours (bronze→platinum)
+// reflect difficulty of the milestone.
+function renderAchievements(stats, summary, data) {
+	var container = document.getElementById('kg-achievements');
+	if (!container) return;
+
+	var translations = summary.translation_coverage || {};
+	var transVals = Object.keys(translations).map(function(k){ return Number(translations[k]) || 0; });
+	var transAvg = transVals.length > 0 ? (transVals.reduce(function(a,b){return a+b;}, 0) / transVals.length) : 0;
+	var allLangs100 = transVals.length > 0 && transVals.every(function(v){ return v >= 100; });
+
+	var products = (data && data.nodes && data.nodes.products) || [];
+	var enrichedCount = products.filter(function(p){ return p.enrichment && p.enrichment.status === 'completed'; }).length;
+
+	// Achievement catalogue — each rule checks a threshold; earned ones render.
+	var rules = [
+		{ cond: stats.seo_coverage >= 50,          tier: 'bronze',   icon: '🎯', text: 'SEO > 50%' },
+		{ cond: stats.seo_coverage >= 80,          tier: 'silver',   icon: '🎯', text: 'SEO > 80%' },
+		{ cond: stats.seo_coverage >= 95,          tier: 'gold',     icon: '🎯', text: 'SEO > 95%' },
+		{ cond: stats.enrichment_coverage >= 50,   tier: 'bronze',   icon: '✨', text: 'Enrichment > 50%' },
+		{ cond: stats.enrichment_coverage >= 80,   tier: 'silver',   icon: '✨', text: 'Enrichment > 80%' },
+		{ cond: stats.enrichment_coverage >= 95,   tier: 'gold',     icon: '✨', text: 'Enrichment > 95%' },
+		{ cond: transAvg >= 80 && transVals.length > 0, tier: 'silver',   icon: '🌍', text: 'Translation > 80%' },
+		{ cond: allLangs100,                       tier: 'gold',     icon: '🌍', text: 'All languages 100%' },
+		{ cond: stats.taxonomy_coverage >= 90,     tier: 'silver',   icon: '🏷️', text: 'Taxonomy > 90%' },
+		{ cond: stats.taxonomy_coverage >= 100,    tier: 'gold',     icon: '🏷️', text: 'Taxonomy 100%' },
+		{ cond: stats.media_health !== null && stats.media_health >= 80, tier: 'silver', icon: '🖼️', text: 'Alt text > 80%' },
+		{ cond: stats.design_health !== null && stats.design_health >= 90, tier: 'silver', icon: '🎨', text: 'Design > 90%' },
+		{ cond: stats.plugin_readiness >= 90,      tier: 'silver',   icon: '🔧', text: 'Plugin health > 90%' },
+		{ cond: products.length >= 100,            tier: 'bronze',   icon: '📦', text: '100+ products' },
+		{ cond: products.length >= 500,            tier: 'silver',   icon: '📦', text: '500+ products' },
+		{ cond: products.length >= 1000,           tier: 'gold',     icon: '📦', text: '1,000+ products' },
+		{ cond: enrichedCount >= 50,               tier: 'bronze',   icon: '🚀', text: '50+ enriched' },
+		{ cond: enrichedCount >= 100,              tier: 'silver',   icon: '🚀', text: '100+ enriched' },
+		// Grand-slam: everything >= 95
+		{ cond: stats.seo_coverage >= 95 && stats.enrichment_coverage >= 95 && transAvg >= 95 && stats.taxonomy_coverage >= 95, tier: 'platinum', icon: '💎', text: 'Grand slam' }
+	];
+
+	var earned = rules.filter(function(r){ return r.cond; });
+	if (earned.length === 0) {
+		container.innerHTML = '';
+		return;
+	}
+
+	// Only show the top-tier badge per category (drop bronze if silver earned, etc.)
+	// Simple dedupe by `text suffix` — group by the emoji + base label.
+	var byPrefix = {};
+	earned.forEach(function(r) {
+		var prefix = r.icon;
+		var tierRank = { bronze: 1, silver: 2, gold: 3, platinum: 4 }[r.tier] || 0;
+		if (!byPrefix[prefix] || tierRank > byPrefix[prefix].rank) {
+			byPrefix[prefix] = { rule: r, rank: tierRank };
+		}
+	});
+	var deduped = Object.keys(byPrefix).map(function(k){ return byPrefix[k].rule; });
+
+	// Cap at 6 badges so the row doesn't wrap into 3 lines.
+	deduped = deduped.slice(0, 6);
+
+	container.innerHTML = deduped.map(function(r) {
+		return '<span class="kg-ach" data-tier="' + r.tier + '" title="' + escHtml(r.tier.charAt(0).toUpperCase() + r.tier.slice(1)) + ' achievement"><span class="kg-ach-icon">' + r.icon + '</span>' + escHtml(r.text) + '</span>';
+	}).join('');
+}
+
+// ── Action Queue (Next Wins) ──
+// Turns the KG data into 3 ranked, actionable suggestions. Each candidate
+// gets an impact score (affected × weight), an effort estimate (minutes),
+// and roi = impact / effort. Top 3 by roi are rendered with one-click CTAs
+// that either fire kgAction directly or open the relevant detail panel for
+// the operator to review before acting.
+function renderActionQueue(data) {
+	var wrap = document.getElementById('kg-action-queue');
+	var list = document.getElementById('kg-action-queue-list');
+	if (!wrap || !list || !data || !data.nodes) return;
+
+	var products = data.nodes.products || [];
+	var categories = data.nodes.categories || [];
+	var languages  = data.nodes.languages || [];
+	var taxonomies = data.nodes.taxonomies || [];
+	var media = data.nodes.media_inventory || null;
+	var candidates = [];
+
+	// CANDIDATE 1: Worst-covered category for SEO — one batch enrich hits the most products at once.
+	// Skip categories with < 3 products (not worth a batch) and those already >= 80% SEO.
+	var seoTargets = categories.filter(function(c) {
+		return (c.product_count || 0) >= 3 && (c.seo_coverage_pct || 0) < 80;
+	}).sort(function(a, b) {
+		// Prefer biggest product_count × (100 - coverage) = most missing SEO meta
+		var aGap = (a.product_count || 0) * (100 - (a.seo_coverage_pct || 0));
+		var bGap = (b.product_count || 0) * (100 - (b.seo_coverage_pct || 0));
+		return bGap - aGap;
+	});
+	if (seoTargets.length > 0) {
+		var cat = seoTargets[0];
+		var missing = Math.round(cat.product_count * (100 - (cat.seo_coverage_pct || 0)) / 100);
+		candidates.push({
+			tier: 'high',
+			label: 'Enrich "' + cat.name + '" category',
+			why: missing + ' of ' + cat.product_count + ' products still missing SEO — batch handles them in one click.',
+			meta: ['SEO', '+~' + Math.round(missing / products.length * 100) + '% site coverage', '~' + (missing * 2) + 'min'],
+			impact: missing * 5,
+			effort: Math.max(1, missing * 2),
+			onClick: function(btn) {
+				// Open the category detail panel so the operator can hit the action there (richer context)
+				if (window.lpKg && window.lpKg.showDetailPanel) {
+					window.lpKg.showDetailPanel({ type: 'category', data: cat, label: cat.name, radius: 12 });
+				}
+			}
+		});
+	}
+
+	// CANDIDATE 2: Translation backlog on a single language — fastest path to 100% coverage lift.
+	// Prefer the target language with the fewest missing products (closest to goal).
+	var transTargets = languages.filter(function(l) {
+		return !l.is_primary && (l.products_missing || 0) > 0;
+	}).sort(function(a, b) {
+		return (a.products_missing || 0) - (b.products_missing || 0);
+	});
+	if (transTargets.length > 0) {
+		var lang = transTargets[0];
+		var label = lang.name || (lang.code || '').toUpperCase();
+		candidates.push({
+			tier: lang.products_missing <= 5 ? 'low' : 'medium',
+			label: 'Translate ' + lang.products_missing + ' products to ' + label,
+			why: 'Finishes ' + label + ' coverage from ' + (lang.coverage_pct || 0).toFixed(0) + '% → 100% in one batch.',
+			meta: ['Translation', label, '~' + (lang.products_missing * 3) + 'min'],
+			impact: lang.products_missing * 3,
+			effort: Math.max(1, lang.products_missing * 3),
+			onClick: function() {
+				// Fire the translate_lang action directly — the language-level batch
+				kgAction('translate_lang', 0, document.getElementById('kg-aq-cta-' + 'lang-' + lang.code), lang.code);
+			},
+			ctaId: 'kg-aq-cta-lang-' + lang.code,
+			ctaLabel: 'Translate all'
+		});
+	}
+
+	// CANDIDATE 3: Taxonomy missing translations — often a <1 min job per language with outsized SEO impact.
+	var taxByLang = {};
+	taxonomies.forEach(function(term) {
+		var trans = term.translations || {};
+		Object.keys(trans).forEach(function(code) {
+			var st = trans[code] && trans[code].status;
+			if (st === 'missing') {
+				taxByLang[code] = (taxByLang[code] || 0) + 1;
+			}
+		});
+	});
+	var taxCodes = Object.keys(taxByLang);
+	if (taxCodes.length > 0) {
+		// Pick the language with the most missing terms (biggest single-click win)
+		taxCodes.sort(function(a, b) { return taxByLang[b] - taxByLang[a]; });
+		var taxCode = taxCodes[0];
+		var taxMissing = taxByLang[taxCode];
+		var taxLangNode = languages.filter(function(l){return l.code===taxCode;})[0];
+		var taxLangLabel = (taxLangNode && taxLangNode.name) || taxCode.toUpperCase();
+		candidates.push({
+			tier: 'medium',
+			label: 'Translate ' + taxMissing + ' taxonomy terms to ' + taxLangLabel,
+			why: 'Category/tag translations feed product hreflang — small job, broad SEO lift across every translated page.',
+			meta: ['Taxonomy', taxLangLabel, '~' + Math.max(1, Math.round(taxMissing / 5)) + 'min'],
+			impact: taxMissing * 8, // disproportionately high weight — taxonomy pages rank
+			effort: Math.max(1, Math.round(taxMissing / 5)),
+			onClick: function() {
+				if (window.lpKg && window.lpKg.showTaxonomyHeatmap) {
+					window.lpKg.showTaxonomyHeatmap(taxonomies);
+				}
+			}
+		});
+	}
+
+	// CANDIDATE 4: Media alt text — huge accessibility + SEO win if significant gap.
+	if (media && (media.missing_alt_count || 0) >= 10) {
+		candidates.push({
+			tier: media.missing_alt_count > 100 ? 'high' : 'medium',
+			label: 'Add alt text to ' + media.missing_alt_count + ' images',
+			why: 'Alt text drives image search + accessibility — currently ' + Math.round((media.missing_alt_count / media.total_images) * 100) + '% of your library is uncovered.',
+			meta: ['Media', 'SEO + A11y', 'Manual'],
+			impact: Math.min(200, media.missing_alt_count),
+			effort: Math.max(30, media.missing_alt_count), // manual, slower than AI batch
+			onClick: function() {
+				if (window.lpKg && window.lpKg.showMediaInventoryPanel) {
+					window.lpKg.showMediaInventoryPanel(media);
+				}
+			}
+		});
+	}
+
+	// CANDIDATE 5: AEO schema gap — HowTo / Schema / Speakable on top enriched products.
+	// Rich results (HowTo cards, review snippets) only fire when the structured data exists;
+	// many stores have FAQ (easy) but never touch the rest. Target the product with the
+	// most gaps among already-enriched items — best ratio of prep work to rich-result lift.
+	var aeoCov = (data.summary && data.summary.aeo_coverage) || {};
+	var missingAeoTypes = [];
+	if ((aeoCov.howto || 0)     < 30) missingAeoTypes.push({ key: 'howto',     label: 'HowTo',     action: 'howto',     prio: 'medium' });
+	if ((aeoCov.schema || 0)    < 30) missingAeoTypes.push({ key: 'schema',    label: 'Schema',    action: null,        prio: 'low'    });
+	if ((aeoCov.speakable || 0) < 30) missingAeoTypes.push({ key: 'speakable', label: 'Speakable', action: null,        prio: 'low'    });
+	if (missingAeoTypes.length > 0) {
+		// Pick the AEO type with the most actionable potential (howto > schema > speakable).
+		var gap = missingAeoTypes[0];
+		// Find a product that's enriched (ready for AEO) but missing this AEO field.
+		var aeoTarget = products.filter(function(p) {
+			var enriched = p.enrichment && p.enrichment.status === 'completed';
+			var aeoMap = p.aeo || {};
+			var has = aeoMap['has_' + gap.key];
+			return enriched && !has;
+		}).sort(function(a, b) {
+			return (b.opportunity_score || 0) - (a.opportunity_score || 0);
+		})[0];
+		if (aeoTarget) {
+			candidates.push({
+				tier: gap.prio,
+				label: 'Generate ' + gap.label + ' for "' + ((aeoTarget.name || '').slice(0, 35) + ((aeoTarget.name || '').length > 35 ? '…' : '')) + '"',
+				why: 'Only ' + Math.round(aeoCov[gap.key] || 0) + '% of products have ' + gap.label + ' schema — the enriched ones are low-hanging rich-result wins.',
+				meta: ['AEO', gap.label, '~1min'],
+				impact: 30,
+				effort: 1,
+				onClick: (function(p, a) {
+					return function() {
+						if (a === 'howto' || a === 'faq') {
+							kgAction(a, p.id, document.createElement('button'));
+						} else if (window.lpKg && window.lpKg.showDetailPanel) {
+							var fake = { type: 'product', data: p, label: p.name, radius: 8, score: p.opportunity_score, seo: p.seo, enrichment: p.enrichment, aeo: p.aeo, translation: p.translation };
+							window.lpKg.showDetailPanel(fake);
+						}
+					};
+				})(aeoTarget, gap.action)
+			});
+		}
+	}
+
+	// CANDIDATE 6: Top-opportunity single product — single high-impact enrichment.
+	var thinOpp = products.filter(function(p) {
+		return (p.content_length || 0) < 800 && (p.opportunity_score || 0) > 30;
+	}).sort(function(a, b) {
+		return (b.opportunity_score || 0) - (a.opportunity_score || 0);
+	});
+	if (thinOpp.length > 0) {
+		var p = thinOpp[0];
+		candidates.push({
+			tier: 'low',
+			label: 'Enrich "' + ((p.name || '').slice(0, 40) + ((p.name || '').length > 40 ? '…' : '')) + '"',
+			why: 'Highest-opportunity product in the catalogue (score ' + p.opportunity_score + '). Thin content + missing SEO — AI can fix both in ~90s.',
+			meta: ['Single product', 'Opportunity ' + p.opportunity_score, '~1.5min'],
+			impact: p.opportunity_score,
+			effort: 2,
+			onClick: function() {
+				// Open the product detail panel — gives the operator visibility on what's missing before firing
+				if (window.lpKg && window.lpKg.showDetailPanel) {
+					var fake = { type: 'product', data: p, label: p.name, radius: 8, score: p.opportunity_score, seo: p.seo, enrichment: p.enrichment, aeo: p.aeo, translation: p.translation };
+					window.lpKg.showDetailPanel(fake);
+				}
+			}
+		});
+	}
+
+	// Rank by ROI (impact / effort). Take top 3.
+	candidates.forEach(function(c) {
+		c.roi = c.impact / Math.max(1, c.effort);
+	});
+	candidates.sort(function(a, b) { return b.roi - a.roi; });
+	candidates = candidates.slice(0, 3);
+
+	// Render
+	if (candidates.length === 0) {
+		list.innerHTML = '<div class="kg-aq-empty">No pressing wins right now — your store is in excellent shape. 🎉</div>';
+		wrap.hidden = false;
+		return;
+	}
+
+	var html = '';
+	candidates.forEach(function(c, i) {
+		var ctaId = c.ctaId || ('kg-aq-cta-' + i);
+		var ctaLabel = c.ctaLabel || 'Review →';
+		html += '<div class="kg-aq-card" data-tier="' + c.tier + '" data-idx="' + i + '">';
+		html += '<span class="kg-aq-rank">#' + (i + 1) + '</span>';
+		html += '<div class="kg-aq-label">' + escHtml(c.label) + '</div>';
+		html += '<div class="kg-aq-why">' + escHtml(c.why) + '</div>';
+		html += '<div class="kg-aq-meta">';
+		c.meta.forEach(function(m) { html += '<span class="kg-aq-meta-chip">' + escHtml(m) + '</span>'; });
+		html += '</div>';
+		html += '<button type="button" class="kg-aq-cta" id="' + ctaId + '">' + escHtml(ctaLabel) + '</button>';
+		html += '</div>';
+	});
+	list.innerHTML = html;
+
+	// Wire the CTAs and the whole-card click (card click = same as CTA)
+	candidates.forEach(function(c, i) {
+		var card = list.querySelector('[data-idx="' + i + '"]');
+		if (!card) return;
+		var cta = card.querySelector('.kg-aq-cta');
+		var handler = function(e) {
+			if (e) e.stopPropagation();
+			if (typeof c.onClick === 'function') c.onClick();
+		};
+		card.addEventListener('click', handler);
+		if (cta) cta.addEventListener('click', handler);
+	});
+
+	wrap.hidden = false;
 }
 
 // ── Detail Panel Close ──
@@ -1507,6 +2166,7 @@ function init(forceFresh) {
 			bindPluginHealthClick(data);
 			bindRevenueClick(data);
 			bindTaxonomyClick(data);
+			bindMediaClick(data);
 			updateCacheBadge(data);
 			updatePresetCounts(data);
 		}, !!forceFresh);
@@ -1551,6 +2211,84 @@ function bindTaxonomyClick(data) {
 	};
 }
 
+function bindMediaClick(data) {
+	var card = document.getElementById('kg-stat-media');
+	if (!card) return;
+	var media = (data.nodes && data.nodes.media_inventory) || null;
+	// Hide the card entirely when there are no images to audit.
+	if (!media || (media.total_images || 0) === 0) {
+		card.onclick = null;
+		card.classList.add('kg-stat-disabled');
+		return;
+	}
+	card.onclick = function() { showMediaInventoryPanel(media); };
+}
+
+function showMediaInventoryPanel(media) {
+	var panel = document.getElementById('kg-detail-panel');
+	var content = document.getElementById('kg-detail-content');
+	var total = media.total_images || 0;
+	var missingAlt = media.missing_alt_count || 0;
+	var orphaned = media.orphaned_count || 0;
+	var altCoveragePct = total > 0 ? Math.round((total - missingAlt) / total * 100) : 0;
+	var cls = altCoveragePct >= 80 ? 'good' : altCoveragePct >= 50 ? 'warn' : 'bad';
+	var h = '';
+
+	h += '<div class="kg-p-type-badge" style="background:#10b981;color:#fff">Media Library</div>';
+	h += '<h3 class="kg-p-name">Media Health Report</h3>';
+	h += '<div class="kg-p-meta">' + total.toLocaleString() + ' images · ' + (media.total_videos || 0) + ' videos · ' + (media.total_documents || 0) + ' documents</div>';
+
+	h += '<div class="kg-p-health kg-h-' + cls + '">';
+	h += '<div class="kg-p-health-bar" style="width:' + altCoveragePct + '%"></div>';
+	h += '<span class="kg-p-health-label">Alt text coverage ' + altCoveragePct + '%</span></div>';
+
+	h += '<div class="kg-p-section"><div class="kg-p-section-title">Breakdown</div>';
+	h += '<div class="kg-p-stat-row"><span>Images with alt text</span><strong style="color:var(--lp-success)">' + (total - missingAlt).toLocaleString() + '</strong></div>';
+	h += '<div class="kg-p-stat-row"><span>Missing alt text</span><strong' + (missingAlt > 0 ? ' class="kg-text-error"' : '') + '>' + missingAlt.toLocaleString() + '</strong></div>';
+	h += '<div class="kg-p-stat-row"><span>Orphaned (unused)</span><strong' + (orphaned > 0 ? ' style="color:var(--lp-warning)"' : '') + '>' + orphaned.toLocaleString() + '</strong></div>';
+	h += '<div class="kg-p-stat-row"><span>Total library size</span><strong>' + (media.total_media || 0).toLocaleString() + '</strong></div>';
+	h += '</div>';
+
+	// Recommendations — link to the filter-friendly Media library views.
+	var recs = [];
+	if (missingAlt > 0) {
+		recs.push({ p: 'high', l: 'Add alt text to ' + missingAlt.toLocaleString() + ' images', d: 'Accessibility + SEO. Use the Media library bulk editor to add descriptions.', link: '/wp-admin/upload.php' });
+	}
+	if (orphaned > 0) {
+		recs.push({ p: 'medium', l: 'Review ' + orphaned.toLocaleString() + ' orphaned files', d: 'Not attached to any post/product — delete to reclaim disk or confirm they\'re still needed.', link: '/wp-admin/upload.php?detached=1' });
+	}
+
+	if (recs.length > 0) {
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
+		recs.forEach(function(r) {
+			h += '<a class="kg-rec kg-rec-' + r.p + '" href="' + r.link + '" target="_blank" rel="noopener">';
+			h += '<span class="kg-rec-dot"></span>';
+			h += '<span class="kg-rec-body"><strong>' + escHtml(r.l) + ' →</strong><br><small>' + escHtml(r.d) + '</small></span>';
+			h += '</a>';
+		});
+		h += '</div>';
+	} else {
+		h += '<div class="kg-p-allgood">Media library is in great shape — every image has alt text and nothing is orphaned.</div>';
+	}
+
+	// Top 5 largest files — ops insight (page weight, storage cost).
+	var largest = (media.largest_files || []).slice(0, 5);
+	if (largest.length > 0) {
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Largest files</div>';
+		largest.forEach(function(f) {
+			var kb = Math.round((f.filesize || 0) / 1024);
+			var sizeStr = kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB';
+			var title = (f.title || '').slice(0, 60);
+			h += '<div class="kg-p-stat-row"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;" title="' + escHtml(f.title || '') + '">' + escHtml(title) + (f.title && f.title.length > 60 ? '…' : '') + '</span>';
+			h += '<strong>' + sizeStr + '</strong></div>';
+		});
+		h += '</div>';
+	}
+
+	content.innerHTML = h;
+	panel.classList.add('open');
+}
+
 function updateCacheBadge(data) {
 	var meta = (data && data.meta) || {};
 	var badge = document.getElementById('kg-cache-badge');
@@ -1561,7 +2299,7 @@ function updateCacheBadge(data) {
 		badge.className = 'kg-cache-badge kg-cache-hit';
 		badge.title = 'Served from cache. Click Refresh to force reload.';
 	} else {
-		badge.textContent = 'fresh (' + (meta.execution_time_ms || 0) + 'ms)';
+		badge.textContent = 'fresh (' + Math.round(meta.execution_time_ms || 0) + 'ms)';
 		badge.className = 'kg-cache-badge kg-cache-miss';
 		badge.title = 'Computed on the server just now.';
 	}
@@ -2333,9 +3071,47 @@ function initKeyboardShortcuts() {
 			}
 		} else if (e.key === '?') {
 			e.preventDefault();
-			alert('Knowledge Graph shortcuts:\n/  Search\nr  Refresh\n1  Products view\n2  Posts view\n3  Pages view\n4  Customers view\nEsc  Close panel\n?  This help');
+			showShortcutsHelp();
 		}
 	});
+}
+
+function showShortcutsHelp() {
+	var panel = document.getElementById('kg-detail-panel');
+	var content = document.getElementById('kg-detail-content');
+	if (!panel || !content) return;
+
+	var shortcuts = [
+		{ key: '/',   label: 'Search across products, posts, categories, customers' },
+		{ key: 'r',   label: 'Refresh graph data (bypass cache)' },
+		{ key: '1',   label: 'Products view' },
+		{ key: '2',   label: 'Posts view' },
+		{ key: '3',   label: 'Pages view' },
+		{ key: '4',   label: 'Customers view' },
+		{ key: 'Esc', label: 'Close this panel' },
+		{ key: '?',   label: 'Show this help' }
+	];
+
+	var h = '';
+	h += '<div class="kg-p-type-badge" style="background:#6366f1;color:#fff">Help</div>';
+	h += '<h3 class="kg-p-name">Keyboard shortcuts</h3>';
+	h += '<div class="kg-p-meta">Faster navigation when your hands are on the keyboard</div>';
+
+	h += '<div class="kg-p-section"><div class="kg-p-section-title">Shortcuts</div>';
+	shortcuts.forEach(function(s) {
+		h += '<div class="kg-p-stat-row" style="align-items:center;">';
+		h += '<strong><kbd style="background:var(--lp-bg-hover);padding:2px 8px;border-radius:4px;font-family:ui-monospace,Menlo,monospace;font-size:12px;border:1px solid var(--lp-border);">' + escHtml(s.key) + '</kbd></strong>';
+		h += '<span style="color:var(--lp-text);flex:1;margin-left:12px;text-align:left;">' + escHtml(s.label) + '</span>';
+		h += '</div>';
+	});
+	h += '</div>';
+
+	h += '<div class="kg-p-section"><div class="kg-p-section-title">Tips</div>';
+	h += '<p style="margin:8px 0;color:var(--lp-text-muted);font-size:12px;line-height:1.5;">Click any stat card in the top bar (Design Health, Plugin Health, Revenue, Taxonomy, Media) to open its detail report. Click a category or language node to see coverage breakdowns with one-click batch actions.</p>';
+	h += '</div>';
+
+	content.innerHTML = h;
+	panel.classList.add('open');
 }
 
 function exportPng() {
@@ -2379,21 +3155,130 @@ function exportPng() {
 function initViewSwitch() {
 	document.querySelectorAll('.kg-view-btn').forEach(function(btn) {
 		btn.addEventListener('click', function() {
-			document.querySelectorAll('.kg-view-btn').forEach(function(b){ b.classList.remove('active'); });
-			btn.classList.add('active');
-			_kgCurrentView = btn.dataset.view;
-			if (_kgData) {
-				buildGraph(_kgData, _kgCurrentView);
+			applyViewAndPreset(btn.dataset.view, null);
+		});
+	});
+}
+
+// Centralised view/preset switcher. Used by:
+// - .kg-view-btn clicks (view switch only)
+// - .kg-stat-clickable data-view/data-preset cards (both)
+// - keyboard shortcuts 1/2/3/4 (via view button clicks)
+// Keeps all UI bits in sync: view-btn active class, preset-menu label,
+// preset-menu active item, and the graph itself.
+function applyViewAndPreset(view, preset) {
+	// View switch
+	if (view) {
+		document.querySelectorAll('.kg-view-btn').forEach(function(b) {
+			b.classList.toggle('active', b.dataset.view === view);
+		});
+		_kgCurrentView = view;
+	}
+	// Preset switch
+	if (preset !== null && preset !== undefined) {
+		_kgCurrentPreset = preset || 'all';
+		// Update preset dropdown label + active item to match
+		var labelEl = document.getElementById('kg-preset-label');
+		var menuItems = document.querySelectorAll('#kg-preset-menu .kg-dropdown-item');
+		menuItems.forEach(function(item) {
+			var match = item.getAttribute('data-preset') === _kgCurrentPreset;
+			item.classList.toggle('active', match);
+			if (match && labelEl) {
+				labelEl.textContent = item.textContent.replace(/\s*\(.+\)\s*$/, '').trim();
 			}
+		});
+	}
+	if (_kgData) {
+		buildGraph(_kgData, _kgCurrentView);
+		flashFilterFeedback(view, preset);
+	}
+}
+
+// Brief visual confirmation when a filter/view is applied. The graph redraw
+// is fast enough that users don't notice it happened — a pulse border on the
+// canvas + a transient "N shown" chip makes the state change unmistakable.
+function flashFilterFeedback(view, preset) {
+	var container = document.getElementById('kg-graph-container');
+	if (!container) return;
+	// Canvas pulse ring
+	container.classList.add('kg-graph-filter-flash');
+	setTimeout(function(){ container.classList.remove('kg-graph-filter-flash'); }, 650);
+
+	// Transient "N shown" chip in the top-left corner of the graph
+	if (!_kgData || !_kgData.nodes) return;
+	var shown = 0;
+	if (_kgCurrentView === 'product') {
+		shown = _kgData.nodes.products ? _kgData.nodes.products.length : 0;
+	} else if (_kgCurrentView === 'post') {
+		shown = _kgData.nodes.posts ? _kgData.nodes.posts.length : 0;
+	} else if (_kgCurrentView === 'page') {
+		shown = _kgData.nodes.pages ? _kgData.nodes.pages.length : 0;
+	} else if (_kgCurrentView === 'customer') {
+		shown = _kgData.nodes.customer_segments ? _kgData.nodes.customer_segments.length : 0;
+	}
+	// Apply the preset-filter count if applicable
+	if (_kgCurrentPreset && _kgCurrentPreset !== 'all') {
+		var filtered = applyPreset(_kgData.nodes.products || [], _kgData.nodes.posts || [], _kgCurrentPreset);
+		if (_kgCurrentView === 'product') shown = filtered.products.length;
+		if (_kgCurrentView === 'post')    shown = filtered.posts.length;
+	}
+
+	var chip = document.getElementById('kg-filter-chip');
+	if (!chip) {
+		chip = document.createElement('div');
+		chip.id = 'kg-filter-chip';
+		chip.className = 'kg-filter-chip';
+		container.appendChild(chip);
+	}
+	var viewLabel = { product: 'products', post: 'posts', page: 'pages', customer: 'segments' }[view || _kgCurrentView] || 'nodes';
+	var presetLabel = (preset && preset !== 'all') ? ' · ' + preset.replace(/_/g, ' ') : '';
+	chip.textContent = shown + ' ' + viewLabel + presetLabel;
+	chip.classList.add('kg-filter-chip--visible');
+	clearTimeout(chip._fadeTimer);
+	chip._fadeTimer = setTimeout(function(){ chip.classList.remove('kg-filter-chip--visible'); }, 2400);
+}
+
+function initStatCardClicks() {
+	// Top-row stat cards (Products/Posts/SEO/Enriched/Opportunities) drill
+	// into the graph by switching view + preset. Fires in addition to
+	// any existing onclick handler (Design/Plugin/Revenue/Taxonomy/Media
+	// bind their own via bindXClick — those open detail panels instead).
+	document.querySelectorAll('.kg-stat-clickable[data-view]').forEach(function(card) {
+		card.addEventListener('click', function() {
+			var view   = card.getAttribute('data-view');
+			var preset = card.getAttribute('data-preset');
+			applyViewAndPreset(view, preset);
+			// Brief visual feedback that the filter applied
+			card.classList.add('kg-stat-pulse');
+			setTimeout(function(){ card.classList.remove('kg-stat-pulse'); }, 600);
 		});
 	});
 }
 
 initViewSwitch();
+initStatCardClicks();
 initSearch();
 initPresets();
 initExport();
 initKeyboardShortcuts();
+initActivityFeed();
+initHeroToggle();
+
+// Store Health is a header-embedded pill (score + mini bar). Clicking it
+// reveals the detail panel (subtitle + per-dimension chips + achievements)
+// below the header. Hidden at rest so the graph is immediately visible.
+function initHeroToggle() {
+	var btn    = document.getElementById('kg-hero-toggle');
+	var detail = document.getElementById('kg-hero-detail');
+	if (!btn || !detail) return;
+	btn.addEventListener('click', function() {
+		var expanded = btn.getAttribute('aria-expanded') === 'true';
+		var next = !expanded;
+		btn.setAttribute('aria-expanded', next ? 'true' : 'false');
+		btn.title = next ? 'Hide Store Health details' : 'Store Health — click for breakdown';
+		detail.hidden = !next;
+	});
+}
 init();
 
 // Expose helpers so onclick handlers (outside IIFE) can trigger refresh
@@ -2405,6 +3290,8 @@ window.lpKg = {
 	bindPluginHealthClick: bindPluginHealthClick,
 	bindRevenueClick: bindRevenueClick,
 	bindTaxonomyClick: bindTaxonomyClick,
+	bindMediaClick: bindMediaClick,
+	showMediaInventoryPanel: showMediaInventoryPanel,
 	showTaxonomyHeatmap: showTaxonomyHeatmap,
 	showElementorAuditDrilldown: showElementorAuditDrilldown,
 	showDesignAuditPanel: showDesignAuditPanel,
@@ -2442,8 +3329,10 @@ function kgBackToDesignAudit() {
 // progress panel until the batch finishes (or the user dismisses it).
 var _kgBatchPoll = null;
 var _kgBatchStart = 0;
+var _kgBatchLastNodeId = null; // remembers which detail panel (if any) to reopen when batch finishes
 
-function kgStartBatchMonitor(batchId, queuedCount) {
+function kgStartBatchMonitor(batchId, queuedCount, nodeId) {
+	_kgBatchLastNodeId = nodeId || null;
 	if (!batchId) return;
 	var monitor = document.getElementById('kg-batch-monitor');
 	var bar     = document.getElementById('kg-batch-monitor-bar');
@@ -2515,12 +3404,34 @@ function kgPollBatchOnce(batchId) {
 			if (statuses.failed)     chips.push('<span class="kg-batch-chip kg-batch-chip-failed">' + statuses.failed + ' failed</span>');
 			detail.innerHTML = chips.join(' ');
 
+			// Fallback: batch enrichment can complete synchronously on small batches
+			// (1-2 products), which clears the tracking meta before the first poll
+			// lands. Result: total=0 even though the job ran. After 12s of 0-total
+			// polls, we assume the work is done and refresh anyway so the operator
+			// isn't staring at a stuck progress bar.
+			if (total === 0 && elapsed >= 12) {
+				stats.textContent = 'Batch complete — refreshing store state…';
+				var syncNodeId = _kgBatchLastNodeId || null;
+				if (typeof kgRefreshAndReopen === 'function') {
+					kgRefreshAndReopen(syncNodeId, null, null);
+				}
+				kgStopBatchMonitor(false);
+				if (typeof fetchActivity === 'function') fetchActivity();
+				return;
+			}
+
 			// Finished?
 			if (total > 0 && completed >= total) {
 				var failMsg = statuses.failed ? ' (' + statuses.failed + ' failed)' : '';
 				stats.textContent = 'Batch complete — ' + completed + ' processed' + failMsg + ' in ' + elapsed + 's';
-				// Invalidate graph + re-render
-				if (window.lpKg && window.lpKg.fetchGraph) {
+				// Refresh everything (graph + stats + panel + card bindings) so
+				// the operator sees their work reflected immediately: chips flip
+				// red→green, health bar jumps, opportunity counter animates down.
+				// Re-opens the same detail panel node if one was active.
+				var lastNodeId = _kgBatchLastNodeId || null;
+				if (typeof kgRefreshAndReopen === 'function') {
+					kgRefreshAndReopen(lastNodeId, null, null);
+				} else if (window.lpKg && window.lpKg.fetchGraph) {
 					window.lpKg.fetchGraph(function(err, freshData) {
 						if (!err && freshData) {
 							window.lpKg.setData(freshData);
@@ -2530,6 +3441,8 @@ function kgPollBatchOnce(batchId) {
 					}, true);
 				}
 				kgStopBatchMonitor(false);
+				// Surface the freshly-completed batch in the activity feed right away.
+				if (typeof fetchActivity === 'function') fetchActivity();
 			}
 		})
 		.catch(function(err) {
@@ -2558,8 +3471,12 @@ function kgAction(action, productId, btn, langs) {
 
 	var endpoint, body;
 	if (action === 'enrich') {
-		endpoint = 'product/enrich';
-		body = { product_id: productId };
+		// Route single-product enrichment through the batch endpoint so the
+		// operator gets the same live progress monitor as a category batch.
+		// Without this, AI takes 30-90s to complete but the panel says "Queued"
+		// then refreshes after 8s showing no change — breaks the gamification loop.
+		endpoint = 'product/enrich-batch';
+		body = { product_ids: [productId] };
 	} else if (action === 'faq') {
 		endpoint = 'aeo/generate-faq';
 		body = { product_id: productId };
@@ -2567,8 +3484,11 @@ function kgAction(action, productId, btn, langs) {
 		endpoint = 'aeo/generate-howto';
 		body = { product_id: productId };
 	} else if (action === 'translate') {
-		endpoint = 'translation/request';
-		body = { post_id: productId, target_languages: langs ? langs.split(',') : [] };
+		// Route single-product translation through the batch endpoint so the
+		// post_ids whitelist scopes it to just this product. Matches the
+		// category/global translate flow for consistent progress feedback.
+		endpoint = 'translation/batch';
+		body = { post_type: 'product', post_ids: [productId], languages: langs ? langs.split(',') : [] };
 	} else if (action === 'translate_lang') {
 		endpoint = 'translation/batch';
 		body = { post_type: 'product', languages: langs ? [langs] : [], limit: 50 };
@@ -2618,20 +3538,28 @@ function kgAction(action, productId, btn, langs) {
 			}).then(function(r) { return r.json().then(function(d){ return { ok: r.ok, data: d, tax: tax }; }); });
 		});
 		Promise.all(promises).then(function(results) {
-			var queued = results.filter(function(r) { return r.ok; }).length;
-			btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> Queued (' + queued + '/' + types.length + ')';
+			var successful = results.filter(function(r) { return r.ok; });
+			var totalTerms = successful.reduce(function(sum, r) {
+				return sum + ((r.data && r.data.terms_sent) || 0);
+			}, 0);
+			// Keep the button disabled with the queued state visible until the
+			// panel refreshes — otherwise a bored user can fire the same batch
+			// repeatedly while the first one is still processing in background.
+			// The refresh re-renders the taxonomy view from fresh data, which
+			// produces a button reflecting the actual remaining missing terms
+			// (usually 0 if the batch ran cleanly).
+			btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> Queued (' + totalTerms + ' terms)';
 			btn.classList.add('kg-action-done');
+			btn.disabled = true;
+			if (typeof fetchActivity === 'function') setTimeout(fetchActivity, 1500);
 			setTimeout(function() {
-				btn.disabled = false;
-				btn.innerHTML = originalText;
-				btn.classList.remove('kg-action-done');
 				kgRefreshAndReopen(null, 'taxonomy', targetLang);
-			}, 8000);
+			}, 12000);
 		}).catch(function(err) {
-			btn.innerHTML = '<span style="color:var(--lp-error);">Failed</span>';
-			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
+			btn.innerHTML = '<span style="color:var(--lp-error);">Failed — retry?</span>';
+			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 3000);
 		});
-		return; // skip the default dispatch path
+		return;
 	}
 
 	fetch(lpKgRestUrl + endpoint, {
@@ -2646,8 +3574,9 @@ function kgAction(action, productId, btn, langs) {
 	.then(function(res) {
 		if (!res.ok) {
 			var msg = (res.data && (res.data.message || res.data.code)) || ('HTTP ' + res.status);
-			btn.innerHTML = '<span style="color:var(--lp-error);">' + msg + '</span>';
-			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 4000);
+			btn.innerHTML = '<span style="color:var(--lp-error);">' + msg + ' — retry?</span>';
+			// Error = retry-safe reset. Success = disabled until panel refresh.
+			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 4000);
 			if (window.console) console.warn('[lpKg] action failed:', action, res);
 			return;
 		}
@@ -2655,24 +3584,40 @@ function kgAction(action, productId, btn, langs) {
 		var isQueued = data.status === 'processing' || data.status === 'queued' || data.job_id || data.batch_id;
 		btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> ' + (isQueued ? 'Queued' : 'Done');
 		btn.classList.add('kg-action-done');
+		// Keep the button locked in its Queued/Done state until the panel
+		// refreshes. The refresh re-renders the whole panel from fresh data,
+		// which produces a button that reflects the new state (usually the
+		// action isn't needed anymore, or is needed for fewer items). Users
+		// stop mashing the same button while the backend is still churning.
+		btn.disabled = true;
 
 		// If the backend returned a batch_id (enrich-batch), spin up the batch monitor.
+		// Category batches (no single productId) just refresh the graph; single-product
+		// batches reopen the same detail panel to show the updated state.
 		if (data.batch_id && typeof kgStartBatchMonitor === 'function') {
-			kgStartBatchMonitor(data.batch_id, data.queued || 0);
+			var reopenId = (action === 'enrich' || action === 'translate') ? productId : null;
+			kgStartBatchMonitor(data.batch_id, data.queued || 0, reopenId);
 		}
 
-		// Refresh the panel after a delay to show updated state
-		var refreshDelay = isQueued ? 8000 : 2000;
+		// Ping activity feed so the "queued" event lands quickly, not on the next poll.
+		if (typeof fetchActivity === 'function') {
+			setTimeout(fetchActivity, 1500);
+		}
+
+		// Batch monitor owns the refresh when batch_id is set.
+		if (data.batch_id) return;
+
+		// Otherwise schedule our own refresh after the queued job is likely done.
+		// Translation: 20-40s. AEO single / non-queued: 2s is plenty.
+		var refreshDelay = isQueued ? 25000 : 2000;
 		setTimeout(function() {
-			btn.disabled = false;
-			btn.innerHTML = originalText;
-			btn.classList.remove('kg-action-done');
 			kgRefreshAndReopen(productId, action === 'translate_lang' ? 'language' : null, langs);
 		}, refreshDelay);
 	})
 	.catch(function(err) {
-		btn.innerHTML = '<span style="color:var(--lp-error);">Network error</span>';
-		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; }, 3000);
+		// Error path — reset so the user can retry.
+		btn.innerHTML = '<span style="color:var(--lp-error);">Network error — retry?</span>';
+		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 3000);
 		if (window.console) console.error('[lpKg] action error:', action, err);
 	});
 }
@@ -2685,7 +3630,7 @@ function kgRefreshAndReopen(nodeId, nodeType, langCode) {
 	var apiToken = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
 	if (apiToken) headers['Authorization'] = 'Bearer ' + apiToken;
 
-	fetch(((window.lpKgConfig && window.lpKgConfig.apiUrl) || '') + '?sections=products,categories,translation,store,opportunities,design_audit,posts,pages,plugins,order_analytics,taxonomy,crm&fresh=1', {
+	fetch(((window.lpKgConfig && window.lpKgConfig.apiUrl) || '') + '?sections=products,categories,translation,store,opportunities,design_audit,posts,pages,plugins,order_analytics,taxonomy,crm,media_inventory&fresh=1', {
 		headers: headers,
 		credentials: 'same-origin'
 	})
@@ -2699,6 +3644,7 @@ function kgRefreshAndReopen(nodeId, nodeType, langCode) {
 		if (window.lpKg.bindPluginHealthClick) window.lpKg.bindPluginHealthClick(data);
 		if (window.lpKg.bindRevenueClick) window.lpKg.bindRevenueClick(data);
 		if (window.lpKg.bindTaxonomyClick) window.lpKg.bindTaxonomyClick(data);
+		if (window.lpKg.bindMediaClick) window.lpKg.bindMediaClick(data);
 		if (window.lpKg.updateCacheBadge) window.lpKg.updateCacheBadge(data);
 		if (window.lpKg.updatePresetCounts) window.lpKg.updatePresetCounts(data);
 

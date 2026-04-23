@@ -102,6 +102,33 @@ class LuwiPress_CRM_Bridge {
 			'callback'            => array( $this, 'handle_lifecycle_callback' ),
 			'permission_callback' => array( $this, 'check_token' ),
 		) );
+
+		// Manual trigger — recompute all segments + regenerate lifecycle events.
+		// Useful when thresholds change, after data imports, or when the weekly
+		// cron tick is late. Writes user_meta, so requires token-or-admin.
+		register_rest_route( 'luwipress/v1', '/crm/refresh-segments', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'handle_refresh_segments' ),
+			'permission_callback' => array( $this, 'check_token' ),
+		) );
+
+		// Settings — GET reads current thresholds, POST partial-updates any
+		// subset. Typical use: `{ loyal_orders: 2 }` on a high-ticket store
+		// where 3 repeat orders is too aggressive. Follows the partial-update
+		// pattern used by /enrich/settings etc. — only present keys are
+		// touched, absent keys keep their current value.
+		register_rest_route( 'luwipress/v1', '/crm/settings', array(
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'handle_get_settings' ),
+				'permission_callback' => array( $this, 'check_token' ),
+			),
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'handle_update_settings' ),
+				'permission_callback' => array( $this, 'check_token' ),
+			),
+		) );
 	}
 
 	// ─── OVERVIEW: Store-wide customer intelligence ────────────────────
@@ -207,6 +234,103 @@ class LuwiPress_CRM_Bridge {
 		LuwiPress_Logger::log( 'CRM segments refreshed', 'info' );
 	}
 
+	// ─── MANUAL REFRESH ENDPOINT ──────────────────────────────────────
+
+	// ─── SETTINGS ENDPOINTS ────────────────────────────────────────────
+
+	private function settings_schema() {
+		return array(
+			'vip_spend'    => array( 'option' => 'luwipress_crm_vip_threshold', 'default' => 1000, 'type' => 'float', 'description' => 'Lifetime spend (store currency) at which a customer becomes VIP (also requires loyal_orders).' ),
+			'loyal_orders' => array( 'option' => 'luwipress_crm_loyal_orders',  'default' => 3,    'type' => 'int',   'description' => 'Order count at which a repeat customer becomes Loyal. Drop to 2 for high-ticket / low-frequency stores.' ),
+			'active_days'  => array( 'option' => 'luwipress_crm_active_days',   'default' => 90,   'type' => 'int',   'description' => 'Recency window (days) during which a customer is considered Active.' ),
+			'at_risk_days' => array( 'option' => 'luwipress_crm_at_risk_days',  'default' => 180,  'type' => 'int',   'description' => 'Max days since last order before customer becomes At Risk.' ),
+			'dormant_days' => array( 'option' => 'luwipress_crm_dormant_days',  'default' => 365,  'type' => 'int',   'description' => 'Max days since last order before customer becomes Dormant (beyond this → Lost or One-Time).' ),
+			'new_days'     => array( 'option' => 'luwipress_crm_new_days',      'default' => 30,   'type' => 'int',   'description' => 'First-time customer window (days since first order) tagged as New.' ),
+		);
+	}
+
+	public function handle_get_settings( $request ) {
+		$schema = $this->settings_schema();
+		$values = array();
+		foreach ( $schema as $key => $meta ) {
+			$raw = get_option( $meta['option'], $meta['default'] );
+			$values[ $key ] = 'float' === $meta['type'] ? floatval( $raw ) : absint( $raw );
+		}
+		return rest_ensure_response( array(
+			'values' => $values,
+			'schema' => $schema,
+		) );
+	}
+
+	public function handle_update_settings( $request ) {
+		$schema  = $this->settings_schema();
+		$updated = array();
+		$params  = $request->get_json_params();
+		if ( ! is_array( $params ) ) {
+			$params = $request->get_params();
+		}
+
+		foreach ( $schema as $key => $meta ) {
+			if ( ! array_key_exists( $key, $params ) ) {
+				continue;
+			}
+			$raw = $params[ $key ];
+			if ( 'float' === $meta['type'] ) {
+				$value = floatval( $raw );
+				if ( $value < 0 ) {
+					return new WP_Error( 'invalid_value', sprintf( '%s must be non-negative.', $key ), array( 'status' => 400 ) );
+				}
+			} else {
+				$value = absint( $raw );
+				if ( $value < 1 ) {
+					return new WP_Error( 'invalid_value', sprintf( '%s must be a positive integer.', $key ), array( 'status' => 400 ) );
+				}
+			}
+			update_option( $meta['option'], $value, false );
+			$updated[ $key ] = $value;
+		}
+
+		if ( empty( $updated ) ) {
+			return new WP_Error( 'no_changes', 'No recognised settings keys in request body.', array( 'status' => 400 ) );
+		}
+
+		LuwiPress_Logger::log(
+			'CRM settings updated: ' . implode( ', ', array_map(
+				function ( $k, $v ) { return $k . '=' . $v; },
+				array_keys( $updated ),
+				array_values( $updated )
+			) ),
+			'info',
+			array( 'updated' => $updated )
+		);
+
+		return rest_ensure_response( array(
+			'ok'      => true,
+			'updated' => $updated,
+			'hint'    => 'Call POST /crm/refresh-segments to reclassify existing customers with the new thresholds.',
+		) );
+	}
+
+	public function handle_refresh_segments( $request ) {
+		if ( ! class_exists( 'WooCommerce' ) ) {
+			return new WP_Error( 'no_woocommerce', 'WooCommerce is not active.', array( 'status' => 400 ) );
+		}
+
+		$started = microtime( true );
+		$counts  = $this->compute_all_segments();
+		$this->generate_lifecycle_events();
+
+		update_option( 'luwipress_crm_last_refresh', current_time( 'mysql' ) );
+		LuwiPress_Logger::log( 'CRM segments refreshed (manual)', 'info' );
+
+		return rest_ensure_response( array(
+			'ok'              => true,
+			'counts'          => $counts,
+			'execution_time'  => round( microtime( true ) - $started, 2 ),
+			'refreshed_at'    => current_time( 'mysql' ),
+		) );
+	}
+
 	// ─── SEGMENT COMPUTATION ───────────────────────────────────────────
 
 	private function compute_all_segments() {
@@ -266,8 +390,11 @@ class LuwiPress_CRM_Bridge {
 				$segment = 'lost';
 			}
 
-			// Override: single order customers stay one_time unless VIP-level spend
-			if ( $order_count === 1 && $segment !== 'vip' && $segment !== 'new' ) {
+			// `one_time` = single-order customer who never came back. Only relabel
+			// `lost` (past the dormant window) as `one_time` — recency categories
+			// (`active` / `at_risk` / `dormant`) are more actionable for 1-order
+			// customers than a generic "bought once" bucket and should be kept.
+			if ( $order_count === 1 && $segment === 'lost' ) {
 				$segment = 'one_time';
 			}
 

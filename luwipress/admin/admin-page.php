@@ -40,7 +40,7 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 	<div class="lp-header">
 		<div class="lp-header-left">
 			<h1 class="lp-title">
-				<svg class="lp-logo" width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="14" fill="var(--lp-primary)"/><path d="M8 14l4 4 8-8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+				<img class="lp-logo" width="28" height="28" src="<?php echo esc_url( LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' ); ?>" alt="LuwiPress" />
 				LuwiPress
 			</h1>
 			<span class="lp-version">v<?php echo esc_html( LUWIPRESS_VERSION ); ?></span>

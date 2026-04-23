@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.1.16
+ * Version: 3.1.37
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -13,6 +13,7 @@
  * Requires at least: 5.6
  * Tested up to: 6.9
  * Requires PHP: 7.4
+ * Requires Plugins: woocommerce
  */
 
 // Prevent direct access
@@ -21,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.1.16');
+define('LUWIPRESS_VERSION', '3.1.37');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -239,9 +240,22 @@ class LuwiPress {
             'manage_options',
             'luwipress',
             array($this, 'admin_page'),
-            'dashicons-networking',
+            LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo-white.png',
             30
         );
+
+        // WP renders menu icons at 20×20 with 7px/2px padding, which squashes our 2000px logo.
+        // Force the image to fill the 34px icon cell so the omega motif stays readable.
+        add_action( 'admin_head', function () {
+            echo '<style>
+                #adminmenu #toplevel_page_luwipress .wp-menu-image img {
+                    width: 24px; height: 24px; padding: 0; opacity: 1;
+                }
+                #adminmenu #toplevel_page_luwipress .wp-menu-image {
+                    padding: 5px 0 0 4px;
+                }
+            </style>';
+        } );
 
         // Rename first submenu from parent slug to "Dashboard"
         add_submenu_page(
@@ -681,6 +695,31 @@ class LuwiPress {
                 true
             );
 
+            // Shared live-update primitive (polling, countUp, sparkline, barMeter).
+            // Lightweight zero-dep module; safe to load on every LuwiPress admin page.
+            wp_enqueue_script(
+                'luwipress-live',
+                LUWIPRESS_PLUGIN_URL . 'assets/js/luwi-live.js',
+                array(),
+                LUWIPRESS_VERSION,
+                true
+            );
+            wp_localize_script('luwipress-live', 'luwipressLive', array(
+                'rest_base'  => esc_url_raw( rest_url( 'luwipress/v1/' ) ),
+                'rest_nonce' => wp_create_nonce( 'wp_rest' ),
+            ));
+
+            // Usage & Logs — page-specific live glue.
+            if ( false !== strpos( $hook, 'luwipress-usage' ) ) {
+                wp_enqueue_script(
+                    'luwipress-usage-live',
+                    LUWIPRESS_PLUGIN_URL . 'assets/js/usage-live.js',
+                    array('luwipress-live'),
+                    LUWIPRESS_VERSION,
+                    true
+                );
+            }
+
             $user = wp_get_current_user();
             wp_localize_script('luwipress-admin', 'luwipress', array(
                 'ajax_url'     => admin_url('admin-ajax.php'),
@@ -689,6 +728,81 @@ class LuwiPress {
                 'user_initial' => mb_strtoupper( mb_substr( $user->display_name, 0, 1 ) ),
                 'rest_root'    => esc_url_raw( rest_url() ),
                 'rest_base'    => esc_url_raw( rest_url( 'luwipress/v1/' ) ),
+                'nonce_rest'   => wp_create_nonce( 'wp_rest' ),
+                'i18n'         => array(
+                    // Scheduler — confirms
+                    'confirm_delete_item'      => __( 'Delete this scheduled item?', 'luwipress' ),
+                    'confirm_delete_plan'      => __( 'Delete this recurring plan? Already-queued topics are kept — only the auto-brainstorm stops.', 'luwipress' ),
+                    'confirm_run_pending'      => __( 'Run up to 10 pending items through AI generation right now?', 'luwipress' ),
+                    'confirm_regen_outline'    => __( 'Discard this outline and regenerate from scratch?', 'luwipress' ),
+                    'confirm_bulk_publish'     => __( 'Publish %d selected draft(s)?', 'luwipress' ),
+                    'confirm_bulk_retry'       => __( 'Retry %d selected item(s)?', 'luwipress' ),
+                    'confirm_bulk_delete'      => __( 'Delete %d selected item(s)? This cannot be undone.', 'luwipress' ),
+                    'confirm_enrich_batch'     => __( 'Start bulk AI enrichment for thin content products?', 'luwipress' ),
+                    'confirm_enrich_batch50'   => __( 'Send up to 50 thin content products for AI enrichment? This will trigger AI enrichment.', 'luwipress' ),
+                    'confirm_refresh_stale'    => __( 'Refresh stale content via AI enrichment?', 'luwipress' ),
+                    // Scheduler — errors / validation
+                    'err_need_topic'           => __( 'Add at least one topic to continue.', 'luwipress' ),
+                    'err_topic_limit'          => __( 'Maximum 50 topics per batch. Please trim the list.', 'luwipress' ),
+                    'err_need_date'            => __( 'Pick a start date.', 'luwipress' ),
+                    'err_need_theme'           => __( 'Please enter a theme.', 'luwipress' ),
+                    'err_need_title'           => __( 'Give the article a title first.', 'luwipress' ),
+                    'err_need_section'         => __( 'Outline needs at least one section.', 'luwipress' ),
+                    'err_keep_one_section'     => __( 'Keep at least one section.', 'luwipress' ),
+                    'err_pick_topic'           => __( 'Pick at least one topic.', 'luwipress' ),
+                    'err_plan_required'        => __( 'Name and theme are required.', 'luwipress' ),
+                    'err_no_thin'              => __( 'No thin content found to enrich. Run a scan first.', 'luwipress' ),
+                    'err_no_thin_products'     => __( 'No thin products found.', 'luwipress' ),
+                    'err_fetch_thin'           => __( 'Failed to fetch thin products.', 'luwipress' ),
+                    'err_request_failed'       => __( 'Request failed. Please try again.', 'luwipress' ),
+                    'err_brainstorm'           => __( 'Brainstorm failed.', 'luwipress' ),
+                    'err_brainstorm_empty'     => __( 'No topics returned — try a more specific theme.', 'luwipress' ),
+                    'err_save_failed'          => __( 'Save failed.', 'luwipress' ),
+                    'err_retry_failed'         => __( 'Retry failed.', 'luwipress' ),
+                    'err_bulk_failed'          => __( 'Bulk action failed.', 'luwipress' ),
+                    'err_enrich_failed'        => __( 'Enrich failed.', 'luwipress' ),
+                    'err_regen_failed'         => __( 'Regenerate failed.', 'luwipress' ),
+                    'err_outline_load'         => __( 'Could not load outline.', 'luwipress' ),
+                    'err_estimate'             => __( 'Unable to estimate.', 'luwipress' ),
+                    'err_generic'              => __( 'Error', 'luwipress' ),
+                    // Scheduler — success / status
+                    'ok_processed'             => __( 'Processed %d item(s).', 'luwipress' ),
+                    'ok_batch_started'         => __( 'Batch enrichment started — %d products queued.', 'luwipress' ),
+                    'ok_queued'                => __( 'Queued %d topic(s).', 'luwipress' ),
+                    'ok_queued_with_skip'      => __( 'Queued %1$d topic(s) · %2$d skipped.', 'luwipress' ),
+                    'ok_refreshing'            => __( 'Refreshing…', 'luwipress' ),
+                    // Scheduler — loading / ephemeral
+                    'loading_calc'             => __( 'Calculating…', 'luwipress' ),
+                    'loading_thinking'         => __( 'Thinking…', 'luwipress' ),
+                    'loading_ideas'            => __( 'Generating ideas…', 'luwipress' ),
+                    'loading_outline'          => __( 'Loading outline…', 'luwipress' ),
+                    'loading_regen'            => __( 'Regenerating…', 'luwipress' ),
+                    'loading_saving'           => __( 'Saving…', 'luwipress' ),
+                    'loading_queuing'          => __( 'Queuing…', 'luwipress' ),
+                    'loading_running'          => __( 'Running…', 'luwipress' ),
+                    // Scheduler — labels
+                    'lbl_retry'                => __( 'Retry', 'luwipress' ),
+                    'lbl_enrich'               => __( 'Enrich', 'luwipress' ),
+                    'lbl_run_pending'          => __( 'Run pending now', 'luwipress' ),
+                    'lbl_queue_all'            => __( 'Queue all topics', 'luwipress' ),
+                    'lbl_regen_outline'        => __( 'Regenerate outline', 'luwipress' ),
+                    'lbl_approve_generate'     => __( 'Approve & generate article', 'luwipress' ),
+                    'lbl_save_plan'            => __( 'Save plan', 'luwipress' ),
+                    'lbl_select_all'           => __( 'Select all (%d)', 'luwipress' ),
+                    'lbl_add_picked'           => __( 'Add picked to queue', 'luwipress' ),
+                    'lbl_topics_count'         => __( '%1$d / %2$d', 'luwipress' ),
+                    'lbl_confirm'              => __( 'Confirm', 'luwipress' ),
+                    'lbl_confirm_delete'       => __( 'Delete', 'luwipress' ),
+                    'lbl_cancel'               => __( 'Cancel', 'luwipress' ),
+                    'lbl_generate_ideas'       => __( 'Generate ideas', 'luwipress' ),
+                    'title_confirm_delete'     => __( 'Delete item', 'luwipress' ),
+                    'title_confirm_bulk_del'   => __( 'Delete selected items', 'luwipress' ),
+                    'title_confirm_regen'      => __( 'Regenerate outline', 'luwipress' ),
+                    'title_confirm_run_now'    => __( 'Run pending now', 'luwipress' ),
+                    'title_confirm_plan_del'   => __( 'Delete recurring plan', 'luwipress' ),
+                    'title_confirm_bulk_pub'   => __( 'Publish selected items', 'luwipress' ),
+                    'title_confirm_bulk_retry' => __( 'Retry selected items', 'luwipress' ),
+                ),
             ));
         }
 

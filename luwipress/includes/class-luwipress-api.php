@@ -71,6 +71,14 @@ class LuwiPress_API {
             'methods'             => 'GET',
             'callback'            => array( $this, 'handle_get_token_recent' ),
             'permission_callback' => array( $this, 'check_admin_permission' ),
+            'args'                => array(
+                'limit' => array(
+                    'required'    => false,
+                    'type'        => 'integer',
+                    'default'     => 20,
+                    'description' => 'Number of rows to return (clamped to 1..100 in handler, default 20).',
+                ),
+            ),
         ) );
 
         // Status endpoint
@@ -808,7 +816,14 @@ class LuwiPress_API {
         if ( ! class_exists( 'LuwiPress_Token_Tracker' ) ) {
             return new WP_Error( 'not_available', 'Token tracking not available', array( 'status' => 500 ) );
         }
-        return rest_ensure_response( LuwiPress_Token_Tracker::get_recent_calls( 20 ) );
+
+        $limit = absint( $request->get_param( 'limit' ) );
+        if ( $limit <= 0 ) {
+            $limit = 20;
+        }
+        $limit = min( 100, max( 1, $limit ) );
+
+        return rest_ensure_response( LuwiPress_Token_Tracker::get_recent_calls( $limit ) );
     }
 
     /**

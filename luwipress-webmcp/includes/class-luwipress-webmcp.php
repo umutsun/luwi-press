@@ -244,6 +244,18 @@ class LuwiPress_WebMCP {
         $id     = $message['id'] ?? null;
         $params = $message['params'] ?? array();
 
+        // JSON-RPC 2.0 spec: the jsonrpc field MUST be exactly "2.0".
+        // Reject 1.0 / missing / mistyped values with -32600 Invalid Request
+        // so misconfigured clients fail loudly instead of silently working.
+        $jsonrpc_version = $message['jsonrpc'] ?? null;
+        if ( '2.0' !== $jsonrpc_version ) {
+            return $this->jsonrpc_error(
+                $id,
+                -32600,
+                "Invalid Request: jsonrpc field must be exactly '2.0'."
+            );
+        }
+
         // Notifications and responses have no 'id' expectation
         if ( null === $id && ! isset( $message['method'] ) ) {
             return null; // Response from client — acknowledge
@@ -383,7 +395,7 @@ class LuwiPress_WebMCP {
      */
     private function handle_tools_list( $id, $params ) {
         $cursor     = $params['cursor'] ?? null;
-        $page_size  = 20;
+        $page_size  = 200;
         $tool_names = array_keys( $this->tools );
 
         // Cursor = base64-encoded offset
@@ -682,7 +694,7 @@ class LuwiPress_WebMCP {
      *
      * Each tool wraps an existing LuwiPress REST endpoint.
      * Tools are grouped by domain: content, seo, aeo, translation,
-     * crm, email, system, claw, chatwoot, workflow.
+     * crm, email, system, workflow, elementor.
      */
 
     private function register_all_tools() {
@@ -693,8 +705,6 @@ class LuwiPress_WebMCP {
         $this->register_translation_tools();
         $this->register_crm_tools();
         $this->register_email_tools();
-        $this->register_claw_tools();
-        $this->register_chatwoot_tools();
         $this->register_workflow_tools();
         $this->register_token_tools();
         $this->register_review_tools();
@@ -1359,6 +1369,36 @@ class LuwiPress_WebMCP {
             $data = $trans->batch_translate_missing( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
+
+        $this->register_tool( 'translation_fix_elementor', array(
+            'description' => 'Repair WPML/Polylang translated posts whose Elementor data was dropped or mis-copied. Re-links translation copies to their source Elementor data so structural changes propagate. Pass "all" to fix every translated post, or a comma-separated list of post IDs.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_ids' => array( 'type' => 'string', 'description' => 'Comma-separated translated post IDs, or "all" (default: all)' ),
+                    'language' => array( 'type' => 'string', 'description' => 'Restrict to a single target language code (e.g. fr, it, es). Omit for all languages.' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Fix Elementor in Translated Posts',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $trans   = LuwiPress_Translation::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/fix-elementor' );
+            $request->set_param( 'post_ids', sanitize_text_field( $args['post_ids'] ?? 'all' ) );
+            if ( ! empty( $args['language'] ) ) {
+                $request->set_param( 'language', sanitize_text_field( $args['language'] ) );
+            }
+            $data = $trans->fix_elementor_translated_posts( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
     }
 
     /* ───────────────────── CRM Tools ───────────────────────────────── */
@@ -1465,100 +1505,6 @@ class LuwiPress_WebMCP {
             ),
         ), function ( $args ) {
             return $this->proxy_rest_post( 'LuwiPress_Email_Proxy', 'send_email', $args );
-        } );
-    }
-
-    /* ───────────────────── Open Claw (AI Agent) Tools ──────────────── */
-
-    private function register_claw_tools() {
-        if ( ! class_exists( 'LuwiPress_Open_Claw' ) ) {
-            return;
-        }
-
-        $this->register_tool( 'claw_execute', array(
-            'description' => 'Execute an Open Claw AI action (runs the LuwiPress AI pipeline for autonomous task execution)',
-            'inputSchema' => array(
-                'type'       => 'object',
-                'properties' => array(
-                    'action'  => array( 'type' => 'string', 'description' => 'Action type to execute (required)' ),
-                    'prompt'  => array( 'type' => 'string', 'description' => 'AI prompt / instruction' ),
-                    'context' => array( 'type' => 'object', 'description' => 'Additional context data' ),
-                ),
-                'required'   => array( 'action' ),
-            ),
-        ), function ( $args ) {
-            return $this->proxy_rest_post( 'LuwiPress_Open_Claw', 'handle_execute_action', $args );
-        } );
-
-        $this->register_tool( 'claw_channels', array(
-            'description' => 'List available Open Claw communication channels',
-            'inputSchema' => array(
-                'type'       => 'object',
-                'properties' => new stdClass(),
-            ),
-        ), function () {
-            $claw    = LuwiPress_Open_Claw::get_instance();
-            $request = new WP_REST_Request( 'GET', '/luwipress/v1/claw/channels' );
-            $data    = $claw->handle_get_channels( $request );
-            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
-        } );
-    }
-
-    /* ───────────────────── Chatwoot Tools ──────────────────────────── */
-
-    private function register_chatwoot_tools() {
-        if ( ! class_exists( 'LuwiPress_Chatwoot' ) ) {
-            return;
-        }
-
-        $this->register_tool( 'chatwoot_customer_lookup', array(
-            'description' => 'Look up a customer in Chatwoot by email or ID, cross-referenced with WooCommerce data',
-            'inputSchema' => array(
-                'type'       => 'object',
-                'properties' => array(
-                    'email'       => array( 'type' => 'string', 'description' => 'Customer email to look up' ),
-                    'customer_id' => array( 'type' => 'integer', 'description' => 'WooCommerce customer ID' ),
-                ),
-            ),
-        ), function ( $args ) {
-            $chat    = LuwiPress_Chatwoot::get_instance();
-            $request = new WP_REST_Request( 'GET', '/luwipress/v1/chatwoot/customer-lookup' );
-            if ( ! empty( $args['email'] ) ) {
-                $request->set_param( 'email', $args['email'] );
-            }
-            if ( ! empty( $args['customer_id'] ) ) {
-                $request->set_param( 'customer_id', $args['customer_id'] );
-            }
-            $data = $chat->customer_lookup( $request );
-            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
-        } );
-
-        $this->register_tool( 'chatwoot_send_message', array(
-            'description' => 'Send a message to a Chatwoot conversation',
-            'inputSchema' => array(
-                'type'       => 'object',
-                'properties' => array(
-                    'conversation_id' => array( 'type' => 'integer', 'description' => 'Chatwoot conversation ID (required)' ),
-                    'message'         => array( 'type' => 'string', 'description' => 'Message content (required)' ),
-                    'private'         => array( 'type' => 'boolean', 'description' => 'Send as private note (default false)' ),
-                ),
-                'required'   => array( 'conversation_id', 'message' ),
-            ),
-        ), function ( $args ) {
-            return $this->proxy_rest_post( 'LuwiPress_Chatwoot', 'send_message', $args );
-        } );
-
-        $this->register_tool( 'chatwoot_status', array(
-            'description' => 'Get Chatwoot integration status',
-            'inputSchema' => array(
-                'type'       => 'object',
-                'properties' => new stdClass(),
-            ),
-        ), function () {
-            $chat    = LuwiPress_Chatwoot::get_instance();
-            $request = new WP_REST_Request( 'GET', '/luwipress/v1/chatwoot/status' );
-            $data    = $chat->get_status( $request );
-            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
     }
 
@@ -2688,6 +2634,117 @@ class LuwiPress_WebMCP {
         ), function ( $args ) {
             $elem = LuwiPress_Elementor::get_instance();
             return $elem->list_snapshots( intval( $args['post_id'] ) );
+        } );
+
+        $this->register_tool( 'elementor_sync_structure', array(
+            'description' => 'Sync the structural layout of an Elementor source page to its WPML/Polylang translation copies. Preserves translated text by default. Auto-snapshots each target before overwriting. If target_ids omitted, syncs to all detected translations.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'source_id'     => array( 'type' => 'integer', 'description' => 'Source (canonical language) page/post ID (required)' ),
+                    'target_ids'    => array(
+                        'type'        => 'array',
+                        'items'       => array( 'type' => 'integer' ),
+                        'description' => 'Specific target translation post IDs. Omit to auto-detect all translations.',
+                    ),
+                    'preserve_text' => array( 'type' => 'boolean', 'description' => 'Keep translated text intact; only propagate structural changes (default true)' ),
+                ),
+                'required'   => array( 'source_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Sync Structure to Translations',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/elementor/sync-structure' );
+            $request->set_param( 'source_id', intval( $args['source_id'] ) );
+            if ( isset( $args['target_ids'] ) && is_array( $args['target_ids'] ) ) {
+                $request->set_param( 'target_ids', array_map( 'intval', $args['target_ids'] ) );
+            }
+            if ( isset( $args['preserve_text'] ) ) {
+                $request->set_param( 'preserve_text', (bool) $args['preserve_text'] );
+            }
+            $data = $elem->rest_sync_structure( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_kit_info', array(
+            'description' => 'Get Elementor Kit metadata — kit post ID, active breakpoints, and whether custom CSS is present. Use before reading/writing Kit CSS.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array(
+                'title'          => 'Elementor Kit Info',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function () {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/elementor/kit' );
+            $data    = $elem->rest_get_kit_info( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_kit_css_get', array(
+            'description' => 'Read the current Kit (global) CSS stored in the luwipress_kit_css option — used for theme-wide styling layers.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array(
+                'title'          => 'Read Kit CSS',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function () {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/elementor/global-css' );
+            $data    = $elem->rest_get_global_css( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_kit_css_set', array(
+            'description' => 'Replace the Kit (global) CSS with a full CSS payload. Always performs a full replace (append:false) to avoid stale-cache cascade regressions — build the complete CSS locally before calling. Automatically flushes Elementor CSS cache. The MCP wrapper forbids append:true by design.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'css' => array( 'type' => 'string', 'description' => 'Full Kit CSS payload (required). Will replace existing Kit CSS entirely.' ),
+                ),
+                'required'   => array( 'css' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Write Kit CSS (Full Replace)',
+                'readOnlyHint'    => false,
+                'destructiveHint' => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/elementor/global-css' );
+            $request->set_param( 'css', (string) $args['css'] );
+            $request->set_param( 'append', false );
+            $data = $elem->rest_set_global_css( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
     }
 

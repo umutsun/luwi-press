@@ -336,25 +336,40 @@ class LuwiPress_AEO {
 
         global $wpdb;
 
-        $total_products = intval($wpdb->get_var(
+        $all_total = intval($wpdb->get_var(
             "SELECT COUNT(*) FROM {$wpdb->posts}
              WHERE post_type = 'product' AND post_status = 'publish'"
         ));
 
-        if (0 === $total_products) {
-            $result = [
-                'total_products' => 0,
-                'faq_coverage'   => 0,
-                'howto_coverage' => 0,
-                'schema_coverage' => 0,
+        if (0 === $all_total) {
+            $empty_block = [
+                'total_products'     => 0,
+                'with_faq'           => 0,
+                'with_howto'         => 0,
+                'with_schema'        => 0,
+                'with_speakable'     => 0,
+                'faq_coverage'       => 0,
+                'howto_coverage'     => 0,
+                'schema_coverage'    => 0,
                 'speakable_coverage' => 0,
             ];
+            $result = array_merge( $empty_block, [
+                'primary_language'   => $empty_block,
+                'all_languages'      => $empty_block,
+                'uncovered_products' => [],
+            ] );
             set_transient( 'luwipress_aeo_coverage', $result, HOUR_IN_SECONDS );
             return rest_ensure_response( $result );
         }
 
-        // Consolidate 4 separate COUNT queries into 1
-        $counts = $wpdb->get_row(
+        // Primary-language IDs (matches Knowledge Graph counting): on WPML use
+        // icl_translations source rows, on Polylang use the default-language
+        // term, otherwise fall back to all products. The KG dashboard uses the
+        // same logic, so AEO numbers now line up with KG instead of being 4×
+        // higher because translations are counted as separate posts.
+        $primary_ids = $this->get_primary_language_product_ids();
+
+        $all_counts = $wpdb->get_row(
             "SELECT
                 COUNT(DISTINCT CASE WHEN meta_key = '_luwipress_faq' AND meta_value != '' AND meta_value != 'a:0:{}' THEN post_id END) AS with_faq,
                 COUNT(DISTINCT CASE WHEN meta_key = '_luwipress_howto' AND meta_value != '' THEN post_id END) AS with_howto,
@@ -364,10 +379,32 @@ class LuwiPress_AEO {
              WHERE meta_key IN ('_luwipress_faq', '_luwipress_howto', '_luwipress_schema', '_luwipress_speakable')"
         );
 
-        $with_faq       = intval( $counts->with_faq );
-        $with_howto     = intval( $counts->with_howto );
-        $with_schema    = intval( $counts->with_schema );
-        $with_speakable = intval( $counts->with_speakable );
+        $all_block = $this->build_coverage_block(
+            $all_total,
+            intval( $all_counts->with_faq ),
+            intval( $all_counts->with_howto ),
+            intval( $all_counts->with_schema ),
+            intval( $all_counts->with_speakable )
+        );
+
+        if ( null !== $primary_ids ) {
+            $primary_total = count( $primary_ids );
+            if ( 0 === $primary_total ) {
+                $primary_block = $this->build_coverage_block( 0, 0, 0, 0, 0 );
+            } else {
+                $primary_counts = $this->count_aeo_meta_for_ids( $primary_ids );
+                $primary_block  = $this->build_coverage_block(
+                    $primary_total,
+                    $primary_counts['with_faq'],
+                    $primary_counts['with_howto'],
+                    $primary_counts['with_schema'],
+                    $primary_counts['with_speakable']
+                );
+            }
+        } else {
+            // Single-language site — primary == all.
+            $primary_block = $all_block;
+        }
 
         // Get products that have NONE of the AEO elements — use sample_permalink for batch
         $products_without_any = $wpdb->get_results(
@@ -395,21 +432,114 @@ class LuwiPress_AEO {
             ];
         }
 
-        $result = [
-            'total_products'     => $total_products,
-            'with_faq'           => $with_faq,
-            'with_howto'         => $with_howto,
-            'with_schema'        => $with_schema,
-            'with_speakable'     => $with_speakable,
-            'faq_coverage'       => round(($with_faq / $total_products) * 100, 1),
-            'howto_coverage'     => round(($with_howto / $total_products) * 100, 1),
-            'schema_coverage'    => round(($with_schema / $total_products) * 100, 1),
-            'speakable_coverage' => round(($with_speakable / $total_products) * 100, 1),
+        // Top-level fields stay identical to pre-3.1.36 (back-compat for existing
+        // dashboards) but mirror the all_languages block, which is what the old
+        // numbers were computing. New consumers should read primary_language.*
+        $result = array_merge( $all_block, [
+            'primary_language'   => $primary_block,
+            'all_languages'      => $all_block,
             'uncovered_products' => $uncovered,
-        ];
+        ] );
 
         set_transient( 'luwipress_aeo_coverage', $result, HOUR_IN_SECONDS );
         return rest_ensure_response( $result );
+    }
+
+    /**
+     * Returns the post_ids of primary-language products only, or null when no
+     * translation plugin is active (caller treats null as "primary == all").
+     *
+     * @return array<int>|null
+     */
+    private function get_primary_language_product_ids() {
+        global $wpdb;
+
+        if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            $rows = $wpdb->get_col(
+                "SELECT p.ID
+                 FROM {$wpdb->posts} p
+                 JOIN {$wpdb->prefix}icl_translations t
+                   ON p.ID = t.element_id AND t.element_type = 'post_product'
+                 WHERE p.post_type = 'product'
+                   AND p.post_status = 'publish'
+                   AND t.source_language_code IS NULL"
+            );
+            return array_map( 'intval', (array) $rows );
+        }
+
+        if ( defined( 'POLYLANG_VERSION' ) && function_exists( 'pll_default_language' ) ) {
+            $default = pll_default_language();
+            if ( $default ) {
+                $rows = get_posts( array(
+                    'post_type'      => 'product',
+                    'post_status'    => 'publish',
+                    'posts_per_page' => -1,
+                    'fields'         => 'ids',
+                    'lang'           => $default,
+                ) );
+                return array_map( 'intval', (array) $rows );
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Count AEO meta rows scoped to a specific product ID set.
+     *
+     * @param array<int> $product_ids
+     * @return array{with_faq:int,with_howto:int,with_schema:int,with_speakable:int}
+     */
+    private function count_aeo_meta_for_ids( $product_ids ) {
+        global $wpdb;
+
+        if ( empty( $product_ids ) ) {
+            return array( 'with_faq' => 0, 'with_howto' => 0, 'with_schema' => 0, 'with_speakable' => 0 );
+        }
+
+        $placeholders = implode( ',', array_fill( 0, count( $product_ids ), '%d' ) );
+
+        $sql = $wpdb->prepare(
+            "SELECT
+                COUNT(DISTINCT CASE WHEN meta_key = '_luwipress_faq' AND meta_value != '' AND meta_value != 'a:0:{}' THEN post_id END) AS with_faq,
+                COUNT(DISTINCT CASE WHEN meta_key = '_luwipress_howto' AND meta_value != '' THEN post_id END) AS with_howto,
+                COUNT(DISTINCT CASE WHEN meta_key = '_luwipress_schema' AND meta_value != '' THEN post_id END) AS with_schema,
+                COUNT(DISTINCT CASE WHEN meta_key = '_luwipress_speakable' AND meta_value != '' THEN post_id END) AS with_speakable
+             FROM {$wpdb->postmeta}
+             WHERE meta_key IN ('_luwipress_faq', '_luwipress_howto', '_luwipress_schema', '_luwipress_speakable')
+               AND post_id IN ($placeholders)",
+            ...$product_ids
+        );
+        $row = $wpdb->get_row( $sql );
+
+        return array(
+            'with_faq'       => intval( $row->with_faq ),
+            'with_howto'     => intval( $row->with_howto ),
+            'with_schema'    => intval( $row->with_schema ),
+            'with_speakable' => intval( $row->with_speakable ),
+        );
+    }
+
+    /**
+     * Build the standard coverage block shape used by both primary_language
+     * and all_languages views.
+     */
+    private function build_coverage_block( $total, $faq, $howto, $schema, $speakable ) {
+        $pct = function ( $count ) use ( $total ) {
+            return $total > 0 ? round( ( $count / $total ) * 100, 1 ) : 0;
+        };
+
+        return array(
+            'total_products'     => $total,
+            'with_faq'           => $faq,
+            'with_howto'         => $howto,
+            'with_schema'        => $schema,
+            'with_speakable'     => $speakable,
+            'faq_coverage'       => $pct( $faq ),
+            'howto_coverage'     => $pct( $howto ),
+            'schema_coverage'    => $pct( $schema ),
+            'speakable_coverage' => $pct( $speakable ),
+        );
     }
 
     /**

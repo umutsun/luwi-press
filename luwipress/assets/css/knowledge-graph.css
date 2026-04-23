@@ -539,6 +539,22 @@
     color: var(--lp-text);
     transition: all 0.2s ease;
 }
+/* Disabled buttons (mid-processing) — no cursor, no hover lift, dimmed. */
+.kg-btn:disabled,
+.kg-btn[disabled],
+.kg-rec:disabled {
+    cursor: not-allowed;
+    opacity: 0.75;
+    transform: none !important;
+}
+.kg-btn:disabled:hover,
+.kg-btn[disabled]:hover,
+.kg-rec:disabled:hover {
+    border-color: var(--lp-border);
+    color: var(--lp-text);
+    transform: none !important;
+    background: var(--lp-surface);
+}
 .kg-btn:hover {
     border-color: var(--lp-primary);
     color: var(--lp-primary);
@@ -622,36 +638,439 @@
 .kg-view-btn svg { flex-shrink: 0; }
 
 /* Stats bar */
-.kg-stats {
+/* Activity Feed — last N operator actions, refreshed every 30s. Sits below
+ * the graph so it doesn't compete with the action queue / hero / graph itself. */
+.kg-activity {
+    margin-top: 14px;
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 12px;
+    padding: 14px 16px;
+}
+.kg-activity-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 12px;
+}
+.kg-activity-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--lp-text);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+.kg-activity-sub {
+    font-size: 11px;
+    color: var(--lp-text-muted);
+}
+.kg-activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+.kg-activity-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+    grid-template-columns: 72px 60px 1fr;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--lp-border);
+    font-size: 12px;
+}
+.kg-activity-row:last-child { border-bottom: none; }
+.kg-activity-time {
+    color: var(--lp-text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+}
+.kg-activity-level {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--lp-bg-hover);
+    color: var(--lp-text-muted);
+    text-align: center;
+    font-weight: 600;
+}
+.kg-activity-level[data-level="error"]   { background: #fee2e2; color: #991b1b; }
+.kg-activity-level[data-level="warning"] { background: #fef3c7; color: #92400e; }
+.kg-activity-level[data-level="success"] { background: #d1fae5; color: #065f46; }
+.kg-activity-level[data-level="info"]    { background: #dbeafe; color: #1e40af; }
+.kg-activity-msg {
+    color: var(--lp-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.kg-activity-empty {
+    padding: 20px 0;
+    text-align: center;
+    color: var(--lp-text-muted);
+    font-size: 13px;
+}
+
+/* Action Queue — ranked next-wins cards. Sits above the hero so it's the
+ * first thing the operator sees when they open the page. */
+.kg-action-queue {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 12px;
+    padding: 14px 16px 12px;
+    margin-bottom: 12px;
+}
+.kg-action-queue-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.kg-action-queue-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--lp-text);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+.kg-action-queue-title::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--lp-primary);
+    margin-right: 8px;
+    vertical-align: middle;
+    animation: kg-aq-pulse 2s infinite;
+}
+@keyframes kg-aq-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.45; }
+}
+.kg-action-queue-sub {
+    font-size: 11px;
+    color: var(--lp-text-muted);
+}
+.kg-action-queue-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 10px;
+}
+.kg-aq-card {
+    border: 1px solid var(--lp-border);
+    border-radius: 10px;
+    padding: 12px;
+    background: var(--lp-bg);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+.kg-aq-card:hover {
+    border-color: var(--lp-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.kg-aq-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--lp-primary);
+}
+.kg-aq-card[data-tier="high"]::before   { background: var(--lp-error); }
+.kg-aq-card[data-tier="medium"]::before { background: var(--lp-warning); }
+.kg-aq-card[data-tier="low"]::before    { background: var(--lp-success); }
+.kg-aq-rank {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--lp-bg-hover);
+    color: var(--lp-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.kg-aq-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--lp-text);
+    padding-right: 28px;
+    line-height: 1.3;
+}
+.kg-aq-why {
+    font-size: 11px;
+    color: var(--lp-text-muted);
+    line-height: 1.4;
+}
+.kg-aq-meta {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+.kg-aq-meta-chip {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--lp-bg-hover);
+    color: var(--lp-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.kg-aq-cta {
+    align-self: flex-start;
+    margin-top: 6px;
+    padding: 6px 12px;
+    background: var(--lp-primary);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.kg-aq-cta:hover {
+    background: var(--lp-primary-dark, #4f46e5);
+    transform: translateY(-1px);
+}
+.kg-aq-empty {
+    padding: 14px 0;
+    text-align: center;
+    color: var(--lp-text-muted);
+    font-size: 13px;
+}
+
+/* Store Health pill — sits inside the header next to the title. Score + mini
+ * progress bar, no label. Clicks expand the detail panel below the header. */
+.kg-health-pill {
+    display: inline-flex;
+    align-items: center;
     gap: 8px;
-    margin-bottom: 16px;
+    padding: 4px 10px 4px 11px;
+    border: 1px solid var(--lp-border);
+    background: var(--lp-surface);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    margin-left: 6px;
+}
+.kg-health-pill:hover {
+    border-color: var(--lp-primary);
+    background: var(--lp-bg-hover);
+}
+.kg-health-pill[aria-expanded="true"] {
+    border-color: var(--lp-primary);
+    background: var(--lp-bg-hover);
+}
+.kg-health-pill-score {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--lp-primary);
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+.kg-health-pill-score.kg-h-good { color: var(--lp-success); }
+.kg-health-pill-score.kg-h-warn { color: var(--lp-warning); }
+.kg-health-pill-score.kg-h-bad  { color: var(--lp-error); }
+.kg-health-pill-unit {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--lp-text-muted);
+    margin-left: -4px;
+}
+.kg-health-pill-bar {
+    width: 60px;
+    height: 4px;
+    background: var(--lp-border);
+    border-radius: 2px;
+    overflow: hidden;
+    display: inline-block;
+}
+.kg-health-pill-bar-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--lp-primary), var(--lp-success));
+    border-radius: 2px;
+    transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.kg-health-pill-chevron {
+    color: var(--lp-text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+.kg-health-pill[aria-expanded="true"] .kg-health-pill-chevron {
+    transform: rotate(180deg);
+    color: var(--lp-primary);
+}
+
+/* Store Health detail panel — slide-down under the header when the pill is
+ * toggled. Contains the qualitative subtitle, the per-dimension chips, and
+ * the achievement badges. Hidden at rest to keep the graph above the fold. */
+.kg-hero-detail-wrap {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    animation: kg-health-detail-in 0.25s ease-out;
+}
+@keyframes kg-health-detail-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.kg-hero-subtitle {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: var(--lp-text-muted);
+    line-height: 1.45;
+}
+.kg-hero-meta {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.kg-hero-meta:empty { display: none; }
+.kg-hero-meta-chip {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    color: var(--lp-text-muted);
+    white-space: nowrap;
+}
+.kg-hero-meta-chip strong {
+    color: var(--lp-text);
+    font-weight: 600;
+}
+
+/* Achievements — milestone badges earned by hitting coverage thresholds.
+ * Colourful, with a subtle float-in on first render to feel like a reward. */
+.kg-achievements {
+    margin-top: 10px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.kg-achievements:empty {
+    display: none;
+}
+.kg-ach {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px 3px 7px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    color: #92400e;
+    border: 1px solid #fcd34d;
+    animation: kg-ach-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap;
+}
+.kg-ach[data-tier="bronze"]   { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #92400e; border-color: #fcd34d; }
+.kg-ach[data-tier="silver"]   { background: linear-gradient(135deg, #f1f5f9, #cbd5e1); color: #334155; border-color: #94a3b8; }
+.kg-ach[data-tier="gold"]     { background: linear-gradient(135deg, #fef9c3, #fde047); color: #713f12; border-color: #eab308; }
+.kg-ach[data-tier="platinum"] { background: linear-gradient(135deg, #ede9fe, #c4b5fd); color: #5b21b6; border-color: #a78bfa; }
+.kg-ach-icon {
+    font-size: 13px;
+    line-height: 1;
+}
+@keyframes kg-ach-pop {
+    0%   { opacity: 0; transform: translateY(6px) scale(0.85); }
+    100% { opacity: 1; transform: translateY(0)   scale(1); }
+}
+.kg-hero-bar-wrap {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--lp-border);
+}
+.kg-hero-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--lp-primary), var(--lp-success));
+    transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kg-stats {
+    /* 10 cards — must fit in the admin content area (typ. 900-1100px after
+     * sidebar + detail panel). Drop the min-width from 108→96 so all cards
+     * render in a single row on typical screens; wrap gracefully on narrow.
+     * Cards stay ≥96px wide + 8px gap = 10×104 ≈ 1040px → fits 1366+ screens.
+     */
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(94px, 1fr));
+    gap: 6px;
+    margin-bottom: 8px;
 }
 .kg-stat {
     background: var(--lp-surface);
     border: 1px solid var(--lp-border);
-    border-radius: 10px;
-    padding: 10px 8px;
+    border-radius: 7px;
+    padding: 7px 6px 8px;
     text-align: center;
-    transition: all 0.3s ease;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    min-width: 0;
+    /* Block layout with cue reserved up-front — card height is determined by
+     * value + label + cue (always in the flow, just invisible at rest) so
+     * hover doesn't resize the card and push the graph canvas down. */
 }
 .kg-stat:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    border-color: var(--lp-primary);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 .kg-stat-value {
-    font-size: 22px;
+    font-size: 16px;
     font-weight: 700;
     color: var(--lp-primary);
-    line-height: 1.15;
+    line-height: 1.1;
 }
 .kg-stat-label {
-    font-size: 10px;
+    font-size: 9px;
     color: var(--lp-gray);
     text-transform: uppercase;
-    letter-spacing: 0.4px;
-    margin-top: 3px;
+    letter-spacing: 0.3px;
+    margin-top: 1px;
+}
+/* Cue ("Show all →" etc.) is always rendered in the flow and occupies its
+ * full height — `visibility: hidden` hides the text but keeps the box so the
+ * card's total height is identical at rest vs. hover. Zero layout shift. */
+.kg-stat-cue {
+    font-size: 9px;
+    color: var(--lp-primary);
+    visibility: hidden;
+    margin-top: 2px;
+    line-height: 1.3;
+    transition: opacity 0.15s ease;
+    opacity: 0;
+}
+.kg-stat:hover .kg-stat-cue {
+    visibility: visible;
+    opacity: 1;
 }
 
 /* Skeleton loading */
@@ -674,6 +1093,50 @@
 @keyframes kg-fade-in {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
+}
+/* Pulse effect when a stat card is clicked — confirms the filter applied */
+.kg-stat-pulse {
+    animation: kg-stat-pulse 0.6s ease-out;
+}
+@keyframes kg-stat-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(var(--lp-primary-rgb, 99,102,241), 0.4); }
+    100% { box-shadow: 0 0 0 12px rgba(var(--lp-primary-rgb, 99,102,241), 0); }
+}
+
+/* Graph canvas flash when a filter/view is applied — brief primary-tinted
+ * ring around the container to confirm the redraw was intentional. */
+.kg-graph-filter-flash {
+    animation: kg-graph-flash 0.65s ease-out;
+}
+@keyframes kg-graph-flash {
+    0%   { box-shadow: 0 0 0 0 rgba(99,102,241, 0.35); }
+    40%  { box-shadow: 0 0 0 6px rgba(99,102,241, 0.25); }
+    100% { box-shadow: 0 0 0 12px rgba(99,102,241, 0); }
+}
+
+/* Floating "N shown" chip in the graph top-left after a filter flash */
+.kg-filter-chip {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 5px 10px;
+    background: rgba(99,102,241, 0.95);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    pointer-events: none;
+    z-index: 5;
+    text-transform: capitalize;
+}
+.kg-filter-chip--visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* Graph container */
@@ -726,11 +1189,30 @@
 
 /* Node labels */
 .kg-label {
-    font-size: 11px;
-    font-weight: 600;
-    fill: var(--lp-gray-dark);
+    font-size: 8px;
+    font-weight: 500;
+    fill: var(--lp-gray);
     pointer-events: none;
     user-select: none;
+    letter-spacing: -0.1px;
+    opacity: 0.85;
+}
+/* Category / language / hub labels stay a touch larger + bolder since they're
+ * the navigational anchors — fewer of them, worth highlighting. */
+.kg-label-anchor {
+    font-size: 10px;
+    font-weight: 600;
+    fill: var(--lp-gray-dark);
+    opacity: 1;
+}
+/* Posts / pages labels hidden at rest — hover the node (group) reveals them. */
+.kg-label-hoverable {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+.kg-node:hover .kg-label-hoverable,
+.kg-node.kg-node-hover .kg-label-hoverable {
+    opacity: 1;
 }
 
 /* Zoom controls */

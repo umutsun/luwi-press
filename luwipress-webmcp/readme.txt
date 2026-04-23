@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,30 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.5 — JSON-RPC 2.0 strict mode + clean UTF-8 in product search =
+* FIX: **`search_products` no longer mangles non-ASCII text.** Spanish, French, Italian and Turkish characters in product titles, descriptions and category names used to come through as `coraz�n` / `m�sica` / `�frica` because the tool wasn't decoding HTML entities or normalising the encoding before handing the payload to the MCP transport. Output is now run through `html_entity_decode` with UTF-8, so LLMs receive clean readable text.
+* FIX: **Prices in `search_products` results are now properly formatted** (e.g. `489,14 €` instead of `489.14&euro;`). Previously the tool concatenated the raw `_price` postmeta with the currency symbol; now it routes through `wc_price()` so locale-correct thousands and decimal separators are applied and the entity reference is decoded to its real character.
+* FIX: **Strict JSON-RPC 2.0 conformance.** Requests that omit the `jsonrpc` field, or set it to anything other than `"2.0"`, are now rejected with error code `-32600 Invalid Request` instead of being silently processed. Brings the server into line with the JSON-RPC 2.0 / MCP spec and helps misconfigured clients fail loudly during integration.
+
+= 1.0.4 — Tool audit + Kit CSS wrappers =
+* FIX: `tools/list` page size raised from 20 to 200 so MCP clients that don't auto-follow `nextCursor` (such as the Claude.ai connector) see the full tool catalog on the first page. Before this change such clients only saw the first 20 tools in registration order.
+* NEW: `elementor_sync_structure` — propagate structural layout changes from a source page to its WPML/Polylang translation copies; preserves translated text by default.
+* NEW: `elementor_kit_info` — read Kit ID, breakpoints, and custom-CSS presence.
+* NEW: `elementor_kit_css_get` — read the current Kit (global) CSS layer.
+* NEW: `elementor_kit_css_set` — write the full Kit CSS payload. Forces `append:false` at the wrapper level to prevent stale-cache append regressions.
+* NEW: `translation_fix_elementor` — repair WPML/Polylang translated posts whose Elementor data was dropped or mis-copied.
+* REMOVED: `claw_execute`, `claw_channels` — Open Claw is parked; tools were dead code.
+* REMOVED: `chatwoot_customer_lookup`, `chatwoot_send_message`, `chatwoot_status` — Chatwoot bridge is not shipped in current core; tools were dead code.
+
+= 1.0.3 — Content depth presets + bulk scheduler =
+* NEW: Content Scheduler bulk-queue MCP tools — brainstorm and queue multiple posts in a single call.
+* NEW: Content depth preset parameter exposed on content/scheduler tools (standard / deep / editorial).
+* FIX: Knowledge Graph dropdown hotfix applied to tools that surface KG filters.
+
+= 1.0.2 — Customers view + Elementor Audit =
+* NEW: CRM tools surface segment drill-down data matching the new Customers view.
+* NEW: Elementor Audit drill-down exposes per-page spacing/responsive findings.
 
 = 1.0.1 — Post Term Management =
 * NEW: `taxonomy_assign_terms` MCP tool — assign/replace/append terms on any post for any taxonomy (post_tag, category, product_tag, product_cat, pa_*). Non-hierarchical terms accept names and auto-create missing ones; hierarchical taxonomies require IDs. Pass `append:true` to add without removing existing terms, or `terms:[]` to clear them all.

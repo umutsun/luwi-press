@@ -479,261 +479,351 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 
 		<!-- AI API KEYS -->
 		<div class="luwipress-tab-content <?php echo 'api-keys' === $active_tab ? 'tab-active' : ''; ?>" id="tab-api-keys">
-			<div class="luwipress-info-box">
-				<span class="dashicons dashicons-info" style="color:#6366f1"></span>
-				<?php esc_html_e( 'LuwiPress uses these API keys for AI content generation, translation, and review responses. Select your preferred provider and enter its key.', 'luwipress' ); ?>
-			</div>
+			<?php
+			// Provider config map — drives the unified provider card.
+			// Each provider owns its model catalog so users never pick a model from a vendor they haven't selected.
+			$providers = array(
+				'anthropic' => array(
+					'label'       => 'Claude',
+					'vendor'      => 'Anthropic',
+					'desc'        => __( 'Best for nuanced product descriptions and multilingual content.', 'luwipress' ),
+					'key_field'   => 'luwipress_anthropic_api_key',
+					'key_value'   => $anthropic_key,
+					'placeholder' => 'sk-ant-…',
+					'help_url'    => 'https://console.anthropic.com/settings/keys',
+					'models'      => array(
+						'claude-haiku-4-5'  => array( 'label' => __( 'Claude Haiku — fast &amp; affordable', 'luwipress' ), 'cost' => '$0.80 / $4.00 per 1M', 'recommended' => true ),
+						'claude-sonnet-4-6' => array( 'label' => __( 'Claude Sonnet — balanced', 'luwipress' ), 'cost' => '$3.00 / $15.00 per 1M' ),
+					),
+					'default_model' => 'claude-haiku-4-5',
+				),
+				'openai' => array(
+					'label'       => 'GPT',
+					'vendor'      => 'OpenAI',
+					'desc'        => __( 'GPT-4o for content, DALL·E for images.', 'luwipress' ),
+					'key_field'   => 'luwipress_openai_api_key',
+					'key_value'   => $openai_key,
+					'placeholder' => 'sk-…',
+					'help_url'    => 'https://platform.openai.com/api-keys',
+					'models'      => array(
+						'gpt-4o-mini' => array( 'label' => __( 'GPT-4o Mini — affordable', 'luwipress' ), 'cost' => '$0.15 / $0.60 per 1M', 'recommended' => true ),
+						'gpt-4o'      => array( 'label' => __( 'GPT-4o — powerful', 'luwipress' ), 'cost' => '$2.50 / $10.00 per 1M' ),
+					),
+					'default_model' => 'gpt-4o-mini',
+				),
+				'google' => array(
+					'label'       => 'Gemini',
+					'vendor'      => 'Google',
+					'desc'        => __( 'Cost-effective content at scale.', 'luwipress' ),
+					'key_field'   => 'luwipress_google_ai_api_key',
+					'key_value'   => $google_ai_key,
+					'placeholder' => 'AIza…',
+					'help_url'    => 'https://aistudio.google.com/apikey',
+					'models'      => array(
+						'gemini-2.0-flash' => array( 'label' => __( 'Gemini 2.0 Flash — fastest', 'luwipress' ), 'cost' => '$0.10 / $0.40 per 1M', 'recommended' => true ),
+						'gemini-2.5-flash' => array( 'label' => __( 'Gemini 2.5 Flash', 'luwipress' ), 'cost' => '$0.15 / $0.60 per 1M' ),
+						'gemini-2.5-pro'   => array( 'label' => __( 'Gemini 2.5 Pro — powerful', 'luwipress' ), 'cost' => '$1.25 / $10.00 per 1M' ),
+					),
+					'default_model' => 'gemini-2.0-flash',
+				),
+				'openai-compatible' => array(
+					'label'       => 'Custom',
+					'vendor'      => __( 'OpenAI-Compatible', 'luwipress' ),
+					'desc'        => __( 'DeepSeek, Kimi, Groq, Together.ai, or self-hosted.', 'luwipress' ),
+					'key_field'   => 'luwipress_oai_compat_api_key',
+					'key_value'   => $oai_compat_key,
+					'placeholder' => 'sk-…',
+					'help_url'    => '',
+					// Custom provider manages its model list via preset-driven dropdown below,
+					// so we don't put a static model list here.
+					'models'      => array(),
+					'default_model' => '',
+				),
+			);
+			$active_provider = isset( $providers[ $ai_provider ] ) ? $ai_provider : 'anthropic';
+			?>
 
-			<div class="luwipress-card">
-				<h2><?php esc_html_e( 'AI Provider', 'luwipress' ); ?></h2>
-				<table class="form-table">
-					<tr>
-						<th><?php esc_html_e( 'Primary Provider', 'luwipress' ); ?></th>
-						<td>
-							<fieldset class="luwipress-provider-select">
-								<label class="luwipress-provider-option <?php echo 'anthropic' === $ai_provider ? 'provider-selected' : ''; ?>">
-									<input type="radio" name="luwipress_ai_provider" value="anthropic" <?php checked( $ai_provider, 'anthropic' ); ?> />
-									<span class="provider-card">
-										<strong>Claude (Anthropic)</strong>
-										<span class="provider-desc"><?php esc_html_e( 'Best for nuanced product descriptions and multilingual content', 'luwipress' ); ?></span>
-									</span>
-								</label>
-								<label class="luwipress-provider-option <?php echo 'openai' === $ai_provider ? 'provider-selected' : ''; ?>">
-									<input type="radio" name="luwipress_ai_provider" value="openai" <?php checked( $ai_provider, 'openai' ); ?> />
-									<span class="provider-card">
-										<strong>OpenAI (GPT)</strong>
-										<span class="provider-desc"><?php esc_html_e( 'GPT-4o for content generation, DALL-E for images', 'luwipress' ); ?></span>
-									</span>
-								</label>
-								<label class="luwipress-provider-option <?php echo 'google' === $ai_provider ? 'provider-selected' : ''; ?>">
-									<input type="radio" name="luwipress_ai_provider" value="google" <?php checked( $ai_provider, 'google' ); ?> />
-									<span class="provider-card">
-										<strong>Google Gemini</strong>
-										<span class="provider-desc"><?php esc_html_e( 'Gemini Pro for cost-effective content at scale', 'luwipress' ); ?></span>
-									</span>
-								</label>
-								<label class="luwipress-provider-option <?php echo 'openai-compatible' === $ai_provider ? 'provider-selected' : ''; ?>">
-									<input type="radio" name="luwipress_ai_provider" value="openai-compatible" <?php checked( $ai_provider, 'openai-compatible' ); ?> />
-									<span class="provider-card">
-										<strong>OpenAI-Compatible</strong>
-										<span class="provider-desc"><?php esc_html_e( 'DeepSeek, Kimi, Groq, Together.ai, or self-hosted', 'luwipress' ); ?></span>
-									</span>
-								</label>
-							</fieldset>
-						</td>
-					</tr>
-				</table>
-			</div>
-
-			<div class="luwipress-card">
-				<h2><?php esc_html_e( 'API Keys', 'luwipress' ); ?></h2>
-				<p class="description" style="margin-bottom:16px;">
-					<?php esc_html_e( 'Enter the API key for your selected provider.', 'luwipress' ); ?>
-				</p>
-				<table class="form-table">
-					<tr>
-						<th>
-							<label for="luwipress_anthropic_api_key">
-								<?php esc_html_e( 'Anthropic API Key', 'luwipress' ); ?>
-								<?php if ( 'anthropic' === $ai_provider ) : ?>
-									<span class="badge-active" style="margin-left:6px;"><?php esc_html_e( 'Active', 'luwipress' ); ?></span>
-								<?php endif; ?>
-							</label>
-						</th>
-						<td>
-							<input type="password" id="luwipress_anthropic_api_key" name="luwipress_anthropic_api_key"
-							       value="<?php echo esc_attr( $anthropic_key ); ?>" class="regular-text" autocomplete="off"
-							       placeholder="sk-ant-..." />
-							<button type="button" class="button button-small luwipress-toggle-password" data-target="luwipress_anthropic_api_key">
-								<span class="dashicons dashicons-visibility"></span>
-							</button>
-							<?php if ( ! empty( $anthropic_key ) ) : ?>
-								<span style="color:#16a34a;margin-left:8px;"><span class="dashicons dashicons-yes-alt"></span></span>
-							<?php endif; ?>
-						</td>
-					</tr>
-					<tr>
-						<th>
-							<label for="luwipress_openai_api_key">
-								<?php esc_html_e( 'OpenAI API Key', 'luwipress' ); ?>
-								<?php if ( 'openai' === $ai_provider ) : ?>
-									<span class="badge-active" style="margin-left:6px;"><?php esc_html_e( 'Active', 'luwipress' ); ?></span>
-								<?php endif; ?>
-							</label>
-						</th>
-						<td>
-							<input type="password" id="luwipress_openai_api_key" name="luwipress_openai_api_key"
-							       value="<?php echo esc_attr( $openai_key ); ?>" class="regular-text" autocomplete="off"
-							       placeholder="sk-..." />
-							<button type="button" class="button button-small luwipress-toggle-password" data-target="luwipress_openai_api_key">
-								<span class="dashicons dashicons-visibility"></span>
-							</button>
-							<?php if ( ! empty( $openai_key ) ) : ?>
-								<span style="color:#16a34a;margin-left:8px;"><span class="dashicons dashicons-yes-alt"></span></span>
-							<?php endif; ?>
-						</td>
-					</tr>
-					<tr>
-						<th>
-							<label for="luwipress_google_ai_api_key">
-								<?php esc_html_e( 'Google AI API Key', 'luwipress' ); ?>
-								<?php if ( 'google' === $ai_provider ) : ?>
-									<span class="badge-active" style="margin-left:6px;"><?php esc_html_e( 'Active', 'luwipress' ); ?></span>
-								<?php endif; ?>
-							</label>
-						</th>
-						<td>
-							<input type="password" id="luwipress_google_ai_api_key" name="luwipress_google_ai_api_key"
-							       value="<?php echo esc_attr( $google_ai_key ); ?>" class="regular-text" autocomplete="off"
-							       placeholder="AIza..." />
-							<button type="button" class="button button-small luwipress-toggle-password" data-target="luwipress_google_ai_api_key">
-								<span class="dashicons dashicons-visibility"></span>
-							</button>
-							<?php if ( ! empty( $google_ai_key ) ) : ?>
-								<span style="color:#16a34a;margin-left:8px;"><span class="dashicons dashicons-yes-alt"></span></span>
-							<?php endif; ?>
-						</td>
-					</tr>
-				</table>
-			</div>
-
-			<!-- OpenAI-Compatible provider (DeepSeek, Kimi, Groq, Together, custom) -->
-			<?php if ( ! empty( $oai_compat_presets ) ) : ?>
-			<div class="luwipress-card">
+			<!-- Provider + key — one card, provider-driven -->
+			<div class="luwipress-card lp-provider-card">
 				<h2>
-					<?php esc_html_e( 'OpenAI-Compatible Provider', 'luwipress' ); ?>
-					<?php if ( 'openai-compatible' === $ai_provider ) : ?>
-						<span class="badge-active" style="margin-left:6px;"><?php esc_html_e( 'Active', 'luwipress' ); ?></span>
-					<?php endif; ?>
+					<span class="dashicons dashicons-admin-network"></span>
+					<?php esc_html_e( 'AI Provider', 'luwipress' ); ?>
 				</h2>
-				<p class="description" style="margin-bottom:16px;">
-					<?php esc_html_e( 'Use any vendor that speaks the OpenAI chat/completions API — DeepSeek, Moonshot Kimi, Groq, Together.ai, or a self-hosted model (Ollama, vLLM, LM Studio). One provider slot, swap vendors via presets.', 'luwipress' ); ?>
+				<p class="description" style="margin:-8px 0 16px;">
+					<?php esc_html_e( 'Pick one vendor. LuwiPress uses this provider for content generation, translation, and review responses. You can switch anytime.', 'luwipress' ); ?>
 				</p>
-				<table class="form-table">
-					<tr>
-						<th><label for="luwipress_oai_compat_preset"><?php esc_html_e( 'Preset', 'luwipress' ); ?></label></th>
-						<td>
-							<select name="luwipress_oai_compat_preset" id="luwipress_oai_compat_preset">
-								<?php foreach ( $oai_compat_presets as $preset_key => $preset_info ) : ?>
-									<option value="<?php echo esc_attr( $preset_key ); ?>" <?php selected( $oai_compat_preset, $preset_key ); ?>>
-										<?php echo esc_html( $preset_info['label'] ); ?>
-										<?php if ( ! empty( $preset_info['base_url'] ) ) : ?>
-											— <?php echo esc_html( $preset_info['base_url'] ); ?>
-										<?php endif; ?>
-									</option>
-								<?php endforeach; ?>
-							</select>
-							<p class="description">
-								<?php esc_html_e( 'Switching preset updates the base URL and model list automatically.', 'luwipress' ); ?>
-							</p>
-						</td>
-					</tr>
-					<tr class="luwipress-oai-compat-custom-row" <?php echo 'custom' !== $oai_compat_preset ? 'style="display:none;"' : ''; ?>>
-						<th><label for="luwipress_oai_compat_base_url"><?php esc_html_e( 'Base URL', 'luwipress' ); ?></label></th>
-						<td>
-							<input type="url" id="luwipress_oai_compat_base_url" name="luwipress_oai_compat_base_url"
-							       value="<?php echo esc_attr( $oai_compat_base ); ?>" class="regular-text"
-							       placeholder="http://localhost:11434/v1" />
-							<p class="description">
-								<?php esc_html_e( 'For self-hosted only. Include /v1 if the server expects it. Leave empty for the hosted presets above.', 'luwipress' ); ?>
-							</p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="luwipress_oai_compat_api_key"><?php esc_html_e( 'API Key', 'luwipress' ); ?></label></th>
-						<td>
-							<input type="password" id="luwipress_oai_compat_api_key" name="luwipress_oai_compat_api_key"
-							       value="<?php echo esc_attr( $oai_compat_key ); ?>" class="regular-text" autocomplete="off"
-							       placeholder="sk-..." />
-							<button type="button" class="button button-small luwipress-toggle-password" data-target="luwipress_oai_compat_api_key">
-								<span class="dashicons dashicons-visibility"></span>
-							</button>
-							<?php if ( ! empty( $oai_compat_key ) ) : ?>
-								<span style="color:#16a34a;margin-left:8px;"><span class="dashicons dashicons-yes-alt"></span></span>
-							<?php endif; ?>
-							<p class="description">
-								<?php esc_html_e( 'For self-hosted servers that do not require auth, enter any non-empty value (e.g. "local").', 'luwipress' ); ?>
-							</p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="luwipress_oai_compat_model"><?php esc_html_e( 'Model', 'luwipress' ); ?></label></th>
-						<td>
-							<?php
-							$current_preset_models = $oai_compat_presets[ $oai_compat_preset ]['models'] ?? array();
-							if ( ! empty( $current_preset_models ) ) :
-								?>
-								<select name="luwipress_oai_compat_model" id="luwipress_oai_compat_model">
-									<option value=""><?php esc_html_e( '— Use preset default —', 'luwipress' ); ?></option>
-									<?php foreach ( $current_preset_models as $model_id => $model_label ) : ?>
-										<option value="<?php echo esc_attr( $model_id ); ?>" <?php selected( $oai_compat_model, $model_id ); ?>>
-											<?php echo esc_html( $model_label ); ?>
+
+				<fieldset class="lp-provider-pills" role="radiogroup" aria-label="<?php esc_attr_e( 'Primary AI provider', 'luwipress' ); ?>">
+					<?php foreach ( $providers as $key => $p ) :
+						$has_key = ! empty( $p['key_value'] );
+					?>
+					<label class="lp-provider-pill <?php echo $active_provider === $key ? 'is-active' : ''; ?>" data-provider="<?php echo esc_attr( $key ); ?>">
+						<input type="radio" name="luwipress_ai_provider" value="<?php echo esc_attr( $key ); ?>" <?php checked( $active_provider, $key ); ?> />
+						<span class="lp-provider-pill-body">
+							<span class="lp-provider-pill-label">
+								<strong><?php echo esc_html( $p['label'] ); ?></strong>
+								<?php if ( $has_key ) : ?>
+									<span class="lp-provider-pill-check" title="<?php esc_attr_e( 'Key saved', 'luwipress' ); ?>"><span class="dashicons dashicons-yes-alt"></span></span>
+								<?php endif; ?>
+							</span>
+							<span class="lp-provider-pill-vendor"><?php echo esc_html( $p['vendor'] ); ?></span>
+						</span>
+					</label>
+					<?php endforeach; ?>
+				</fieldset>
+
+				<?php
+				// This hidden input carries the actual saved model id on submit.
+				// JS syncs it whenever the provider pill or model radio changes, so the user never
+				// has to pick a model from a vendor they didn't select.
+				$submit_model = $ai_model;
+				if ( isset( $providers[ $active_provider ]['models'] ) && ! empty( $providers[ $active_provider ]['models'] ) && ! array_key_exists( $ai_model, $providers[ $active_provider ]['models'] ) ) {
+					$submit_model = $providers[ $active_provider ]['default_model'];
+				}
+				?>
+				<input type="hidden" name="luwipress_ai_model" id="luwipress_ai_model" value="<?php echo esc_attr( $submit_model ); ?>" />
+
+				<?php // Per-provider key input (only the active one is visible). ?>
+				<div class="lp-provider-keys">
+				<?php foreach ( $providers as $key => $p ) : ?>
+					<div class="lp-provider-key-block" data-provider="<?php echo esc_attr( $key ); ?>" data-default-model="<?php echo esc_attr( $p['default_model'] ); ?>" <?php echo $active_provider !== $key ? 'hidden' : ''; ?>>
+						<?php if ( 'openai-compatible' === $key ) : ?>
+							<?php // Custom provider: preset picker first, then base URL (if custom), key, model. ?>
+							<div class="lp-field">
+								<label for="luwipress_oai_compat_preset"><?php esc_html_e( 'Preset', 'luwipress' ); ?></label>
+								<select name="luwipress_oai_compat_preset" id="luwipress_oai_compat_preset" class="regular-text">
+									<?php foreach ( $oai_compat_presets as $preset_key => $preset_info ) : ?>
+										<option value="<?php echo esc_attr( $preset_key ); ?>" <?php selected( $oai_compat_preset, $preset_key ); ?>>
+											<?php echo esc_html( $preset_info['label'] ); ?>
+											<?php if ( ! empty( $preset_info['base_url'] ) ) : ?> — <?php echo esc_html( $preset_info['base_url'] ); ?><?php endif; ?>
 										</option>
 									<?php endforeach; ?>
 								</select>
-							<?php else : ?>
-								<input type="text" id="luwipress_oai_compat_model" name="luwipress_oai_compat_model"
-								       value="<?php echo esc_attr( $oai_compat_model ); ?>" class="regular-text"
-								       placeholder="llama-3.1-8b-instruct" />
-							<?php endif; ?>
-							<?php
-							$off_peak = $oai_compat_presets[ $oai_compat_preset ]['off_peak_utc'] ?? null;
-							if ( is_array( $off_peak ) && count( $off_peak ) === 2 ) :
+								<p class="description"><?php esc_html_e( 'Switches base URL + model list automatically.', 'luwipress' ); ?></p>
+							</div>
+							<div class="lp-field lp-oai-compat-custom-row" <?php echo 'custom' !== $oai_compat_preset ? 'hidden' : ''; ?>>
+								<label for="luwipress_oai_compat_base_url"><?php esc_html_e( 'Base URL', 'luwipress' ); ?></label>
+								<input type="url" id="luwipress_oai_compat_base_url" name="luwipress_oai_compat_base_url"
+								       value="<?php echo esc_attr( $oai_compat_base ); ?>" class="regular-text"
+								       placeholder="http://localhost:11434/v1" />
+								<p class="description"><?php esc_html_e( 'Self-hosted servers only (Ollama, vLLM, LM Studio). Include /v1 if needed.', 'luwipress' ); ?></p>
+							</div>
+						<?php endif; ?>
+
+						<div class="lp-field">
+							<label for="<?php echo esc_attr( $p['key_field'] ); ?>">
+								<?php
+								/* translators: %s: provider vendor name (Anthropic, OpenAI, etc.) */
+								echo esc_html( sprintf( __( '%s API Key', 'luwipress' ), $p['vendor'] ) );
 								?>
+								<?php if ( ! empty( $p['key_value'] ) ) : ?>
+									<span class="lp-field-saved"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Saved', 'luwipress' ); ?></span>
+								<?php endif; ?>
+							</label>
+							<div class="lp-field-input-row">
+								<input type="password" id="<?php echo esc_attr( $p['key_field'] ); ?>" name="<?php echo esc_attr( $p['key_field'] ); ?>"
+								       value="<?php echo esc_attr( $p['key_value'] ); ?>" class="regular-text" autocomplete="off"
+								       placeholder="<?php echo esc_attr( $p['placeholder'] ); ?>" />
+								<button type="button" class="button button-small luwipress-toggle-password" data-target="<?php echo esc_attr( $p['key_field'] ); ?>" aria-label="<?php esc_attr_e( 'Show/hide key', 'luwipress' ); ?>">
+									<span class="dashicons dashicons-visibility"></span>
+								</button>
+							</div>
+							<?php if ( ! empty( $p['help_url'] ) ) : ?>
 								<p class="description">
-									<?php
-									/* translators: 1: start time, 2: end time in UTC */
-									printf(
-										esc_html__( 'Tip: %1$s offers a ~50%% off-peak discount between %2$s–%3$s UTC.', 'luwipress' ),
-										esc_html( $oai_compat_presets[ $oai_compat_preset ]['label'] ),
-										esc_html( $off_peak[0] ),
-										esc_html( $off_peak[1] )
-									);
-									?>
+									<a href="<?php echo esc_url( $p['help_url'] ); ?>" target="_blank" rel="noopener">
+										<?php esc_html_e( 'Get your API key →', 'luwipress' ); ?>
+									</a>
 								</p>
 							<?php endif; ?>
-						</td>
-					</tr>
-				</table>
-				<script>
-				(function () {
-					var presetEl = document.getElementById( 'luwipress_oai_compat_preset' );
-					var customRow = document.querySelector( '.luwipress-oai-compat-custom-row' );
-					if ( presetEl && customRow ) {
-						presetEl.addEventListener( 'change', function () {
-							customRow.style.display = this.value === 'custom' ? '' : 'none';
-						} );
-					}
-				})();
-				</script>
+						</div>
+
+						<?php if ( ! empty( $p['models'] ) ) : ?>
+						<?php
+						// Model picker as visual cards — only the active provider's models are present in the DOM.
+						// If the saved $ai_model belongs to another provider, fall back to this provider's default
+						// so the UI never shows a nonsensical cross-provider model when the pill is active.
+						$model_for_this_provider = array_key_exists( $ai_model, $p['models'] ) ? $ai_model : $p['default_model'];
+						?>
+						<div class="lp-field">
+							<label><?php esc_html_e( 'Model', 'luwipress' ); ?></label>
+							<div class="lp-model-grid">
+								<?php foreach ( $p['models'] as $model_id => $model_meta ) :
+									$is_checked = ( $active_provider === $key ) && ( $model_for_this_provider === $model_id );
+								?>
+								<label class="lp-model-card <?php echo ! empty( $model_meta['recommended'] ) ? 'is-recommended' : ''; ?>">
+									<input type="radio" name="luwipress_ai_model_<?php echo esc_attr( $key ); ?>" value="<?php echo esc_attr( $model_id ); ?>" <?php checked( $is_checked ); ?> />
+									<span class="lp-model-card-body">
+										<span class="lp-model-card-top">
+											<strong><?php echo esc_html( $model_meta['label'] ); ?></strong>
+											<?php if ( ! empty( $model_meta['recommended'] ) ) : ?>
+												<span class="lp-model-card-badge"><?php esc_html_e( 'Recommended', 'luwipress' ); ?></span>
+											<?php endif; ?>
+										</span>
+										<span class="lp-model-card-cost"><?php echo esc_html( $model_meta['cost'] ); ?></span>
+									</span>
+								</label>
+								<?php endforeach; ?>
+							</div>
+							<p class="description"><?php esc_html_e( 'Per-million-token pricing (input / output). All Luwi workflows use the selected model.', 'luwipress' ); ?></p>
+						</div>
+						<?php endif; ?>
+
+						<?php if ( 'openai-compatible' === $key ) : ?>
+							<div class="lp-field">
+								<label for="luwipress_oai_compat_model"><?php esc_html_e( 'Model', 'luwipress' ); ?></label>
+								<?php
+								$current_preset_models = $oai_compat_presets[ $oai_compat_preset ]['models'] ?? array();
+								if ( ! empty( $current_preset_models ) ) :
+									?>
+									<select name="luwipress_oai_compat_model" id="luwipress_oai_compat_model" class="regular-text">
+										<option value=""><?php esc_html_e( '— Use preset default —', 'luwipress' ); ?></option>
+										<?php foreach ( $current_preset_models as $model_id => $model_label ) : ?>
+											<option value="<?php echo esc_attr( $model_id ); ?>" <?php selected( $oai_compat_model, $model_id ); ?>>
+												<?php echo esc_html( $model_label ); ?>
+											</option>
+										<?php endforeach; ?>
+									</select>
+								<?php else : ?>
+									<input type="text" id="luwipress_oai_compat_model" name="luwipress_oai_compat_model"
+									       value="<?php echo esc_attr( $oai_compat_model ); ?>" class="regular-text"
+									       placeholder="llama-3.1-8b-instruct" />
+								<?php endif; ?>
+								<?php
+								$off_peak = $oai_compat_presets[ $oai_compat_preset ]['off_peak_utc'] ?? null;
+								if ( is_array( $off_peak ) && count( $off_peak ) === 2 ) :
+									?>
+									<p class="description">
+										<?php
+										/* translators: 1: preset label, 2: start time UTC, 3: end time UTC */
+										printf(
+											esc_html__( 'Tip: %1$s offers a ~50%% off-peak discount between %2$s–%3$s UTC.', 'luwipress' ),
+											esc_html( $oai_compat_presets[ $oai_compat_preset ]['label'] ),
+											esc_html( $off_peak[0] ),
+											esc_html( $off_peak[1] )
+										);
+										?>
+									</p>
+								<?php endif; ?>
+							</div>
+						<?php endif; ?>
+					</div>
+				<?php endforeach; ?>
+				</div>
 			</div>
+
+			<?php
+			// Secondary keys — advanced, collapsed by default.
+			// Shown only if the user has keys saved for providers other than the active one.
+			$secondary = array();
+			foreach ( $providers as $key => $p ) {
+				if ( $key !== $active_provider && ! empty( $p['key_value'] ) ) {
+					$secondary[ $key ] = $p;
+				}
+			}
+			if ( ! empty( $secondary ) ) :
+			?>
+			<details class="lp-secondary-keys">
+				<summary>
+					<span class="dashicons dashicons-admin-generic"></span>
+					<?php
+					/* translators: %d: count of additional saved keys */
+					echo esc_html( sprintf( _n( '%d other saved key', '%d other saved keys', count( $secondary ), 'luwipress' ), count( $secondary ) ) );
+					?>
+					<span class="lp-secondary-keys-hint"><?php esc_html_e( '(fallback providers — not active)', 'luwipress' ); ?></span>
+				</summary>
+				<div class="lp-secondary-keys-body">
+					<p class="description" style="margin-top:12px;">
+						<?php esc_html_e( 'Keys you saved for other providers are kept here so you can switch back without re-entering them. Only the active provider above is used for AI calls.', 'luwipress' ); ?>
+					</p>
+					<?php foreach ( $secondary as $key => $p ) : ?>
+						<div class="lp-secondary-key-row">
+							<span class="lp-secondary-key-vendor"><?php echo esc_html( $p['vendor'] ); ?></span>
+							<code><?php echo esc_html( substr( $p['key_value'], 0, 7 ) . '…' . substr( $p['key_value'], -4 ) ); ?></code>
+							<span class="lp-secondary-key-check"><span class="dashicons dashicons-yes-alt"></span></span>
+						</div>
+					<?php endforeach; ?>
+				</div>
+			</details>
 			<?php endif; ?>
 
-			<!-- Model Selection & Cost Control -->
+			<script>
+			(function () {
+				var hiddenModel = document.getElementById('luwipress_ai_model');
+				var pills = document.querySelectorAll('.lp-provider-pill input[type="radio"]');
+				var blocks = document.querySelectorAll('.lp-provider-key-block');
+
+				// When provider changes: show its key block, and sync the hidden
+				// `luwipress_ai_model` to whatever radio is selected inside that block
+				// (falls back to data-default-model if none is checked yet).
+				function syncBlocks(active) {
+					blocks.forEach(function (b) {
+						b.hidden = b.getAttribute('data-provider') !== active;
+					});
+					document.querySelectorAll('.lp-provider-pill').forEach(function (p) {
+						p.classList.toggle('is-active', p.getAttribute('data-provider') === active);
+					});
+					syncHiddenModel();
+				}
+
+				function syncHiddenModel() {
+					if (!hiddenModel) return;
+					var activeBlock = document.querySelector('.lp-provider-key-block:not([hidden])');
+					if (!activeBlock) return;
+					var provider = activeBlock.getAttribute('data-provider');
+					var fallback = activeBlock.getAttribute('data-default-model') || '';
+
+					if (provider === 'openai-compatible') {
+						// Custom provider uses the preset-driven <select>; model id is already
+						// submitted via its own name="luwipress_oai_compat_model". Keep the hidden
+						// luwipress_ai_model empty so the backend knows to use the custom slot.
+						hiddenModel.value = '';
+						return;
+					}
+
+					var selectedRadio = activeBlock.querySelector('input[name^="luwipress_ai_model_"]:checked');
+					if (selectedRadio) {
+						hiddenModel.value = selectedRadio.value;
+					} else if (fallback) {
+						hiddenModel.value = fallback;
+						// Auto-check the default radio so the UI reflects the fallback.
+						var defaultRadio = activeBlock.querySelector('input[name^="luwipress_ai_model_"][value="' + fallback + '"]');
+						if (defaultRadio) defaultRadio.checked = true;
+					}
+				}
+
+				pills.forEach(function (input) {
+					input.addEventListener('change', function () {
+						if (this.checked) syncBlocks(this.value);
+					});
+				});
+
+				// Any model radio change anywhere → resync hidden field.
+				document.querySelectorAll('input[name^="luwipress_ai_model_"]').forEach(function (r) {
+					r.addEventListener('change', syncHiddenModel);
+				});
+
+				// Preset dropdown → toggle base URL row.
+				var presetEl = document.getElementById('luwipress_oai_compat_preset');
+				var customRow = document.querySelector('.lp-oai-compat-custom-row');
+				if (presetEl && customRow) {
+					presetEl.addEventListener('change', function () {
+						customRow.hidden = this.value !== 'custom';
+					});
+				}
+
+				// Ensure hidden model is correct on initial load (fallback if saved model
+				// doesn't match active provider's catalog).
+				syncHiddenModel();
+			})();
+			</script>
+
+			<!-- Cost & Limits (model selection lives inside the provider card above) -->
 			<div class="luwipress-card">
-				<h2><span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e( 'AI Model & Cost Control', 'luwipress' ); ?></h2>
+				<h2><span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e( 'Cost &amp; Limits', 'luwipress' ); ?></h2>
+				<p class="description" style="margin:-8px 0 16px;">
+					<?php esc_html_e( 'Daily cap protects you from surprise bills; max output tokens caps the length of each AI response.', 'luwipress' ); ?>
+				</p>
 				<table class="form-table">
-					<tr>
-						<th><label for="luwipress_ai_model"><?php esc_html_e( 'AI Model', 'luwipress' ); ?></label></th>
-						<td>
-							<select name="luwipress_ai_model" id="luwipress_ai_model">
-								<optgroup label="Anthropic">
-									<option value="claude-haiku-4-5" <?php selected( $ai_model, 'claude-haiku-4-5' ); ?>>Claude Haiku — Hızlı &amp; Ucuz ✅ Önerilen ($0.80/$4.00/M)</option>
-									<option value="claude-sonnet-4-6" <?php selected( $ai_model, 'claude-sonnet-4-6' ); ?>>Claude Sonnet — Dengeli ($3.00/$15.00/M)</option>
-								</optgroup>
-								<optgroup label="OpenAI">
-									<option value="gpt-4o-mini" <?php selected( $ai_model, 'gpt-4o-mini' ); ?>>GPT-4o Mini — Ucuz ($0.15/$0.60/M)</option>
-									<option value="gpt-4o" <?php selected( $ai_model, 'gpt-4o' ); ?>>GPT-4o — Güçlü ($2.50/$10.00/M)</option>
-								</optgroup>
-								<optgroup label="Google">
-									<option value="gemini-2.0-flash" <?php selected( $ai_model, 'gemini-2.0-flash' ); ?>>Gemini 2.0 Flash ($0.10/$0.40/M)</option>
-									<option value="gemini-2.5-flash" <?php selected( $ai_model, 'gemini-2.5-flash' ); ?>>Gemini 2.5 Flash ($0.15/$0.60/M)</option>
-									<option value="gemini-2.5-pro" <?php selected( $ai_model, 'gemini-2.5-pro' ); ?>>Gemini 2.5 Pro ($1.25/$10.00/M)</option>
-								</optgroup>
-							</select>
-							<p class="description"><?php esc_html_e( 'Selected model is used for AI content enrichment.', 'luwipress' ); ?></p>
-						</td>
-					</tr>
 					<tr>
 						<th><label for="luwipress_daily_token_limit"><?php esc_html_e( 'Daily Budget Limit ($)', 'luwipress' ); ?></label></th>
 						<td>
@@ -769,15 +859,6 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				</table>
 			</div>
 
-			<div class="luwipress-card luwipress-card--muted">
-				<h2><?php esc_html_e( 'Cost Protection', 'luwipress' ); ?></h2>
-				<ul class="luwipress-feature-list">
-					<li><span class="dashicons dashicons-shield"></span> <?php esc_html_e( 'Daily budget limit auto-pauses AI when reached — no surprise charges', 'luwipress' ); ?></li>
-					<li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Local commands (/scan, /seo, etc.) always work with zero AI cost', 'luwipress' ); ?></li>
-					<li><span class="dashicons dashicons-chart-bar"></span> <?php esc_html_e( 'Token usage tracked per workflow — see exactly what costs money', 'luwipress' ); ?></li>
-					<li><span class="dashicons dashicons-update"></span> <?php esc_html_e( 'Switch models anytime — GPT-4o Mini is 20x cheaper than Claude Sonnet', 'luwipress' ); ?></li>
-				</ul>
-			</div>
 		</div>
 
 		<!-- AI CONTENT -->

@@ -22,6 +22,10 @@ class LuwiPress_Security {
         if (get_option('luwipress_security_headers', 1)) {
             add_action('send_headers', array($this, 'add_security_headers'));
         }
+
+        // Always stamp no-store on luwipress/v1 REST responses so upstream caches
+        // (LiteSpeed, Varnish, CDN) cannot replay an authenticated body to anon requests.
+        add_filter('rest_post_dispatch', array($this, 'stamp_rest_cache_headers'), 10, 3);
     }
 
     /**
@@ -33,6 +37,64 @@ class LuwiPress_Security {
             header('X-Frame-Options: SAMEORIGIN');
             header('Referrer-Policy: strict-origin-when-cross-origin');
         }
+    }
+
+    /**
+     * Stamp cache-busting headers on every luwipress/v1 REST response.
+     * Without this, LiteSpeed/Varnish/CDN cache authenticated 200 responses
+     * by URL and serve them to subsequent unauthenticated requests.
+     *
+     * @param mixed            $response
+     * @param WP_REST_Server   $server
+     * @param mixed            $request
+     * @return mixed
+     */
+    public function stamp_rest_cache_headers($response, $server, $request) {
+        if (!($response instanceof WP_REST_Response) || !($request instanceof WP_REST_Request)) {
+            return $response;
+        }
+
+        $route = $request->get_route();
+        if (strpos($route, '/luwipress/v1/') !== 0) {
+            return $response;
+        }
+
+        // Truly public endpoints (no token required, no PII) can stay cacheable.
+        $public_routes = array(
+            '/luwipress/v1/status',
+            '/luwipress/v1/health',
+            '/luwipress/v1/chat/config',
+        );
+
+        if (in_array($route, $public_routes, true)) {
+            return $response;
+        }
+
+        $response->header('Cache-Control', 'no-store, private, must-revalidate, max-age=0');
+        $response->header('Pragma', 'no-cache');
+
+        // LiteSpeed Cache bypass signals. LS reads these as HTTP response
+        // headers — `rest_post_dispatch` runs AFTER PHP has started sending
+        // headers for this request, so `header()` is typically a no-op here.
+        // The WP_REST_Response->header() API writes into the response's header
+        // list which `rest_send_headers()` flushes before LS's caching stage.
+        $response->header( 'X-LiteSpeed-Cache-Control', 'no-cache, no-store, private' );
+        $response->header( 'X-LiteSpeed-Tag', 'nocache' );
+        // Belt-and-braces: also fire the LS plugin hooks so the tag-based
+        // plugin cache opts out even when the web-server module misses the
+        // headers above.
+        if ( did_action( 'init' ) ) {
+            do_action( 'litespeed_control_set_nocache', 'luwipress REST authenticated payload' );
+            do_action( 'litespeed_control_set_private', 'luwipress REST authenticated payload' );
+        }
+
+        // WP Rocket / W3TC / WP Super Cache: DONOTCACHEPAGE constant is the
+        // historic opt-out; harmless if the cache plugin isn't installed.
+        if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+            define( 'DONOTCACHEPAGE', true );
+        }
+
+        return $response;
     }
 
     /**

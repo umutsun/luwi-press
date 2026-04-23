@@ -448,24 +448,40 @@ class LuwiPress_Search_Index {
 				continue;
 			}
 
-			$price    = get_post_meta( $pid, '_price', true );
-			$stock    = get_post_meta( $pid, '_stock_status', true );
-			$currency = function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol() : '';
+			$price = get_post_meta( $pid, '_price', true );
+			$stock = get_post_meta( $pid, '_stock_status', true );
+
+			// Format price using wc_price so currency symbol + locale-correct
+			// thousands/decimal separators are applied; strip the resulting HTML
+			// so MCP clients (LLMs) get clean text instead of `&euro;` entities.
+			if ( '' !== $price && function_exists( 'wc_price' ) ) {
+				$price_text = html_entity_decode( wp_strip_all_tags( wc_price( $price ) ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			} else {
+				$price_text = $price !== '' ? (string) $price : 'N/A';
+			}
 
 			$cats = get_the_terms( $pid, 'product_cat' );
 			$cat_names = array();
 			if ( $cats && ! is_wp_error( $cats ) ) {
-				$cat_names = wp_list_pluck( $cats, 'name' );
+				$cat_names = array_map(
+					static function ( $name ) {
+						return html_entity_decode( (string) $name, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					},
+					wp_list_pluck( $cats, 'name' )
+				);
 			}
+
+			$description = wp_trim_words( wp_strip_all_tags( $post->post_content ), 40 );
+			$description = html_entity_decode( $description, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 
 			$results[] = array(
 				'id'          => $pid,
-				'name'        => $post->post_title,
-				'price'       => ( $price ?: 'N/A' ) . $currency,
+				'name'        => html_entity_decode( $post->post_title, ENT_QUOTES | ENT_HTML5, 'UTF-8' ),
+				'price'       => $price_text,
 				'stock'       => $stock ?: 'instock',
 				'sku'         => get_post_meta( $pid, '_sku', true ) ?: '',
 				'categories'  => $cat_names,
-				'description' => wp_trim_words( wp_strip_all_tags( $post->post_content ), 40 ),
+				'description' => $description,
 				'reviews'     => array(
 					'count'      => (int) $post->comment_count,
 					'avg_rating' => 0,

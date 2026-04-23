@@ -26,7 +26,14 @@ if ( ! current_user_can( 'manage_options' ) ) {
 				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--lp-primary)" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="8" r="2"/><circle cx="20" cy="8" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="20" cy="16" r="2"/><line x1="6" y1="8" x2="9" y2="10"/><line x1="18" y1="8" x2="15" y2="10"/><line x1="6" y1="16" x2="9" y2="14"/><line x1="18" y1="16" x2="15" y2="14"/></svg>
 				<?php esc_html_e( 'Knowledge Graph', 'luwipress' ); ?>
 			</h1>
-			<span class="kg-subtitle"><?php esc_html_e( 'Interactive store intelligence map', 'luwipress' ); ?></span>
+			<!-- Store Health pill — score + mini progress bar, click expands the
+			     full dimension chips + achievements panel below the header.
+			     Replaces the separate hero banner; saves ~40px of vertical space. -->
+			<button type="button" class="kg-health-pill" id="kg-hero-toggle" aria-expanded="false" aria-controls="kg-hero-detail" title="<?php esc_attr_e( 'Store Health — click for breakdown', 'luwipress' ); ?>" hidden>
+				<span class="kg-health-pill-score" id="kg-hero-score">—</span><span class="kg-health-pill-unit">%</span>
+				<span class="kg-health-pill-bar"><span class="kg-health-pill-bar-fill" id="kg-hero-bar" style="width:0%"></span></span>
+				<svg class="kg-health-pill-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+			</button>
 			<span id="kg-cache-badge" class="kg-cache-badge" hidden></span>
 		</div>
 		<div class="kg-header-right">
@@ -93,27 +100,42 @@ if ( ! current_user_can( 'manage_options' ) ) {
 		</div>
 	</div>
 
+	<!-- Store Health details — expansion panel, opens when the header pill is
+	     clicked. Contains the qualitative subtitle, the per-dimension chips
+	     (weakest first), and the achievement badges. Hidden at rest so the
+	     graph is one click away from fullscreen focus. -->
+	<div class="kg-hero-detail-wrap" id="kg-hero-detail" hidden>
+		<p class="kg-hero-subtitle" id="kg-hero-subtitle"><?php esc_html_e( 'Weighted average across content, translation, design, and media metrics.', 'luwipress' ); ?></p>
+		<div class="kg-hero-meta" id="kg-hero-meta"></div>
+		<div class="kg-achievements" id="kg-achievements"></div>
+	</div>
+
 	<!-- Stats Bar (animated counters) -->
 	<div class="kg-stats" id="kg-stats">
-		<div class="kg-stat kg-stat-skeleton">
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-products" data-view="product" data-preset="all">
 			<div class="kg-stat-value" data-counter="total_products">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Products', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'Show all →', 'luwipress' ); ?></div>
 		</div>
-		<div class="kg-stat kg-stat-skeleton">
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-posts" data-view="post" data-preset="all">
 			<div class="kg-stat-value" data-counter="total_posts">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Posts', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'Show posts →', 'luwipress' ); ?></div>
 		</div>
-		<div class="kg-stat kg-stat-skeleton">
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-seo" data-view="product" data-preset="needs_seo">
 			<div class="kg-stat-value" data-counter="seo_coverage">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'SEO Coverage', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'Needs SEO →', 'luwipress' ); ?></div>
 		</div>
-		<div class="kg-stat kg-stat-skeleton">
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-enriched" data-view="product" data-preset="not_enriched">
 			<div class="kg-stat-value" data-counter="enrichment_coverage">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Enriched', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'Needs enrich →', 'luwipress' ); ?></div>
 		</div>
-		<div class="kg-stat kg-stat-skeleton">
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-opportunities" data-view="product" data-preset="high_opportunity">
 			<div class="kg-stat-value" data-counter="opportunity_score_total">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Opportunities', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'Top wins →', 'luwipress' ); ?></div>
 		</div>
 		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-design">
 			<div class="kg-stat-value" data-counter="design_health">—</div>
@@ -135,6 +157,11 @@ if ( ! current_user_can( 'manage_options' ) ) {
 			<div class="kg-stat-label"><?php esc_html_e( 'Taxonomy Coverage', 'luwipress' ); ?></div>
 			<div class="kg-stat-cue"><?php esc_html_e( 'View heatmap →', 'luwipress' ); ?></div>
 		</div>
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-media">
+			<div class="kg-stat-value" data-counter="media_health">—</div>
+			<div class="kg-stat-label"><?php esc_html_e( 'Media Health', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'View library →', 'luwipress' ); ?></div>
+		</div>
 	</div>
 
 	<!-- Graph Canvas -->
@@ -153,17 +180,27 @@ if ( ! current_user_can( 'manage_options' ) ) {
 			<button type="button" id="kg-zoom-fit" class="kg-zoom-btn" title="<?php esc_attr_e( 'Fit to screen', 'luwipress' ); ?>">⊡</button>
 			<button type="button" id="kg-layout-reset" class="kg-zoom-btn" title="<?php esc_attr_e( 'Reset saved layout for this view', 'luwipress' ); ?>">↺</button>
 		</div>
-		<!-- Legend -->
-		<div class="kg-legend">
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-primary)"></span> Product</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:#8b5cf6"></span> Post</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:#06b6d4"></span> Page</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:#a855f7"></span> Segment</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-warning)"></span> Category</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-blue)"></span> Language</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-success)"></span> SEO Complete</div>
-			<div class="kg-legend-item"><span class="kg-legend-dot" style="background:var(--lp-error)"></span> Needs Work</div>
+	</div>
+
+	<!-- Action Queue — "Next 3 wins" suggestions. Sits BELOW the graph so the
+	     operator explores the store first, then hits the recommended actions.
+	     Ranked by impact ÷ effort. -->
+	<div class="kg-action-queue" id="kg-action-queue" hidden>
+		<div class="kg-action-queue-header">
+			<span class="kg-action-queue-title"><?php esc_html_e( 'Next wins', 'luwipress' ); ?></span>
+			<span class="kg-action-queue-sub"><?php esc_html_e( 'Ranked by impact ÷ effort — tackle from top', 'luwipress' ); ?></span>
 		</div>
+		<div class="kg-action-queue-list" id="kg-action-queue-list"></div>
+	</div>
+
+	<!-- Activity Feed — last N operator actions (enrichment, translation, AEO).
+	     Polls /logs every 30s while visible to surface background job completions. -->
+	<div class="kg-activity" id="kg-activity" hidden>
+		<div class="kg-activity-header">
+			<span class="kg-activity-title"><?php esc_html_e( 'Recent activity', 'luwipress' ); ?></span>
+			<span class="kg-activity-sub" id="kg-activity-sub">—</span>
+		</div>
+		<div class="kg-activity-list" id="kg-activity-list"></div>
 	</div>
 
 	<!-- Detail Panel (slides in on node click) -->

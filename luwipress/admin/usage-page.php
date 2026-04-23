@@ -70,9 +70,12 @@ $recent_calls = class_exists( 'LuwiPress_Token_Tracker' ) ? LuwiPress_Token_Trac
 $nonce    = wp_create_nonce( 'luwipress_dashboard_nonce' );
 $ajax_url = admin_url( 'admin-ajax.php' );
 $base_url = admin_url( 'admin.php?page=luwipress-usage' );
+
+// REST nonce for the JS live layer (luwi-live.js reads window.luwipressLive).
+$rest_nonce = wp_create_nonce( 'wp_rest' );
 ?>
 
-<div class="wrap lp-tm">
+<div class="wrap lp-tm" data-luwi-usage-root data-tab="<?php echo esc_attr( $active_tab ); ?>">
 
 	<!-- ═══ HEADER ═══ -->
 	<div class="tm-header">
@@ -97,55 +100,87 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 	<div class="tm-stats">
 		<?php
 		$bar_colour = $limit_pct >= 90 ? 'var(--lp-error)' : ( $limit_pct >= 70 ? 'var(--lp-warning)' : 'var(--lp-success)' );
+		$bar_class  = $limit_pct >= 90 ? ' lp-bar-crit' : ( $limit_pct >= 70 ? ' lp-bar-warn' : '' );
+		$card_pulse = $limit_pct >= 90 ? ' lp-card-pulse' : '';
 		$cost_cards = array(
 			array(
-				'icon'  => 'dashicons-clock',
-				'label' => __( "Today's Spend", 'luwipress' ),
-				'value' => '$' . number_format( $today_cost, 4 ),
-				'sub'   => $today_calls . ' ' . __( 'calls', 'luwipress' ),
-				'color' => $bar_colour,
+				'icon'       => 'dashicons-clock',
+				'label'      => __( "Today's Spend", 'luwipress' ),
+				'value'      => '$' . number_format( $today_cost, 4 ),
+				'sub'        => $today_calls . ' ' . __( 'calls', 'luwipress' ),
+				'color'      => $bar_colour,
+				'stat_key'   => 'today-cost',
+				'stat_raw'   => $today_cost,
+				'sub_key'    => 'today-calls',
+				'sub_raw'    => $today_calls,
 			),
 			array(
-				'icon'  => 'dashicons-calendar-alt',
-				'label' => __( 'This Month', 'luwipress' ),
-				'value' => '$' . number_format( $month_cost, 4 ),
-				'sub'   => $month_calls . ' ' . __( 'calls', 'luwipress' ),
-				'color' => 'var(--lp-primary)',
+				'icon'       => 'dashicons-calendar-alt',
+				'label'      => __( 'This Month', 'luwipress' ),
+				'value'      => '$' . number_format( $month_cost, 4 ),
+				'sub'        => $month_calls . ' ' . __( 'calls', 'luwipress' ),
+				'color'      => 'var(--lp-primary)',
+				'stat_key'   => 'month-cost',
+				'stat_raw'   => $month_cost,
+				'sub_key'    => 'month-calls',
+				'sub_raw'    => $month_calls,
 			),
 			array(
-				'icon'  => 'dashicons-shield',
-				'label' => __( 'Daily Budget', 'luwipress' ),
-				'value' => $daily_limit > 0 ? $limit_pct . '%' : '--',
-				'color' => $bar_colour,
-				'bar'   => $daily_limit > 0 ? min( 100, $limit_pct ) : 0,
-				'sub'   => $daily_limit > 0 ? '$' . number_format( $today_cost, 2 ) . ' / $' . number_format( $daily_limit, 2 ) : __( 'No limit set', 'luwipress' ),
+				'icon'       => 'dashicons-shield',
+				'label'      => __( 'Daily Budget', 'luwipress' ),
+				'value'      => $daily_limit > 0 ? $limit_pct . '%' : '--',
+				'color'      => $bar_colour,
+				'bar'        => $daily_limit > 0 ? min( 100, $limit_pct ) : 0,
+				'sub'        => $daily_limit > 0 ? '$' . number_format( $today_cost, 2 ) . ' / $' . number_format( $daily_limit, 2 ) : __( 'No limit set', 'luwipress' ),
+				'stat_key'   => 'limit-pct',
+				'stat_raw'   => $limit_pct,
+				'sub_key'    => 'budget-sub',
+				'sub_raw'    => '',
+				'card_attr'  => 'data-live-card="budget"' . $card_pulse,
+				'bar_attr'   => 'data-live-stat="budget-bar"',
+				'bar_class'  => $bar_class,
 			),
 			array(
-				'icon'  => 'dashicons-admin-tools',
-				'label' => __( 'AI Workflows', 'luwipress' ),
-				'value' => count( $by_workflow ),
-				'sub'   => __( 'active this month', 'luwipress' ),
-				'color' => 'var(--lp-blue)',
+				'icon'       => 'dashicons-admin-tools',
+				'label'      => __( 'AI Workflows', 'luwipress' ),
+				'value'      => count( $by_workflow ),
+				'sub'        => __( 'active this month', 'luwipress' ),
+				'color'      => 'var(--lp-blue)',
+				'stat_key'   => 'workflow-count',
+				'stat_raw'   => count( $by_workflow ),
 			),
 		);
 		foreach ( $cost_cards as $ci => $card ) :
+			$card_cls   = ( isset( $card['card_attr'] ) && false !== strpos( $card['card_attr'], 'lp-card-pulse' ) ) ? ' lp-card-pulse' : '';
+			$card_extra = isset( $card['card_attr'] ) ? ' ' . trim( str_replace( 'lp-card-pulse', '', $card['card_attr'] ) ) : '';
 		?>
-		<div class="tm-stat-card" style="animation-delay:<?php echo $ci * 80; ?>ms;">
+		<div class="tm-stat-card<?php echo $card_cls; ?>"<?php echo $card_extra; ?> style="animation-delay:<?php echo $ci * 80; ?>ms;">
 			<div class="tm-stat-icon" style="color:<?php echo $card['color']; ?>;">
 				<span class="dashicons <?php echo esc_attr( $card['icon'] ); ?>"></span>
 			</div>
 			<div class="tm-stat-body">
 				<span class="tm-stat-label"><?php echo esc_html( $card['label'] ); ?></span>
-				<span class="tm-stat-value" style="color:<?php echo $card['color']; ?>;"><?php echo esc_html( $card['value'] ); ?></span>
-				<?php if ( ! empty( $card['bar'] ) ) : ?>
-					<div class="tm-stat-bar"><div class="tm-stat-bar-fill" style="width:<?php echo (int) $card['bar']; ?>%;background:<?php echo $card['color']; ?>;"></div></div>
+				<span class="tm-stat-value" style="color:<?php echo $card['color']; ?>;"<?php if ( ! empty( $card['stat_key'] ) ) : ?> data-live-stat="<?php echo esc_attr( (string) $card['stat_key'] ); ?>" data-lp-live-value="<?php echo esc_attr( (string) $card['stat_raw'] ); ?>"<?php endif; ?>><?php echo esc_html( (string) $card['value'] ); ?></span>
+				<?php if ( isset( $card['bar'] ) ) : ?>
+					<div class="tm-stat-bar"><div class="tm-stat-bar-fill<?php echo isset( $card['bar_class'] ) ? esc_attr( (string) $card['bar_class'] ) : ''; ?>"<?php if ( ! empty( $card['bar_attr'] ) ) : ?> <?php echo $card['bar_attr']; ?><?php endif; ?> style="width:<?php echo (int) $card['bar']; ?>%;background:<?php echo $card['color']; ?>;"></div></div>
 				<?php endif; ?>
 				<?php if ( ! empty( $card['sub'] ) ) : ?>
-					<span class="tm-stat-sub"><?php echo esc_html( $card['sub'] ); ?></span>
+					<span class="tm-stat-sub"<?php if ( ! empty( $card['sub_key'] ) ) : ?> data-live-stat="<?php echo esc_attr( (string) $card['sub_key'] ); ?>"<?php if ( isset( $card['sub_raw'] ) && '' !== $card['sub_raw'] ) : ?> data-lp-live-value="<?php echo esc_attr( (string) $card['sub_raw'] ); ?>"<?php endif; ?><?php endif; ?>><?php echo esc_html( (string) $card['sub'] ); ?></span>
 				<?php endif; ?>
 			</div>
 		</div>
 		<?php endforeach; ?>
+
+		<!-- 30-day cost trend sparkline — 5th grid item -->
+		<div class="tm-stat-card tm-stat-card--spark" style="animation-delay:320ms;">
+			<div class="tm-stat-icon" style="color:var(--lp-primary);">
+				<span class="dashicons dashicons-chart-line"></span>
+			</div>
+			<div class="tm-stat-body">
+				<span class="tm-stat-label"><?php esc_html_e( '30-day cost trend', 'luwipress' ); ?></span>
+				<svg class="lp-sparkline" data-live-sparkline viewBox="0 0 160 36" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="<?php esc_attr_e( '30-day cost trend', 'luwipress' ); ?>"></svg>
+			</div>
+		</div>
 	</div>
 
 	<!-- ═══ TABS ═══ -->
@@ -175,25 +210,29 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 					<span class="dashicons dashicons-chart-bar"></span>
 					<p><?php esc_html_e( 'No AI calls yet.', 'luwipress' ); ?></p>
 				</div>
-			<?php else : ?>
-				<table class="tm-table">
-					<thead><tr>
-						<th><?php esc_html_e( 'Workflow', 'luwipress' ); ?></th>
-						<th class="tm-col-num"><?php esc_html_e( 'Calls', 'luwipress' ); ?></th>
-						<th class="tm-col-num"><?php esc_html_e( 'Cost', 'luwipress' ); ?></th>
-					</tr></thead>
-					<tbody>
-					<?php foreach ( $by_workflow as $wf ) :
-						$wf_name = ucwords( str_replace( array( '-', '_' ), ' ', $wf->workflow ) );
+			<?php else :
+				$wf_palette = array( 'var(--lp-primary)', 'var(--lp-success)', 'var(--lp-warning)', 'var(--lp-error)', 'var(--lp-blue)', '#a855f7', '#ec4899' );
+				$wf_max     = max( 0.000001, max( array_map( function ( $w ) { return floatval( $w->cost ); }, $by_workflow ) ) );
+			?>
+				<div class="lp-bar-meter" data-live-workflows>
+					<?php foreach ( array_slice( $by_workflow, 0, 8 ) as $i => $wf ) :
+						$wf_name  = ucwords( str_replace( array( '-', '_' ), ' ', $wf->workflow ) );
+						$wf_cost  = floatval( $wf->cost );
+						$wf_pct   = max( 2, ( $wf_cost / $wf_max ) * 100 );
+						$wf_color = $wf_palette[ $i % count( $wf_palette ) ];
 					?>
-						<tr class="tm-lang-row">
-							<td><strong><?php echo esc_html( $wf_name ); ?></strong></td>
-							<td class="tm-col-num"><?php echo number_format( (int) $wf->calls ); ?></td>
-							<td class="tm-col-num"><span class="tm-num-done">$<?php echo number_format( (float) $wf->cost, 4 ); ?></span></td>
-						</tr>
+						<div class="lp-bar-row">
+							<div class="lp-bar-head">
+								<span class="lp-bar-label"><?php echo esc_html( $wf_name ); ?></span>
+								<span class="lp-bar-value">$<?php echo esc_html( number_format( $wf_cost, 4 ) ); ?></span>
+							</div>
+							<div class="lp-bar-track">
+								<div class="lp-bar-fill" style="width:<?php echo esc_attr( number_format( $wf_pct, 1 ) ); ?>%;background:<?php echo esc_attr( $wf_color ); ?>;"></div>
+							</div>
+							<div class="lp-bar-sub"><?php echo esc_html( number_format( (int) $wf->calls ) ); ?> <?php esc_html_e( 'calls', 'luwipress' ); ?> · <?php echo esc_html( number_format( (int) $wf->tokens ) ); ?> <?php esc_html_e( 'tokens', 'luwipress' ); ?></div>
+						</div>
 					<?php endforeach; ?>
-					</tbody>
-				</table>
+				</div>
 			<?php endif; ?>
 		</div>
 
@@ -249,18 +288,23 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 				<input type="hidden" name="page" value="luwipress-usage" />
 				<input type="hidden" name="tab" value="logs" />
 				<?php if ( $filter_level ) : ?><input type="hidden" name="level" value="<?php echo esc_attr( $filter_level ); ?>" /><?php endif; ?>
-				<input type="search" name="search" value="<?php echo esc_attr( $filter_search ); ?>" placeholder="<?php esc_attr_e( 'Search logs...', 'luwipress' ); ?>" class="usage-search-input" />
+				<input type="search" name="search" value="<?php echo esc_attr( $filter_search ); ?>" placeholder="<?php esc_attr_e( 'Search logs...', 'luwipress' ); ?>" class="usage-search-input" data-live-log-search />
 				<button type="submit" class="tm-btn tm-btn-secondary tm-btn-sm"><span class="dashicons dashicons-search"></span></button>
 			</form>
+			<label class="lp-live-toggle" title="<?php esc_attr_e( 'Poll server for new entries every 15 seconds', 'luwipress' ); ?>">
+				<input type="checkbox" data-live-autorefresh />
+				<span class="lp-live-dot"></span>
+				<span data-live-autorefresh-label data-on="<?php esc_attr_e( 'Live', 'luwipress' ); ?>" data-off="<?php esc_attr_e( 'Paused', 'luwipress' ); ?>"><?php esc_html_e( 'Paused', 'luwipress' ); ?></span>
+			</label>
 		</div>
 
 		<!-- Grouped Logs -->
-		<?php if ( empty( $grouped_logs ) ) : ?>
-			<div class="usage-empty" style="padding:var(--space-3xl);">
-				<span class="dashicons dashicons-yes-alt"></span>
-				<p><?php esc_html_e( 'No logs found.', 'luwipress' ); ?></p>
-			</div>
-		<?php else : ?>
+		<div class="usage-empty" data-live-log-empty style="padding:var(--space-3xl);<?php echo empty( $grouped_logs ) ? '' : 'display:none;'; ?>">
+			<span class="dashicons dashicons-yes-alt"></span>
+			<p><?php esc_html_e( 'No logs found.', 'luwipress' ); ?></p>
+		</div>
+		<?php if ( ! empty( $grouped_logs ) ) : ?>
+			<div data-live-log-stream>
 			<?php foreach ( $grouped_logs as $date => $day_logs ) : ?>
 			<div class="usage-log-group">
 				<div class="usage-log-date">
@@ -270,7 +314,7 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 				<?php foreach ( $day_logs as $log ) :
 					$level_class = 'log-' . $log->level;
 				?>
-				<div class="usage-log-entry <?php echo esc_attr( $level_class ); ?>">
+				<div class="usage-log-entry <?php echo esc_attr( $level_class ); ?>" data-live-log-id="<?php echo esc_attr( $log->id ); ?>">
 					<span class="usage-log-time"><?php echo esc_html( wp_date( 'H:i:s', strtotime( $log->timestamp ) ) ); ?></span>
 					<span class="usage-log-level"><?php echo esc_html( strtoupper( $log->level ) ); ?></span>
 					<span class="usage-log-msg"><?php echo esc_html( $log->message ); ?></span>
@@ -283,6 +327,7 @@ $base_url = admin_url( 'admin.php?page=luwipress-usage' );
 				<?php endforeach; ?>
 			</div>
 			<?php endforeach; ?>
+			</div>
 
 			<!-- Pagination -->
 			<?php if ( $total_pages > 1 ) : ?>

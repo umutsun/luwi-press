@@ -106,7 +106,8 @@ class LuwiPress_Translation {
         ]);
 
         // Batch: translate N untranslated posts for one or more target languages.
-        // Used by the Knowledge Graph "Translate N missing products" button.
+        // Used by the Knowledge Graph "Translate N missing products" button
+        // and the category-scoped "Translate this category to X" action.
         register_rest_route($namespace, '/translation/batch', [
             'methods'             => 'POST',
             'callback'            => [$this, 'batch_translate_missing'],
@@ -115,6 +116,7 @@ class LuwiPress_Translation {
                 'languages' => ['required' => true],
                 'post_type' => ['default' => 'product', 'sanitize_callback' => 'sanitize_text_field'],
                 'limit'     => ['default' => 50, 'sanitize_callback' => 'absint'],
+                'post_ids'  => ['description' => 'Optional whitelist (array or comma-separated IDs) to scope the batch to specific posts (e.g. one category).'],
             ],
         ]);
 

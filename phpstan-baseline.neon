@@ -11,6 +11,11 @@ parameters:
 			path: luwipress/admin/admin-page.php
 
 		-
+			message: "#^Offset 'models' on array\\{label\\: 'Claude', vendor\\: 'Anthropic', desc\\: string, key_field\\: 'luwipress_anthropic…', key_value\\: mixed, placeholder\\: 'sk\\-ant\\-…', help_url\\: 'https\\://console…', models\\: array\\{claude\\-haiku\\-4\\-5\\: array\\{label\\: string, cost\\: '\\$0\\.80 / \\$4\\.00 per 1M', recommended\\: true\\}, claude\\-sonnet\\-4\\-6\\: array\\{label\\: string, cost\\: '\\$3\\.00 / \\$15\\.00 per…'\\}\\}, \\.\\.\\.\\}\\|array\\{label\\: 'Custom', vendor\\: string, desc\\: string, key_field\\: 'luwipress_oai…', key_value\\: mixed, placeholder\\: 'sk\\-…', help_url\\: '', models\\: array\\{\\}, \\.\\.\\.\\}\\|array\\{label\\: 'Gemini', vendor\\: 'Google', desc\\: string, key_field\\: 'luwipress_google_ai…', key_value\\: mixed, placeholder\\: 'AIza…', help_url\\: 'https\\://aistudio…', models\\: array\\{gemini\\-2\\.0\\-flash\\: array\\{label\\: string, cost\\: '\\$0\\.10 / \\$0\\.40 per 1M', recommended\\: true\\}, gemini\\-2\\.5\\-flash\\: array\\{label\\: string, cost\\: '\\$0\\.15 / \\$0\\.60 per 1M'\\}, gemini\\-2\\.5\\-pro\\: array\\{label\\: string, cost\\: '\\$1\\.25 / \\$10\\.00 per…'\\}\\}, \\.\\.\\.\\}\\|array\\{label\\: 'GPT', vendor\\: 'OpenAI', desc\\: string, key_field\\: 'luwipress_openai…', key_value\\: mixed, placeholder\\: 'sk\\-…', help_url\\: 'https\\://platform…', models\\: array\\{gpt\\-4o\\-mini\\: array\\{label\\: string, cost\\: '\\$0\\.15 / \\$0\\.60 per 1M', recommended\\: true\\}, gpt\\-4o\\: array\\{label\\: string, cost\\: '\\$2\\.50 / \\$10\\.00 per…'\\}\\}, \\.\\.\\.\\} in isset\\(\\) always exists and is not nullable\\.$#"
+			count: 1
+			path: luwipress/admin/settings-page.php
+
+		-
 			message: "#^Parameter \\#1 \\$text of function esc_attr expects string, float given\\.$#"
 			count: 1
 			path: luwipress/admin/settings-page.php
@@ -29,6 +34,26 @@ parameters:
 			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
 			count: 1
 			path: luwipress/admin/translation-page.php
+
+		-
+			message: "#^Offset 'bar_attr' on array\\{icon\\: 'dashicons\\-shield', label\\: string, value\\: non\\-falsy\\-string, color\\: 'var\\(\\-\\-lp\\-error\\)'\\|'var\\(\\-\\-lp\\-success\\)'\\|'var\\(\\-\\-lp\\-warning\\)', bar\\: int\\<min, 100\\>, sub\\: string, stat_key\\: 'limit\\-pct', stat_raw\\: int, \\.\\.\\.\\} in empty\\(\\) always exists and is not falsy\\.$#"
+			count: 1
+			path: luwipress/admin/usage-page.php
+
+		-
+			message: "#^Offset 'bar_class' on array\\{icon\\: 'dashicons\\-shield', label\\: string, value\\: non\\-falsy\\-string, color\\: 'var\\(\\-\\-lp\\-error\\)'\\|'var\\(\\-\\-lp\\-success\\)'\\|'var\\(\\-\\-lp\\-warning\\)', bar\\: int\\<min, 100\\>, sub\\: string, stat_key\\: 'limit\\-pct', stat_raw\\: int, \\.\\.\\.\\} in isset\\(\\) always exists and is not nullable\\.$#"
+			count: 1
+			path: luwipress/admin/usage-page.php
+
+		-
+			message: "#^Offset 'stat_key' on array\\{icon\\: 'dashicons\\-admin…', label\\: string, value\\: int\\<0, max\\>, sub\\: string, color\\: 'var\\(\\-\\-lp\\-blue\\)', stat_key\\: 'workflow\\-count', stat_raw\\: int\\<0, max\\>\\}\\|array\\{icon\\: 'dashicons\\-calendar…', label\\: string, value\\: non\\-falsy\\-string, sub\\: non\\-falsy\\-string, color\\: 'var\\(\\-\\-lp\\-primary\\)', stat_key\\: 'month\\-cost', stat_raw\\: float, sub_key\\: 'month\\-calls', \\.\\.\\.\\}\\|array\\{icon\\: 'dashicons\\-clock', label\\: string, value\\: non\\-falsy\\-string, sub\\: non\\-falsy\\-string, color\\: 'var\\(\\-\\-lp\\-error\\)'\\|'var\\(\\-\\-lp\\-success\\)'\\|'var\\(\\-\\-lp\\-warning\\)', stat_key\\: 'today\\-cost', stat_raw\\: float, sub_key\\: 'today\\-calls', \\.\\.\\.\\}\\|array\\{icon\\: 'dashicons\\-shield', label\\: string, value\\: non\\-falsy\\-string, color\\: 'var\\(\\-\\-lp\\-error\\)'\\|'var\\(\\-\\-lp\\-success\\)'\\|'var\\(\\-\\-lp\\-warning\\)', bar\\: int\\<min, 100\\>, sub\\: string, stat_key\\: 'limit\\-pct', stat_raw\\: int, \\.\\.\\.\\} in empty\\(\\) always exists and is not falsy\\.$#"
+			count: 1
+			path: luwipress/admin/usage-page.php
+
+		-
+			message: "#^Offset 'sub_raw' on array\\{icon\\: 'dashicons\\-calendar…', label\\: string, value\\: non\\-falsy\\-string, sub\\: non\\-falsy\\-string, color\\: 'var\\(\\-\\-lp\\-primary\\)', stat_key\\: 'month\\-cost', stat_raw\\: float, sub_key\\: 'month\\-calls', \\.\\.\\.\\}\\|array\\{icon\\: 'dashicons\\-clock', label\\: string, value\\: non\\-falsy\\-string, sub\\: non\\-falsy\\-string, color\\: 'var\\(\\-\\-lp\\-error\\)'\\|'var\\(\\-\\-lp\\-success\\)'\\|'var\\(\\-\\-lp\\-warning\\)', stat_key\\: 'today\\-cost', stat_raw\\: float, sub_key\\: 'today\\-calls', \\.\\.\\.\\}\\|array\\{icon\\: 'dashicons\\-shield', label\\: string, value\\: non\\-falsy\\-string, color\\: 'var\\(\\-\\-lp\\-error\\)'\\|'var\\(\\-\\-lp\\-success\\)'\\|'var\\(\\-\\-lp\\-warning\\)', bar\\: int\\<min, 100\\>, sub\\: non\\-falsy\\-string, stat_key\\: 'limit\\-pct', stat_raw\\: int, \\.\\.\\.\\} in isset\\(\\) always exists and is not nullable\\.$#"
+			count: 1
+			path: luwipress/admin/usage-page.php
 
 		-
 			message: "#^Function wc_get_product not found\\.$#"

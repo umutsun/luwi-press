@@ -182,7 +182,7 @@ class LuwiPress_Knowledge_Graph {
 		}
 
 		if ( in_array( 'translation', $sections, true ) ) {
-			$language_nodes = $this->build_language_nodes( $product_nodes, $target_languages );
+			$language_nodes = $this->build_language_nodes( $product_nodes, $target_languages, $default_language );
 		}
 
 		if ( in_array( 'crm', $sections, true ) ) {
@@ -877,7 +877,7 @@ class LuwiPress_Knowledge_Graph {
 		return $nodes;
 	}
 
-	private function build_language_nodes( $product_nodes, $target_languages ) {
+	private function build_language_nodes( $product_nodes, $target_languages, $default_language = '' ) {
 		$lang_counts = array();
 
 		foreach ( $target_languages as $lang ) {
@@ -901,12 +901,35 @@ class LuwiPress_Knowledge_Graph {
 		$total = count( $product_nodes );
 		$nodes = array();
 
+		// Primary / source language — 100% coverage by definition (products
+		// originate in this language). Including it lets the Language view /
+		// Taxonomy heatmap / stats show a complete picture instead of hiding
+		// the source dimension.
+		if ( ! empty( $default_language ) ) {
+			$nodes[] = array(
+				'id'                  => 'lang_' . $default_language,
+				'type'                => 'language',
+				'code'                => $default_language,
+				'name'                => $this->language_native_name( $default_language ),
+				'english_name'        => $this->language_english_name( $default_language ),
+				'is_primary'          => true,
+				'products_translated' => $total,
+				'products_processing' => 0,
+				'products_missing'    => 0,
+				'coverage_pct'        => 100,
+				'opportunity_score'   => 0,
+			);
+		}
+
 		foreach ( $lang_counts as $lang => $counts ) {
 			$coverage = $total > 0 ? round( ( $counts['completed'] / $total ) * 100, 1 ) : 0;
 			$nodes[] = array(
 				'id'                  => 'lang_' . $lang,
 				'type'                => 'language',
 				'code'                => $lang,
+				'name'                => $this->language_native_name( $lang ),
+				'english_name'        => $this->language_english_name( $lang ),
+				'is_primary'          => false,
 				'products_translated' => $counts['completed'],
 				'products_processing' => $counts['processing'],
 				'products_missing'    => $counts['missing'],
@@ -916,6 +939,34 @@ class LuwiPress_Knowledge_Graph {
 		}
 
 		return $nodes;
+	}
+
+	// Language code → native + english display name. Falls back to the
+	// uppercased code for anything we don't have in the map.
+	private function language_native_name( $code ) {
+		$map = array(
+			'en' => 'English',   'fr' => 'Français',   'it' => 'Italiano', 'es' => 'Español',
+			'de' => 'Deutsch',   'pt' => 'Português',  'nl' => 'Nederlands','pl' => 'Polski',
+			'ru' => 'Русский',   'tr' => 'Türkçe',     'ar' => 'العربية',  'zh' => '中文',
+			'ja' => '日本語',     'ko' => '한국어',      'hi' => 'हिन्दी',      'el' => 'Ελληνικά',
+			'sv' => 'Svenska',   'da' => 'Dansk',      'no' => 'Norsk',    'fi' => 'Suomi',
+			'cs' => 'Čeština',   'ro' => 'Română',     'hu' => 'Magyar',   'uk' => 'Українська',
+			'he' => 'עברית',      'th' => 'ไทย',         'vi' => 'Tiếng Việt','id' => 'Bahasa Indonesia',
+		);
+		return $map[ $code ] ?? strtoupper( $code );
+	}
+
+	private function language_english_name( $code ) {
+		$map = array(
+			'en' => 'English',   'fr' => 'French',    'it' => 'Italian',   'es' => 'Spanish',
+			'de' => 'German',    'pt' => 'Portuguese','nl' => 'Dutch',     'pl' => 'Polish',
+			'ru' => 'Russian',   'tr' => 'Turkish',   'ar' => 'Arabic',    'zh' => 'Chinese',
+			'ja' => 'Japanese',  'ko' => 'Korean',    'hi' => 'Hindi',     'el' => 'Greek',
+			'sv' => 'Swedish',   'da' => 'Danish',    'no' => 'Norwegian', 'fi' => 'Finnish',
+			'cs' => 'Czech',     'ro' => 'Romanian',  'hu' => 'Hungarian', 'uk' => 'Ukrainian',
+			'he' => 'Hebrew',    'th' => 'Thai',      'vi' => 'Vietnamese','id' => 'Indonesian',
+		);
+		return $map[ $code ] ?? strtoupper( $code );
 	}
 
 	private function build_customer_segment_nodes() {
@@ -1080,7 +1131,7 @@ class LuwiPress_Knowledge_Graph {
 			$aeo_coverage[ $type ] = $pct( $count );
 		}
 
-		return array(
+		$summary = array(
 			'total_products'        => $total,
 			'total_categories'      => count( $category_nodes ),
 			'total_customer_segments' => count( $segment_nodes ),
@@ -1091,6 +1142,85 @@ class LuwiPress_Knowledge_Graph {
 			'opportunity_score_total' => $total_score,
 			'opportunity_score_avg'   => $total > 0 ? round( $total_score / $total, 1 ) : 0,
 		);
+
+		// History + delta — keep a rolling 30-day ring of daily snapshots so
+		// the frontend can show "X wins this week" progress badges. Throttled
+		// to one write per day (keyed by Y-m-d) so hot callers don't spam.
+		$summary['trend'] = $this->update_and_get_summary_trend( $summary );
+
+		return $summary;
+	}
+
+	// Stores a small daily snapshot of the key coverage numbers in a site
+	// option (autoload=no). Returns { last_week_delta_opportunities,
+	// last_week_delta_seo, last_week_delta_enrichment, points_count }.
+	private function update_and_get_summary_trend( $summary ) {
+		$key     = 'luwipress_kg_summary_history';
+		$history = get_option( $key, array() );
+		if ( ! is_array( $history ) ) {
+			$history = array();
+		}
+
+		$today = current_time( 'Y-m-d' );
+		$entry = array(
+			'date'                => $today,
+			'ts'                  => current_time( 'mysql' ),
+			'total_products'      => absint( $summary['total_products'] ),
+			'seo_coverage'        => floatval( $summary['seo_coverage'] ),
+			'enrichment_coverage' => floatval( $summary['enrichment_coverage'] ),
+			'opportunity_total'   => absint( $summary['opportunity_score_total'] ),
+		);
+
+		// Upsert by date — today's write overwrites any earlier snapshot today.
+		$found = false;
+		foreach ( $history as $i => $row ) {
+			if ( ( $row['date'] ?? '' ) === $today ) {
+				$history[ $i ] = $entry;
+				$found         = true;
+				break;
+			}
+		}
+		if ( ! $found ) {
+			$history[] = $entry;
+		}
+
+		// Keep only the last 30 entries (≈1 month).
+		usort( $history, function ( $a, $b ) {
+			return strcmp( $a['date'] ?? '', $b['date'] ?? '' );
+		} );
+		if ( count( $history ) > 30 ) {
+			$history = array_slice( $history, -30 );
+		}
+
+		update_option( $key, $history, false );
+
+		// Delta vs ≈7 days ago (or earliest available if we have less history).
+		$delta = array(
+			'points_count'          => count( $history ),
+			'opportunities_delta'   => null,
+			'seo_delta'             => null,
+			'enrichment_delta'      => null,
+			'baseline_date'         => null,
+		);
+		if ( count( $history ) >= 2 ) {
+			// Pick the snapshot closest to 7 days before today.
+			$target_ts = strtotime( $today ) - 7 * DAY_IN_SECONDS;
+			$baseline  = $history[0];
+			foreach ( $history as $row ) {
+				if ( ( $row['date'] ?? '' ) === $today ) {
+					continue;
+				}
+				if ( abs( strtotime( $row['date'] ) - $target_ts ) < abs( strtotime( $baseline['date'] ) - $target_ts ) ) {
+					$baseline = $row;
+				}
+			}
+			$delta['baseline_date']       = $baseline['date'];
+			$delta['opportunities_delta'] = absint( $summary['opportunity_score_total'] ) - absint( $baseline['opportunity_total'] );
+			$delta['seo_delta']           = round( floatval( $summary['seo_coverage'] ) - floatval( $baseline['seo_coverage'] ), 1 );
+			$delta['enrichment_delta']    = round( floatval( $summary['enrichment_coverage'] ) - floatval( $baseline['enrichment_coverage'] ), 1 );
+		}
+
+		return $delta;
 	}
 
 	// ─── STORE INTELLIGENCE (WooCommerce deep analysis) ─────────────────
