@@ -2382,7 +2382,33 @@ a:focus-visible {
     font-size: 11px; font-weight: 500; color: #fff; background: var(--lp-primary);
     padding: 2px 8px; border-radius: 10px; letter-spacing: 0.5px;
 }
-.lp-header-actions { display: flex; gap: 8px; align-items: center; }
+.lp-header-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* Header pills — same shape as the status ribbon pills below, but rendered
+   as actionable links/buttons with hover state. Keeps the visual language
+   consistent: every clickable chip in the dashboard hero looks the same. */
+.lp-pill--action {
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color .15s ease, transform .12s ease;
+}
+.lp-pill--action:hover {
+    background: var(--lp-primary, #2271b1);
+    color: #fff;
+    transform: translateY(-1px);
+}
+.lp-pill--action:hover .dashicons { opacity: 1; }
+.lp-pill--action:focus {
+    outline: 2px solid var(--lp-primary, #2271b1);
+    outline-offset: 1px;
+    color: inherit;
+}
+
+/* Icon-only variant (settings cog) — square padding so it stays compact. */
+.lp-pill--icon {
+    padding: 4px 8px;
+}
+.lp-pill--icon .dashicons { margin: 0; }
 .lp-btn-glow {
     background: linear-gradient(135deg, var(--lp-primary), var(--lp-primary-dark)) !important;
     border: none !important;
@@ -2412,16 +2438,75 @@ a:focus-visible {
     display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px;
     padding: 14px 16px; background: var(--lp-surface); border: 1px solid var(--lp-border);
     border-radius: 10px;
+    /* Sibling cards below (hero stats, KG header, etc.) sometimes create
+       their own stacking contexts via transform/opacity/will-change, which
+       trapped pill tooltips behind them. Lift the whole ribbon so its
+       descendant z-indexes outrank everything that follows. */
+    position: relative;
+    z-index: 100;
 }
 .lp-pill {
-    display: inline-flex; align-items: center; gap: 5px;
+    display: inline-flex; align-items: center; gap: 6px;
     font-size: 12px; font-weight: 500; padding: 4px 10px;
     border-radius: 20px; white-space: nowrap;
+    position: relative;
 }
-.lp-pill .dashicons { font-size: 14px; width: 14px; height: 14px; }
+/* When hovered, lift the pill itself out of the ribbon's flow so its
+   tooltip child overlays anything painted later. Belt to the ribbon's
+   `z-index: 100` so even a transformed card below can't intercept it. */
+.lp-pill--has-tip:hover,
+.lp-pill--has-tip:focus,
+.lp-pill--has-tip:focus-within { z-index: 200; }
+.lp-pill .dashicons { font-size: 14px; width: 14px; height: 14px; opacity: .85; }
+/* Coloured status dot — flips green when slot is filled, red when empty.
+   Lets the operator scan slot status faster than reading every label. */
+.lp-pill-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor; opacity: .7;
+    flex-shrink: 0;
+}
 .pill-ok { background: #ecfdf5; color: #065f46; }
+.pill-ok .lp-pill-dot { background: #10b981; opacity: 1; }
 .pill-err { background: #fef2f2; color: #991b1b; }
+.pill-err .lp-pill-dot { background: #ef4444; opacity: 1; }
 .pill-neutral { background: #f0f9ff; color: #1e40af; }
+.pill-neutral .lp-pill-dot { background: #3b82f6; opacity: 1; }
+
+/* Hover/focus tooltip — one-line label is the at-a-glance signal,
+   tooltip carries the "what does this enable / what's recommended" copy. */
+.lp-pill--has-tip { cursor: help; }
+.lp-pill--has-tip:focus { outline: 2px solid var(--lp-primary, #2271b1); outline-offset: 1px; }
+.lp-pill-tip {
+    /* `display:none` (overrides inline fallback) so the tooltip span never
+       affects layout when hidden. visibility/opacity wasn't enough — span's
+       inline default leaked the text into the pill row in some browsers. */
+    display: none !important;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 9999;
+    min-width: 240px;
+    max-width: 380px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: #1d2327;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.5;
+    white-space: normal;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
+    pointer-events: none;
+}
+.lp-pill--has-tip:hover .lp-pill-tip,
+.lp-pill--has-tip:focus .lp-pill-tip,
+.lp-pill--has-tip:focus-within .lp-pill-tip {
+    display: block !important;
+}
+/* When CSS loads, suppress the native browser title tooltip so we don't
+   double-render. The `title` attr stays as a fallback if our CSS is cached
+   stale and the custom tooltip never paints. */
+.lp-pill--has-tip:hover { /* placeholder for spec — native title is OS-driven */ }
 
 /* ─── Hero Stats ─── */
 .lp-hero {

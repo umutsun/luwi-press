@@ -218,6 +218,11 @@ class LuwiPress_AEO {
         $data = $request->get_json_params();
         $product_id = isset($data['product_id']) ? absint($data['product_id']) : 0;
 
+        $wc_check = $this->require_woocommerce();
+        if ( is_wp_error( $wc_check ) ) {
+            return $wc_check;
+        }
+
         if (!$product_id || !wc_get_product($product_id)) {
             return new WP_Error('invalid_product', 'Invalid product ID', ['status' => 400]);
         }
@@ -258,6 +263,11 @@ class LuwiPress_AEO {
     public function save_howto_data($request) {
         $data = $request->get_json_params();
         $product_id = isset($data['product_id']) ? absint($data['product_id']) : 0;
+
+        $wc_check = $this->require_woocommerce();
+        if ( is_wp_error( $wc_check ) ) {
+            return $wc_check;
+        }
 
         if (!$product_id || !wc_get_product($product_id)) {
             return new WP_Error('invalid_product', 'Invalid product ID', ['status' => 400]);
@@ -302,6 +312,11 @@ class LuwiPress_AEO {
     public function save_speakable_data($request) {
         $data = $request->get_json_params();
         $product_id = isset($data['product_id']) ? absint($data['product_id']) : 0;
+
+        $wc_check = $this->require_woocommerce();
+        if ( is_wp_error( $wc_check ) ) {
+            return $wc_check;
+        }
 
         if (!$product_id || !wc_get_product($product_id)) {
             return new WP_Error('invalid_product', 'Invalid product ID', ['status' => 400]);

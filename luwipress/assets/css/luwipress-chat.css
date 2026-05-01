@@ -52,13 +52,19 @@
     content: 'Chat';
 }
 
-/* Window — slightly wider, more generous radius, softer shadow */
+/* Window — slightly wider, more generous radius, softer shadow.
+   Height anchored at 80% of the viewport so the chat is a substantial
+   modal but the toggle and surrounding chrome stay in view. */
 .lp-chat-window {
     position: absolute;
     bottom: 58px;
     right: 0;
     width: 390px;
-    max-height: 720px;
+    height: 80vh;
+    height: 80dvh;
+    max-height: 80vh;
+    max-height: 80dvh;
+    min-height: 480px;
     background: #fff;
     border-radius: 16px;
     box-shadow: 0 12px 40px rgba(0,0,0,.14), 0 2px 8px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.04);
@@ -183,16 +189,17 @@
 
 .lp-chat-close-btn { font-size: 20px; line-height: 1; color: var(--lp-text) !important; }
 
-/* Body */
+/* Body — flexes to fill available height after header + input + footer.
+   `min-height: 0` lets it shrink instead of pushing the header out of
+   the viewport when the window's max-height is small. */
 .lp-chat-body {
-    flex: 1;
+    flex: 1 1 auto;
     overflow-y: auto;
     padding: 18px 14px;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    min-height: 420px;
-    max-height: 540px;
+    min-height: 0;
     background: linear-gradient(180deg, #fafbfc 0%, #f5f6f8 100%);
 }
 .lp-chat-body { scrollbar-width: thin; scrollbar-color: #d1d5db transparent; }
@@ -389,4 +396,18 @@
 /* Avoid floating cart overlap — extra bottom spacing for right-side widgets */
 @media (min-width: 601px) {
     .lp-chat-widget:not(.lp-chat-left) { bottom: 80px; }
+}
+
+/* Short-viewport safety — laptops zoomed in / split-screen / browser
+   chrome eating vertical space. Tighten the toggle inset and shrink
+   the window's bottom anchor so the header never gets pushed off-screen. */
+@media (min-width: 601px) and (max-height: 720px) {
+    .lp-chat-widget:not(.lp-chat-left) { bottom: 20px; }
+    .lp-chat-window {
+        bottom: 58px;
+        height: 80vh;
+        height: 80dvh;
+        max-height: calc(100vh - 100px);
+        max-height: calc(100dvh - 100px);
+    }
 }

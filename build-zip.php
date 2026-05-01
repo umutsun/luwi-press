@@ -16,11 +16,26 @@ if ( ! is_dir( $src ) ) {
 // ── Pre-build syntax check ──
 echo "Checking PHP syntax...\n";
 $lint_errors = 0;
+$bom_files   = [];
 $lint_iter = new RecursiveIteratorIterator(
     new RecursiveDirectoryIterator( $src, RecursiveDirectoryIterator::SKIP_DOTS )
 );
 foreach ( $lint_iter as $lint_file ) {
     if ( $lint_file->getExtension() !== 'php' ) continue;
+
+    // BOM detection — a UTF-8 BOM at the top of a PHP file gets emitted as
+    // 3 bytes of output before headers can be sent, breaking activation with
+    // "headers already sent" / "plugin generated 3 characters of unexpected
+    // output". Block the build before it ships a busted ZIP.
+    $fh = fopen( $lint_file->getRealPath(), 'rb' );
+    if ( $fh ) {
+        $head = fread( $fh, 3 );
+        fclose( $fh );
+        if ( $head === "\xEF\xBB\xBF" ) {
+            $bom_files[] = str_replace( $src . DIRECTORY_SEPARATOR, '', $lint_file->getRealPath() );
+        }
+    }
+
     $out = []; $code = 0;
     exec( 'php -l ' . escapeshellarg( $lint_file->getRealPath() ) . ' 2>&1', $out, $code );
     if ( $code !== 0 ) {
@@ -32,6 +47,11 @@ foreach ( $lint_iter as $lint_file ) {
 }
 if ( $lint_errors > 0 ) {
     die( "\nBLOCKED: $lint_errors syntax error(s). Fix before building.\n" );
+}
+if ( ! empty( $bom_files ) ) {
+    echo "  BOM detected in:\n";
+    foreach ( $bom_files as $bf ) echo "    $bf\n";
+    die( "\nBLOCKED: " . count( $bom_files ) . " file(s) start with UTF-8 BOM. WordPress activation will fail with 'unexpected output' — strip the BOM before building.\n" );
 }
 echo "  All PHP files OK.\n\n";
 

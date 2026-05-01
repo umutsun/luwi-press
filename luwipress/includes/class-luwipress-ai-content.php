@@ -26,11 +26,12 @@ class LuwiPress_AI_Content {
 
     private function __construct() {
         add_action('rest_api_init', array($this, 'register_endpoints'));
-        add_action('add_meta_boxes', array($this, 'add_product_meta_box'));
-        add_action('admin_enqueue_scripts', array($this, 'enqueue_product_scripts'));
 
-        // Auto-enrich hook: fires when a product is first published (WooCommerce required)
-        if ( class_exists( 'WooCommerce' ) ) {
+        // Product-bound UI hooks: only when WC is active (the meta box and
+        // product script enqueue both target the WC product editor screen).
+        if ( LuwiPress::is_wc_active() ) {
+            add_action('add_meta_boxes', array($this, 'add_product_meta_box'));
+            add_action('admin_enqueue_scripts', array($this, 'enqueue_product_scripts'));
             add_action('woocommerce_new_product', array($this, 'maybe_auto_enrich'), 20, 2);
         }
 
@@ -49,27 +50,57 @@ class LuwiPress_AI_Content {
 
     /**
      * Register REST API endpoints
+     *
+     * Product-bound routes (/product/enrich*, /product/enrich-batch*) are
+     * skipped when WooCommerce is inactive — their handlers call wc_get_product()
+     * which would fatal without WC loaded. Generic routes (/seo/schema,
+     * /seo/faq, /enrich/settings, /content/stale) always register because
+     * they operate on any post_type.
      */
     public function register_endpoints() {
-        // Trigger product enrichment → sends for AI processing.
-        // options may include: target_language, focus_keyword, custom_instructions,
-        // target_words, meta_title_max, meta_desc_max.
-        register_rest_route('luwipress/v1', '/product/enrich', array(
-            'methods'             => 'POST',
-            'callback'            => array($this, 'handle_enrich_request'),
-            'permission_callback' => array($this, 'check_admin_permission'),
-            'args'                => array(
-                'product_id' => array('required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'),
-                'options'    => array('required' => false, 'type' => 'object', 'default' => array()),
-            ),
-        ));
+        // ── Product-bound routes (WC required) ──
+        if ( LuwiPress::is_wc_active() ) {
+            // Trigger product enrichment → sends for AI processing.
+            register_rest_route('luwipress/v1', '/product/enrich', array(
+                'methods'             => 'POST',
+                'callback'            => array($this, 'handle_enrich_request'),
+                'permission_callback' => array($this, 'check_admin_permission'),
+                'args'                => array(
+                    'product_id' => array('required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'),
+                    'options'    => array('required' => false, 'type' => 'object', 'default' => array()),
+                ),
+            ));
 
-        // Callback from AI: receives enriched data
-        register_rest_route('luwipress/v1', '/product/enrich-callback', array(
-            'methods'             => 'POST',
-            'callback'            => array($this, 'handle_enrich_callback'),
-            'permission_callback' => array($this, 'check_api_token'),
-        ));
+            // Callback from AI: receives enriched data
+            register_rest_route('luwipress/v1', '/product/enrich-callback', array(
+                'methods'             => 'POST',
+                'callback'            => array($this, 'handle_enrich_callback'),
+                'permission_callback' => array($this, 'check_api_token'),
+            ));
+
+            // Batch product enrichment → queues multiple products for async enrichment
+            register_rest_route('luwipress/v1', '/product/enrich-batch', array(
+                'methods'             => 'POST',
+                'callback'            => array($this, 'handle_batch_enrich_request'),
+                'permission_callback' => array($this, 'check_admin_permission'),
+                'args'                => array(
+                    'product_ids' => array('required' => true, 'type' => 'array', 'items' => array('type' => 'integer')),
+                    'options'     => array('required' => false, 'type' => 'object', 'default' => array()),
+                ),
+            ));
+
+            // Batch enrichment status check
+            register_rest_route('luwipress/v1', '/product/enrich-batch/status', array(
+                'methods'             => 'GET',
+                'callback'            => array($this, 'handle_batch_status'),
+                'permission_callback' => array($this, 'check_admin_permission'),
+                'args'                => array(
+                    'batch_id' => array('required' => true, 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field'),
+                ),
+            ));
+        }
+
+        // ── Generic routes (always registered, work on any post_type) ──
 
         // Save/update schema markup for any post/product
         register_rest_route('luwipress/v1', '/seo/schema', array(
@@ -83,27 +114,6 @@ class LuwiPress_AI_Content {
             'methods'             => 'POST',
             'callback'            => array($this, 'handle_save_faq'),
             'permission_callback' => array($this, 'check_api_token'),
-        ));
-
-        // Batch product enrichment → queues multiple products for async enrichment
-        register_rest_route('luwipress/v1', '/product/enrich-batch', array(
-            'methods'             => 'POST',
-            'callback'            => array($this, 'handle_batch_enrich_request'),
-            'permission_callback' => array($this, 'check_admin_permission'),
-            'args'                => array(
-                'product_ids' => array('required' => true, 'type' => 'array', 'items' => array('type' => 'integer')),
-                'options'     => array('required' => false, 'type' => 'object', 'default' => array()),
-            ),
-        ));
-
-        // Batch enrichment status check
-        register_rest_route('luwipress/v1', '/product/enrich-batch/status', array(
-            'methods'             => 'GET',
-            'callback'            => array($this, 'handle_batch_status'),
-            'permission_callback' => array($this, 'check_admin_permission'),
-            'args'                => array(
-                'batch_id' => array('required' => true, 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field'),
-            ),
         ));
 
         // Read current enrichment settings (custom prompt + constraints)
@@ -157,7 +167,7 @@ class LuwiPress_AI_Content {
         // Reject enrichment targeting a WPML translation copy (see enrich-callback guard).
         if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) ) {
             $post_lang    = LuwiPress_Translation::get_post_wpml_language( $product_id );
-            $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+            $default_lang = LuwiPress_Translation::get_default_language();
             if ( $post_lang && $post_lang !== $default_lang ) {
                 return new WP_Error(
                     'language_mismatch',
@@ -286,7 +296,7 @@ class LuwiPress_AI_Content {
         // translation copies.
         if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) ) {
             $post_lang    = LuwiPress_Translation::get_post_wpml_language( $product_id );
-            $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+            $default_lang = LuwiPress_Translation::get_default_language();
             $allow_target = (bool) ( $data['allow_translation_target'] ?? false );
             if ( $post_lang && $post_lang !== $default_lang && ! $allow_target ) {
                 LuwiPress_Logger::log(
@@ -571,7 +581,7 @@ class LuwiPress_AI_Content {
         $errors      = array();
 
         $wpml_active      = defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' );
-        $default_language = $wpml_active ? apply_filters( 'wpml_default_language', get_locale() ) : null;
+        $default_language = $wpml_active ? LuwiPress_Translation::get_default_language() : null;
 
         foreach ($product_ids as $pid) {
             $product = wc_get_product($pid);

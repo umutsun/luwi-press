@@ -1721,9 +1721,16 @@ function renderStoreHealthHero(stats, summary) {
 	}
 
 	// Breakdown chips — show the weakest dimensions first so the operator
-	// knows where one click gives them the biggest lift.
+	// knows where one click gives them the biggest lift. Defensive: drop any
+	// chip whose label or value didn't survive the parts[] pipeline (caused
+	// "undefined NaN%" chips when a backend stat returned null/undefined and
+	// snuck past the value-only filter above).
 	if (metaEl) {
-		var sorted = parts.slice().sort(function(a,b){ return a.value - b.value; });
+		var renderable = parts.filter(function(p) {
+			return p && typeof p.label === 'string' && p.label.length > 0
+				&& typeof p.value === 'number' && !isNaN(p.value);
+		});
+		var sorted = renderable.slice().sort(function(a,b){ return a.value - b.value; });
 		metaEl.innerHTML = sorted.map(function(p) {
 			var cls = p.value >= 80 ? 'kg-h-good' : p.value >= 50 ? 'kg-h-warn' : 'kg-h-bad';
 			return '<span class="kg-hero-meta-chip"><strong>' + escHtml(p.label) + '</strong> <span class="' + cls + '">' + Math.round(p.value) + '%</span></span>';
@@ -3542,19 +3549,29 @@ function kgAction(action, productId, btn, langs) {
 			var totalTerms = successful.reduce(function(sum, r) {
 				return sum + ((r.data && r.data.terms_sent) || 0);
 			}, 0);
-			// Keep the button disabled with the queued state visible until the
-			// panel refreshes — otherwise a bored user can fire the same batch
-			// repeatedly while the first one is still processing in background.
-			// The refresh re-renders the taxonomy view from fresh data, which
-			// produces a button reflecting the actual remaining missing terms
-			// (usually 0 if the batch ran cleanly).
-			btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> Queued (' + totalTerms + ' terms)';
+			// Real success = backend persisted to WPML/Polylang. terms_sent is "AI calls fired",
+			// saved is "rows inserted". When AI returns malformed JSON or save errors silently,
+			// terms_sent > 0 but saved = 0 — that's the failure mode users see as "Queued forever".
+			var totalSaved = successful.reduce(function(sum, r) {
+				return sum + ((r.data && r.data.saved) || 0);
+			}, 0);
+
+			if (totalTerms > 0 && totalSaved === 0) {
+				btn.innerHTML = '<span style="color:var(--lp-error);">AI ran but 0 saved — retry?</span>';
+				setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 5000);
+				if (typeof fetchActivity === 'function') setTimeout(fetchActivity, 1500);
+				return;
+			}
+
+			btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> Saved ' + totalSaved + '/' + totalTerms;
 			btn.classList.add('kg-action-done');
 			btn.disabled = true;
 			if (typeof fetchActivity === 'function') setTimeout(fetchActivity, 1500);
+			// Refresh delay scaled to AI volume: ~3s per term + 8s safety, capped at 60s.
+			var refreshMs = Math.min(8000 + totalTerms * 3000, 60000);
 			setTimeout(function() {
 				kgRefreshAndReopen(null, 'taxonomy', targetLang);
-			}, 12000);
+			}, refreshMs);
 		}).catch(function(err) {
 			btn.innerHTML = '<span style="color:var(--lp-error);">Failed — retry?</span>';
 			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 3000);
@@ -3607,6 +3624,14 @@ function kgAction(action, productId, btn, langs) {
 		// Batch monitor owns the refresh when batch_id is set.
 		if (data.batch_id) return;
 
+			// LuwiPress_Job_Queue path -- when backend returns a job_id, poll real progress.
+			if (data.job_id && typeof kgPollJobStatus === 'function') {
+				kgPollJobStatus(data.job_id, btn, function() {
+					kgRefreshAndReopen(productId, action === 'translate_lang' ? 'language' : null, langs);
+				});
+				return;
+			}
+
 		// Otherwise schedule our own refresh after the queued job is likely done.
 		// Translation: 20-40s. AEO single / non-queued: 2s is plenty.
 		var refreshDelay = isQueued ? 25000 : 2000;
@@ -3620,6 +3645,58 @@ function kgAction(action, productId, btn, langs) {
 		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 3000);
 		if (window.console) console.error('[lpKg] action error:', action, err);
 	});
+}
+
+// Polls the generic LuwiPress_Job_Queue REST endpoint until status === 'done' or
+// an error stops it. Updates btn.innerHTML with live progress (saved/total) and
+// calls onDone() when the job finishes (typically a graph refresh).
+function kgPollJobStatus(jobId, btn, onDone) {
+	var attempts = 0;
+	var originalText = btn ? btn.innerHTML : '';
+	var poll = function() {
+		attempts++;
+		fetch(lpKgRestUrl + 'job/status?job_id=' + encodeURIComponent(jobId), {
+			headers: { 'X-WP-Nonce': lpKgNonce },
+			credentials: 'same-origin'
+		}).then(function(r) {
+			return r.json().then(function(data) { return { ok: r.ok, data: data }; });
+		}).then(function(res) {
+			if (!res.ok) {
+				if (attempts > 5) {
+					if (btn) {
+						btn.innerHTML = '<span style="color:var(--lp-error);">Job lookup failed -- retry?</span>';
+						setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 4000);
+					}
+					return;
+				}
+				setTimeout(poll, 5000);
+				return;
+			}
+			var j = res.data || {};
+			if (btn) {
+				var pct = j.total_units > 0 ? Math.round((j.done_units / j.total_units) * 100) : 0;
+				btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> ' + j.done_units + '/' + j.total_units + ' chunks (' + j.saved + ' saved)';
+			}
+			if (j.status === 'done' || j.status === 'cancelled') {
+				if (btn) {
+					if (j.saved === 0 && j.sent > 0) {
+						btn.disabled = false;
+						btn.innerHTML = '<span style="color:var(--lp-error);">AI ran but 0 saved -- retry?</span>';
+						btn.classList.remove('kg-action-done');
+					} else {
+						btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> ' + j.saved + '/' + j.sent + ' done';
+					}
+				}
+				if (typeof onDone === 'function') { setTimeout(onDone, 1500); }
+				return;
+			}
+			setTimeout(poll, 3000);
+		}).catch(function() {
+			if (attempts > 10) { return; }
+			setTimeout(poll, 5000);
+		});
+	};
+	setTimeout(poll, 2000);
 }
 
 function kgRefreshAndReopen(nodeId, nodeType, langCode) {

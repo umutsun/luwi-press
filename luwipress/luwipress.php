@@ -1,9 +1,9 @@
-﻿<?php
+<?php
 /**
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.1.37
+ * Version: 3.1.39
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -13,7 +13,6 @@
  * Requires at least: 5.6
  * Tested up to: 6.9
  * Requires PHP: 7.4
- * Requires Plugins: woocommerce
  */
 
 // Prevent direct access
@@ -22,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.1.37');
+define('LUWIPRESS_VERSION', '3.1.39');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -46,13 +45,29 @@ class LuwiPress {
         }
         return self::$instance;
     }
-    
+
+    /**
+     * Is WooCommerce active and loaded? Single source of truth — every WC-only
+     * feature gates on this. Plugin runs without WC; product enrichment, AEO,
+     * marketplace, CRM, and KG product nodes silently disable themselves.
+     *
+     * @return bool
+     */
+    public static function is_wc_active() {
+        return class_exists( 'WooCommerce' );
+    }
+
     /**
      * Constructor
      */
     private function __construct() {
         $this->init_hooks();
         $this->load_dependencies();
+        // Instantiate modules synchronously — each module's constructor
+        // registers its own admin_menu / rest_api_init hooks, and we're
+        // already on plugins_loaded p10 here (see luwipress_init at the
+        // end of this file), which runs BEFORE admin_menu fires.
+        $this->load_modules();
     }
     
     /**
@@ -62,16 +77,41 @@ class LuwiPress {
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
 
+        // Module instantiation runs synchronously at the end of __construct
+        // (see load_modules() call below). Each module's constructor is what
+        // registers its own admin_menu / rest_api_init hooks, so we MUST
+        // instantiate them before WP fires those actions. The bootstrap is
+        // already deferred to plugins_loaded p10 by the file footer
+        // `add_action('plugins_loaded', 'luwipress_init')`, which runs
+        // BEFORE admin_menu (p10 in admin context) — so calling
+        // load_modules() inline in the constructor is the simplest correct
+        // ordering. Scheduling a NEW plugins_loaded callback from inside an
+        // existing plugins_loaded callback at lower priority would silently
+        // never fire (WP's hook iteration is already past it).
+
         add_action('init', array($this, 'init'));
         add_action('rest_api_init', array($this, 'register_rest_routes'));
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
         add_action('admin_init', array($this, 'handle_cron_notice_dismiss'));
+        // Cron + migration notices stay registered globally so they reach the
+        // operator on the WP plugins screen and other native pages — but they
+        // are SUPPRESSED inside any LuwiPress admin page (see
+        // suppress_admin_notices_on_luwipress_pages below) because notices
+        // injected into the dashboard hero break our layout. The status
+        // ribbon's red WC pill is the in-dashboard signal for missing WC.
         add_action('admin_notices', array($this, 'render_cron_notices'));
         add_action('admin_notices', array($this, 'render_webmcp_moved_notice'));
         add_action('admin_init', array($this, 'handle_webmcp_notice_dismiss'));
         add_action('admin_notices', array($this, 'render_open_claw_moved_notice'));
         add_action('admin_init', array($this, 'handle_open_claw_notice_dismiss'));
+
+        // Strip ALL admin_notices / all_admin_notices output on LuwiPress
+        // pages so third-party plugins (BeTheme TGM "recommended plugins",
+        // WP core update nags, etc.) don't push the dashboard hero around
+        // or overflow the header ribbon. Operator still sees these on their
+        // native screens (Plugins list, Dashboard home, etc.).
+        add_action('in_admin_header', array($this, 'suppress_admin_notices_on_luwipress_pages'), 1000);
         add_action('wp_footer', array($this, 'render_chat_assets'), 1);
         add_action('admin_enqueue_scripts', array($this, 'admin_enqueue_scripts'));
         add_action('wp_ajax_luwipress_scan_opportunities', array($this, 'ajax_scan_opportunities'));
@@ -89,6 +129,7 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-api.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-auth.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-logger.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-job-queue.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-token-tracker.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-security.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-hmac.php';
@@ -186,7 +227,16 @@ class LuwiPress {
 
         // Daily cleanup cron
         add_action( 'luwipress_daily_cleanup', array( $this, 'run_daily_cleanup' ) );
+    }
 
+    /**
+     * Instantiate all modules. Runs on `plugins_loaded` priority 5 so module
+     * constructors (which `add_action('admin_menu', ...)`) execute BEFORE
+     * WP fires `admin_menu` on first activation. Previously this ran on
+     * `init`, racing same-priority hooks and producing an incomplete menu
+     * on the first page load.
+     */
+    public function load_modules() {
         // Core infrastructure
         LuwiPress_API::get_instance();
         LuwiPress_Auth::get_instance();
@@ -216,7 +266,6 @@ class LuwiPress {
         if ( LuwiPress_Elementor::is_elementor_active() || is_admin() ) {
             LuwiPress_Elementor::get_instance();
         }
-
     }
     
     /**
@@ -234,6 +283,13 @@ class LuwiPress {
      * Add admin menu
      */
     public function add_admin_menu() {
+        // Position 3.13 — decimal under Dashboard (2). Integer 3 was taken
+        // by Jetpack on Tapadum (visible bug: Jetpack appeared as a phantom
+        // submenu under our parent), and integer collisions overwrite slots
+        // unpredictably. WP accepts float positions and uses the decimal as
+        // a tiebreak so collision risk drops to near zero. Stays out of the
+        // BeTheme 25-55 cluster and any cleanup themes that filter null
+        // positions still render us because we pass a real numeric value.
         add_menu_page(
             'LuwiPress',
             'LuwiPress',
@@ -241,7 +297,7 @@ class LuwiPress {
             'luwipress',
             array($this, 'admin_page'),
             LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo-white.png',
-            30
+            3.13
         );
 
         // WP renders menu icons at 20×20 with 7px/2px padding, which squashes our 2000px logo.
@@ -379,7 +435,7 @@ class LuwiPress {
         }
 
         global $wpdb;
-        $default_lang = apply_filters( 'wpml_default_language', 'en' );
+        $default_lang = LuwiPress_Translation::get_default_language();
 
         // Find posts registered as originals (source_language_code IS NULL)
         // in the default language but created in the last 7 days
@@ -459,23 +515,172 @@ class LuwiPress {
     }
 
     /**
+     * Strip every admin_notices / all_admin_notices callback (ours and
+     * third-party) inside LuwiPress admin pages. WP injects notices between
+     * the `<h1>` and the first `<div>` of page content, which collides with
+     * the dashboard hero / Knowledge Graph header / Settings tabs and
+     * physically pushes the layout. The status ribbon's red WC pill (and
+     * other category pills) replaces any in-page warning the operator
+     * needs while inside LuwiPress; native screens (Plugins list, WP
+     * Dashboard home) keep getting the notices unchanged.
+     */
+    public function suppress_admin_notices_on_luwipress_pages() {
+        $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        if ( ! $screen || strpos( (string) $screen->id, 'luwipress' ) === false ) {
+            return;
+        }
+        remove_all_actions( 'admin_notices' );
+        remove_all_actions( 'all_admin_notices' );
+        remove_all_actions( 'user_admin_notices' );
+        remove_all_actions( 'network_admin_notices' );
+    }
+
+    /**
+     * Persistent notice: WooCommerce is no longer required (3.1.38+) but most
+     * value-add features need it. Show a discreet warning banner so the operator
+     * knows what's disabled, with a one-click link to install WC.
+     */
+    public function render_woocommerce_inactive_notice() {
+        if ( self::is_wc_active() ) {
+            return;
+        }
+        if ( ! current_user_can( 'activate_plugins' ) ) {
+            return;
+        }
+        // Only show on LuwiPress admin pages to avoid notice spam across WP admin.
+        $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        if ( ! $screen || strpos( (string) $screen->id, 'luwipress' ) === false ) {
+            return;
+        }
+
+        $install_url = wp_nonce_url(
+            self_admin_url( 'update.php?action=install-plugin&plugin=woocommerce' ),
+            'install-plugin_woocommerce'
+        );
+        self::render_pill_notice_styles();
+        $tooltip = __( 'Generic features (content scheduler, customer chat, AI provider settings, token tracking, generic SEO/AEO writers) are active. WooCommerce-dependent features are disabled: product enrichment, AEO product schema, marketplace publishing, CRM customer segmentation, product knowledge graph nodes, and review analytics.', 'luwipress' );
+        ?>
+        <div class="notice notice-warning notice-luwi-pill">
+            <span class="luwi-pill" tabindex="0" title="<?php echo esc_attr( $tooltip ); ?>">
+                <span class="luwi-pill__dot" aria-hidden="true"></span>
+                <span class="luwi-pill__label"><?php esc_html_e( 'WooCommerce inactive — generic features only', 'luwipress' ); ?></span>
+                <span class="luwi-pill__tip" role="tooltip" style="display:none;"><?php echo esc_html( $tooltip ); ?></span>
+            </span>
+            <a href="<?php echo esc_url( $install_url ); ?>" class="button button-small button-primary luwi-pill__action"><?php esc_html_e( 'Install WooCommerce', 'luwipress' ); ?></a>
+        </div>
+        <?php
+    }
+
+    /**
+     * Inline styles for the compact pill notices — emit once per page so
+     * multiple notices share one stylesheet block. Also prints an empty
+     * style tag with id so subsequent calls early-return.
+     */
+    private static function render_pill_notice_styles() {
+        static $printed = false;
+        if ( $printed ) {
+            return;
+        }
+        $printed = true;
+        ?>
+        <style id="luwi-pill-notice-css">
+        .notice.notice-luwi-pill {
+            padding: 8px 12px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 20px 8px 2px;
+        }
+        .notice.notice-luwi-pill > p { margin: 0; padding: 0; }
+        .luwi-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(0,0,0,.04);
+            font-size: 12px;
+            line-height: 1.4;
+            font-weight: 600;
+            color: #1d2327;
+            position: relative;
+            cursor: help;
+            white-space: nowrap;
+        }
+        .luwi-pill:focus { outline: 2px solid #2271b1; outline-offset: 1px; }
+        .luwi-pill__dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #dba617;
+        }
+        .notice-info .luwi-pill__dot { background: #2271b1; }
+        .notice-success .luwi-pill__dot { background: #00a32a; }
+        .notice-error .luwi-pill__dot { background: #d63638; }
+        .luwi-pill__tip {
+            display: none !important;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            z-index: 9999;
+            min-width: 280px;
+            max-width: 480px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            background: #1d2327;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.5;
+            white-space: normal;
+            box-shadow: 0 4px 14px rgba(0,0,0,.18);
+            pointer-events: none;
+        }
+        .luwi-pill:hover .luwi-pill__tip,
+        .luwi-pill:focus .luwi-pill__tip,
+        .luwi-pill:focus-within .luwi-pill__tip {
+            display: block !important;
+        }
+        .luwi-pill__action { margin-left: 4px !important; }
+        </style>
+        <?php
+    }
+
+    /**
      * One-time migration notice: Open Claw moved to a companion plugin in 3.1.0.
      */
     public function render_open_claw_moved_notice() {
         if ( ! current_user_can( 'activate_plugins' ) ) return;
         if ( class_exists( 'LuwiPress_Open_Claw' ) || defined( 'LUWIPRESS_OPEN_CLAW_VERSION' ) ) return;
         if ( get_option( 'luwipress_open_claw_moved_dismissed', false ) ) return;
+        // Migration notice: only show if the site previously had Open Claw
+        // enabled (i.e. is upgrading from pre-3.1.0). Fresh installs never
+        // had Open Claw so there's nothing to migrate. Without this gate the
+        // notice appeared on every clean install (Birikim 3.1.38) as a
+        // confusing "what's this?" message for a feature the user never used.
+        if ( false === get_option( 'luwipress_open_claw_enabled', false ) ) {
+            return;
+        }
+        // Match the WC notice scoping: only show on LuwiPress admin pages.
+        $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        if ( ! $screen || strpos( (string) $screen->id, 'luwipress' ) === false ) {
+            return;
+        }
         $dismiss_url = wp_nonce_url(
             add_query_arg( 'luwipress_dismiss_open_claw_notice', '1' ),
             'luwipress_dismiss_open_claw_notice'
         );
+        self::render_pill_notice_styles();
+        $tooltip = __( 'The admin AI assistant now lives in the separate "LuwiPress Open Claw" plugin. Install and activate it to keep the LuwiPress → Open Claw menu.', 'luwipress' );
         ?>
-        <div class="notice notice-warning">
-            <p>
-                <strong><?php esc_html_e( 'LuwiPress 3.1 — Open Claw has moved to a companion plugin.', 'luwipress' ); ?></strong>
-                <?php esc_html_e( 'The admin AI assistant now lives in the separate "LuwiPress Open Claw" plugin. Install and activate it to keep the LuwiPress → Open Claw menu.', 'luwipress' ); ?>
-            </p>
-            <p><a href="<?php echo esc_url( $dismiss_url ); ?>" class="button button-secondary"><?php esc_html_e( 'Dismiss — companion is installed or no longer needed', 'luwipress' ); ?></a></p>
+        <div class="notice notice-info notice-luwi-pill">
+            <span class="luwi-pill" tabindex="0" title="<?php echo esc_attr( $tooltip ); ?>">
+                <span class="luwi-pill__dot" aria-hidden="true"></span>
+                <span class="luwi-pill__label"><?php esc_html_e( 'Open Claw moved to companion plugin (3.1+)', 'luwipress' ); ?></span>
+                <span class="luwi-pill__tip" role="tooltip" style="display:none;"><?php echo esc_html( $tooltip ); ?></span>
+            </span>
+            <a href="<?php echo esc_url( $dismiss_url ); ?>" class="button button-small luwi-pill__action"><?php esc_html_e( 'Dismiss', 'luwipress' ); ?></a>
         </div>
         <?php
     }
@@ -511,20 +716,26 @@ class LuwiPress {
         if ( get_option( 'luwipress_webmcp_moved_dismissed', false ) ) {
             return;
         }
+        // Match the WC notice scoping: only show on LuwiPress admin pages.
+        $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        if ( ! $screen || strpos( (string) $screen->id, 'luwipress' ) === false ) {
+            return;
+        }
 
         $dismiss_url = wp_nonce_url(
             add_query_arg( 'luwipress_dismiss_webmcp_notice', '1' ),
             'luwipress_dismiss_webmcp_notice'
         );
+        self::render_pill_notice_styles();
+        $tooltip = __( 'Your MCP configuration is preserved, but the WebMCP endpoint and admin page now live in the separate "LuwiPress WebMCP" plugin. Install and activate it to restore AI-agent integration.', 'luwipress' );
         ?>
-        <div class="notice notice-warning">
-            <p>
-                <strong><?php esc_html_e( 'LuwiPress 3.0 — WebMCP has moved to a companion plugin.', 'luwipress' ); ?></strong>
-                <?php esc_html_e( 'Your MCP configuration is preserved, but the WebMCP endpoint and admin page now live in the separate "LuwiPress WebMCP" plugin. Install and activate it to restore AI-agent integration.', 'luwipress' ); ?>
-            </p>
-            <p>
-                <a href="<?php echo esc_url( $dismiss_url ); ?>" class="button button-secondary"><?php esc_html_e( 'Dismiss — WebMCP companion is installed or no longer needed', 'luwipress' ); ?></a>
-            </p>
+        <div class="notice notice-info notice-luwi-pill">
+            <span class="luwi-pill" tabindex="0" title="<?php echo esc_attr( $tooltip ); ?>">
+                <span class="luwi-pill__dot" aria-hidden="true"></span>
+                <span class="luwi-pill__label"><?php esc_html_e( 'WebMCP moved to companion plugin (3.0+)', 'luwipress' ); ?></span>
+                <span class="luwi-pill__tip" role="tooltip" style="display:none;"><?php echo esc_html( $tooltip ); ?></span>
+            </span>
+            <a href="<?php echo esc_url( $dismiss_url ); ?>" class="button button-small luwi-pill__action"><?php esc_html_e( 'Dismiss', 'luwipress' ); ?></a>
         </div>
         <?php
     }
@@ -679,7 +890,21 @@ class LuwiPress {
      * Admin enqueue scripts
      */
     public function admin_enqueue_scripts($hook) {
-        if (strpos($hook, 'luwipress') !== false) {
+        // Match BOTH the page-load hook ($hook) and the screen ID, because
+        // companions (luwipress-webmcp) and themes can register pages whose
+        // hook name doesn't start with our parent slug but whose screen ID
+        // does. Belt-and-braces: if either matches, enqueue.
+        $screen    = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        $screen_id = $screen ? (string) $screen->id : '';
+        $is_luwipress_page = strpos( (string) $hook, 'luwipress' ) !== false
+                          || strpos( $screen_id, 'luwipress' ) !== false;
+        if ($is_luwipress_page) {
+            // Thickbox: powers the wordpress.org plugin-information modal that
+            // the dashboard ribbon's red pills link to. Without this, clicking
+            // a "No SMTP" / "No cache plugin" pill would just open a blank
+            // iframe popup instead of the proper plugin detail card.
+            add_thickbox();
+
             wp_enqueue_style(
                 'luwipress-admin',
                 LUWIPRESS_PLUGIN_URL . 'assets/css/admin.css',
@@ -687,11 +912,13 @@ class LuwiPress {
                 LUWIPRESS_VERSION
             );
 
+            $admin_js_path = LUWIPRESS_PLUGIN_DIR . 'assets/js/admin.js';
+            $admin_js_ver  = LUWIPRESS_VERSION . '.' . ( file_exists( $admin_js_path ) ? filemtime( $admin_js_path ) : '0' );
             wp_enqueue_script(
                 'luwipress-admin',
                 LUWIPRESS_PLUGIN_URL . 'assets/js/admin.js',
                 array('jquery'),
-                LUWIPRESS_VERSION,
+                $admin_js_ver,
                 true
             );
 
@@ -809,17 +1036,24 @@ class LuwiPress {
         // Knowledge Graph page — separate script + style bundle.
         // 2,200+ lines of D3 code and 1,000+ lines of CSS; no point loading on every admin page.
         if ( false !== strpos( $hook, 'luwipress-knowledge-graph' ) ) {
+            $kg_css_path = LUWIPRESS_PLUGIN_DIR . 'assets/css/knowledge-graph.css';
+            $kg_css_ver  = LUWIPRESS_VERSION . '.' . ( file_exists( $kg_css_path ) ? filemtime( $kg_css_path ) : '0' );
             wp_enqueue_style(
                 'luwipress-knowledge-graph',
                 LUWIPRESS_PLUGIN_URL . 'assets/css/knowledge-graph.css',
                 array( 'luwipress-admin' ),
-                LUWIPRESS_VERSION
+                $kg_css_ver
             );
+            // Use filemtime as cache buster -- in-place hotfixes that don't bump
+            // LUWIPRESS_VERSION (e.g. JS-only chip-render fixes) still get a fresh
+            // ?ver=... so browsers + LiteSpeed JS minify cache invalidate immediately.
+            $kg_js_path = LUWIPRESS_PLUGIN_DIR . 'assets/js/knowledge-graph.js';
+            $kg_js_ver  = LUWIPRESS_VERSION . '.' . ( file_exists( $kg_js_path ) ? filemtime( $kg_js_path ) : '0' );
             wp_enqueue_script(
                 'luwipress-knowledge-graph',
                 LUWIPRESS_PLUGIN_URL . 'assets/js/knowledge-graph.js',
                 array(),
-                LUWIPRESS_VERSION,
+                $kg_js_ver,
                 true
             );
             wp_localize_script( 'luwipress-knowledge-graph', 'lpKgConfig', array(

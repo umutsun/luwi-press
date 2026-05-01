@@ -24,6 +24,48 @@ class LuwiPress_Translation {
         return self::$instance;
     }
 
+    private static $detector_cache = null;
+
+    /**
+     * Default language code from Plugin Detector - works for WPML, Polylang, TranslatePress.
+     * apply_filters("wpml_default_language", ...) only fires when WPML is active; on Polylang
+     * sites it falls through to get_locale() which returns "en_US" instead of "en" and
+     * silently breaks every WHERE language_code = X query downstream. Static + public so all
+     * LuwiPress modules (AI Content, Elementor, Knowledge Graph, etc.) share one source.
+     */
+    public static function get_default_language() {
+        if ( null === self::$detector_cache && class_exists( 'LuwiPress_Plugin_Detector' ) ) {
+            self::$detector_cache = LuwiPress_Plugin_Detector::get_instance()->detect_translation();
+        }
+        $lang = self::$detector_cache['default_language'] ?? get_locale();
+        return self::normalize_language_code( $lang );
+    }
+
+    /**
+     * Active language codes from Plugin Detector. WPML/Polylang/TranslatePress aware.
+     */
+    public static function get_active_languages() {
+        if ( null === self::$detector_cache && class_exists( 'LuwiPress_Plugin_Detector' ) ) {
+            self::$detector_cache = LuwiPress_Plugin_Detector::get_instance()->detect_translation();
+        }
+        $langs = self::$detector_cache['active_languages'] ?? array( get_locale() );
+        return array_map( array( __CLASS__, 'normalize_language_code' ), $langs );
+    }
+
+    /**
+     * Normalize "en_US" / "pt_BR" to "en" / "pt-br" so codes match WPML/Polylang storage format.
+     * Keeps real multi-region WPML codes (pt-br, zh-cn) intact while collapsing locale-only
+     * forms (en_US -> en) that come from get_locale() fallback.
+     */
+    private static function normalize_language_code( $code ) {
+        $code = strtolower( str_replace( '_', '-', (string) $code ) );
+        $multi_region_kept = array( 'pt-br', 'pt-pt', 'zh-cn', 'zh-tw', 'zh-hk', 'es-mx', 'es-cl', 'fr-ca', 'en-gb', 'en-au', 'en-ca' );
+        if ( strpos( $code, '-' ) !== false && ! in_array( $code, $multi_region_kept, true ) ) {
+            return substr( $code, 0, 2 );
+        }
+        return $code;
+    }
+
     private function __construct() {
         add_action('rest_api_init', [$this, 'register_endpoints']);
         add_action('admin_menu', [$this, 'add_submenu']);
@@ -41,6 +83,12 @@ class LuwiPress_Translation {
         add_action('wp_ajax_luwipress_fix_excerpts', [$this, 'ajax_fix_excerpts']);
         add_action('wp_ajax_luwipress_fix_orphan_translations', [$this, 'ajax_fix_orphan_translations']);
         add_action('wp_ajax_luwipress_sync_wpml_menus', [$this, 'ajax_sync_wpml_menus']);
+
+        // Register chunk workers with the generic LuwiPress_Job_Queue.
+        if ( class_exists( 'LuwiPress_Job_Queue' ) ) {
+            LuwiPress_Job_Queue::register_type( 'taxonomy_translation', array( $this, 'jq_taxonomy_translation_worker' ) );
+            LuwiPress_Job_Queue::register_type( 'post_translation',     array( $this, 'jq_post_translation_worker' ) );
+        }
     }
 
     /**
@@ -90,6 +138,18 @@ class LuwiPress_Translation {
                 'target_languages' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
                 'post_type'        => ['default' => 'product', 'sanitize_callback' => 'sanitize_text_field'],
                 'limit'            => ['default' => 20, 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
+        // Outdated translations: source post was edited after the translation was last synced.
+        // Returns posts whose source post_modified_gmt > translation's _luwipress_synced_source_modified.
+        register_rest_route($namespace, '/translation/outdated', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'get_outdated_translations'],
+            'permission_callback' => [$this, 'check_permission'],
+            'args' => [
+                'post_type' => ['default' => 'page', 'sanitize_callback' => 'sanitize_text_field'],
+                'limit'     => ['default' => 100, 'sanitize_callback' => 'absint'],
             ],
         ]);
 
@@ -167,14 +227,14 @@ class LuwiPress_Translation {
             'permission_callback' => [$this, 'check_token_permission'],
         ]);
 
-        // Fix excerpts — extract from Elementor content
+        // Fix excerpts â€” extract from Elementor content
         register_rest_route($namespace, '/translation/fix-excerpts', [
             'methods'             => 'POST',
             'callback'            => [$this, 'rest_fix_excerpts'],
             'permission_callback' => [$this, 'check_permission'],
         ]);
 
-        // Fix Elementor mode on translated blog posts — removes _elementor_edit_mode
+        // Fix Elementor mode on translated blog posts â€” removes _elementor_edit_mode
         // so WordPress renders post_content instead of English _elementor_data
         register_rest_route($namespace, '/translation/fix-elementor', [
             'methods'             => 'POST',
@@ -193,7 +253,7 @@ class LuwiPress_Translation {
             'permission_callback' => [$this, 'check_permission'],
         ]);
 
-        // Write translation module settings — partial update, only provided keys are touched
+        // Write translation module settings â€” partial update, only provided keys are touched
         register_rest_route($namespace, '/translation/settings', [
             'methods'             => 'POST',
             'callback'            => [$this, 'handle_set_settings'],
@@ -207,7 +267,7 @@ class LuwiPress_Translation {
     }
 
     /**
-     * GET /translation/settings — mirrors the Translation tab in Settings.
+     * GET /translation/settings â€” mirrors the Translation tab in Settings.
      */
     public function handle_get_settings( $request ) {
         return array(
@@ -218,7 +278,7 @@ class LuwiPress_Translation {
     }
 
     /**
-     * POST /translation/settings — partial update.
+     * POST /translation/settings â€” partial update.
      */
     public function handle_set_settings( $request ) {
         $data = $request->get_json_params();
@@ -290,7 +350,7 @@ class LuwiPress_Translation {
     }
 
     /**
-     * GET /translation/missing — Products missing translations
+     * GET /translation/missing â€” Products missing translations
      */
     public function get_missing_translations($request) {
         $target_lang = $request->get_param('target_language');
@@ -310,7 +370,7 @@ class LuwiPress_Translation {
     }
 
     /**
-     * GET /translation/missing-all — Products missing any target language.
+     * GET /translation/missing-all â€” Products missing any target language.
      * Returns each product with its list of missing languages.
      * AI clients use this to translate all missing languages in one pass.
      */
@@ -325,10 +385,24 @@ class LuwiPress_Translation {
         }
 
         global $wpdb;
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = self::get_default_language();
         $element_type = 'post_' . $post_type;
 
-        // Get all original posts — exclude orphan trids (lonely EN entries that are actually translations)
+        // Get all original posts. Multiple guards layered here based on incidents:
+        //
+        //  (1) post_title != ''  -- skip blank-title rows (corrupt or trash)
+        //
+        //  (2) NOT EXISTS (older sibling EN row in same trid) -- skip cascade dups
+        //      that share a trid with an older legitimate EN source.
+        //
+        //  (3) NOT EXISTS (_luwipress_elementor_translated meta) -- THIS IS THE STRONG
+        //      guard. We set _luwipress_elementor_translated=1 on every post we create
+        //      AS a translation. So if a post has this meta, by definition it is a
+        //      translation, not a source -- regardless of what icl_translations says.
+        //      This catches the cascade-duplicate case where a translation post got
+        //      mis-stamped as language_code='en' (the bug we keep chasing). The post
+        //      stays in the missing-list otherwise because each cascade dup gets its
+        //      own unique trid (lonely-trid), so guard (2) cannot help.
         $originals = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID, p.post_title, t.trid
              FROM {$wpdb->posts} p
@@ -337,22 +411,34 @@ class LuwiPress_Translation {
                AND t.element_type = %s AND t.language_code = %s
                AND t.source_language_code IS NULL
                AND p.post_title != ''
+               AND NOT EXISTS (
+                   SELECT 1 FROM {$wpdb->prefix}icl_translations t2
+                   WHERE t2.trid = t.trid
+                     AND t2.element_type = t.element_type
+                     AND t2.language_code = %s
+                     AND t2.source_language_code IS NULL
+                     AND t2.element_id < t.element_id
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM {$wpdb->postmeta} pm
+                   WHERE pm.post_id = p.ID
+                     AND pm.meta_key = '_luwipress_elementor_translated'
+                     AND pm.meta_value = '1'
+               )
              ORDER BY p.post_date DESC
              LIMIT %d",
-            $post_type, $element_type, $default_lang, $limit * 2
+            $post_type, $element_type, $default_lang, $default_lang, $limit * 2
         ));
 
-        // Filter out orphan sources — lonely trids with non-English titles
-        $originals = array_filter( $originals, function( $orig ) use ( $wpdb ) {
-            $trid_count = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->prefix}icl_translations WHERE trid = %d", $orig->trid
-            ) );
-            if ( $trid_count > 1 ) return true; // Has translations — real source
-            // Lonely trid — check if title looks non-English
-            $t = mb_strtolower( $orig->post_title );
-            return ! preg_match( '/[àâäéèêëïîôùûüçñáíóúìòü]/u', $t )
-                && ! preg_match( '/\b(della|degli|delle|nella|tutto|ogni|comme|tout|sur le|acheter|pour|avec|dans|entre|une|thérap|découvr|tambour|flûte|también|guía|cómo|instrumentos|terapia|poder|viaje|encanto|fascino|tecniche|strumenti|accordare|persiano|gioco)\b/u', $t );
-        } );
+        // NOTE: A heuristic non-English-title filter used to live here -- it scanned
+        // post titles for foreign-language words (tambour, guia, instrumenti, etc.) to
+        // skip orphan source rows. In practice it produced false positives on legit
+        // English posts about world music (Tambourine vs Bendir, Persian Tar guide)
+        // and silently hid them from the missing-list, even though the Coverage SQL
+        // counted them as missing -- causing the 8 missing but 0 to translate UI bug.
+        // The source_language_code IS NULL filter above already excludes real WPML
+        // orphans. Operators who suspect mis-filed source posts can run the dedicated
+        // Fix Orphan Translations maintenance tool instead.
 
         // Bulk-fetch all existing translations for these trids in one query
         $trids = wp_list_pluck( $originals, 'trid' );
@@ -361,12 +447,24 @@ class LuwiPress_Translation {
         if ( ! empty( $trids ) ) {
             $trid_ph = implode( ',', array_fill( 0, count( $trids ), '%d' ) );
             $lang_ph = implode( ',', array_fill( 0, count( $target_langs ), '%s' ) );
+            // CRITICAL: source_language_code IS NOT NULL — must match the Coverage SQL filter
+            // exactly. Without it, the fetcher counts mis-flagged "lonely-trid" rows
+            // (where a non-EN post sits in the same trid as the EN source but is
+            // wrongly stamped source_language_code = NULL) as "translation exists",
+            // while Coverage SQL skips them. Result: coverage shows "8 missing" but
+            // fetcher returns 0 items and the operator is stuck. Symmetric filter
+            // = symmetric counts = no more phantom missing.
+            // Also require the translated post to actually exist + be visible — same
+            // post_status set as Coverage uses.
             $sql     = sprintf(
-                "SELECT trid, language_code
-                 FROM {$wpdb->prefix}icl_translations
-                 WHERE trid IN (%s)
-                   AND element_type = %%s
-                   AND language_code IN (%s)",
+                "SELECT t.trid, t.language_code
+                 FROM {$wpdb->prefix}icl_translations t
+                 JOIN {$wpdb->posts} p ON t.element_id = p.ID
+                 WHERE t.trid IN (%s)
+                   AND t.element_type = %%s
+                   AND t.language_code IN (%s)
+                   AND t.source_language_code IS NOT NULL
+                   AND p.post_status IN ('publish','draft','private')",
                 $trid_ph,
                 $lang_ph
             );
@@ -412,7 +510,80 @@ class LuwiPress_Translation {
     }
 
     /**
-     * POST /translation/request — Translate a post/product/page via AI.
+     * GET /translation/outdated â€” Translation posts whose source has been edited
+     * since the last sync. Source post_modified_gmt > stored _luwipress_synced_source_modified.
+     * Returns each translation grouped by source so the UI can show "1 source has 3 outdated translations".
+     */
+    public function get_outdated_translations( $request ) {
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            return rest_ensure_response( array( 'count' => 0, 'sources' => array() ) );
+        }
+        global $wpdb;
+        $post_type    = sanitize_text_field( $request->get_param( 'post_type' ) ?: 'page' );
+        $limit        = min( max( 1, absint( $request->get_param( 'limit' ) ) ), 500 );
+        $default_lang = self::get_default_language();
+        $element_type = 'post_' . $post_type;
+
+        // Find every translation post (has _luwipress_synced_source_modified meta) where
+        // source's post_modified_gmt is strictly newer than the stored sync stamp.
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT
+                t.element_id   AS translation_id,
+                t.language_code,
+                t.trid,
+                pm.meta_value  AS synced_at,
+                src_t.element_id AS source_id,
+                src_p.post_title AS source_title,
+                src_p.post_modified_gmt AS source_modified
+             FROM {$wpdb->prefix}icl_translations t
+             JOIN {$wpdb->postmeta} pm
+               ON pm.post_id = t.element_id
+              AND pm.meta_key = '_luwipress_synced_source_modified'
+             JOIN {$wpdb->prefix}icl_translations src_t
+               ON src_t.trid = t.trid
+              AND src_t.element_type = t.element_type
+              AND src_t.language_code = %s
+              AND src_t.source_language_code IS NULL
+             JOIN {$wpdb->posts} src_p
+               ON src_p.ID = src_t.element_id
+              AND src_p.post_status = 'publish'
+             WHERE t.element_type = %s
+               AND t.source_language_code IS NOT NULL
+               AND src_p.post_modified_gmt > pm.meta_value
+             ORDER BY src_p.post_modified_gmt DESC
+             LIMIT %d",
+            $default_lang, $element_type, $limit
+        ) );
+
+        // Group by source so the UI can show "1 source -> 3 outdated translations"
+        $sources = array();
+        foreach ( $rows as $row ) {
+            $sid = absint( $row->source_id );
+            if ( ! isset( $sources[ $sid ] ) ) {
+                $sources[ $sid ] = array(
+                    'source_id'       => $sid,
+                    'title'           => (string) $row->source_title,
+                    'source_modified' => (string) $row->source_modified,
+                    'translations'    => array(),
+                );
+            }
+            $sources[ $sid ]['translations'][] = array(
+                'translation_id' => absint( $row->translation_id ),
+                'language'       => (string) $row->language_code,
+                'synced_at'      => (string) $row->synced_at,
+                'lag_hours'      => round( ( strtotime( $row->source_modified ) - strtotime( $row->synced_at ) ) / 3600, 1 ),
+            );
+        }
+
+        return rest_ensure_response( array(
+            'count'   => count( $sources ),
+            'total_translations' => count( $rows ),
+            'sources' => array_values( $sources ),
+        ) );
+    }
+
+    /**
+     * POST /translation/request â€” Translate a post/product/page via AI.
      * Accepts post_id (preferred) or product_id (backward compat).
      */
     public function request_translation($request) {
@@ -436,7 +607,7 @@ class LuwiPress_Translation {
         }
 
         $source_override = $request->get_param( 'source_language' );
-        $source_language = $source_override ? sanitize_text_field( $source_override ) : apply_filters( 'wpml_default_language', get_locale() );
+        $source_language = $source_override ? sanitize_text_field( $source_override ) : self::get_default_language();
 
         // If source_language override is given and WPML is active, read content from THAT language's
         // translated post rather than the post_id passed in. This lets callers pick a clean source
@@ -482,7 +653,7 @@ class LuwiPress_Translation {
         $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese', 'pt-pt' => 'Portuguese', 'ko' => 'Korean' );
         $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
 
-        // Elementor pages: ALWAYS use cron background job (never sync — avoids timeout)
+        // Elementor pages: ALWAYS use cron background job (never sync â€” avoids timeout)
         $is_elementor_page = class_exists( 'LuwiPress_Elementor' ) && LuwiPress_Elementor::is_elementor_page( $product_id );
 
         if ( $is_elementor_page ) {
@@ -495,7 +666,7 @@ class LuwiPress_Translation {
                 wp_schedule_single_event( time(), 'luwipress_elementor_translate_single', array( $product_id, $lang ) );
             }
             spawn_cron();
-            LuwiPress_Logger::log( 'Elementor page #' . $product_id . ' queued for background translation → ' . implode( ',', $target_languages ), 'info' );
+            LuwiPress_Logger::log( 'Elementor page #' . $product_id . ' queued for background translation â†’ ' . implode( ',', $target_languages ), 'info' );
             return rest_ensure_response( array(
                 'status'      => 'queued',
                 'post_id'     => $product_id,
@@ -510,7 +681,7 @@ class LuwiPress_Translation {
 
             $target_name = $lang_names[ $lang ] ?? ucfirst( $lang );
 
-            // ── Standard Translation Path (non-Elementor or short content) ──
+            // â”€â”€ Standard Translation Path (non-Elementor or short content) â”€â”€
 
             // Calculate max_tokens based on content length
             $content_length = strlen( $payload['content']['description'] ?? '' );
@@ -546,7 +717,7 @@ class LuwiPress_Translation {
                         $ai_result = $parsed;
                     } else {
                         // JSON parse failed AND extract_json failed. NEVER write raw text to
-                        // post_content — it could be a literal JSON payload dump (bug history:
+                        // post_content â€” it could be a literal JSON payload dump (bug history:
                         // corrupted IT copies on tapadum.com, 2026-04-20). Fail the translation
                         // and preserve existing content untouched.
                         update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'failed' );
@@ -617,7 +788,7 @@ class LuwiPress_Translation {
      * @return array|WP_Error Result with 'translated' count.
      */
     /**
-     * POST /translation/batch — Translate N untranslated posts for one or more target languages.
+     * POST /translation/batch â€” Translate N untranslated posts for one or more target languages.
      *
      * Used by the Knowledge Graph "Translate N missing products" button. Thin
      * REST wrapper around handle_bulk_translation() which does the heavy lifting
@@ -638,7 +809,7 @@ class LuwiPress_Translation {
             return new WP_Error( 'missing_languages', 'languages parameter is required (array or comma-separated).', array( 'status' => 400 ) );
         }
 
-        // Optional post_ids whitelist — lets callers scope the batch to a category,
+        // Optional post_ids whitelist â€” lets callers scope the batch to a category,
         // search result set, etc. Normalised here so handle_bulk_translation can read it back.
         $post_ids = $request->get_param( 'post_ids' );
         if ( ! empty( $post_ids ) ) {
@@ -691,17 +862,58 @@ class LuwiPress_Translation {
             return array( 'translated' => 0, 'message' => 'Nothing to translate.' );
         }
 
-        $translated = 0;
-
+        // Estimate total work units: post * languages_each_post_is_missing.
+        $total_units = 0;
         foreach ( $missing_items as $item ) {
-            $post_id        = $item['post_id'] ?? $item['product_id'] ?? 0;
-            $missing_langs  = $item['missing_languages'] ?? $languages;
+            $missing_langs = $item['missing_languages'] ?? $languages;
+            $total_units += count( $missing_langs );
+        }
+
+        // Async path for big batches: anything past 10 work units (each unit = one
+        // AI translation call for one post in one language) goes to wp_cron via
+        // LuwiPress_Job_Queue. Sync path stays for small batches so the dashboard
+        // stays snappy.
+        if ( $total_units > 10 && class_exists( 'LuwiPress_Job_Queue' ) ) {
+            $chunks = array();
+            foreach ( $missing_items as $item ) {
+                $post_id       = $item['post_id'] ?? $item['product_id'] ?? 0;
+                $missing_langs = $item['missing_languages'] ?? $languages;
+                if ( ! $post_id ) { continue; }
+                foreach ( $missing_langs as $lang ) {
+                    $chunks[] = array( 'post_id' => $post_id, 'lang' => $lang );
+                }
+            }
+            $job = LuwiPress_Job_Queue::enqueue( 'post_translation', array(
+                'chunks' => $chunks,
+                'meta'   => array(
+                    'post_type' => $post_type,
+                    'languages' => $languages,
+                ),
+            ) );
+            if ( is_wp_error( $job ) ) {
+                return $job;
+            }
+            return array(
+                'translated'  => 0,
+                'queued'      => count( $chunks ),
+                'job_id'      => $job['job_id'],
+                'total_units' => $job['total_units'],
+                'total_found' => count( $missing_items ),
+                'status'      => 'queued',
+                'message'     => sprintf( 'Queued %d translations. Poll job_id for progress.', count( $chunks ) ),
+            );
+        }
+
+        // Sync path -- small batches (<=10 units).
+        $translated = 0;
+        foreach ( $missing_items as $item ) {
+            $post_id       = $item['post_id'] ?? $item['product_id'] ?? 0;
+            $missing_langs = $item['missing_languages'] ?? $languages;
 
             if ( ! $post_id ) {
                 continue;
             }
 
-            // Call the existing request_translation for each item
             $tr_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
             $tr_request->set_param( 'post_id', $post_id );
             $tr_request->set_param( 'target_languages', $missing_langs );
@@ -717,7 +929,35 @@ class LuwiPress_Translation {
     }
 
     /**
-     * POST /translation/callback — Receive translated content from async AI pipeline
+     * Worker for one post-translation chunk: { post_id, lang }.
+     * Returns: [ 'sent' => N, 'saved' => N, 'errors' => [...] ]
+     */
+    public function jq_post_translation_worker( $chunk_payload, $meta, $job_id ) {
+        $post_id = absint( $chunk_payload['post_id'] ?? 0 );
+        $lang    = sanitize_text_field( $chunk_payload['lang'] ?? '' );
+
+        if ( ! $post_id || ! $lang ) {
+            return array( 'sent' => 0, 'saved' => 0, 'errors' => array( 'invalid chunk: missing post_id or lang' ) );
+        }
+
+        $tr_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
+        $tr_request->set_param( 'post_id', $post_id );
+        $tr_request->set_param( 'target_languages', array( $lang ) );
+
+        $result = $this->request_translation( $tr_request );
+
+        if ( is_wp_error( $result ) ) {
+            return array( 'sent' => 1, 'saved' => 0, 'errors' => array( sprintf( 'post #%d -> %s: %s', $post_id, $lang, $result->get_error_message() ) ) );
+        }
+
+        // request_translation returns rest_ensure_response on success. We treat the
+        // chunk as saved if we didn't get a wp_error -- the actual write happens
+        // inside request_translation -> AI -> handle_translation_callback chain.
+        return array( 'sent' => 1, 'saved' => 1, 'errors' => array() );
+    }
+
+    /**
+     * POST /translation/callback â€” Receive translated content from async AI pipeline
      */
     public function handle_translation_callback($request) {
         // Support both JSON body (external REST) and body_params (internal call)
@@ -757,7 +997,7 @@ class LuwiPress_Translation {
         update_post_meta($product_id, '_luwipress_translation_' . $language . '_completed', current_time('c'));
 
         $post_obj = get_post( $product_id );
-        LuwiPress_Logger::log('Translation completed: ' . ( $post_obj ? $post_obj->post_title : $product_id ) . ' → ' . strtoupper( $language ), 'info', array(
+        LuwiPress_Logger::log('Translation completed: ' . ( $post_obj ? $post_obj->post_title : $product_id ) . ' â†’ ' . strtoupper( $language ), 'info', array(
             'product_id' => $product_id,
             'language'   => $language,
         ));
@@ -774,11 +1014,11 @@ class LuwiPress_Translation {
         } catch ( \Exception $e ) {
             $save_error = $e->getMessage();
             LuwiPress_Logger::log(
-                sprintf('Translation save error: product #%d → %s: %s', $product_id, strtoupper($language), $save_error),
+                sprintf('Translation save error: product #%d â†’ %s: %s', $product_id, strtoupper($language), $save_error),
                 'error',
                 ['product_id' => $product_id, 'language' => $language, 'error' => $save_error]
             );
-            // Don't fail — meta is already saved, WPML post creation just failed
+            // Don't fail â€” meta is already saved, WPML post creation just failed
         }
 
         // Purge cache for original and translated post
@@ -794,7 +1034,7 @@ class LuwiPress_Translation {
     }
 
     /**
-     * GET /translation/status — Translation queue status
+     * GET /translation/status â€” Translation queue status
      */
     public function get_translation_status($request) {
         global $wpdb;
@@ -842,7 +1082,7 @@ class LuwiPress_Translation {
     }
 
     /**
-     * POST /translation/quality-check — Trigger quality audit
+     * POST /translation/quality-check â€” Trigger quality audit
      */
     public function trigger_quality_check($request) {
         $data = $request->get_json_params();
@@ -871,7 +1111,7 @@ class LuwiPress_Translation {
             'type' => 'quality_check',
         ];
 
-        // Quality check via built-in AI Engine (synchronous — small payload)
+        // Quality check via built-in AI Engine (synchronous â€” small payload)
         $budget = LuwiPress_Token_Tracker::check_budget( 'translation-pipeline' );
         if ( is_wp_error( $budget ) ) {
             return $budget;
@@ -986,7 +1226,7 @@ class LuwiPress_Translation {
             return $this->get_missing_luwipress($target_lang, $post_type, $limit);
         }
 
-        $default_lang = apply_filters('wpml_default_language', 'tr');
+        $default_lang = self::get_default_language();
 
         // Find default-language posts that either:
         // 1. Have no translation record for the target language, OR
@@ -1071,7 +1311,7 @@ class LuwiPress_Translation {
     /**
      * Create a translation post and register it with WPML/Polylang.
      *
-     * Central method — every translation post in the plugin MUST go through here.
+     * Central method â€” every translation post in the plugin MUST go through here.
      * Handles: WPML, Polylang, and vanilla WordPress.
      *
      * @param int    $source_id   Original post ID.
@@ -1096,17 +1336,17 @@ class LuwiPress_Translation {
         $plugin    = $lang_info['plugin'] ?? 'none';
 
         $default_lang = 'none' !== $plugin
-            ? apply_filters( 'wpml_default_language', get_locale() )
+            ? self::get_default_language()
             : substr( get_locale(), 0, 2 );
 
-        // ── Duplicate lock ──
+        // â”€â”€ Duplicate lock â”€â”€
         $lock_key = 'luwipress_tpost_' . $source_id . '_' . $language;
         if ( get_transient( $lock_key ) ) {
-            return new \WP_Error( 'locked', 'Translation lock active for #' . $source_id . ' → ' . $language );
+            return new \WP_Error( 'locked', 'Translation lock active for #' . $source_id . ' â†’ ' . $language );
         }
         set_transient( $lock_key, 1, 60 );
 
-        // ── Get WPML trid (if WPML) ──
+        // â”€â”€ Get WPML trid (if WPML) â”€â”€
         $trid = null;
         if ( 'wpml' === $plugin && defined( 'ICL_SITEPRESS_VERSION' ) ) {
             $trid = apply_filters( 'wpml_element_trid', null, $source_id, $element_type );
@@ -1123,11 +1363,11 @@ class LuwiPress_Translation {
             ) );
             if ( $existing_id && get_post_status( $existing_id ) ) {
                 delete_transient( $lock_key );
-                return absint( $existing_id ); // Already exists — return existing ID
+                return absint( $existing_id ); // Already exists â€” return existing ID
             }
         }
 
-        // ── Create the post via direct DB insert (bypass WPML hooks entirely) ──
+        // â”€â”€ Create the post via direct DB insert (bypass WPML hooks entirely) â”€â”€
         $title   = $post_data['title']   ?? $source_post->post_title;
         $slug    = $post_data['slug']    ?? sanitize_title( $title ) . '-' . $language;
         $content = $post_data['content'] ?? '';
@@ -1174,7 +1414,7 @@ class LuwiPress_Translation {
         // Clean object cache
         clean_post_cache( $new_post_id );
 
-        // ── Register with translation plugin ──
+        // â”€â”€ Register with translation plugin â”€â”€
         if ( 'wpml' === $plugin && $trid ) {
             // Remove any auto-created WPML record (should not exist since we bypassed hooks)
             $wpdb->delete(
@@ -1203,22 +1443,62 @@ class LuwiPress_Translation {
                 array( '%s', '%d', '%d', '%s', '%s' )
             );
 
-            // Verify
+            // Force WPML to re-read the icl_translations row we just wrote. Without
+            // these cache flushes the next apply_filters('wpml_post_language_details')
+            // can return a stale "this is an EN original" answer (taken from before
+            // our insert), which downstream code then trusts to mean "this post is a
+            // valid translation source" — exactly the cascade-duplication bug where
+            // a freshly-created IT/FR translation gets re-translated to other langs
+            // on the next cron tick.
+            wp_cache_delete( $new_post_id, 'wpml-element-language-details' );
+            wp_cache_delete( $new_post_id, 'wpml-element-language-code' );
+            wp_cache_delete( 'all', 'wpml-language-details' );
+            do_action( 'wpml_cache_clear' );
+
+            // Verify the row really landed with the correct language_code -- WPML save_post
+            // hooks can run after our direct insert and overwrite the row in some cases.
+            // If the persisted row doesn't match what we wrote, force-correct it.
             $verify = $wpdb->get_row( $wpdb->prepare(
                 "SELECT language_code, source_language_code, trid FROM {$wpdb->prefix}icl_translations
                  WHERE element_id = %d AND element_type = %s",
                 $new_post_id, $element_type
             ) );
 
+            if ( $verify && ( $verify->language_code !== $language || $verify->source_language_code !== $default_lang ) ) {
+                // WPML hook overwrote our row -- force-correct it instead of deleting the
+                // post (the post itself is fine, only the icl_translations metadata is wrong).
+                $wpdb->update(
+                    $wpdb->prefix . 'icl_translations',
+                    array(
+                        'language_code'        => $language,
+                        'source_language_code' => $default_lang,
+                        'trid'                 => $trid,
+                    ),
+                    array( 'element_id' => $new_post_id, 'element_type' => $element_type ),
+                    array( '%s', '%s', '%d' ),
+                    array( '%d', '%s' )
+                );
+                wp_cache_delete( $new_post_id, 'wpml-element-language-details' );
+                LuwiPress_Logger::log(
+                    sprintf( 'WPML row force-corrected for #%d → %s (was %s)', $new_post_id, $language, $verify->language_code ),
+                    'warning'
+                );
+                $verify = $wpdb->get_row( $wpdb->prepare(
+                    "SELECT language_code, source_language_code, trid FROM {$wpdb->prefix}icl_translations
+                     WHERE element_id = %d AND element_type = %s",
+                    $new_post_id, $element_type
+                ) );
+            }
+
             if ( ! $verify || $verify->language_code !== $language || (int) $verify->trid !== (int) $trid ) {
-                // Catastrophic failure — trash and abort
+                // Catastrophic failure -- trash and abort
                 wp_delete_post( $new_post_id, true );
                 delete_transient( $lock_key );
                 LuwiPress_Logger::log(
-                    sprintf( 'CRITICAL: WPML registration failed for translation of #%d → %s. Post deleted.', $source_id, $language ),
+                    sprintf( 'CRITICAL: WPML registration failed for translation of #%d -> %s. Post deleted.', $source_id, $language ),
                     'error'
                 );
-                return new \WP_Error( 'wpml_failed', 'WPML registration failed — translation post deleted' );
+                return new \WP_Error( 'wpml_failed', 'WPML registration failed -- translation post deleted' );
             }
 
         } elseif ( 'polylang' === $plugin && function_exists( 'pll_set_post_language' ) ) {
@@ -1228,11 +1508,18 @@ class LuwiPress_Translation {
             pll_save_post_translations( $translations );
         }
 
-        // ── Copy featured image ──
+        // â”€â”€ Copy featured image â”€â”€
         $thumb_id = get_post_thumbnail_id( $source_id );
         if ( $thumb_id ) {
             update_post_meta( $new_post_id, '_thumbnail_id', $thumb_id );
         }
+
+        // Stamp the source/language relationship so auto-cleanup can RE-STAMP the WPML
+        // row instead of just deleting it when WPML hooks corrupt language_code. Without
+        // this we'd loop forever: WPML mis-stamps -> we delete -> missing-list shows
+        // source as needing translation -> we translate again -> WPML mis-stamps again.
+        update_post_meta( $new_post_id, '_luwipress_translation_source', absint( $source_id ) );
+        update_post_meta( $new_post_id, '_luwipress_translation_language', sanitize_text_field( $language ) );
 
         delete_transient( $lock_key );
 
@@ -1266,7 +1553,7 @@ class LuwiPress_Translation {
             return;
         }
 
-        $default_lang  = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang  = self::get_default_language();
         $translated_id = apply_filters( 'wpml_object_id', $product_id, $post_type, false, $language );
 
         // Determine WPML language of the post we were handed. If the caller passed a post whose
@@ -1299,7 +1586,7 @@ class LuwiPress_Translation {
             }
             $self_result = wp_update_post( $update_data, true );
             if ( is_wp_error( $self_result ) ) {
-                LuwiPress_Logger::log( 'WPML self-update FAILED: #' . $product_id . ' — ' . $self_result->get_error_message(), 'error' );
+                LuwiPress_Logger::log( 'WPML self-update FAILED: #' . $product_id . ' â€” ' . $self_result->get_error_message(), 'error' );
             } else {
                 LuwiPress_Logger::log( 'WPML self-update: #' . $product_id . ' (' . strtoupper( $language ) . ') content_len=' . strlen( $translated['description'] ?? '' ), 'info' );
             }
@@ -1311,7 +1598,7 @@ class LuwiPress_Translation {
         }
 
         if ( $translated_id && $translated_id !== $product_id ) {
-            // ── Update existing translation ──
+            // â”€â”€ Update existing translation â”€â”€
             $existing_post = get_post( $translated_id );
             $needs_slug = $existing_post && ( is_numeric( $existing_post->post_name ) || empty( $existing_post->post_name ) );
             $update_data = array(
@@ -1327,12 +1614,12 @@ class LuwiPress_Translation {
             $result = wp_update_post( $update_data, true );
 
             if ( is_wp_error( $result ) ) {
-                LuwiPress_Logger::log( 'WPML update FAILED: #' . $translated_id . ' — ' . $result->get_error_message(), 'error' );
+                LuwiPress_Logger::log( 'WPML update FAILED: #' . $translated_id . ' â€” ' . $result->get_error_message(), 'error' );
             } else {
                 LuwiPress_Logger::log( 'WPML translation updated: #' . $translated_id . ' (' . strtoupper( $language ) . ') title="' . mb_substr( $translated['name'], 0, 50 ) . '" content_len=' . strlen( $translated['description'] ?? '' ), 'info' );
             }
 
-            // ── Elementor: copy _elementor_data and replace text widgets ──
+            // â”€â”€ Elementor: copy _elementor_data and replace text widgets â”€â”€
             // Skip if chunked translation is active (it handles Elementor data separately)
             if ( $is_elementor && ! $is_chunked ) {
                 $this->copy_elementor_translated( $product_id, $translated_id, $translated );
@@ -1340,7 +1627,7 @@ class LuwiPress_Translation {
 
             $target_id = $translated_id;
 
-            // ── Ensure images match original ──
+            // â”€â”€ Ensure images match original â”€â”€
             if ( 'product' === $post_type ) {
                 $this->copy_product_images( $product_id, $translated_id );
             } else {
@@ -1351,7 +1638,7 @@ class LuwiPress_Translation {
                 }
             }
         } else {
-            // ── Create new translation post via centralized method ──
+            // â”€â”€ Create new translation post via centralized method â”€â”€
             $new_id = $this->create_translation_post( $product_id, $language, array(
                 'title'   => $translated['name'],
                 'slug'    => $translated['slug'] ?? '',
@@ -1366,12 +1653,12 @@ class LuwiPress_Translation {
 
             $target_id = $new_id;
 
-            // ── Elementor: copy structure with translated text ──
+            // â”€â”€ Elementor: copy structure with translated text â”€â”€
             if ( $is_elementor && ! $is_chunked ) {
                 $this->copy_elementor_translated( $product_id, $new_id, $translated );
             }
 
-            // ── Copy WooCommerce-specific meta & taxonomies (products only) ──
+            // â”€â”€ Copy WooCommerce-specific meta & taxonomies (products only) â”€â”€
             if ( 'product' === $post_type ) {
                 $wc_meta_keys = array(
                     '_price', '_regular_price', '_sale_price', '_sku',
@@ -1408,7 +1695,7 @@ class LuwiPress_Translation {
 
         }
 
-        // ── Save SEO meta (Rank Math / Yoast) ──
+        // â”€â”€ Save SEO meta (Rank Math / Yoast) â”€â”€
         if ( $target_id && ( ! empty( $translated['meta_title'] ) || ! empty( $translated['meta_description'] ) ) ) {
             $detector = LuwiPress_Plugin_Detector::get_instance();
             $seo      = $detector->detect_seo();
@@ -1444,7 +1731,7 @@ class LuwiPress_Translation {
         }
 
         global $wpdb;
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = self::get_default_language();
 
         // Get all original posts/products/pages
         $originals = $wpdb->get_results( $wpdb->prepare(
@@ -1497,7 +1784,7 @@ class LuwiPress_Translation {
         }
 
         global $wpdb;
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = self::get_default_language();
 
         // Get all default-language posts, pages, and products
         $originals = $wpdb->get_results( $wpdb->prepare(
@@ -1590,7 +1877,7 @@ class LuwiPress_Translation {
         delete_post_meta( $target_id, '_elementor_css' );
         delete_post_meta( $target_id, '_elementor_page_assets' );
 
-        LuwiPress_Logger::log( 'Elementor chunked translation completed: #' . $source_id . ' → #' . $target_id . ' (' . $target_lang . ')', 'info' );
+        LuwiPress_Logger::log( 'Elementor chunked translation completed: #' . $source_id . ' â†’ #' . $target_id . ' (' . $target_lang . ')', 'info' );
 
         return true;
     }
@@ -1625,11 +1912,11 @@ class LuwiPress_Translation {
                         $original = preg_replace( '/^\s*<h1[^>]*>.*?<\/h1>\s*/is', '', $original, 1 );
                     }
 
-                    // Long content → chunk and translate
+                    // Long content â†’ chunk and translate
                     if ( in_array( $key, $content_keys, true ) && strlen( $original ) > 3000 ) {
                         $translated = $this->translate_html_chunked( $original, $source_lang, $target_lang );
                     } else {
-                        // Short text (titles, buttons, etc.) → single AI call
+                        // Short text (titles, buttons, etc.) â†’ single AI call
                         $translated = $this->translate_html_single( $original, $source_lang, $target_lang );
                     }
 
@@ -1731,12 +2018,12 @@ class LuwiPress_Translation {
         $parts = preg_split( '/(?=<h[23][^>]*>)/i', $html );
 
         if ( empty( $parts ) || count( $parts ) <= 1 ) {
-            // No headings found — split by paragraphs instead
+            // No headings found â€” split by paragraphs instead
             $parts = preg_split( '/(?=<p[^>]*>)/i', $html );
         }
 
         if ( empty( $parts ) || count( $parts ) <= 1 ) {
-            // Still can't split — return as single chunk
+            // Still can't split â€” return as single chunk
             return array( $html );
         }
 
@@ -1824,12 +2111,12 @@ class LuwiPress_Translation {
             'ekit_heading_focused_title',
         );
 
-        // Title keys — get translated title
+        // Title keys â€” get translated title
         $title_keys = array(
             'title', 'heading_title', 'ekit_heading_title', 'ekit_heading_focused_title',
         );
 
-        // Content keys — get translated description (long content)
+        // Content keys â€” get translated description (long content)
         $content_keys = array(
             'editor', 'tab_content', 'description', 'description_text',
             'ekit_heading_extra_title', 'ekit_heading_description',
@@ -1846,13 +2133,13 @@ class LuwiPress_Translation {
                             continue;
                         }
 
-                        // Title keys → use translated title
+                        // Title keys â†’ use translated title
                         if ( in_array( $key, $title_keys, true ) && ! empty( $translated_title ) ) {
                             $element['settings'][ $key ] = $translated_title;
                             continue;
                         }
 
-                        // Content keys → use translated description
+                        // Content keys â†’ use translated description
                         if ( in_array( $key, $content_keys, true ) && ! empty( $translated_content ) ) {
                             $element['settings'][ $key ] = $translated_content;
                             $translated_content = '';
@@ -1892,12 +2179,12 @@ class LuwiPress_Translation {
     /**
      * @deprecated Use copy_product_images() instead.
      * Share product images (thumbnail + gallery) across WPML languages.
-     * WPML may look for translated attachment IDs — this ensures the original
+     * WPML may look for translated attachment IDs â€” this ensures the original
      * attachments are registered for the target language so images display correctly.
      */
     private function wpml_share_product_images( $source_id, $target_id, $language ) {
         global $wpdb;
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = self::get_default_language();
         $attachment_ids = array();
 
         // Collect thumbnail
@@ -1986,7 +2273,7 @@ class LuwiPress_Translation {
             return;
         }
 
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = self::get_default_language();
         $translated_term_ids = array();
 
         foreach ( $terms as $term ) {
@@ -1996,7 +2283,7 @@ class LuwiPress_Translation {
             if ( $translated_term_id && $translated_term_id !== $term->term_id ) {
                 $translated_term_ids[] = (int) $translated_term_id;
             } else {
-                // No translation — auto-create one so each language has its own term
+                // No translation â€” auto-create one so each language has its own term
                 $new_term_id = $this->auto_create_wpml_term_translation( $term, $taxonomy, $language, $default_lang );
                 if ( $new_term_id ) {
                     $translated_term_ids[] = $new_term_id;
@@ -2063,7 +2350,7 @@ class LuwiPress_Translation {
         ) );
 
         if ( is_wp_error( $new_term ) ) {
-            // Slug conflict — try with random suffix
+            // Slug conflict â€” try with random suffix
             $new_term = wp_insert_term( $original_term->name, $taxonomy, array(
                 'slug'   => $slug . '-' . wp_rand( 100, 999 ),
                 'parent' => $parent,
@@ -2123,7 +2410,7 @@ class LuwiPress_Translation {
         $target_id = null;
 
         if (isset($translations[$language])) {
-            // ── Update existing translation ──
+            // â”€â”€ Update existing translation â”€â”€
             wp_update_post([
                 'ID'           => $translations[$language],
                 'post_title'   => $translated['name'],
@@ -2139,7 +2426,7 @@ class LuwiPress_Translation {
                 ['original_id' => $product_id, 'translated_id' => $target_id, 'language' => $language]
             );
         } else {
-            // ── Create new translation post ──
+            // â”€â”€ Create new translation post â”€â”€
             $original = get_post($product_id);
             if (!$original) {
                 return;
@@ -2166,7 +2453,7 @@ class LuwiPress_Translation {
 
             $target_id = $new_id;
 
-            // ── Copy WooCommerce product meta (whitelist approach) ──
+            // â”€â”€ Copy WooCommerce product meta (whitelist approach) â”€â”€
             $wc_meta_keys = array(
                 '_price', '_regular_price', '_sale_price', '_sku',
                 '_stock', '_stock_status', '_manage_stock', '_backorders',
@@ -2186,19 +2473,19 @@ class LuwiPress_Translation {
                 }
             }
 
-            // ── Copy product type taxonomy ──
+            // â”€â”€ Copy product type taxonomy â”€â”€
             $type_terms = wp_get_object_terms($product_id, 'product_type', ['fields' => 'slugs']);
             if (!empty($type_terms) && !is_wp_error($type_terms)) {
                 wp_set_object_terms($new_id, $type_terms, 'product_type');
             }
 
-            // ── Copy product visibility ──
+            // â”€â”€ Copy product visibility â”€â”€
             $visibility = wp_get_object_terms($product_id, 'product_visibility', ['fields' => 'slugs']);
             if (!empty($visibility) && !is_wp_error($visibility)) {
                 wp_set_object_terms($new_id, $visibility, 'product_visibility');
             }
 
-            // ── Copy product categories and tags ──
+            // â”€â”€ Copy product categories and tags â”€â”€
             foreach (['product_cat', 'product_tag'] as $taxonomy) {
                 $terms = wp_get_object_terms($product_id, $taxonomy, ['fields' => 'ids']);
                 if (!empty($terms) && !is_wp_error($terms)) {
@@ -2210,18 +2497,18 @@ class LuwiPress_Translation {
             wp_update_post(['ID' => $new_id, 'post_status' => 'publish']);
 
             LuwiPress_Logger::log(
-                sprintf('Polylang translation created: #%d (%s) from #%d — "%s"', $new_id, strtoupper($language), $product_id, $translated['name']),
+                sprintf('Polylang translation created: #%d (%s) from #%d â€” "%s"', $new_id, strtoupper($language), $product_id, $translated['name']),
                 'info',
                 ['original_id' => $product_id, 'translated_id' => $new_id, 'language' => $language]
             );
         }
 
-        // ── Copy product images (thumbnail + gallery) ──
+        // â”€â”€ Copy product images (thumbnail + gallery) â”€â”€
         if ($target_id) {
             $this->copy_product_images($product_id, $target_id);
         }
 
-        // ── Save SEO meta via Plugin Detector ──
+        // â”€â”€ Save SEO meta via Plugin Detector â”€â”€
         if ($target_id && (!empty($translated['meta_title']) || !empty($translated['meta_description']))) {
             $detector = LuwiPress_Plugin_Detector::get_instance();
             $seo_data = [];
@@ -2238,11 +2525,11 @@ class LuwiPress_Translation {
         }
     }
 
-    // ─── TAXONOMY TRANSLATION ──────────────────────────────────────────
+    // â”€â”€â”€ TAXONOMY TRANSLATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
-     * GET /translation/taxonomy-missing — Return missing taxonomy terms for clients to translate.
-     * This does NOT trigger a webhook — it just returns the data.
+     * GET /translation/taxonomy-missing â€” Return missing taxonomy terms for clients to translate.
+     * This does NOT trigger a webhook â€” it just returns the data.
      */
     public function get_missing_taxonomy_terms_api($request) {
         $taxonomy = $request->get_param('taxonomy');
@@ -2250,7 +2537,7 @@ class LuwiPress_Translation {
         $limit = min($request->get_param('limit'), 200);
 
         $target_languages = array_map('trim', explode(',', $target_languages_str));
-        $source_language = apply_filters( 'wpml_default_language', get_locale() );
+        $source_language = self::get_default_language();
 
         if (!taxonomy_exists($taxonomy)) {
             return new WP_Error('invalid_taxonomy', 'Taxonomy not found: ' . $taxonomy, ['status' => 400]);
@@ -2268,7 +2555,7 @@ class LuwiPress_Translation {
     }
 
     /**
-     * POST /translation/taxonomy — Send untranslated terms to the AI engine for translation
+     * POST /translation/taxonomy â€” Send untranslated terms to the AI engine for translation
      */
     public function request_taxonomy_translation($request) {
         $taxonomy         = $request->get_param('taxonomy');
@@ -2283,7 +2570,7 @@ class LuwiPress_Translation {
             return new WP_Error('invalid_taxonomy', 'Taxonomy not found: ' . $taxonomy, ['status' => 400]);
         }
 
-        $source_language = apply_filters( 'wpml_default_language', get_locale() );
+        $source_language = self::get_default_language();
 
         // Get untranslated terms
         $missing_terms = $this->get_missing_taxonomy_terms($taxonomy, $target_languages, $source_language, $limit);
@@ -2293,6 +2580,15 @@ class LuwiPress_Translation {
                 'status'  => 'nothing_to_translate',
                 'message' => 'All terms are already translated.',
             ]);
+        }
+
+        // Async path: anything past 1 chunk worth of work goes to LuwiPress_Job_Queue.
+        // 1 chunk = 25 terms (~10s of AI). Multi-chunk or multi-lang work risks hitting
+        // the sync HTTP timeout, so queue it. Single-chunk single-lang work stays sync
+        // for snappy small-batch UX.
+        $needs_queue = ( count( $missing_terms ) > 25 ) || ( count( $target_languages ) > 1 && count( $missing_terms ) > 10 );
+        if ( $needs_queue && class_exists( 'LuwiPress_Job_Queue' ) ) {
+            return $this->queue_taxonomy_translation_job( $taxonomy, $missing_terms, $target_languages, $source_language );
         }
 
         $payload = [
@@ -2333,43 +2629,78 @@ class LuwiPress_Translation {
 
             // Ensure result is an array of translations
             $translated = is_array( $ai_result ) && isset( $ai_result[0] ) ? $ai_result : ( $ai_result['translations'] ?? array() );
+
+            // AI doesn't reliably echo back which target language it translated for.
+            // The loop knows â€” stamp every item so the callback's empty($language) guard doesn't silently drop them.
+            foreach ( $translated as &$tr_item ) {
+                $tr_item['language'] = $lang;
+            }
+            unset( $tr_item );
+
             $all_translations = array_merge( $all_translations, $translated );
         }
 
         // Feed into existing callback handler
+        $saved_count   = 0;
+        $save_errors   = array();
+        $sample_item   = ! empty( $all_translations ) ? $all_translations[0] : null;
         if ( ! empty( $all_translations ) ) {
             $callback_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/taxonomy-callback' );
             $callback_request->set_body_params( array(
                 'taxonomy'     => $taxonomy,
                 'translations' => $all_translations,
             ) );
-            $this->handle_taxonomy_callback( $callback_request );
+            $callback_response = $this->handle_taxonomy_callback( $callback_request );
+            if ( ! is_wp_error( $callback_response ) ) {
+                $callback_data = is_object( $callback_response ) && method_exists( $callback_response, 'get_data' ) ? $callback_response->get_data() : array();
+                $saved_count   = absint( $callback_data['saved'] ?? 0 );
+                $save_errors   = (array) ( $callback_data['errors'] ?? array() );
+            } else {
+                $save_errors[] = 'callback wp_error: ' . $callback_response->get_error_message();
+            }
         }
 
-        LuwiPress_Logger::log( 'Taxonomy translation requested: ' . $taxonomy, 'info', array(
-            'taxonomy'  => $taxonomy,
-            'languages' => $target_languages,
-            'count'     => count( $missing_terms ),
-        ) );
+        // Diagnostic log so support can see why saved=0 happened (sample translation shape + first 3 errors).
+        LuwiPress_Logger::log(
+            sprintf( 'Taxonomy translation: %s -- sent %d, saved %d', $taxonomy, count( $all_translations ), $saved_count ),
+            $saved_count > 0 ? 'info' : 'warning',
+            array(
+                'taxonomy'      => $taxonomy,
+                'languages'     => $target_languages,
+                'sent'          => count( $all_translations ),
+                'saved'         => $saved_count,
+                'sample_keys'   => $sample_item ? array_keys( $sample_item ) : array(),
+                'sample_item'   => $sample_item,
+                'first_errors'  => array_slice( $save_errors, 0, 3 ),
+            )
+        );
 
         return rest_ensure_response( array(
             'status'           => 'completed',
             'taxonomy'         => $taxonomy,
             'target_languages' => $target_languages,
             'terms_sent'       => count( $missing_terms ),
+            'saved'            => $saved_count,
+            'errors'           => array_slice( $save_errors, 0, 5 ),
+            'sample_keys'      => $sample_item ? array_keys( $sample_item ) : array(),
         ) );
     }
 
     /**
-     * POST /translation/taxonomy-callback — Receive translated taxonomy terms from async AI pipeline
+     * POST /translation/taxonomy-callback â€” Receive translated taxonomy terms from async AI pipeline
      */
     public function handle_taxonomy_callback($request) {
-        $data = $request->get_json_params();
+        // Read from JSON body OR form-encoded body OR REST params -- internal callers use
+        // set_body_params() which lands in body_params, not json_params. get_param() walks
+        // all sources, which is what we want for both external HTTP callbacks and internal
+        // dispatch from request_taxonomy_translation().
+        $taxonomy     = sanitize_text_field( $request->get_param( 'taxonomy' ) ?? '' );
+        $translations = $request->get_param( 'translations' );
+        if ( ! is_array( $translations ) ) {
+            $translations = array();
+        }
 
-        $taxonomy     = sanitize_text_field($data['taxonomy'] ?? '');
-        $translations = $data['translations'] ?? [];
-
-        if (empty($taxonomy) || empty($translations) || !is_array($translations)) {
+        if (empty($taxonomy) || empty($translations)) {
             return new WP_Error('invalid_data', 'taxonomy and translations array required', ['status' => 400]);
         }
 
@@ -2392,7 +2723,7 @@ class LuwiPress_Translation {
 
             $result = $this->save_wpml_taxonomy_translation($term_id, $taxonomy, $language, $name, $slug);
             if (is_wp_error($result)) {
-                $errors[] = sprintf('term #%d → %s: %s', $term_id, $language, $result->get_error_message());
+                $errors[] = sprintf('term #%d â†’ %s: %s', $term_id, $language, $result->get_error_message());
             } else {
                 $saved++;
             }
@@ -2430,7 +2761,7 @@ class LuwiPress_Translation {
             }
 
             global $wpdb;
-            $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+            $default_lang = self::get_default_language();
 
             $query = "SELECT DISTINCT p.ID, t.language_code
                       FROM {$wpdb->posts} p
@@ -2491,7 +2822,7 @@ class LuwiPress_Translation {
                     }
                 }
 
-                // Fix broken slug — if numeric, regenerate from title
+                // Fix broken slug â€” if numeric, regenerate from title
                 if ( preg_match( '/^\d+$/', $post->post_name ) && ! empty( $post->post_title ) ) {
                     $new_slug = sanitize_title( $post->post_title );
                     wp_update_post( array( 'ID' => $pid, 'post_name' => $new_slug ) );
@@ -2617,7 +2948,7 @@ class LuwiPress_Translation {
             return;
         }
 
-        // WPML action failed (common in REST context) — direct SQL insert
+        // WPML action failed (common in REST context) â€” direct SQL insert
         // Get next trid
         $max_trid = (int) $wpdb->get_var("SELECT MAX(trid) FROM {$wpdb->prefix}icl_translations");
         $new_trid = $max_trid + 1;
@@ -2648,7 +2979,7 @@ class LuwiPress_Translation {
         }
 
         $element_type = 'tax_' . $taxonomy;
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = self::get_default_language();
 
         // Get the trid of the original term
         $trid = (int) $wpdb->get_var($wpdb->prepare(
@@ -2728,7 +3059,7 @@ class LuwiPress_Translation {
 
         $new_term_id = $new_term['term_id'];
 
-        // Link to WPML translation group — try action first, SQL fallback
+        // Link to WPML translation group â€” try action first, SQL fallback
         do_action('wpml_set_element_language_details', [
             'element_id'           => $new_term_id,
             'element_type'         => $element_type,
@@ -2788,7 +3119,7 @@ class LuwiPress_Translation {
         $terms_removed = 0;
         $posts_removed = 0;
 
-        // ── 1. Orphan taxonomy translations: trid has no original ──
+        // â”€â”€ 1. Orphan taxonomy translations: trid has no original â”€â”€
         $orphan_terms = $wpdb->get_results(
             "SELECT t.translation_id, t.element_id, t.element_type, t.trid, t.language_code
              FROM {$icl} t
@@ -2812,7 +3143,7 @@ class LuwiPress_Translation {
             $terms_removed++;
         }
 
-        // ── 2. Orphan post translations: element_id not in wp_posts ──
+        // â”€â”€ 2. Orphan post translations: element_id not in wp_posts â”€â”€
         $orphan_posts = $wpdb->get_results(
             "SELECT t.translation_id, t.element_id, t.element_type
              FROM {$icl} t
@@ -2827,7 +3158,7 @@ class LuwiPress_Translation {
             $posts_removed++;
         }
 
-        // ── 3. Orphan term translations: element_id not in wp_term_taxonomy ──
+        // â”€â”€ 3. Orphan term translations: element_id not in wp_term_taxonomy â”€â”€
         $orphan_term_records = $wpdb->get_results(
             "SELECT t.translation_id, t.element_id
              FROM {$icl} t
@@ -2864,10 +3195,13 @@ class LuwiPress_Translation {
         wp_send_json_success( array(
             'terms_removed' => $terms_removed,
             'posts_removed' => $posts_removed,
+            'removed'       => $total,
+            'total'         => $total,
+            'message'       => sprintf( 'Cleaned %d orphan record(s) (%d terms, %d posts).', $total, $terms_removed, $posts_removed ),
         ) );
     }
 
-    // ─── AJAX: Get missing items for a post type + language ──────────────
+    // AJAX: Get missing items for a post type + language
 
     public function ajax_get_missing_items() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
@@ -2875,9 +3209,27 @@ class LuwiPress_Translation {
             wp_send_json_error( 'Unauthorized' );
         }
 
+        // Force no-cache on this AJAX response. LiteSpeed (and some hosting WAFs) cache
+        // admin-ajax responses by URL+nonce when no explicit no-store is set, which is
+        // the root cause of "coverage shifts but UI keeps showing the old missing-list"
+        // mismatches. nocache_headers() emits Cache-Control + Pragma + Expires; the LS
+        // header is the explicit edge-cache bypass.
+        if ( ! headers_sent() ) {
+            nocache_headers();
+            header( 'X-LiteSpeed-Cache-Control: no-cache' );
+        }
+
         $lang      = sanitize_text_field( $_POST['language'] ?? '' );
         $post_type = sanitize_text_field( $_POST['post_type'] ?? 'product' );
         $limit     = absint( $_POST['limit'] ?? 500 );
+
+        // WPML admin-context language switcher can scope queries to the current admin
+        // language (e.g. user is viewing in EN, switcher narrows source SQL to EN-only
+        // when admin asks for "missing translations"). Force "all" so source SQL stays
+        // language-neutral and matches the public REST behaviour exactly.
+        if ( has_action( 'wpml_switch_language' ) ) {
+            do_action( 'wpml_switch_language', 'all' );
+        }
 
         $request = new WP_REST_Request( 'GET', '/luwipress/v1/translation/missing-all' );
         $request->set_param( 'target_languages', $lang );
@@ -2895,13 +3247,25 @@ class LuwiPress_Translation {
             );
         }
 
+        // Diagnostic log for the recurring "X missing in DB but unreachable" mismatch:
+        // when coverage and fetcher disagree, this surfaces the per-call evidence so we
+        // can decide if it's WPML language scope, post_status drift, or a fetcher edge case.
+        LuwiPress_Logger::log(
+            sprintf( 'get_missing_items: post_type=%s lang=%s -> %d items', $post_type, $lang, count( $items ) ),
+            'debug',
+            array(
+                'returned_ids' => wp_list_pluck( $items, 'id' ),
+                'limit'        => $limit,
+            )
+        );
+
         wp_send_json_success( array(
             'items' => $items,
             'total' => count( $items ),
         ) );
     }
 
-    // ─── AJAX: Translate a single post ──────────────────────────────────
+    // â”€â”€â”€ AJAX: Translate a single post â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function ajax_translate_single() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
@@ -2920,6 +3284,53 @@ class LuwiPress_Translation {
         $post = get_post( $post_id );
         if ( ! $post ) {
             wp_send_json_error( 'Post #' . $post_id . ' not found' );
+        }
+
+        // CRITICAL guard: refuse to translate a post that is itself a translation. Without
+        // this, a stale UI item or a cascade-duplicate row in icl_translations can pass a
+        // non-EN post_id here, and we then "translate it to FR/IT/ES" -- producing more
+        // duplicates. The legit source post must have language_code = default AND
+        // source_language_code IS NULL.
+        if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            global $wpdb;
+            $default_lang = self::get_default_language();
+            $element_type = 'post_' . $post->post_type;
+            $row = $wpdb->get_row( $wpdb->prepare(
+                "SELECT language_code, source_language_code, trid FROM {$wpdb->prefix}icl_translations
+                 WHERE element_id = %d AND element_type = %s",
+                $post_id, $element_type
+            ) );
+            if ( $row && $row->language_code !== $default_lang ) {
+                wp_send_json_error( sprintf(
+                    'Post #%d is registered as %s, not %s -- refusing to use it as a translation source.',
+                    $post_id, $row->language_code, $default_lang
+                ) );
+            }
+            if ( $row && $row->source_language_code !== null ) {
+                wp_send_json_error( sprintf(
+                    'Post #%d is itself a translation (source_language_code=%s) -- refusing to retranslate.',
+                    $post_id, $row->source_language_code
+                ) );
+            }
+            // Also block: if this trid has another EN-source row that's older, this one
+            // is a cascade duplicate and must not produce more translations.
+            if ( $row ) {
+                $older_sibling = $wpdb->get_var( $wpdb->prepare(
+                    "SELECT t.element_id FROM {$wpdb->prefix}icl_translations t
+                     JOIN {$wpdb->posts} p ON t.element_id = p.ID
+                     WHERE t.trid = %d AND t.element_type = %s
+                       AND t.language_code = %s AND t.source_language_code IS NULL
+                       AND t.element_id != %d
+                     ORDER BY p.post_date ASC LIMIT 1",
+                    $row->trid, $element_type, $default_lang, $post_id
+                ) );
+                if ( $older_sibling ) {
+                    wp_send_json_error( sprintf(
+                        'Post #%d shares trid %d with older EN source #%d -- cascade duplicate, refusing to translate. Run Fix Orphans.',
+                        $post_id, $row->trid, $older_sibling
+                    ) );
+                }
+            }
         }
 
         // For Elementor pages: use background job to avoid timeout
@@ -2966,7 +3377,7 @@ class LuwiPress_Translation {
         ) );
     }
 
-    // ─── AJAX: Translate taxonomy batch ─────────────────────────────────
+    // â”€â”€â”€ AJAX: Translate taxonomy batch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function ajax_translate_taxonomy_batch() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
@@ -2994,17 +3405,42 @@ class LuwiPress_Translation {
         }
 
         wp_send_json_success( array(
-            'status'     => $result_data['status'] ?? 'completed',
-            'terms_sent' => $result_data['terms_sent'] ?? 0,
+            'status'      => $result_data['status'] ?? 'completed',
+            'terms_sent'  => $result_data['terms_sent'] ?? 0,
+            'saved'       => $result_data['saved'] ?? 0,
+            'errors'      => $result_data['errors'] ?? array(),
+            'sample_keys' => $result_data['sample_keys'] ?? array(),
+            // Async path: when batch is large, request_taxonomy_translation queues it and
+            // returns job_id + total_units so UI can poll progress instead of waiting.
+            'job_id'      => $result_data['job_id'] ?? null,
+            'total_units' => $result_data['total_units'] ?? 0,
+            'total_terms' => $result_data['total_terms'] ?? 0,
         ) );
     }
 
-    // ─── AJAX: Poll translation progress for background jobs ────────────
+    // AJAX: Poll translation progress for background jobs
 
     public function ajax_translation_progress() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized' );
+        }
+
+        // Force no-cache (LiteSpeed admin-ajax cache class of bug -- already documented
+        // for ajax_get_missing_items, same fix here for symmetry).
+        if ( ! headers_sent() ) {
+            nocache_headers();
+            header( 'X-LiteSpeed-Cache-Control: no-cache' );
+        }
+
+        // Each progress poll is also a cron heartbeat. The pre-existing JS-side
+        // wp-cron.php fetch with mode:no-cors is unreliable on hosts where LiteSpeed
+        // intercepts that path; the server-side LuwiPress_Job_Queue::nudge_cron does
+        // spawn_cron() + a real loopback POST that those hosts honour.
+        if ( class_exists( 'LuwiPress_Job_Queue' ) ) {
+            LuwiPress_Job_Queue::nudge_cron();
+        } elseif ( function_exists( 'spawn_cron' ) ) {
+            spawn_cron();
         }
 
         $post_ids = array_map( 'absint', (array) ( $_POST['post_ids'] ?? array() ) );
@@ -3026,7 +3462,7 @@ class LuwiPress_Translation {
         wp_send_json_success( $results );
     }
 
-    // ─── AJAX: Get missing taxonomy terms ───────────────────────────────
+    // â”€â”€â”€ AJAX: Get missing taxonomy terms â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function ajax_get_missing_terms() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
@@ -3041,7 +3477,7 @@ class LuwiPress_Translation {
         }
 
         $target_langs    = array_map( 'trim', explode( ',', $languages ) );
-        $source_language = apply_filters( 'wpml_default_language', get_locale() );
+        $source_language = self::get_default_language();
         $terms           = $this->get_missing_taxonomy_terms( $taxonomy, $target_langs, $source_language, 500 );
 
         // Flatten: one item per term+language pair for per-item progress
@@ -3059,7 +3495,7 @@ class LuwiPress_Translation {
         wp_send_json_success( array( 'items' => $items, 'total' => count( $items ) ) );
     }
 
-    // ─── AJAX: Translate a single taxonomy term ─────────────────────────
+    // â”€â”€â”€ AJAX: Translate a single taxonomy term â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function ajax_translate_single_term() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
@@ -3079,7 +3515,7 @@ class LuwiPress_Translation {
             wp_send_json_error( 'Term not found' );
         }
 
-        $source_language = apply_filters( 'wpml_default_language', get_locale() );
+        $source_language = self::get_default_language();
         $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese', 'pt-pt' => 'Portuguese', 'ko' => 'Korean' );
         $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
         $target_name = $lang_names[ $language ] ?? ucfirst( $language );
@@ -3096,7 +3532,9 @@ class LuwiPress_Translation {
             wp_send_json_error( $ai_result->get_error_message() );
         }
 
-        $translated_name = sanitize_text_field( trim( $ai_result, ' "\'.' ) );
+        // dispatch() returns array { content, input_tokens, ... }, not a bare string.
+        $ai_text = (string) ( $ai_result['content'] ?? '' );
+        $translated_name = sanitize_text_field( trim( $ai_text, ' "\'.' ) );
         if ( empty( $translated_name ) ) {
             wp_send_json_error( 'AI returned empty translation' );
         }
@@ -3116,7 +3554,7 @@ class LuwiPress_Translation {
         ) );
     }
 
-    // ─── AJAX: Re-translate broken translations ─────────────────────────
+    // â”€â”€â”€ AJAX: Re-translate broken translations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function ajax_retranslate_broken() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
@@ -3128,10 +3566,10 @@ class LuwiPress_Translation {
         }
 
         global $wpdb;
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = self::get_default_language();
 
         // Find translated posts/pages with empty title OR numeric slug
-        // SAFE: only post, page, product — never nav_menu_item or other types
+        // SAFE: only post, page, product â€” never nav_menu_item or other types
         $safe_types = array( 'post', 'page', 'product' );
         $type_ph    = implode( ',', array_fill( 0, count( $safe_types ), '%s' ) );
         $sql        = sprintf(
@@ -3187,7 +3625,7 @@ class LuwiPress_Translation {
 
             $fixed++;
 
-            // Queue Elementor re-translation via cron (non-destructive — overwrites _elementor_data)
+            // Queue Elementor re-translation via cron (non-destructive â€” overwrites _elementor_data)
             if ( class_exists( 'LuwiPress_Elementor' ) && LuwiPress_Elementor::is_elementor_page( $source_id ) ) {
                 wp_schedule_single_event( time() + $queued, 'luwipress_elementor_translate_single', array( absint( $source_id ), $row->language_code ) );
                 $queued++;
@@ -3207,7 +3645,7 @@ class LuwiPress_Translation {
         ) );
     }
 
-    // ─── AJAX: Sync WPML menus from default language ────────────────────
+    // â”€â”€â”€ AJAX: Sync WPML menus from default language â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function ajax_sync_wpml_menus() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
@@ -3219,7 +3657,7 @@ class LuwiPress_Translation {
         }
 
         global $wpdb;
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = self::get_default_language();
         $target_langs = apply_filters( 'wpml_active_languages', array() );
 
         // Get all menus in the default language
@@ -3268,7 +3706,7 @@ class LuwiPress_Translation {
                     do_action( 'wpml_sync_custom_element', $menu->term_id, 'nav_menu' );
                     $synced++;
                     LuwiPress_Logger::log( sprintf(
-                        'Menu sync: %s (%s → %s) — source: %d items, translated: %d items',
+                        'Menu sync: %s (%s â†’ %s) â€” source: %d items, translated: %d items',
                         $menu->name, $default_lang, $lang_code, $source_count, $existing_count
                     ), 'info' );
                 }
@@ -3277,16 +3715,16 @@ class LuwiPress_Translation {
 
         if ( $synced > 0 ) {
             wp_send_json_success( array(
-                'message' => sprintf( '%d menu(s) synced. Visit WPML → Menu Sync to complete item translations.', $synced ),
+                'message' => sprintf( '%d menu(s) synced. Visit WPML â†’ Menu Sync to complete item translations.', $synced ),
             ) );
         } else {
             wp_send_json_success( array(
-                'message' => 'All menus are in sync. If menus are still broken, go to WPML → Menu Sync manually.',
+                'message' => 'All menus are in sync. If menus are still broken, go to WPML â†’ Menu Sync manually.',
             ) );
         }
     }
 
-    // ─── AJAX: Stop active cron translations ────────────────────────────
+    // â”€â”€â”€ AJAX: Stop active cron translations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function ajax_stop_translations() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
@@ -3307,7 +3745,7 @@ class LuwiPress_Translation {
             }
             $st = json_decode( $raw, true );
             if ( $st && in_array( $st['status'] ?? '', array( 'queued', 'translating' ), true ) ) {
-                // Clear the status — cron job will still run but won't find queued status
+                // Clear the status â€” cron job will still run but won't find queued status
                 delete_post_meta( $pid, '_luwipress_translation_status' );
 
                 // Unschedule the cron event if still pending
@@ -3327,7 +3765,7 @@ class LuwiPress_Translation {
         ) );
     }
 
-    // ─── REST: Fix excerpts — extract from Elementor widget text ────────
+    // â”€â”€â”€ REST: Fix excerpts â€” extract from Elementor widget text â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function rest_fix_excerpts( $request ) {
         global $wpdb;
@@ -3370,7 +3808,7 @@ class LuwiPress_Translation {
         ) );
     }
 
-    // ─── AJAX: Fix excerpts — extract from Elementor widget text ────────
+    // â”€â”€â”€ AJAX: Fix excerpts â€” extract from Elementor widget text â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function ajax_fix_excerpts() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
@@ -3443,7 +3881,7 @@ class LuwiPress_Translation {
         }
     }
 
-    // ─── AJAX: Fix orphan translations — set correct source_language_code ─
+    // â”€â”€â”€ AJAX: Fix orphan translations â€” set correct source_language_code â”€
 
     public function ajax_fix_orphan_translations() {
         check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
@@ -3455,10 +3893,10 @@ class LuwiPress_Translation {
         }
 
         global $wpdb;
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = self::get_default_language();
         $fixed = 0;
 
-        // ── Type 1: Non-EN posts registered as originals (source_language_code IS NULL, lang != EN) ──
+        // â”€â”€ Type 1: Non-EN posts registered as originals (source_language_code IS NULL, lang != EN) â”€â”€
         $type1 = $wpdb->get_results( $wpdb->prepare(
             "SELECT t.translation_id, t.element_id, t.language_code, t.trid, p.post_title
              FROM {$wpdb->prefix}icl_translations t
@@ -3484,7 +3922,7 @@ class LuwiPress_Translation {
             }
         }
 
-        // ── Type 2: Posts registered as EN originals but their trid is a lonely group ──
+        // â”€â”€ Type 2: Posts registered as EN originals but their trid is a lonely group â”€â”€
         // These are FR/IT/ES translations that got their own trid with language_code=EN
         // Detect: EN original in a trid where NO other translations exist + title is non-English
         $type2 = $wpdb->get_results( $wpdb->prepare(
@@ -3509,10 +3947,10 @@ class LuwiPress_Translation {
             // AND the title looks non-English, it's likely an orphan
             if ( $trid_count <= 1 ) {
                 $title = mb_strtolower( $row->post_title );
-                $is_foreign = preg_match( '/[àâäéèêëïîôùûüçñáíóúìòü]/u', $title )
-                    || preg_match( '/\b(della|degli|delle|nella|sono|tutto|ogni|comme|tout|sur le|acheter|pour|avec|dans|entre|une|thérap|découvr|tambour|flûte|también|guía|cómo|instrumentos|terapia|poder|viaje|encanto|fascino|tecniche|strumenti|accordare|persiano|gioco)\b/u', $title );
+                $is_foreign = preg_match( '/[Ã Ã¢Ã¤Ã©Ã¨ÃªÃ«Ã¯Ã®Ã´Ã¹Ã»Ã¼Ã§Ã±Ã¡Ã­Ã³ÃºÃ¬Ã²Ã¼]/u', $title )
+                    || preg_match( '/\b(della|degli|delle|nella|sono|tutto|ogni|comme|tout|sur le|acheter|pour|avec|dans|entre|une|thÃ©rap|dÃ©couvr|tambour|flÃ»te|tambiÃ©n|guÃ­a|cÃ³mo|instrumentos|terapia|poder|viaje|encanto|fascino|tecniche|strumenti|accordare|persiano|gioco)\b/u', $title );
                 if ( $is_foreign ) {
-                    // Delete this orphan WPML record — the post itself stays but won't appear in EN list
+                    // Delete this orphan WPML record â€” the post itself stays but won't appear in EN list
                     $wpdb->delete( $wpdb->prefix . 'icl_translations', array( 'translation_id' => $row->translation_id ) );
                     $fixed++;
                     LuwiPress_Logger::log( sprintf( 'Orphan fixed (Type 2): deleted WPML record for #%d "%s" (lonely EN trid=%d)',
@@ -3521,10 +3959,217 @@ class LuwiPress_Translation {
             }
         }
 
+        // Type 3: Sibling-rank orphan -- a trid where TWO rows have source_language_code IS NULL
+        // (one is the legit EN source, the other is a non-EN post wrongly stamped as "I am also
+        // an original"). This is exactly the "8 missing in DB but unreachable" case: Coverage SQL
+        // skips these (source_language_code IS NULL filter on the count side), but the post does
+        // exist in the trid, so the missing-fetcher sees "translation present" and won't list it.
+        // Result: phantom missing, no way to translate it from the UI. Fix: stamp the non-EN row
+        // with source_language_code = EN so it becomes a proper translation.
+        $type3 = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.translation_id, t.element_id, t.language_code, t.trid
+             FROM {$wpdb->prefix}icl_translations t
+             JOIN {$wpdb->posts} p ON t.element_id = p.ID
+             WHERE t.source_language_code IS NULL
+               AND t.language_code != %s
+               AND t.element_type LIKE 'post_%%'
+               AND p.post_type IN ('post', 'page', 'product')
+               AND p.post_status IN ('publish','draft','private')
+               AND t.trid IN (
+                   SELECT trid FROM (
+                       SELECT trid FROM {$wpdb->prefix}icl_translations
+                       WHERE source_language_code IS NULL
+                         AND element_type LIKE 'post_%%'
+                       GROUP BY trid
+                       HAVING COUNT(*) > 1
+                   ) AS multi_origin_trids
+               )
+             LIMIT 500",
+            $default_lang
+        ) );
+        foreach ( $type3 as $row ) {
+            // Verify there's a real EN source in the same trid before stamping.
+            $has_en_source = $wpdb->get_var( $wpdb->prepare(
+                "SELECT element_id FROM {$wpdb->prefix}icl_translations
+                 WHERE trid = %d AND language_code = %s AND source_language_code IS NULL
+                   AND translation_id != %d
+                 LIMIT 1",
+                $row->trid, $default_lang, $row->translation_id
+            ) );
+            if ( $has_en_source ) {
+                $wpdb->update( $wpdb->prefix . 'icl_translations',
+                    array( 'source_language_code' => $default_lang ),
+                    array( 'translation_id' => $row->translation_id ) );
+                $fixed++;
+                LuwiPress_Logger::log( sprintf( 'Orphan fixed (Type 3): stamped #%d (%s) as translation of EN source in trid=%d',
+                    $row->element_id, $row->language_code, $row->trid ), 'info' );
+            }
+        }
+
+        // Type 4: Cascade-duplicate -- a trid with multiple EN-tagged rows where ALL of them
+        // currently have source_language_code IS NULL (none are valid translations). The first/
+        // oldest row is the legit EN source; every later row is the byproduct of a runaway
+        // create_translation_post -> WPML hook race -> language_code overwritten -> appeared
+        // again in missing-list -> got "translated" again loop. The actual non-EN content is
+        // already in the post body (these were originally IT/FR/ES translations), so we just
+        // delete the icl_translations row -- the post itself becomes a stand-alone untranslated
+        // copy and the operator can decide manually whether to keep it.
+        $cascade_groups = $wpdb->get_results( $wpdb->prepare(
+            "SELECT trid, element_type, COUNT(*) AS cnt
+             FROM {$wpdb->prefix}icl_translations
+             WHERE source_language_code IS NULL
+               AND language_code = %s
+               AND element_type LIKE 'post_%%'
+             GROUP BY trid, element_type
+             HAVING COUNT(*) > 1",
+            $default_lang
+        ) );
+        foreach ( $cascade_groups as $group ) {
+            $rows = $wpdb->get_results( $wpdb->prepare(
+                "SELECT t.translation_id, t.element_id
+                 FROM {$wpdb->prefix}icl_translations t
+                 JOIN {$wpdb->posts} p ON t.element_id = p.ID
+                 WHERE t.trid = %d
+                   AND t.element_type = %s
+                   AND t.language_code = %s
+                   AND t.source_language_code IS NULL
+                 ORDER BY p.post_date ASC, t.translation_id ASC",
+                $group->trid, $group->element_type, $default_lang
+            ) );
+            if ( count( $rows ) <= 1 ) { continue; }
+            // Keep the first (oldest) row as the legit EN source. Drop the WPML record
+            // for every later row so they stop appearing in the missing-list.
+            $kept = array_shift( $rows );
+            foreach ( $rows as $extra ) {
+                $wpdb->delete(
+                    $wpdb->prefix . 'icl_translations',
+                    array( 'translation_id' => $extra->translation_id ),
+                    array( '%d' )
+                );
+                $fixed++;
+                LuwiPress_Logger::log(
+                    sprintf( 'Orphan fixed (Type 4 cascade): removed WPML record for #%d (kept #%d as legit EN source in trid=%d)',
+                        $extra->element_id, $kept->element_id, $group->trid ),
+                    'warning'
+                );
+            }
+        }
+
         LuwiPress_Logger::log( sprintf( 'Fix orphan translations: %d fixed', $fixed ), 'info' );
         wp_send_json_success( array(
             'fixed'   => $fixed,
             'message' => sprintf( '%d orphan translations fixed (source_language_code set to %s).', $fixed, $default_lang ),
         ) );
+    }
+
+    // Async taxonomy translation -- delegates to LuwiPress_Job_Queue.
+    // Worker fires per chunk: { lang: 'fr', terms: [...] }
+
+    private function queue_taxonomy_translation_job( $taxonomy, $missing_terms, $target_languages, $source_language ) {
+        $chunk_size  = 25;
+        $term_chunks = array_chunk( $missing_terms, $chunk_size );
+        $chunks = array();
+        foreach ( $term_chunks as $chunk ) {
+            foreach ( $target_languages as $lang ) {
+                $chunks[] = array( 'lang' => $lang, 'terms' => array_values( $chunk ) );
+            }
+        }
+
+        $job = LuwiPress_Job_Queue::enqueue( 'taxonomy_translation', array(
+            'chunks' => $chunks,
+            'meta'   => array(
+                'taxonomy'        => $taxonomy,
+                'source_language' => $source_language,
+                'target_languages' => $target_languages,
+                'total_terms'     => count( $missing_terms ),
+            ),
+        ) );
+
+        if ( is_wp_error( $job ) ) {
+            return $job;
+        }
+
+        return rest_ensure_response( array(
+            'status'      => 'queued',
+            'job_id'      => $job['job_id'],
+            'taxonomy'    => $taxonomy,
+            'total_terms' => count( $missing_terms ),
+            'total_units' => $job['total_units'],
+            'message'     => sprintf( 'Queued %d translations across %d chunks. Poll job status with job_id.', count( $missing_terms ) * count( $target_languages ), $job['total_units'] ),
+        ) );
+    }
+
+    /**
+     * Worker for one taxonomy-translation chunk. Called by LuwiPress_Job_Queue::cron_dispatch.
+     * Returns: [ 'sent' => N, 'saved' => N, 'errors' => [...] ]
+     */
+    public function jq_taxonomy_translation_worker( $chunk_payload, $meta, $job_id ) {
+        $lang     = $chunk_payload['lang']  ?? '';
+        $terms    = $chunk_payload['terms'] ?? array();
+        $taxonomy = $meta['taxonomy']        ?? '';
+        $source_language = $meta['source_language'] ?? self::get_default_language();
+
+        if ( ! $lang || ! $taxonomy || empty( $terms ) ) {
+            return array( 'sent' => 0, 'saved' => 0, 'errors' => array( 'invalid chunk payload (lang/taxonomy/terms missing)' ) );
+        }
+
+        $lang_names = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese', 'pt-pt' => 'Portuguese', 'ko' => 'Korean' );
+        $source_name = $lang_names[ $source_language ] ?? ucfirst( $source_language );
+        $target_name = $lang_names[ $lang ] ?? ucfirst( $lang );
+
+        $terms_for_prompt = array();
+        foreach ( $terms as $t ) {
+            $terms_for_prompt[] = array(
+                'term_id' => $t['term_id'] ?? 0,
+                'name'    => $t['name']    ?? '',
+                'slug'    => $t['slug']    ?? '',
+            );
+        }
+
+        // Token budget scales with chunk size: ~80-100 tokens per term entry in the JSON response.
+        $max_tokens = max( 1024, count( $terms ) * 100 );
+
+        $prompt   = LuwiPress_Prompts::taxonomy_translation( $terms_for_prompt, $taxonomy, $source_name, $target_name );
+        $messages = LuwiPress_AI_Engine::build_messages( $prompt );
+        $ai_result = LuwiPress_AI_Engine::dispatch_json( 'translation-pipeline', $messages, array(
+            'max_tokens' => $max_tokens,
+        ) );
+
+        $sent  = count( $terms );
+        $saved = 0;
+        $errors = array();
+
+        if ( is_wp_error( $ai_result ) ) {
+            $errors[] = sprintf( '%s ai err: %s', $lang, $ai_result->get_error_message() );
+            return array( 'sent' => $sent, 'saved' => 0, 'errors' => $errors );
+        }
+
+        $translated = is_array( $ai_result ) && isset( $ai_result[0] ) ? $ai_result : ( $ai_result['translations'] ?? array() );
+        foreach ( $translated as &$tr_item ) {
+            $tr_item['language'] = $lang;
+        }
+        unset( $tr_item );
+
+        if ( empty( $translated ) ) {
+            return array( 'sent' => $sent, 'saved' => 0, 'errors' => array( $lang . ' ai returned no translations' ) );
+        }
+
+        $callback_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/taxonomy-callback' );
+        $callback_request->set_body_params( array(
+            'taxonomy'     => $taxonomy,
+            'translations' => $translated,
+        ) );
+        $callback_response = $this->handle_taxonomy_callback( $callback_request );
+
+        if ( is_wp_error( $callback_response ) ) {
+            $errors[] = 'callback wp_error: ' . $callback_response->get_error_message();
+        } else {
+            $callback_data = is_object( $callback_response ) && method_exists( $callback_response, 'get_data' ) ? $callback_response->get_data() : array();
+            $saved         = absint( $callback_data['saved'] ?? 0 );
+            $cb_errors     = (array) ( $callback_data['errors'] ?? array() );
+            $errors        = array_merge( $errors, array_slice( $cb_errors, 0, 3 ) );
+        }
+
+        return array( 'sent' => $sent, 'saved' => $saved, 'errors' => $errors );
     }
 }

@@ -16,6 +16,19 @@ if ( ! current_user_can( 'manage_options' ) ) {
 	wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'luwipress' ) );
 }
 
+// Translation Manager is fully dynamic (counts shift after every translation, fetcher
+// state changes after every Fix Orphans run). Force every layer of caching off so the
+// operator never sees stale "X missing in DB but unreachable" amber buttons that were
+// produced by an earlier session whose data is now superseded. Three layers covered:
+// (1) PHP-level Cache-Control + Pragma + Expires headers,
+// (2) WP nocache constants for plugin caches (Rocket, W3TC, etc.) that honour them,
+// (3) LiteSpeed-specific bypass header.
+if ( ! headers_sent() ) {
+	nocache_headers();
+	header( 'X-LiteSpeed-Cache-Control: no-cache' );
+	if ( ! defined( 'DONOTCACHEPAGE' ) ) { define( 'DONOTCACHEPAGE', true ); }
+}
+
 // ── Environment ──
 $detector       = LuwiPress_Plugin_Detector::get_instance();
 $translation    = $detector->detect_translation();
@@ -145,6 +158,202 @@ foreach ( $content_types as $pt => $color ) {
 	}
 
 	$coverage[ $pt ] = array( 'label' => $pt_obj->labels->name, 'total' => $total, 'languages' => $langs, 'color' => $color );
+}
+
+// AUTO-CLEANUP: every time the operator opens the Translation Manager page, sweep
+// cascade-duplicate WPML rows BEFORE we compute the missing-list. This is the only
+// place we can be 100% sure the operator's UI sees a clean state -- no matter what
+// stale cron jobs or external integrations are also writing to icl_translations.
+//
+// Catches TWO classes of cascade dups:
+//
+//   (A) Multi-EN-row trid: any trid where >1 row has source_language_code=NULL.
+//       Legit case = exactly 1. Keeps the oldest row, drops the rest.
+//
+//   (B) Lonely-trid translation post stamped as EN: a post that has the meta key
+//       _luwipress_elementor_translated=1 (set by us only on real translations) but
+//       its WPML row says language_code=default + source_language_code=NULL. That's
+//       a translation post wrongly flagged as a fresh EN source. Each such post
+//       gets its OWN trid (no sibling), so detector (A) misses them. Cleaning their
+//       icl_translations row removes them from the missing-list immediately.
+if ( $is_wpml ) {
+	$auto_cleanup_count = 0;
+
+	// (A) Multi-EN-row trid
+	$cascade_groups_to_clean = $wpdb->get_results( $wpdb->prepare(
+		"SELECT trid, element_type FROM {$wpdb->prefix}icl_translations
+		 WHERE source_language_code IS NULL
+		   AND language_code = %s
+		   AND element_type LIKE 'post_%%'
+		 GROUP BY trid, element_type
+		 HAVING COUNT(*) > 1",
+		$default_lang
+	) );
+	foreach ( $cascade_groups_to_clean as $g ) {
+		$rows_in_group = $wpdb->get_results( $wpdb->prepare(
+			"SELECT t.translation_id, t.element_id
+			 FROM {$wpdb->prefix}icl_translations t
+			 JOIN {$wpdb->posts} p ON t.element_id = p.ID
+			 WHERE t.trid = %d AND t.element_type = %s
+			   AND t.language_code = %s AND t.source_language_code IS NULL
+			 ORDER BY p.post_date ASC, t.translation_id ASC",
+			$g->trid, $g->element_type, $default_lang
+		) );
+		if ( count( $rows_in_group ) <= 1 ) { continue; }
+		array_shift( $rows_in_group );
+		foreach ( $rows_in_group as $extra ) {
+			$wpdb->delete(
+				$wpdb->prefix . 'icl_translations',
+				array( 'translation_id' => $extra->translation_id ),
+				array( '%d' )
+			);
+			$auto_cleanup_count++;
+		}
+	}
+
+	// (B) Translation posts mis-flagged as EN sources -- caught by our own meta key.
+	// Earlier versions just DELETED the bad row, but that left the post invisible to
+	// WPML and the source kept showing as "missing translation" -> infinite re-translate
+	// loop. Now we look up the correct (source_id, target_language) from our own
+	// `_luwipress_translation_source` + `_luwipress_translation_language` meta keys
+	// (set at create_translation_post time) and RE-STAMP the row with the right values.
+	// Falls back to delete only if our meta is missing (older translation posts).
+	$mistagged = $wpdb->get_results( $wpdb->prepare(
+		"SELECT t.translation_id, t.element_id, t.element_type, t.trid
+		 FROM {$wpdb->prefix}icl_translations t
+		 JOIN {$wpdb->postmeta} pm ON pm.post_id = t.element_id
+		 WHERE t.source_language_code IS NULL
+		   AND t.language_code = %s
+		   AND t.element_type LIKE 'post_%%'
+		   AND pm.meta_key = '_luwipress_elementor_translated'
+		   AND pm.meta_value = '1'
+		 LIMIT 200",
+		$default_lang
+	) );
+	foreach ( $mistagged as $row ) {
+		$source_id = absint( get_post_meta( $row->element_id, '_luwipress_translation_source', true ) );
+		$target_lang = sanitize_text_field( get_post_meta( $row->element_id, '_luwipress_translation_language', true ) );
+
+		if ( $source_id && $target_lang && $target_lang !== $default_lang ) {
+			// Find the source's trid so we can re-link this translation to it.
+			$source_trid = (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT trid FROM {$wpdb->prefix}icl_translations
+				 WHERE element_id = %d AND element_type = %s
+				   AND language_code = %s AND source_language_code IS NULL",
+				$source_id, $row->element_type, $default_lang
+			) );
+
+			if ( $source_trid ) {
+				// Remove any pre-existing target-language row for this trid (will collide otherwise).
+				$wpdb->delete(
+					$wpdb->prefix . 'icl_translations',
+					array( 'trid' => $source_trid, 'language_code' => $target_lang, 'element_type' => $row->element_type ),
+					array( '%d', '%s', '%s' )
+				);
+				// Update our row to be the correct translation entry.
+				$wpdb->update(
+					$wpdb->prefix . 'icl_translations',
+					array(
+						'trid'                 => $source_trid,
+						'language_code'        => $target_lang,
+						'source_language_code' => $default_lang,
+					),
+					array( 'translation_id' => $row->translation_id ),
+					array( '%d', '%s', '%s' ),
+					array( '%d' )
+				);
+				$auto_cleanup_count++;
+				LuwiPress_Logger::log(
+					sprintf( 'Auto-cleanup (re-stamped): #%d was mis-flagged as EN source, restored as %s translation of #%d (trid %d)',
+						$row->element_id, $target_lang, $source_id, $source_trid ),
+					'warning'
+				);
+				continue;
+			}
+		}
+
+		// Fallback for older translation posts without our meta: delete the bad row.
+		$wpdb->delete(
+			$wpdb->prefix . 'icl_translations',
+			array( 'translation_id' => $row->translation_id ),
+			array( '%d' )
+		);
+		$auto_cleanup_count++;
+		LuwiPress_Logger::log(
+			sprintf( 'Auto-cleanup (mis-tagged, no source meta): #%d had _luwipress_elementor_translated=1 but was flagged as EN source -- WPML row removed',
+				$row->element_id ),
+			'warning'
+		);
+	}
+
+	if ( $auto_cleanup_count > 0 ) {
+		LuwiPress_Logger::log(
+			sprintf( 'Translation Manager auto-cleanup: removed %d cascade-duplicate WPML rows on page render', $auto_cleanup_count ),
+			'info'
+		);
+		// Recompute coverage now that cascade rows are gone -- otherwise the coverage
+		// numbers above this block stay inflated and missing-list shows phantom posts.
+		foreach ( $content_types as $pt => $color ) {
+			$pt_obj = get_post_type_object( $pt );
+			if ( ! $pt_obj ) { continue; }
+			$element_type = 'post_' . $pt;
+			$total = (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT COUNT(DISTINCT t.element_id) FROM {$wpdb->prefix}icl_translations t
+				 WHERE t.element_type = %s AND t.language_code = %s AND t.source_language_code IS NULL
+				   AND t.element_id IN (SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish')",
+				$element_type, $default_lang, $pt
+			) );
+			$langs = array();
+			foreach ( $target_langs as $lang ) {
+				$langs[ $lang ] = (int) $wpdb->get_var( $wpdb->prepare(
+					"SELECT COUNT(DISTINCT t.element_id) FROM {$wpdb->prefix}icl_translations t
+					 WHERE t.element_type = %s AND t.language_code = %s
+					   AND t.source_language_code IS NOT NULL
+					   AND t.trid IN (
+					       SELECT trid FROM {$wpdb->prefix}icl_translations
+					       WHERE element_type = %s AND language_code = %s AND source_language_code IS NULL
+					   )
+					   AND t.element_id IN (SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status IN ('publish','draft','private'))",
+					$element_type, $lang, $element_type, $default_lang, $pt
+				) );
+				$langs[ $lang ] = min( $langs[ $lang ], $total );
+			}
+			$coverage[ $pt ]['total'] = $total;
+			$coverage[ $pt ]['languages'] = $langs;
+		}
+	}
+}
+
+// Server-side missing-list pre-fetch (avoids the AJAX cache mismatch loop). For each
+// post_type, ask the existing fetcher once and stash the IDs per target language. JS
+// reads these inline arrays instead of round-tripping through admin-ajax which has
+// repeatedly returned stale cached results on Tapadum / hosts with edge caches that
+// don't honour nocache_headers() reliably for admin-ajax responses.
+$inline_missing = array();
+if ( $is_wpml ) {
+	$translation_module = LuwiPress_Translation::get_instance();
+	foreach ( $coverage as $pt => $cov ) {
+		$inline_missing[ $pt ] = array();
+		foreach ( $target_langs as $lang ) {
+			$missing_count = max( 0, $cov['total'] - ( $cov['languages'][ $lang ] ?? 0 ) );
+			if ( $missing_count <= 0 ) { continue; }
+			$req = new WP_REST_Request( 'GET', '/luwipress/v1/translation/missing-all' );
+			$req->set_param( 'target_languages', $lang );
+			$req->set_param( 'post_type', $pt );
+			$req->set_param( 'limit', max( 50, $missing_count ) );
+			$resp = $translation_module->get_missing_translations_all( $req );
+			$payload = $resp->get_data();
+			$items = $payload['items'] ?? $payload['products'] ?? array();
+			$inline_missing[ $pt ][ $lang ] = array_map( function( $it ) {
+				return array(
+					'id'    => absint( $it['post_id'] ?? $it['product_id'] ?? 0 ),
+					'title' => (string) ( $it['name'] ?? '' ),
+				);
+			}, array_filter( $items, function( $it ) {
+				return ! empty( $it['post_id'] ?? $it['product_id'] ?? 0 );
+			} ) );
+		}
+	}
 }
 
 // ── Taxonomy coverage ──
@@ -537,94 +746,158 @@ if ( $is_wpml ) {
 	</div>
 	<?php endforeach; ?>
 
-	<!-- ═══ MAINTENANCE ═══ -->
-	<div class="tm-step tm-step-maint">
-		<div class="tm-step-header">
-			<div class="tm-step-number" style="background:var(--lp-gray);">
-				<span class="dashicons dashicons-admin-tools" style="font-size:16px;width:16px;height:16px;"></span>
-			</div>
-			<div class="tm-step-info">
-				<h2 class="tm-step-title"><?php esc_html_e( 'Maintenance Tools', 'luwipress' ); ?></h2>
-				<p class="tm-step-desc"><?php esc_html_e( 'Fix common translation issues and clean up data.', 'luwipress' ); ?></p>
+	<?php
+	// Outdated translations panel — semi-automatic detection: source post's
+	// post_modified_gmt > translation's _luwipress_synced_source_modified meta
+	// means the operator edited the source after translating, so the translation
+	// is now stale. Show a panel with one-click sync per source.
+	$outdated_sources = array();
+	if ( $is_wpml ) {
+		foreach ( array( 'page', 'post' ) as $pt ) {
+			$req = new WP_REST_Request( 'GET', '/luwipress/v1/translation/outdated' );
+			$req->set_param( 'post_type', $pt );
+			$req->set_param( 'limit', 50 );
+			$resp = LuwiPress_Translation::get_instance()->get_outdated_translations( $req );
+			$data = $resp->get_data();
+			if ( ! empty( $data['sources'] ) ) {
+				foreach ( $data['sources'] as $src ) {
+					$src['post_type'] = $pt;
+					$outdated_sources[] = $src;
+				}
+			}
+		}
+	}
+	?>
+	<?php if ( ! empty( $outdated_sources ) ) : ?>
+	<div class="tm-outdated-panel">
+		<div class="tm-outdated-header">
+			<span class="dashicons dashicons-clock tm-outdated-icon"></span>
+			<div>
+				<strong class="tm-outdated-title"><?php echo count( $outdated_sources ); ?> <?php echo esc_html( _n( 'source has outdated translations', 'sources have outdated translations', count( $outdated_sources ), 'luwipress' ) ); ?></strong>
+				<p class="tm-outdated-sub"><?php esc_html_e( 'You edited these source posts after translating. Sync structure to update the translations.', 'luwipress' ); ?></p>
 			</div>
 		</div>
-		<div class="tm-step-body tm-maint-tools">
-			<div class="tm-tool-card">
-				<div class="tm-tool-info">
-					<strong><?php esc_html_e( 'Fix Category Assignments', 'luwipress' ); ?></strong>
-					<span><?php esc_html_e( 'Re-assigns translated products to their correct translated categories.', 'luwipress' ); ?></span>
+		<div class="tm-outdated-list">
+			<?php foreach ( $outdated_sources as $src ) : ?>
+			<div class="tm-outdated-row" data-source="<?php echo esc_attr( $src['source_id'] ); ?>">
+				<div class="tm-outdated-info">
+					<span class="tm-outdated-pt-badge tm-outdated-pt-<?php echo esc_attr( $src['post_type'] ); ?>"><?php echo esc_html( strtoupper( $src['post_type'] ) ); ?></span>
+					<span class="tm-outdated-name"><?php echo esc_html( $src['title'] ); ?></span>
+					<span class="tm-outdated-langs">
+						<?php foreach ( $src['translations'] as $t ) : ?>
+							<span class="tm-outdated-lang-chip" title="<?php echo esc_attr( sprintf( __( '~%s hours behind source', 'luwipress' ), $t['lag_hours'] ) ); ?>"><?php echo esc_html( strtoupper( $t['language'] ) ); ?></span>
+						<?php endforeach; ?>
+					</span>
 				</div>
-				<button type="button" id="luwipress-fix-categories" class="tm-btn tm-btn-secondary">
-					<span class="dashicons dashicons-category"></span> <?php esc_html_e( 'Fix', 'luwipress' ); ?>
-				</button>
-				<span id="luwipress-fix-categories-result" class="tm-tool-result"></span>
-			</div>
-			<div class="tm-tool-card">
-				<div class="tm-tool-info">
-					<strong><?php esc_html_e( 'Fix Translation Images', 'luwipress' ); ?></strong>
-					<span><?php esc_html_e( 'Copies featured images from originals to all translated posts, pages, and products.', 'luwipress' ); ?></span>
+				<div class="tm-outdated-actions">
+					<button type="button" class="tm-btn tm-btn-secondary tm-outdated-sync-btn" data-source="<?php echo esc_attr( $src['source_id'] ); ?>" data-preserve="1" title="<?php esc_attr_e( 'Copy new structure from source, keep existing translations for unchanged texts. Safe.', 'luwipress' ); ?>">
+						<span class="dashicons dashicons-update"></span> <?php esc_html_e( 'Sync structure', 'luwipress' ); ?>
+					</button>
+					<button type="button" class="tm-btn tm-btn-secondary tm-outdated-retranslate-btn" data-source="<?php echo esc_attr( $src['source_id'] ); ?>" title="<?php esc_attr_e( 'Re-translate every text from scratch. Slower, costs AI tokens.', 'luwipress' ); ?>">
+						<span class="dashicons dashicons-translation"></span> <?php esc_html_e( 'Re-translate', 'luwipress' ); ?>
+					</button>
 				</div>
-				<button type="button" id="luwipress-fix-images" class="tm-btn tm-btn-secondary">
-					<span class="dashicons dashicons-format-image"></span> <?php esc_html_e( 'Fix', 'luwipress' ); ?>
-				</button>
-				<span id="luwipress-fix-images-result" class="tm-tool-result"></span>
 			</div>
-			<div class="tm-tool-card">
-				<div class="tm-tool-info">
-					<strong><?php esc_html_e( 'Clean Orphan Translations', 'luwipress' ); ?></strong>
-					<span><?php esc_html_e( 'Scans for orphan WPML records (preview first, then confirm). Fixes inflated coverage.', 'luwipress' ); ?></span>
-				</div>
-				<button type="button" id="luwipress-clean-orphans" class="tm-btn tm-btn-danger">
-					<span class="dashicons dashicons-trash"></span> <?php esc_html_e( 'Clean', 'luwipress' ); ?>
-				</button>
-				<span id="luwipress-clean-orphans-result" class="tm-tool-result"></span>
-			</div>
-			<div class="tm-tool-card">
-				<div class="tm-tool-info">
-					<strong><?php esc_html_e( 'Fix Broken Translations', 'luwipress' ); ?></strong>
-					<span><?php esc_html_e( 'Fixes posts with empty titles or numeric slugs, then queues Elementor pages for re-translation. Safe — no deletions.', 'luwipress' ); ?></span>
-				</div>
-				<button type="button" id="luwipress-retranslate-broken" class="tm-btn tm-btn-secondary">
-					<span class="dashicons dashicons-update"></span> <?php esc_html_e( 'Re-translate', 'luwipress' ); ?>
-				</button>
-				<span id="luwipress-retranslate-broken-result" class="tm-tool-result"></span>
-			</div>
-			<div class="tm-tool-card">
-				<div class="tm-tool-info">
-					<strong><?php esc_html_e( 'Sync WPML Menus', 'luwipress' ); ?></strong>
-					<span><?php esc_html_e( 'Re-syncs navigation menus from default language to all translations. Fixes missing menu items.', 'luwipress' ); ?></span>
-				</div>
-				<button type="button" id="luwipress-sync-menus" class="tm-btn tm-btn-secondary">
-					<span class="dashicons dashicons-menu"></span> <?php esc_html_e( 'Sync Menus', 'luwipress' ); ?>
-				</button>
-				<span id="luwipress-sync-menus-result" class="tm-tool-result"></span>
-			</div>
-			<div class="tm-tool-card">
-				<div class="tm-tool-info">
-					<strong><?php esc_html_e( 'Fix Excerpts', 'luwipress' ); ?></strong>
-					<span><?php esc_html_e( 'Extracts excerpts from Elementor content for posts with empty excerpts. Fixes shortcode display in blog lists.', 'luwipress' ); ?></span>
-				</div>
-				<button type="button" id="luwipress-fix-excerpts" class="tm-btn tm-btn-secondary">
-					<span class="dashicons dashicons-editor-justify"></span> <?php esc_html_e( 'Fix Excerpts', 'luwipress' ); ?>
-				</button>
-				<span id="luwipress-fix-excerpts-result" class="tm-tool-result"></span>
-			</div>
-			<div class="tm-tool-card">
-				<div class="tm-tool-info">
-					<strong><?php esc_html_e( 'Fix Orphan Translations', 'luwipress' ); ?></strong>
-					<span><?php esc_html_e( 'Fixes non-English posts appearing as originals. Sets correct source language in WPML.', 'luwipress' ); ?></span>
-				</div>
-				<button type="button" id="luwipress-fix-orphans-lang" class="tm-btn tm-btn-secondary">
-					<span class="dashicons dashicons-admin-site-alt3"></span> <?php esc_html_e( 'Fix Orphans', 'luwipress' ); ?>
-				</button>
-				<span id="luwipress-fix-orphans-lang-result" class="tm-tool-result"></span>
-			</div>
+			<?php endforeach; ?>
 		</div>
 	</div>
+	<style>
+		.tm-outdated-panel { margin: 16px 0; border: 1px solid var(--lp-warning, #f59e0b); border-left: 4px solid var(--lp-warning, #f59e0b); border-radius: 8px; background: #fffbeb; padding: 16px; }
+		.tm-outdated-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+		.tm-outdated-icon { color: var(--lp-warning, #f59e0b); font-size: 24px; width: 24px; height: 24px; }
+		.tm-outdated-title { color: #78350f; font-size: 14px; }
+		.tm-outdated-sub { margin: 4px 0 0; font-size: 12px; color: #92400e; }
+		.tm-outdated-list { display: flex; flex-direction: column; gap: 8px; }
+		.tm-outdated-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; background: #fff; border: 1px solid #fde68a; border-radius: 6px; flex-wrap: wrap; }
+		.tm-outdated-info { display: flex; align-items: center; gap: 10px; flex: 1 1 50%; min-width: 0; }
+		.tm-outdated-pt-badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 3px; background: var(--lp-blue, #3b82f6); color: #fff; }
+		.tm-outdated-pt-page { background: var(--lp-success, #10b981); }
+		.tm-outdated-name { font-weight: 500; color: #1f2937; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.tm-outdated-langs { display: flex; gap: 4px; flex-shrink: 0; }
+		.tm-outdated-lang-chip { display: inline-block; font-size: 10px; font-weight: 600; padding: 3px 7px; background: #fef3c7; color: #78350f; border-radius: 3px; cursor: help; }
+		.tm-outdated-actions { display: flex; gap: 6px; flex-shrink: 0; }
+		.tm-outdated-actions .tm-btn { font-size: 12px; padding: 6px 10px; }
+		.tm-outdated-actions .tm-btn .dashicons { font-size: 14px; width: 14px; height: 14px; }
+		.tm-outdated-row.tm-outdated-done { background: #ecfdf5; border-color: #6ee7b7; }
+		.tm-outdated-row.tm-outdated-error { background: #fef2f2; border-color: #fca5a5; }
+	</style>
+	<?php endif; ?>
+
+	<!-- ═══ MAINTENANCE — minimal collapsed by default ═══ -->
+	<details class="tm-maint-collapsed">
+		<summary class="tm-maint-summary">
+			<span class="dashicons dashicons-admin-tools"></span>
+			<span class="tm-maint-summary-label"><?php esc_html_e( 'Maintenance Tools', 'luwipress' ); ?></span>
+			<span class="tm-maint-summary-hint"><?php esc_html_e( '7 utilities for fixing translation issues', 'luwipress' ); ?></span>
+		</summary>
+		<div class="tm-maint-grid">
+			<button type="button" id="luwipress-fix-categories" class="tm-maint-btn" title="<?php esc_attr_e( 'Re-assigns translated products to their correct translated categories.', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-category"></span>
+				<span class="tm-maint-btn-label"><?php esc_html_e( 'Fix Categories', 'luwipress' ); ?></span>
+				<span id="luwipress-fix-categories-result" class="tm-maint-btn-result"></span>
+			</button>
+			<button type="button" id="luwipress-fix-images" class="tm-maint-btn" title="<?php esc_attr_e( 'Copies featured images from originals to all translated posts, pages, and products.', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-format-image"></span>
+				<span class="tm-maint-btn-label"><?php esc_html_e( 'Fix Images', 'luwipress' ); ?></span>
+				<span id="luwipress-fix-images-result" class="tm-maint-btn-result"></span>
+			</button>
+			<button type="button" id="luwipress-clean-orphans" class="tm-maint-btn tm-maint-btn-danger" title="<?php esc_attr_e( 'Scans for orphan WPML records (preview first, then confirm). Fixes inflated coverage.', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-trash"></span>
+				<span class="tm-maint-btn-label"><?php esc_html_e( 'Clean Orphans', 'luwipress' ); ?></span>
+				<span id="luwipress-clean-orphans-result" class="tm-maint-btn-result"></span>
+			</button>
+			<button type="button" id="luwipress-retranslate-broken" class="tm-maint-btn" title="<?php esc_attr_e( 'Fixes posts with empty titles or numeric slugs, then queues Elementor pages for re-translation. Safe — no deletions.', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-update"></span>
+				<span class="tm-maint-btn-label"><?php esc_html_e( 'Fix Broken', 'luwipress' ); ?></span>
+				<span id="luwipress-retranslate-broken-result" class="tm-maint-btn-result"></span>
+			</button>
+			<button type="button" id="luwipress-sync-menus" class="tm-maint-btn" title="<?php esc_attr_e( 'Re-syncs navigation menus from default language to all translations. Fixes missing menu items.', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-menu"></span>
+				<span class="tm-maint-btn-label"><?php esc_html_e( 'Sync Menus', 'luwipress' ); ?></span>
+				<span id="luwipress-sync-menus-result" class="tm-maint-btn-result"></span>
+			</button>
+			<button type="button" id="luwipress-fix-excerpts" class="tm-maint-btn" title="<?php esc_attr_e( 'Extracts excerpts from Elementor content for posts with empty excerpts. Fixes shortcode display in blog lists.', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-editor-justify"></span>
+				<span class="tm-maint-btn-label"><?php esc_html_e( 'Fix Excerpts', 'luwipress' ); ?></span>
+				<span id="luwipress-fix-excerpts-result" class="tm-maint-btn-result"></span>
+			</button>
+			<button type="button" id="luwipress-fix-orphans-lang" class="tm-maint-btn" title="<?php esc_attr_e( 'Fixes non-English posts appearing as originals. Resolves cascade-duplicate translations. Run this if you see "X missing in DB but unreachable".', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-admin-site-alt3"></span>
+				<span class="tm-maint-btn-label"><?php esc_html_e( 'Fix Orphans', 'luwipress' ); ?></span>
+				<span id="luwipress-fix-orphans-lang-result" class="tm-maint-btn-result"></span>
+			</button>
+		</div>
+	</details>
+	<style>
+		.tm-maint-collapsed { margin: 16px 0; border: 1px solid var(--lp-border, #e5e7eb); border-radius: 8px; background: #fff; }
+		.tm-maint-summary { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; user-select: none; list-style: none; outline: none; }
+		.tm-maint-summary::-webkit-details-marker { display: none; }
+		.tm-maint-summary:hover { background: var(--lp-gray-50, #f9fafb); }
+		.tm-maint-summary .dashicons { color: var(--lp-text-muted, #6b7280); }
+		.tm-maint-summary-label { font-weight: 600; color: var(--lp-text, #111827); }
+		.tm-maint-summary-hint { font-size: 12px; color: var(--lp-text-muted, #6b7280); margin-left: auto; }
+		.tm-maint-collapsed[open] .tm-maint-summary { border-bottom: 1px solid var(--lp-border, #e5e7eb); }
+		.tm-maint-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; padding: 12px; }
+		.tm-maint-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; background: var(--lp-gray-50, #f9fafb); border: 1px solid var(--lp-border, #e5e7eb); border-radius: 6px; color: var(--lp-text, #111827); cursor: pointer; font-size: 12px; transition: all 0.15s; min-height: 80px; position: relative; }
+		.tm-maint-btn:hover { background: #fff; border-color: var(--lp-primary, #6366f1); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+		.tm-maint-btn .dashicons { font-size: 18px; width: 18px; height: 18px; color: var(--lp-text-muted, #6b7280); }
+		.tm-maint-btn:hover .dashicons { color: var(--lp-primary, #6366f1); }
+		.tm-maint-btn-label { font-weight: 500; line-height: 1.2; text-align: center; }
+		.tm-maint-btn-result { font-size: 11px; color: var(--lp-success, #10b981); line-height: 1.2; min-height: 14px; text-align: center; }
+		.tm-maint-btn-danger:hover { border-color: var(--lp-error, #dc2626); }
+		.tm-maint-btn-danger:hover .dashicons { color: var(--lp-error, #dc2626); }
+		.tm-maint-btn:disabled { opacity: 0.6; cursor: wait; }
+	</style>
 
 	<script>
 	(function() {
 		var nonce = <?php echo wp_json_encode( wp_create_nonce( 'luwipress_translation_nonce' ) ); ?>;
+		// Server-side pre-fetched missing items keyed by post_type then language. The
+		// "Translate All" handler reads this first; AJAX get_missing_items is only used
+		// as a fallback when the inline cache is empty (e.g. coverage just changed in
+		// another tab). Bypassing the AJAX round-trip eliminates the LiteSpeed admin
+		// cache class of "X missing in DB but unreachable" mismatches we kept hitting.
+		var lpInlineMissing = <?php echo wp_json_encode( $inline_missing ); ?>;
 
 		// ─── Auto-poll active cron jobs on page load ───
 		(function() {
@@ -766,21 +1039,48 @@ if ( $is_wpml ) {
 				if (statusEl) statusEl.textContent = 'Loading items...';
 				if (fillEl) fillEl.style.width = '0%';
 
-				// Step 1: Fetch missing items
-				var formData = new FormData();
-				formData.append('action', 'luwipress_get_missing_items');
-				formData.append('nonce', nonce);
-				formData.append('language', lang);
-				formData.append('post_type', postType);
-				formData.append('limit', missing);
+				// Step 1: Use server-side pre-fetched list when available (avoids the
+				// LiteSpeed admin-ajax cache mismatch). Fall back to AJAX only when
+				// the inline cache is empty (e.g. coverage just changed in another tab).
+				var inline = (lpInlineMissing[postType] && lpInlineMissing[postType][lang]) || null;
+				var inlineProm;
+				if (inline && inline.length > 0) {
+					inlineProm = Promise.resolve({
+						success: true,
+						data: { items: inline.map(function(it){ return { id: it.id, title: it.title }; }), total: inline.length }
+					});
+				} else {
+					var formData = new FormData();
+					formData.append('action', 'luwipress_get_missing_items');
+					formData.append('nonce', nonce);
+					formData.append('language', lang);
+					formData.append('post_type', postType);
+					formData.append('limit', missing);
+					inlineProm = fetch(ajaxurl, { method: 'POST', body: formData }).then(function(r){ return r.json(); });
+				}
 
-				fetch(ajaxurl, { method: 'POST', body: formData })
-				.then(function(r) { return r.json(); })
+				inlineProm
 				.then(function(d) {
 					if (!d.success || !d.data.items.length) {
 						btn.disabled = false;
-						btn.innerHTML = '<span class="dashicons dashicons-translation"></span> Nothing to translate';
-						if (statusEl) statusEl.textContent = 'No items found.';
+						// Be honest: coverage SQL counted N missing but the missing-fetcher
+						// returned 0 items. That's a database mismatch (orphan WPML rows,
+						// post_status drift, or trid mis-link), NOT "nothing to do". Tell
+						// the operator + suggest the dedicated maintenance tool that
+						// actually fixes this kind of mismatch.
+						if (missing > 0) {
+							btn.innerHTML = '<span class="dashicons dashicons-warning"></span> ' + missing + ' missing in DB but unreachable';
+							btn.style.background = 'var(--lp-warning, #f59e0b)';
+							btn.style.color = '#fff';
+							if (statusEl) {
+								statusEl.innerHTML = 'Coverage shows ' + missing + ' missing but the fetcher returned 0 items -- likely orphan WPML records. <a href="#luwipress-fix-orphans-lang" onclick="var el = document.getElementById(\'luwipress-fix-orphans-lang\'); if (el) { el.scrollIntoView({behavior:\'smooth\', block:\'center\'}); el.style.boxShadow = \'0 0 0 3px var(--lp-warning, #f59e0b)\'; setTimeout(function(){ el.style.boxShadow = \'\'; }, 3000); } return false;" style="color:var(--lp-primary); font-weight:600;">Run Fix Orphans &rarr;</a>';
+								statusEl.style.color = 'var(--lp-warning, #f59e0b)';
+							}
+						} else {
+							btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> Up to date';
+							btn.classList.add('tm-btn-done');
+							if (statusEl) statusEl.textContent = 'No translations needed.';
+						}
 						return;
 					}
 
@@ -937,12 +1237,43 @@ if ( $is_wpml ) {
 				fetch(ajaxurl, { method: 'POST', body: fd })
 				.then(function(r) { return r.json(); })
 				.then(function(d) {
-					if (d.success) {
+					if (d.success && d.data.job_id) {
+						// Async path -- big batches go through wp_cron. Poll status, advance the progress bar.
+						btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Translating...';
+						var jobId = d.data.job_id; var totalUnits = d.data.total_units || 1; var totalTerms = d.data.total_terms || 0;
+						var pollFn = function() {
+							var pf = new FormData(); pf.append('action', 'luwipress_job_status'); pf.append('nonce', nonce); pf.append('job_id', jobId);
+							fetch(ajaxurl, { method: 'POST', body: pf }).then(function(r){return r.json();}).then(function(jd){
+								if (!jd.success) { if (statusEl) statusEl.textContent = 'Job lookup failed -- ' + (jd.data || ''); return; }
+								var j = jd.data; var pct = Math.round((j.done_units / j.total_units) * 100);
+								if (fillEl) { fillEl.style.width = Math.max(5, pct) + '%'; }
+								if (statusEl) statusEl.textContent = j.done_units + '/' + j.total_units + ' chunks done -- saved ' + j.saved + '/' + j.sent + ' so far';
+								if (j.status === 'done') {
+									if (j.saved === 0) {
+										btn.disabled = false; btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Retry';
+										if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--lp-error)'; }
+										var jerr = (j.errors && j.errors.length) ? ' [' + j.errors[0] + ']' : '';
+										if (statusEl) { statusEl.textContent = 'AI ran but 0 saved' + jerr + ' -- retry?'; statusEl.style.color = 'var(--lp-error)'; }
+										if (resultEl) { resultEl.textContent = '0/' + j.sent + ' saved'; resultEl.className = 'tm-tax-result result-err'; }
+									} else {
+										btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> Done'; btn.classList.add('tm-btn-done');
+										if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--lp-success)'; }
+										if (statusEl) { statusEl.textContent = j.saved + ' of ' + j.sent + ' terms saved. Reloading...'; statusEl.style.color = 'var(--lp-success)'; }
+										if (resultEl) { resultEl.textContent = j.saved + '/' + j.sent + ' saved'; resultEl.className = 'tm-tax-result result-ok'; }
+										setTimeout(function() { location.reload(); }, 2000);
+									}
+								} else { setTimeout(pollFn, 3000); }
+							}).catch(function(){ setTimeout(pollFn, 5000); });
+						};
+						if (statusEl) statusEl.textContent = 'Queued ' + totalTerms + ' terms (' + totalUnits + ' chunks). Working in background...';
+						if (fillEl) { fillEl.style.width = '8%'; }
+						setTimeout(pollFn, 3000);
+					} else if (d.success) {
 						btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> Done';
 						btn.classList.add('tm-btn-done');
 						if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--lp-success)'; }
-						if (statusEl) { statusEl.textContent = (d.data.terms_sent || 0) + ' terms translated. Reloading...'; statusEl.style.color = 'var(--lp-success)'; }
-						if (resultEl) { resultEl.textContent = (d.data.terms_sent || 0) + ' terms'; resultEl.className = 'tm-tax-result result-ok'; }
+						var sent = d.data.terms_sent || 0; var saved = d.data.saved || 0; if (sent > 0 && saved === 0) { btn.disabled = false; btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Retry'; if (fillEl) { fillEl.style.width = '100%'; fillEl.style.background = 'var(--lp-error)'; } var firstErr = (d.data.errors && d.data.errors.length) ? ' [' + d.data.errors[0] + ']' : ''; var keys = (d.data.sample_keys && d.data.sample_keys.length) ? ' (item keys: ' + d.data.sample_keys.join(',') + ')' : ''; if (statusEl) { statusEl.textContent = 'AI returned ' + sent + ' translations but 0 saved to WPML' + firstErr + keys + ' -- retry?'; statusEl.style.color = 'var(--lp-error)'; } if (resultEl) { resultEl.textContent = '0/' + sent + ' saved'; resultEl.className = 'tm-tax-result result-err'; } return; } if (statusEl) { statusEl.textContent = saved + ' of ' + sent + ' terms saved. Reloading...'; statusEl.style.color = 'var(--lp-success)'; }
+						if (resultEl) { resultEl.textContent = saved + '/' + sent + ' saved'; resultEl.className = 'tm-tax-result result-ok'; }
 						setTimeout(function() { location.reload(); }, 2000);
 					} else {
 						btn.disabled = false;
@@ -956,6 +1287,85 @@ if ( $is_wpml ) {
 					btn.disabled = false;
 					btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Error';
 					if (statusEl) statusEl.textContent = 'Request failed';
+				});
+			});
+		});
+
+		// ─── Outdated translations: sync structure + re-translate handlers ───
+		var lpRestBase = <?php echo wp_json_encode( esc_url_raw( rest_url( 'luwipress/v1/' ) ) ); ?>;
+		var lpRestNonce = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
+
+		document.querySelectorAll('.tm-outdated-sync-btn').forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				var sourceId = btn.dataset.source;
+				var preserve = btn.dataset.preserve === '1';
+				var row = btn.closest('.tm-outdated-row');
+				btn.disabled = true;
+				btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Syncing...';
+				fetch(lpRestBase + 'elementor/sync-structure', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpRestNonce },
+					body: JSON.stringify({ source_id: parseInt(sourceId, 10), preserve_text: preserve }),
+					credentials: 'same-origin'
+				}).then(function(r){ return r.json(); }).then(function(d) {
+					if (d.code) {
+						btn.innerHTML = '<span class="dashicons dashicons-warning"></span> ' + (d.message || 'Error');
+						if (row) row.classList.add('tm-outdated-error');
+						setTimeout(function(){ btn.disabled = false; }, 3000);
+						return;
+					}
+					var preserved = 0;
+					if (d.results) {
+						Object.keys(d.results).forEach(function(tid){
+							preserved += (d.results[tid].texts_preserved || 0);
+						});
+					}
+					btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> Synced (' + preserved + ' texts kept)';
+					if (row) {
+						row.classList.add('tm-outdated-done');
+						setTimeout(function(){ row.style.display = 'none'; }, 2000);
+					}
+				}).catch(function(){
+					btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Network error';
+					if (row) row.classList.add('tm-outdated-error');
+					setTimeout(function(){ btn.disabled = false; }, 3000);
+				});
+			});
+		});
+
+		document.querySelectorAll('.tm-outdated-retranslate-btn').forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				if (!confirm('<?php echo esc_js( __( 'Re-translate every text from scratch? This costs AI tokens. Continue?', 'luwipress' ) ); ?>')) return;
+				var sourceId = btn.dataset.source;
+				var row = btn.closest('.tm-outdated-row');
+				btn.disabled = true;
+				btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> Re-translating...';
+				// Get list of languages from chips on this row
+				var langs = Array.from(row.querySelectorAll('.tm-outdated-lang-chip')).map(function(c){
+					return c.textContent.trim().toLowerCase();
+				});
+				var lang = langs[0]; // start with first; cron will pick up rest as user retries
+				var fd = new FormData();
+				fd.append('action', 'luwipress_translate_single');
+				fd.append('nonce', nonce);
+				fd.append('post_id', sourceId);
+				fd.append('language', lang);
+				fetch(ajaxurl, { method: 'POST', body: fd })
+				.then(function(r){ return r.json(); }).then(function(d) {
+					if (d.success) {
+						btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> Queued';
+						if (row) {
+							row.classList.add('tm-outdated-done');
+							setTimeout(function(){ row.style.display = 'none'; }, 2000);
+						}
+					} else {
+						btn.innerHTML = '<span class="dashicons dashicons-warning"></span> ' + (d.data || 'Failed');
+						if (row) row.classList.add('tm-outdated-error');
+						setTimeout(function(){ btn.disabled = false; }, 3000);
+					}
+				}).catch(function(){
+					btn.innerHTML = '<span class="dashicons dashicons-warning"></span> Network error';
+					setTimeout(function(){ btn.disabled = false; }, 3000);
 				});
 			});
 		});

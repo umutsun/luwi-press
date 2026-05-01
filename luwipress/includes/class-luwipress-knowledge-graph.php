@@ -1495,7 +1495,7 @@ class LuwiPress_Knowledge_Graph {
 			return array();
 		}
 
-		$default_lang = apply_filters( 'wpml_default_language', 'en' );
+		$default_lang = LuwiPress_Translation::get_default_language();
 		$result = array();
 
 		foreach ( array( 'product_cat', 'product_tag' ) as $taxonomy ) {
@@ -1589,7 +1589,7 @@ class LuwiPress_Knowledge_Graph {
 			return $nodes;
 		}
 
-		$default_lang = apply_filters( 'wpml_default_language', 'en' );
+		$default_lang = LuwiPress_Translation::get_default_language();
 
 		foreach ( array( 'product_cat' => 'Product Categories', 'product_tag' => 'Product Tags' ) as $taxonomy => $label ) {
 			if ( ! taxonomy_exists( $taxonomy ) ) {

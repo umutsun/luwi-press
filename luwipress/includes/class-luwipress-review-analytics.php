@@ -294,7 +294,7 @@ class LuwiPress_Review_Analytics {
 			$aggregate = get_post_meta( $product_id, '_luwipress_review_aggregate', true );
 		}
 
-		$product = wc_get_product( $product_id );
+		$product = function_exists( 'wc_get_product' ) ? wc_get_product( $product_id ) : null;
 
 		return array(
 			'product_id'     => $product_id,

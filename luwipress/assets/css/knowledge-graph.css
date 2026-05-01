@@ -1215,6 +1215,22 @@
     opacity: 1;
 }
 
+/* Selected node — replace browser's default rectangular focus outline with a
+   round halo that matches the node's circular shape. tabindex=0 on each node
+   makes them focusable for accessibility but the default outline looks like a
+   selection bug to the operator. */
+.kg-node:focus,
+.kg-node:focus-visible {
+    outline: none;
+}
+.kg-node:focus circle,
+.kg-node:focus-visible circle {
+    stroke: var(--lp-primary, #6366f1);
+    stroke-width: 3;
+    filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.6));
+    transition: stroke-width 0.15s ease, filter 0.15s ease;
+}
+
 /* Zoom controls */
 .kg-zoom-controls {
     position: absolute;

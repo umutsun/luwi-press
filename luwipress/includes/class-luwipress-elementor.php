@@ -49,6 +49,60 @@ class LuwiPress_Elementor {
             @set_time_limit( 300 );
         }
 
+        // CRITICAL guard: refuse to translate a post that is itself a translation OR a
+        // cascade duplicate. Without this, queued cron jobs from a previous bad state
+        // keep producing duplicates even after the UI/REST guards are in place.
+        if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) ) {
+            global $wpdb;
+            $src_post = get_post( $source_id );
+            if ( ! $src_post ) {
+                LuwiPress_Logger::log( 'Cron: source post #' . $source_id . ' not found, skipping', 'warning' );
+                return;
+            }
+            $default_lang = LuwiPress_Translation::get_default_language();
+            $element_type = 'post_' . $src_post->post_type;
+            $row = $wpdb->get_row( $wpdb->prepare(
+                "SELECT language_code, source_language_code, trid FROM {$wpdb->prefix}icl_translations
+                 WHERE element_id = %d AND element_type = %s",
+                $source_id, $element_type
+            ) );
+            if ( $row && ( $row->language_code !== $default_lang || $row->source_language_code !== null ) ) {
+                LuwiPress_Logger::log( sprintf(
+                    'Cron: refusing to translate #%d -- it is itself a %s translation (source_language_code=%s). Skipping to prevent cascade duplicate.',
+                    $source_id, $row->language_code, $row->source_language_code ?? 'NULL'
+                ), 'warning' );
+                update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
+                    'status'   => 'skipped_not_source',
+                    'language' => $target_language,
+                    'finished' => current_time( 'mysql' ),
+                ) ) );
+                return;
+            }
+            if ( $row ) {
+                $older_sibling = $wpdb->get_var( $wpdb->prepare(
+                    "SELECT t.element_id FROM {$wpdb->prefix}icl_translations t
+                     JOIN {$wpdb->posts} p ON t.element_id = p.ID
+                     WHERE t.trid = %d AND t.element_type = %s
+                       AND t.language_code = %s AND t.source_language_code IS NULL
+                       AND t.element_id != %d
+                     ORDER BY p.post_date ASC LIMIT 1",
+                    $row->trid, $element_type, $default_lang, $source_id
+                ) );
+                if ( $older_sibling ) {
+                    LuwiPress_Logger::log( sprintf(
+                        'Cron: #%d is a cascade duplicate (older EN sibling #%d in trid %d). Skipping.',
+                        $source_id, $older_sibling, $row->trid
+                    ), 'warning' );
+                    update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
+                        'status'   => 'skipped_cascade_dup',
+                        'language' => $target_language,
+                        'finished' => current_time( 'mysql' ),
+                    ) ) );
+                    return;
+                }
+            }
+        }
+
         // Track translation status for progress polling
         update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
             'status'   => 'translating',
@@ -293,6 +347,12 @@ class LuwiPress_Elementor {
         register_rest_route( $ns, '/elementor/clone', array(
             'methods'             => 'POST',
             'callback'            => array( $this, 'rest_clone_element' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        register_rest_route( $ns, '/elementor/copy-section', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_copy_section' ),
             'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
         ) );
 
@@ -809,6 +869,83 @@ class LuwiPress_Elementor {
      * @return array|WP_Error Translation result.
      */
     public function translate_page( $post_id, $target_language ) {
+        // CRITICAL inline guard: every translation flow eventually calls this method,
+        // so this is the single chokepoint where we MUST verify $post_id is a legit
+        // EN source -- not a translation, not a cascade duplicate. Without this,
+        // stale UI items / queued cron jobs / external REST calls keep producing
+        // duplicate translations of translations until coverage stops making sense.
+        if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) ) {
+            global $wpdb;
+            $src_post = get_post( $post_id );
+            if ( ! $src_post ) {
+                return new WP_Error( 'not_found', 'Source post #' . $post_id . ' not found' );
+            }
+            $default_lang = LuwiPress_Translation::get_default_language();
+            $element_type = 'post_' . $src_post->post_type;
+            $row = $wpdb->get_row( $wpdb->prepare(
+                "SELECT language_code, source_language_code, trid FROM {$wpdb->prefix}icl_translations
+                 WHERE element_id = %d AND element_type = %s",
+                $post_id, $element_type
+            ) );
+            if ( $row && ( $row->language_code !== $default_lang || $row->source_language_code !== null ) ) {
+                LuwiPress_Logger::log( sprintf(
+                    'translate_page guard: refusing #%d -- registered as %s translation (source_language_code=%s)',
+                    $post_id, $row->language_code, $row->source_language_code ?? 'NULL'
+                ), 'warning' );
+                return new WP_Error( 'not_source', sprintf( 'Post #%d is not a valid translation source', $post_id ) );
+            }
+            if ( $row ) {
+                $older_sibling = $wpdb->get_var( $wpdb->prepare(
+                    "SELECT t.element_id FROM {$wpdb->prefix}icl_translations t
+                     JOIN {$wpdb->posts} p ON t.element_id = p.ID
+                     WHERE t.trid = %d AND t.element_type = %s
+                       AND t.language_code = %s AND t.source_language_code IS NULL
+                       AND t.element_id != %d
+                     ORDER BY p.post_date ASC LIMIT 1",
+                    $row->trid, $element_type, $default_lang, $post_id
+                ) );
+                if ( $older_sibling ) {
+                    // Try to RE-STAMP this row as the correct translation row (using our
+                    // own source-meta to find the right language) instead of deleting it.
+                    // Deleting the row leaves the missing-list showing the source as
+                    // "needs translation" -> we re-translate -> WPML mis-stamps again
+                    // -> infinite loop. Re-stamping breaks the loop because the source
+                    // now has a real translation registered.
+                    $self_source = absint( get_post_meta( $post_id, '_luwipress_translation_source', true ) );
+                    $self_lang   = sanitize_text_field( get_post_meta( $post_id, '_luwipress_translation_language', true ) );
+                    if ( $self_source && $self_lang && $self_lang !== $default_lang && $self_source === absint( $older_sibling ) ) {
+                        // Remove any conflicting target-language row in the source's trid first.
+                        $wpdb->delete(
+                            $wpdb->prefix . 'icl_translations',
+                            array( 'trid' => $row->trid, 'language_code' => $self_lang, 'element_type' => $element_type ),
+                            array( '%d', '%s', '%s' )
+                        );
+                        $wpdb->update(
+                            $wpdb->prefix . 'icl_translations',
+                            array(
+                                'language_code'        => $self_lang,
+                                'source_language_code' => $default_lang,
+                            ),
+                            array( 'element_id' => $post_id, 'element_type' => $element_type ),
+                            array( '%s', '%s' ),
+                            array( '%d', '%s' )
+                        );
+                        LuwiPress_Logger::log( sprintf(
+                            'translate_page guard: #%d re-stamped as %s translation of #%d (trid %d) -- breaks WPML race loop',
+                            $post_id, $self_lang, $older_sibling, $row->trid
+                        ), 'warning' );
+                        return new WP_Error( 'restamped', sprintf( 'Post #%d was a cascade dup of #%d; re-stamped as %s translation', $post_id, $older_sibling, $self_lang ) );
+                    }
+                    // Fallback: no source meta, plain refusal.
+                    LuwiPress_Logger::log( sprintf(
+                        'translate_page guard: #%d is cascade duplicate (older EN sibling #%d in trid %d) -- refusing',
+                        $post_id, $older_sibling, $row->trid
+                    ), 'warning' );
+                    return new WP_Error( 'cascade_dup', sprintf( 'Post #%d is a cascade duplicate of #%d', $post_id, $older_sibling ) );
+                }
+            }
+        }
+
         // Validate Elementor data exists
         $data = $this->get_elementor_data( $post_id );
         if ( is_wp_error( $data ) ) {
@@ -830,7 +967,35 @@ class LuwiPress_Elementor {
             return $translatable;
         }
         if ( empty( $translatable ) ) {
-            return new WP_Error( 'no_text', 'No translatable text found on this page', array( 'status' => 400 ) );
+            // No translatable text -- typical for shortcode-only pages (Cart / Checkout /
+            // My Account where WooCommerce renders everything via shortcodes that already
+            // honour WPML's string translation). Instead of failing, create a structure-only
+            // translation post so WPML knows the pair exists and the missing-list stops
+            // surfacing it. The translation post's _elementor_data is a clone of the source
+            // (no AI calls made, $0 cost), and the operator can manually edit shortcode
+            // args via WPML String Translation if they ever need localized variants.
+            $translated_data = $this->get_elementor_data( $post_id );
+            if ( is_wp_error( $translated_data ) ) {
+                $translated_data = array();
+            }
+            $result = $this->save_translated_page( $post_id, $target_language, (array) $translated_data );
+            if ( is_wp_error( $result ) ) {
+                return $result;
+            }
+            $tid = $result['translated_id'] ?? 0;
+            if ( $tid ) {
+                $src = get_post( $post_id );
+                if ( $src ) {
+                    wp_update_post( array(
+                        'ID'           => $tid,
+                        'post_title'   => $src->post_title,
+                        'post_status'  => 'publish',
+                    ) );
+                    update_post_meta( $tid, '_luwipress_synced_source_modified', get_post_field( 'post_modified_gmt', $post_id ) );
+                }
+            }
+            LuwiPress_Logger::log( sprintf( 'Elementor translate #%d -> %s: no translatable text (shortcode-only page) -- structure-only WPML pair created', $post_id, $target_language ), 'info' );
+            return array( 'translated_id' => $tid, 'note' => 'structure_only_no_text' );
         }
 
         // Build a flat structure for AI translation
@@ -869,7 +1034,7 @@ class LuwiPress_Elementor {
         }
 
         // Get source language
-        $source_language = apply_filters( 'wpml_default_language', get_locale() );
+        $source_language = LuwiPress_Translation::get_default_language();
         $source_name     = self::LANG_NAMES[ $source_language ] ?? ucfirst( $source_language );
         $target_name     = self::LANG_NAMES[ $target_language ] ?? ucfirst( $target_language );
 
@@ -968,8 +1133,13 @@ class LuwiPress_Elementor {
                 'user'   => sprintf( 'Translate this title from %s to %s: "%s"',
                     $source_name, $target_name, $source_post->post_title ),
             ) ), array( 'max_tokens' => 256 ) );
-            if ( ! is_wp_error( $ai_title ) && ! empty( trim( $ai_title ) ) ) {
-                $translated_title = strip_tags( trim( $ai_title, " \t\n\r\"'." ) );
+            // dispatch() returns an array { content, input_tokens, ... }, NOT a bare string.
+            // Earlier code did trim($ai_title) directly which threw a PHP fatal:
+            // "trim(): Argument #1 must be of type string, array given" -- killed the
+            // whole translation pipeline silently from the operator's perspective.
+            $title_text = is_array( $ai_title ) ? (string) ( $ai_title['content'] ?? '' ) : '';
+            if ( ! is_wp_error( $ai_title ) && ! empty( trim( $title_text ) ) ) {
+                $translated_title = strip_tags( trim( $title_text, " \t\n\r\"'." ) );
             } else {
                 // Last resort: keep source title (better than empty)
                 $translated_title = $source_post->post_title;
@@ -1115,7 +1285,7 @@ class LuwiPress_Elementor {
             $source_ids = array_map( 'absint', $post_ids );
         } elseif ( $post_type ) {
             // Auto-discover: find source-language Elementor posts that need translation
-            $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+            $default_lang = LuwiPress_Translation::get_default_language();
             $posts = get_posts( array(
                 'post_type'   => $post_type,
                 'post_status' => 'publish',
@@ -1952,6 +2122,12 @@ class LuwiPress_Elementor {
         $saved = $this->save_elementor_data( $target_id, $cloned );
         if ( is_wp_error( $saved ) ) {
             return $saved;
+        }
+
+        // Stamp source's modified_gmt so this target is no longer "outdated".
+        $src_modified = get_post_field( 'post_modified_gmt', $source_id );
+        if ( $src_modified ) {
+            update_post_meta( $target_id, '_luwipress_synced_source_modified', $src_modified );
         }
 
         LuwiPress_Logger::log( sprintf( 'Synced structure #%d -> #%d (%d texts preserved)', $source_id, $target_id, $preserved ), 'info' );
@@ -2966,7 +3142,7 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
 
         $post_type    = $source_post->post_type;
         $element_type = 'post_' . $post_type;
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = LuwiPress_Translation::get_default_language();
 
         // Check if WPML is available
         if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
@@ -3077,6 +3253,15 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
 
         // Mark as LuwiPress Elementor translated — prevents bypass filter
         update_post_meta( $translated_id, '_luwipress_elementor_translated', '1' );
+
+        // Stamp the source's modified_at_gmt so we can detect "outdated translation"
+        // later: if source.post_modified_gmt > stored stamp, the translation is stale
+        // and the operator should re-sync. Stored on translation post (one stamp per
+        // language pair). Cheap to compare, robust to timezone drift.
+        $src_modified = get_post_field( 'post_modified_gmt', $source_id );
+        if ( $src_modified ) {
+            update_post_meta( $translated_id, '_luwipress_synced_source_modified', $src_modified );
+        }
 
         return array( 'translated_id' => $translated_id );
     }
@@ -3381,6 +3566,102 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
         );
     }
 
+    /* ──────────── Copy a section across posts ──────────────────────────── */
+
+    /**
+     * REST: copy a top-level section from one post into another at a given position.
+     *
+     * Payload:
+     *   source_post_id     int    — post to read the section from
+     *   source_section_id  string — id of the top-level section to copy
+     *   target_post_id     int    — post to insert into
+     *   target_position    int    — 0-based insertion index; -1 = append
+     *
+     * Behaviour: deep-clones the entire section subtree with NEW element IDs,
+     * inserts at target_position in target's `_elementor_data`. Snapshots the
+     * target before mutation. Does NOT touch any other section in the target —
+     * existing translated text in untouched sections is preserved by construction.
+     */
+    public function rest_copy_section( $request ) {
+        $source_post_id    = intval( $request->get_param( 'source_post_id' ) );
+        $source_section_id = sanitize_text_field( $request->get_param( 'source_section_id' ) );
+        $target_post_id    = intval( $request->get_param( 'target_post_id' ) );
+        $target_position   = $request->get_param( 'target_position' );
+        $target_position   = ( $target_position === null || $target_position === '' ) ? -1 : intval( $target_position );
+
+        if ( ! $source_post_id || ! $source_section_id || ! $target_post_id ) {
+            return new WP_Error( 'missing_params', 'source_post_id, source_section_id, target_post_id required', array( 'status' => 400 ) );
+        }
+        if ( $source_post_id === $target_post_id ) {
+            return new WP_Error( 'same_post', 'For same-post clone use /elementor/clone instead', array( 'status' => 400 ) );
+        }
+
+        return rest_ensure_response( $this->copy_section( $source_post_id, $source_section_id, $target_post_id, $target_position ) );
+    }
+
+    public function copy_section( $source_post_id, $source_section_id, $target_post_id, $target_position = -1 ) {
+        // Read source
+        $source_data = $this->get_elementor_data( $source_post_id );
+        if ( is_wp_error( $source_data ) ) {
+            return $source_data;
+        }
+
+        // Find the source section as a top-level entry
+        $source_section = null;
+        $source_index   = null;
+        foreach ( $source_data as $idx => $element ) {
+            if ( ( $element['id'] ?? '' ) === $source_section_id ) {
+                $source_section = $element;
+                $source_index   = $idx;
+                break;
+            }
+        }
+        if ( ! $source_section ) {
+            return new WP_Error( 'source_section_not_found', sprintf( 'Section %s not found at top level of post #%d', $source_section_id, $source_post_id ), array( 'status' => 404 ) );
+        }
+
+        // Read target
+        $target_data = $this->get_elementor_data( $target_post_id );
+        if ( is_wp_error( $target_data ) ) {
+            return $target_data;
+        }
+
+        // Snapshot target BEFORE mutation
+        $snapshot = $this->create_snapshot( $target_post_id, sprintf( 'Pre-copy-section from #%d/%s', $source_post_id, $source_section_id ) );
+        $snapshot_id = is_wp_error( $snapshot ) ? '' : ( $snapshot['snapshot_id'] ?? '' );
+
+        // Deep clone source section with fresh IDs
+        $cloned_section = $this->deep_clone_element( $source_section );
+
+        // Insert at target_position (0 = prepend, -1 or >=count = append)
+        $insert_at = $target_position;
+        if ( $insert_at < 0 || $insert_at > count( $target_data ) ) {
+            $insert_at = count( $target_data );
+        }
+        array_splice( $target_data, $insert_at, 0, array( $cloned_section ) );
+
+        // Save target
+        $saved = $this->save_elementor_data( $target_post_id, $target_data );
+        if ( is_wp_error( $saved ) ) {
+            return $saved;
+        }
+
+        LuwiPress_Logger::log( sprintf(
+            'Elementor: copied section %s from #%d to #%d as %s at pos %d',
+            $source_section_id, $source_post_id, $target_post_id, $cloned_section['id'], $insert_at
+        ), 'info' );
+
+        return array(
+            'status'             => 'copied',
+            'source_post_id'     => $source_post_id,
+            'source_section_id'  => $source_section_id,
+            'target_post_id'     => $target_post_id,
+            'target_position'    => $insert_at,
+            'new_section_id'     => $cloned_section['id'],
+            'snapshot_id'        => $snapshot_id,
+        );
+    }
+
     /* ═══════════════════════════════════════════════════════════════════
      *  CUSTOM CSS & RESPONSIVE OVERRIDES
      * ═══════════════════════════════════════════════════════════════════ */
@@ -3673,7 +3954,7 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
             return array();
         }
 
-        $default_lang = apply_filters( 'wpml_default_language', get_locale() );
+        $default_lang = LuwiPress_Translation::get_default_language();
 
         global $wpdb;
         $rows = $wpdb->get_results( $wpdb->prepare(

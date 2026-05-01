@@ -107,6 +107,12 @@ function luwipress_webmcp_admin_enqueue( $hook ) {
 			LUWIPRESS_VERSION
 		);
 	}
+	wp_enqueue_style(
+		'luwipress-webmcp-admin',
+		LUWIPRESS_WEBMCP_PLUGIN_URL . 'assets/css/webmcp-admin.css',
+		array( 'luwipress-admin' ),
+		LUWIPRESS_WEBMCP_VERSION
+	);
 	wp_enqueue_script(
 		'luwipress-webmcp-client',
 		LUWIPRESS_WEBMCP_PLUGIN_URL . 'assets/js/webmcp-client.js',

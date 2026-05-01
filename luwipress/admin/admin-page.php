@@ -37,104 +37,268 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 <div class="wrap luwipress-dashboard">
 
 	<!-- ═══ HEADER ═══ -->
+	<!-- Header keeps the brand mark + a tight pill row of nav/version actions.
+	     All right-side actions render in the same pill style as the status
+	     ribbon below so the visual language stays consistent at a glance. -->
 	<div class="lp-header">
 		<div class="lp-header-left">
 			<h1 class="lp-title">
 				<img class="lp-logo" width="28" height="28" src="<?php echo esc_url( LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' ); ?>" alt="LuwiPress" />
 				LuwiPress
 			</h1>
-			<span class="lp-version">v<?php echo esc_html( LUWIPRESS_VERSION ); ?></span>
 		</div>
 		<div class="lp-header-actions">
-			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-knowledge-graph' ) ); ?>" class="button button-primary lp-btn-glow">
-				<span class="dashicons dashicons-networking"></span> <?php esc_html_e( 'Knowledge Graph', 'luwipress' ); ?>
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-knowledge-graph' ) ); ?>"
+			   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
+			   title="<?php esc_attr_e( 'Knowledge Graph — interactive store intelligence (D3.js).', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-networking"></span>
+				<span class="screen-reader-text"><?php esc_html_e( 'Knowledge Graph', 'luwipress' ); ?></span>
 			</a>
-			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-settings' ) ); ?>" class="button">
+			<span class="lp-pill pill-neutral" title="<?php esc_attr_e( 'Plugin version', 'luwipress' ); ?>">
+				v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
+			</span>
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-settings' ) ); ?>"
+			   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
+			   title="<?php esc_attr_e( 'Settings — API keys, providers, budget, integrations.', 'luwipress' ); ?>">
 				<span class="dashicons dashicons-admin-generic"></span>
+				<span class="screen-reader-text"><?php esc_html_e( 'Settings', 'luwipress' ); ?></span>
 			</a>
 		</div>
 	</div>
 
 	<!-- ═══ STATUS RIBBON ═══ -->
+	<!-- Every soft-dep category is rendered unconditionally — green dot when a
+	     friendly plugin is detected, red dot when the slot is empty. As the
+	     operator installs WC / Rank Math / WPML / etc, dots flip green so the
+	     WC-less starting state is visually obvious. Hover any pill for the
+	     "what does this slot enable, what's recommended" tooltip. -->
 	<div class="lp-ribbon">
 		<?php
+		// Pill rows are now actionable: each red pill links to the WP plugin
+		// installer for the recommended .org slug; each green pill links to
+		// that plugin's settings/admin page when we know one. Operators don't
+		// have to leave the dashboard to fix a missing dependency.
 		$pills = array();
 
-		// AI Engine
+		$slug_label = static function ( $slug ) {
+			return ucwords( str_replace( array( '-', '_' ), ' ', $slug ) );
+		};
+
+		// Build a "plugin info" thickbox URL for a wordpress.org plugin slug.
+		// Opens the standard WP plugin-information popup (screenshots,
+		// description, ratings, "Install Now" button) instead of triggering
+		// the install immediately. Operators expect to review before installing.
+		$install_url = static function ( $org_slug ) {
+			return self_admin_url(
+				'plugin-install.php?tab=plugin-information&plugin=' . rawurlencode( $org_slug ) .
+				'&TB_iframe=true&width=772&height=577'
+			);
+		};
+
+		// Map detected plugin slug → its admin/settings page (best-effort).
+		// When the plugin's settings page isn't known, fall back to the WP
+		// plugins list so the operator at least lands on the management screen.
+		$manage_url = static function ( $detected_slug ) {
+			$map = array(
+				// SEO
+				'rank-math'       => admin_url( 'admin.php?page=rank-math' ),
+				'wordpress-seo'   => admin_url( 'admin.php?page=wpseo_dashboard' ),
+				'all-in-one-seo'  => admin_url( 'admin.php?page=aioseo' ),
+				'aioseo'          => admin_url( 'admin.php?page=aioseo' ),
+				'seopress'        => admin_url( 'admin.php?page=seopress-option' ),
+				// Translation
+				'wpml'            => admin_url( 'admin.php?page=sitepress-multilingual-cms/menu/languages.php' ),
+				'polylang'        => admin_url( 'admin.php?page=mlang' ),
+				'translatepress'  => admin_url( 'admin.php?page=trp_settings' ),
+				// SMTP
+				'wp-mail-smtp'    => admin_url( 'admin.php?page=wp-mail-smtp' ),
+				'fluent-smtp'     => admin_url( 'admin.php?page=fluent-mail' ),
+				'post-smtp'       => admin_url( 'admin.php?page=postman' ),
+				// Cache
+				'litespeed-cache' => admin_url( 'admin.php?page=litespeed' ),
+				'wp-rocket'       => admin_url( 'options-general.php?page=wprocket' ),
+				'w3-total-cache'  => admin_url( 'admin.php?page=w3tc_dashboard' ),
+				// Page builder
+				'elementor'       => admin_url( 'admin.php?page=elementor' ),
+				'divi'            => admin_url( 'admin.php?page=et_divi_options' ),
+				// Analytics
+				'google-site-kit' => admin_url( 'admin.php?page=googlesitekit-dashboard' ),
+				'gtm4wp'          => admin_url( 'options-general.php?page=gtm4wp-options' ),
+				'monsterinsights' => admin_url( 'admin.php?page=monsterinsights_reports' ),
+				// Google Ads / Merchant Center
+				'google-listings-and-ads' => admin_url( 'admin.php?page=wc-admin&path=%2Fgoogle%2Fdashboard' ),
+				// Meta
+				'facebook-for-woocommerce' => admin_url( 'admin.php?page=wc-facebook' ),
+			);
+			return $map[ $detected_slug ] ?? admin_url( 'plugins.php' );
+		};
+
+		// AI Engine — config slot, not a plugin. Click → Settings (API keys tab).
 		if ( ! empty( $ai_key ) ) {
-			$pills[] = array( 'ok', 'dashicons-admin-generic', sprintf( '%s (%s)', $provider_label, $ai_model ) );
+			$pills[] = array( 'ok', 'dashicons-admin-generic', sprintf( '%s (%s)', $provider_label, $ai_model ),
+				sprintf( __( 'AI provider configured: %1$s · model %2$s. Click to manage in Settings.', 'luwipress' ), $provider_label, $ai_model ),
+				admin_url( 'admin.php?page=luwipress-settings' ) );
 		} else {
-			$pills[] = array( 'err', 'dashicons-warning', __( 'No AI key', 'luwipress' ) );
+			$pills[] = array( 'err', 'dashicons-admin-generic', __( 'No AI key', 'luwipress' ),
+				__( 'No AI provider key set. Click to open Settings → API Keys (OpenAI, Anthropic, Google, or any OpenAI-compatible endpoint).', 'luwipress' ),
+				admin_url( 'admin.php?page=luwipress-settings' ) );
 		}
 
-		// WooCommerce
+		// WooCommerce — click → install (when missing) or wc-admin (when active).
 		if ( $wc_active ) {
-			$pills[] = array( 'ok', 'dashicons-cart', 'WooCommerce ' . WC_VERSION );
+			$pills[] = array( 'ok', 'dashicons-cart', 'WooCommerce ' . WC_VERSION,
+				__( 'WooCommerce is active. Click to open the WC dashboard.', 'luwipress' ),
+				admin_url( 'admin.php?page=wc-admin' ) );
+		} else {
+			$pills[] = array( 'err', 'dashicons-cart', __( 'No WooCommerce', 'luwipress' ),
+				__( 'WooCommerce is not active. Click to install it. Plugin runs in WC-less mode meanwhile.', 'luwipress' ),
+				$install_url( 'woocommerce' ) );
 		}
 
-		// SEO
-		$seo = $environment['seo'];
+		// SEO — click → manage (when active) or install Rank Math (when missing).
+		$seo = $environment['seo'] ?? array( 'plugin' => 'none' );
 		if ( 'luwipress-native' === $seo['plugin'] ) {
-			$pills[] = array( 'ok', 'dashicons-search', __( 'LuwiPress SEO', 'luwipress' ) );
+			$pills[] = array( 'ok', 'dashicons-search', __( 'LuwiPress SEO', 'luwipress' ),
+				__( 'Native SEO writer active (no third-party SEO plugin). Click to install Rank Math for richer features.', 'luwipress' ),
+				$install_url( 'seo-by-rank-math' ) );
 		} elseif ( 'none' !== $seo['plugin'] ) {
-			$pills[] = array( 'ok', 'dashicons-search', ucwords( str_replace( '-', ' ', $seo['plugin'] ) ) );
+			$pills[] = array( 'ok', 'dashicons-search', $slug_label( $seo['plugin'] ),
+				sprintf( __( 'SEO plugin detected: %s. Click to manage it.', 'luwipress' ), $slug_label( $seo['plugin'] ) ),
+				$manage_url( $seo['plugin'] ) );
+		} else {
+			$pills[] = array( 'err', 'dashicons-search', __( 'No SEO plugin', 'luwipress' ),
+				__( 'No SEO plugin detected. Click to install Rank Math (recommended). Yoast / AIOSEO / SEOPress also supported.', 'luwipress' ),
+				$install_url( 'seo-by-rank-math' ) );
 		}
 
-		// Translation
-		$trans = $environment['translation'];
+		// Translation — click → manage or install Polylang (free).
+		$trans = $environment['translation'] ?? array( 'plugin' => 'none' );
 		if ( 'none' !== $trans['plugin'] ) {
 			$lang_count = count( $trans['active_languages'] ?? array() );
-			$pills[] = array( 'ok', 'dashicons-translation', ucwords( str_replace( '-', ' ', $trans['plugin'] ) ) . ( $lang_count > 1 ? " ({$lang_count})" : '' ) );
+			$pills[] = array( 'ok', 'dashicons-translation', $slug_label( $trans['plugin'] ) . ( $lang_count > 1 ? " ({$lang_count})" : '' ),
+				sprintf( __( 'Translation plugin: %1$s with %2$d languages. Click to manage.', 'luwipress' ), $slug_label( $trans['plugin'] ), $lang_count ),
+				$manage_url( $trans['plugin'] ) );
+		} else {
+			$pills[] = array( 'err', 'dashicons-translation', __( 'No translation', 'luwipress' ),
+				__( 'No translation plugin detected. Click to install Polylang (free). WPML and TranslatePress also supported.', 'luwipress' ),
+				$install_url( 'polylang' ) );
 		}
 
-		// Email
-		$email = $environment['email'];
+		// SMTP — click → manage or install WP Mail SMTP.
+		$email = $environment['email'] ?? array( 'plugin' => 'wp_mail' );
 		if ( 'wp_mail' !== $email['plugin'] && 'none' !== $email['plugin'] ) {
-			$pills[] = array( 'ok', 'dashicons-email-alt', ucwords( str_replace( '-', ' ', $email['plugin'] ) ) );
+			$pills[] = array( 'ok', 'dashicons-email-alt', $slug_label( $email['plugin'] ),
+				sprintf( __( 'SMTP plugin: %s. Email proxy routes through it. Click to manage.', 'luwipress' ), $slug_label( $email['plugin'] ) ),
+				$manage_url( $email['plugin'] ) );
+		} else {
+			$pills[] = array( 'err', 'dashicons-email-alt', __( 'No SMTP', 'luwipress' ),
+				__( 'Falling back to wp_mail() (host MTA). Click to install WP Mail SMTP for reliable delivery.', 'luwipress' ),
+				$install_url( 'wp-mail-smtp' ) );
 		}
 
-		// Cache
-		$cache = $environment['cache'] ?? array();
+		// Cache — click → manage or install LiteSpeed.
+		$cache = $environment['cache'] ?? array( 'plugin' => 'none' );
 		if ( ! empty( $cache['plugin'] ) && 'none' !== $cache['plugin'] ) {
-			$pills[] = array( 'ok', 'dashicons-performance', ucwords( str_replace( '-', ' ', $cache['plugin'] ) ) );
+			$pills[] = array( 'ok', 'dashicons-performance', $slug_label( $cache['plugin'] ),
+				sprintf( __( 'Cache plugin: %s. /cache/purge flushes it on content updates. Click to manage.', 'luwipress' ), $slug_label( $cache['plugin'] ) ),
+				$manage_url( $cache['plugin'] ) );
+		} else {
+			$pills[] = array( 'err', 'dashicons-performance', __( 'No cache plugin', 'luwipress' ),
+				__( 'No page-cache plugin. Click to install LiteSpeed Cache (recommended). WP Rocket / W3 Total Cache also supported.', 'luwipress' ),
+				$install_url( 'litespeed-cache' ) );
 		}
 
-		// Analytics (GTM / GA4)
-		$analytics = $environment['analytics'] ?? array();
+		// Page builder — click → manage or install Elementor.
+		$page_builder = $environment['page_builder'] ?? array( 'plugin' => 'none' );
+		if ( ! empty( $page_builder['plugin'] ) && 'none' !== $page_builder['plugin'] ) {
+			$pills[] = array( 'ok', 'dashicons-edit', $slug_label( $page_builder['plugin'] ),
+				sprintf( __( 'Page builder: %s. The 30+ Elementor REST endpoints are available. Click to manage.', 'luwipress' ), $slug_label( $page_builder['plugin'] ) ),
+				$manage_url( $page_builder['plugin'] ) );
+		} else {
+			$pills[] = array( 'err', 'dashicons-edit', __( 'No page builder', 'luwipress' ),
+				__( 'No page builder. Click to install Elementor (required for read/write/translate page structures).', 'luwipress' ),
+				$install_url( 'elementor' ) );
+		}
+
+		// Analytics — click → manage or install Site Kit.
+		$analytics = $environment['analytics'] ?? array( 'plugin' => 'none' );
 		if ( ! empty( $analytics['plugin'] ) && 'none' !== $analytics['plugin'] ) {
-			$pills[] = array( 'ok', 'dashicons-chart-bar', ucwords( str_replace( '-', ' ', $analytics['plugin'] ) ) );
+			$pills[] = array( 'ok', 'dashicons-chart-bar', $slug_label( $analytics['plugin'] ),
+				sprintf( __( 'Analytics: %s. Click to open dashboard.', 'luwipress' ), $slug_label( $analytics['plugin'] ) ),
+				$manage_url( $analytics['plugin'] ) );
+		} else {
+			$pills[] = array( 'err', 'dashicons-chart-bar', __( 'No analytics', 'luwipress' ),
+				__( 'No analytics plugin. Click to install Google Site Kit (recommended). GTM4WP / MonsterInsights also supported.', 'luwipress' ),
+				$install_url( 'google-site-kit' ) );
 		}
 
 		// Track plugin slugs already shown to avoid duplicates across ads/feed categories
 		$seen_plugins = array();
 
-		// Google Ads
-		$gads = $environment['google_ads'] ?? array();
+		// Google Ads — only suggested when WC active.
+		$gads = $environment['google_ads'] ?? array( 'plugin' => 'none' );
 		if ( ! empty( $gads['plugin'] ) && 'none' !== $gads['plugin'] ) {
-			$pills[] = array( 'ok', 'dashicons-megaphone', ucwords( str_replace( '-', ' ', $gads['plugin'] ) ) );
+			$pills[] = array( 'ok', 'dashicons-megaphone', $slug_label( $gads['plugin'] ),
+				sprintf( __( 'Google Ads / Merchant Center: %s. Click to manage.', 'luwipress' ), $slug_label( $gads['plugin'] ) ),
+				$manage_url( $gads['plugin'] ) );
 			$seen_plugins[ $gads['plugin'] ] = true;
+		} elseif ( $wc_active ) {
+			$pills[] = array( 'err', 'dashicons-megaphone', __( 'No Google Ads', 'luwipress' ),
+				__( 'No Google Ads / Merchant Center integration. Click to install Google Listings & Ads.', 'luwipress' ),
+				$install_url( 'google-listings-and-ads' ) );
 		}
 
-		// Meta Ads (Facebook/Instagram Pixel)
-		$meta = $environment['meta_ads'] ?? array();
+		// Meta Ads — only when WC active.
+		$meta = $environment['meta_ads'] ?? array( 'plugin' => 'none' );
 		if ( ! empty( $meta['plugin'] ) && 'none' !== $meta['plugin'] && empty( $seen_plugins[ $meta['plugin'] ] ) ) {
-			$pills[] = array( 'ok', 'dashicons-share', ucwords( str_replace( '-', ' ', $meta['plugin'] ) ) );
+			$pills[] = array( 'ok', 'dashicons-share', $slug_label( $meta['plugin'] ),
+				sprintf( __( 'Meta Pixel / CAPI: %s. Click to manage.', 'luwipress' ), $slug_label( $meta['plugin'] ) ),
+				$manage_url( $meta['plugin'] ) );
 			$seen_plugins[ $meta['plugin'] ] = true;
+		} elseif ( $wc_active ) {
+			$pills[] = array( 'err', 'dashicons-share', __( 'No Meta Pixel', 'luwipress' ),
+				__( 'No Meta Pixel / Instagram Shopping integration. Click to install Meta for WooCommerce.', 'luwipress' ),
+				$install_url( 'facebook-for-woocommerce' ) );
 		}
 
-		// Product Feed — skip if already shown as Google Ads (same plugin often covers both)
-		$feed = $environment['product_feed'] ?? array();
+		// Product feed — only when WC active and Google Ads slot empty.
+		$feed = $environment['product_feed'] ?? array( 'plugin' => 'none' );
 		if ( ! empty( $feed['plugin'] ) && 'none' !== $feed['plugin'] && empty( $seen_plugins[ $feed['plugin'] ] ) ) {
-			$pills[] = array( 'ok', 'dashicons-rss', ucwords( str_replace( '-', ' ', $feed['plugin'] ) ) );
+			$pills[] = array( 'ok', 'dashicons-rss', $slug_label( $feed['plugin'] ),
+				sprintf( __( 'Product feed: %s.', 'luwipress' ), $slug_label( $feed['plugin'] ) ),
+				$manage_url( $feed['plugin'] ) );
+		} elseif ( $wc_active && 'none' === ( $gads['plugin'] ?? 'none' ) ) {
+			$pills[] = array( 'err', 'dashicons-rss', __( 'No product feed', 'luwipress' ),
+				__( 'No product-feed plugin. Click to install Product Feed PRO (Google Shopping / marketplace sync).', 'luwipress' ),
+				$install_url( 'product-feed-pro-for-woocommerce' ) );
 		}
 
 		foreach ( $pills as $p ) :
-			$cls = 'ok' === $p[0] ? 'pill-ok' : ( 'err' === $p[0] ? 'pill-err' : 'pill-neutral' );
+			$state = $p[0];
+			$icon  = $p[1];
+			$label = $p[2];
+			$tip   = $p[3];
+			$url   = $p[4];
+			$cls   = 'ok' === $state ? 'pill-ok' : ( 'err' === $state ? 'pill-err' : 'pill-neutral' );
+			$tag   = $url ? 'a' : 'span';
+			// Thickbox (TB_iframe) URLs need the `thickbox` class to trigger
+			// the WP modal handler. Otherwise the link would open the iframe
+			// URL directly in the parent window. Detect by URL fragment.
+			$is_thickbox = $url && false !== strpos( $url, 'TB_iframe=true' );
+			$href  = $url ? ' href="' . esc_url( $url ) . '"' : '';
+			$class_extra = $url ? ' lp-pill--action' : '';
+			if ( $is_thickbox ) {
+				$class_extra .= ' thickbox';
+			}
 		?>
-		<span class="lp-pill <?php echo esc_attr( $cls ); ?>">
-			<span class="dashicons <?php echo esc_attr( $p[1] ); ?>"></span>
-			<?php echo esc_html( $p[2] ); ?>
-		</span>
+		<<?php echo esc_html( $tag ); ?> class="lp-pill lp-pill--has-tip <?php echo esc_attr( $cls . $class_extra ); ?>" tabindex="0" title="<?php echo esc_attr( $tip ); ?>"<?php echo $href; // already escaped ?>>
+			<span class="lp-pill-dot" aria-hidden="true"></span>
+			<span class="dashicons <?php echo esc_attr( $icon ); ?>"></span>
+			<?php echo esc_html( $label ); ?>
+			<?php if ( $tip ) : ?>
+				<span class="lp-pill-tip" role="tooltip" style="display:none;"><?php echo esc_html( $tip ); ?></span>
+			<?php endif; ?>
+		</<?php echo esc_html( $tag ); ?>>
 		<?php endforeach; ?>
 	</div>
 
