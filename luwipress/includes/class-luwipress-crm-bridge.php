@@ -89,6 +89,18 @@ class LuwiPress_CRM_Bridge {
 			'permission_callback' => array( $this, 'check_permission' ),
 		) );
 
+		// Suspected bot / fake-customer registrations (read-only audit). The operator
+		// can review this list and delete via the standard WP user admin; an in-product
+		// "purge selected" action is planned for 3.1.43 once thresholds are tuned.
+		register_rest_route( 'luwipress/v1', '/crm/suspicious-bots', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'handle_suspicious_bots' ),
+			'permission_callback' => array( $this, 'check_permission' ),
+			'args'                => array(
+				'limit' => array( 'default' => 100, 'sanitize_callback' => 'absint' ),
+			),
+		) );
+
 		// Lifecycle events ready for downstream processing
 		register_rest_route( 'luwipress/v1', '/crm/lifecycle-queue', array(
 			'methods'             => 'GET',
@@ -152,6 +164,127 @@ class LuwiPress_CRM_Bridge {
 			'segments'     => $this->get_segment_counts(),
 			'definitions'  => $this->segments,
 			'last_refresh' => get_option( 'luwipress_crm_last_refresh', '' ),
+		) );
+	}
+
+	/**
+	 * Read-only audit of suspected bot/fake-customer accounts.
+	 *
+	 * Scoring (heuristic, conservative — false positives MUST be tolerable since the
+	 * operator reviews the list before deletion):
+	 *   +2 random-looking email local part (>=8 chars, all lowercase letters/digits, no separators)
+	 *   +2 disposable-email domain
+	 *   +1 zero orders
+	 *   +1 never logged in (or last_login empty/older than registration)
+	 *   +1 registered <30 days ago AND no orders
+	 *   +1 first_name + last_name both empty
+	 *
+	 * Score >=3 → returned. Operator deletes via Users → All Users in WP admin.
+	 * 3.1.43 will add an opt-in "purge selected" REST action once thresholds are tuned.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response
+	 */
+	public function handle_suspicious_bots( $request ) {
+		$limit = min( max( 1, intval( $request->get_param( 'limit' ) ?: 100 ) ), 500 );
+
+		$disposable = array(
+			'mailinator.com', 'tempmail.com', 'guerrillamail.com', 'yopmail.com',
+			'10minutemail.com', 'throwaway.email', 'temp-mail.org', 'getairmail.com',
+			'maildrop.cc', 'sharklasers.com', 'fakeinbox.com', 'trashmail.com',
+		);
+
+		$users = get_users( array(
+			'role__in' => array( 'customer', 'subscriber' ),
+			'number'   => -1,
+			'fields'   => array( 'ID', 'user_email', 'user_registered', 'display_name', 'user_login' ),
+		) );
+
+		$now      = current_time( 'timestamp' );
+		$results  = array();
+		foreach ( $users as $u ) {
+			$score    = 0;
+			$reasons  = array();
+			$email    = strtolower( $u->user_email );
+			$at       = strrpos( $email, '@' );
+			$local    = $at === false ? $email : substr( $email, 0, $at );
+			$domain   = $at === false ? ''     : substr( $email, $at + 1 );
+
+			// Random local part — long, all alphanumeric, no separators.
+			if ( strlen( $local ) >= 8 && preg_match( '/^[a-z0-9]+$/', $local ) ) {
+				$letters = preg_match_all( '/[a-z]/', $local );
+				$digits  = preg_match_all( '/[0-9]/', $local );
+				if ( $letters >= 4 && $digits >= 2 ) {
+					$score += 2;
+					$reasons[] = 'random_local_part';
+				}
+			}
+
+			if ( in_array( $domain, $disposable, true ) ) {
+				$score += 2;
+				$reasons[] = 'disposable_domain';
+			}
+
+			$order_count = function_exists( 'wc_get_customer_order_count' )
+				? (int) wc_get_customer_order_count( $u->ID )
+				: 0;
+			if ( 0 === $order_count ) {
+				$score += 1;
+				$reasons[] = 'zero_orders';
+			}
+
+			$registered_ts = strtotime( $u->user_registered );
+			$age_days      = $registered_ts ? floor( ( $now - $registered_ts ) / DAY_IN_SECONDS ) : 9999;
+			if ( $age_days < 30 && 0 === $order_count ) {
+				$score += 1;
+				$reasons[] = 'new_no_orders';
+			}
+
+			$first = get_user_meta( $u->ID, 'first_name', true );
+			$last  = get_user_meta( $u->ID, 'last_name', true );
+			if ( empty( $first ) && empty( $last ) ) {
+				$score += 1;
+				$reasons[] = 'no_name';
+			}
+
+			$last_login = (int) get_user_meta( $u->ID, 'luwipress_last_login_ts', true );
+			if ( ! $last_login || $last_login < $registered_ts ) {
+				$score += 1;
+				$reasons[] = 'never_logged_in';
+			}
+
+			if ( $score >= 3 ) {
+				$results[] = array(
+					'id'             => $u->ID,
+					'email'          => $u->user_email,
+					'display_name'   => $u->display_name,
+					'login'          => $u->user_login,
+					'registered'     => $u->user_registered,
+					'age_days'       => (int) $age_days,
+					'order_count'    => $order_count,
+					'suspicion_score'=> $score,
+					'reasons'        => $reasons,
+				);
+			}
+		}
+
+		// Sort: highest score, then oldest registration (let the obvious ones surface).
+		usort( $results, function ( $a, $b ) {
+			if ( $a['suspicion_score'] !== $b['suspicion_score'] ) {
+				return $b['suspicion_score'] - $a['suspicion_score'];
+			}
+			return strcmp( $a['registered'], $b['registered'] );
+		} );
+
+		$total = count( $results );
+		$results = array_slice( $results, 0, $limit );
+
+		return rest_ensure_response( array(
+			'total_flagged'  => $total,
+			'returned'       => count( $results ),
+			'limit'          => $limit,
+			'note'           => 'Read-only audit. Review each entry; delete via WP Users admin. Score >=3 threshold; raise it if false-positive rate is high.',
+			'customers'      => $results,
 		) );
 	}
 

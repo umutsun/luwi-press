@@ -164,6 +164,16 @@ class LuwiPress_AI_Content {
             return new WP_Error('not_found', 'Product not found.', array('status' => 404));
         }
 
+        // 3.1.42-hotfix3 (BUG-007): operator can pass options.force_regen_faq=true
+        // to force the AI to draft fresh FAQs instead of returning a cached/identical
+        // answer. We delete the existing meta before the AI call so the prompt path
+        // genuinely regenerates rather than echoing prior content.
+        if ( ! empty( $options['force_regen_faq'] ) ) {
+            delete_post_meta( $product_id, '_luwipress_faq' );
+            delete_post_meta( $product_id, '_luwipress_aeo_faq_status' );
+            delete_post_meta( $product_id, '_luwipress_aeo_faq_updated' );
+        }
+
         // Reject enrichment targeting a WPML translation copy (see enrich-callback guard).
         if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) ) {
             $post_lang    = LuwiPress_Translation::get_post_wpml_language( $product_id );
@@ -524,9 +534,9 @@ class LuwiPress_AI_Content {
     // ─── STALE CONTENT endpoint ─────────────────────────────────────────
 
     public function handle_stale_content($request) {
-        $days      = $request->get_param('days');
-        $post_type = $request->get_param('post_type');
-        $per_page  = min($request->get_param('per_page'), 200);
+        $days      = max( 1, intval( $request->get_param('days') ?: 180 ) );
+        $post_type = sanitize_key( $request->get_param('post_type') ?: 'product' );
+        $per_page  = max( 1, min( intval( $request->get_param('per_page') ?: 50 ), 200 ) );
 
         $cutoff = date('Y-m-d H:i:s', strtotime("-{$days} days"));
 

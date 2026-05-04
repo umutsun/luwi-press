@@ -1,6 +1,6 @@
 # LuwiPress — Complete Feature Overview
 
-**Version:** 3.1.35 · **License:** GPLv2+ · **Target:** WooCommerce stores
+**Version:** 3.1.44 · **License:** GPLv2+ · **Target:** WooCommerce stores
 
 LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerce. It generates content, optimizes SEO, translates products, and automates store management — integrating seamlessly with existing plugins (Rank Math, WPML, Elementor, etc.) without replacing them.
 
@@ -8,6 +8,14 @@ Shipped as a lean **365 KB core** plus two optional companion plugins — instal
 
 ## 🆕 What's new in 3.x
 
+- **Marketplace + Open Claw companion split (3.1.44)** — two more modules carved out of core. **Marketplace publishing** (Amazon, eBay, Trendyol, Hepsiburada, N11, Etsy, Walmart, Alibaba) is now the dedicated **LuwiPress Marketplace Sync** companion plugin — only stores that actually sell on third-party marketplaces install it, keeping the core ~80 KB lighter for everyone else. **Open Claw** (the admin-side natural-language AI chat assistant) is similarly its own companion. All saved credentials, REST endpoints, and option keys carry over without migration — install the companion and previously-stored API keys light up instantly. The core's settings page sheds the Marketplaces tab; the dashboard's "Ask AI" link becomes a soft reference that only renders when the Open Claw companion is active. Stores that ignore both verticals see no functional change other than a smaller core ZIP.
+- **WordPress Abilities API bridge (3.1.43)** — LuwiPress now mirrors its 150+ MCP tools into the WordPress 6.9+ Abilities API (`wp_register_ability`) automatically. AI clients that use the WP-native registry (the upcoming WordPress 7.0 AI client, the WooCommerce MCP adapter, third-party agent platforms that read `wp_get_abilities()`) will discover every LuwiPress capability under the `luwipress/` namespace alongside their existing tools — no second integration to wire up. Read-only abilities default to public; mutating abilities are private until the operator opts them in. The existing WebMCP endpoint stays online for backward compatibility, so stores running on WP 6.8 and earlier are unaffected. WooCommerce MCP namespace inclusion is wired via the standard `woocommerce_mcp_include_ability` filter, letting an agent query a single WC MCP endpoint and reach LuwiPress tools through it.
+- **ACP attribution bridge (3.1.43)** — Stripe's Agentic Commerce Protocol (the December 2025 launch with WooCommerce as a launch partner) lets AI shopping agents complete checkouts server-to-server. Those orders bypass the browser entirely — no GA4 gtag fires, no Meta Pixel cookie, no Google Ads gclid lands — so analytics + ad platforms see nothing and Smart Bidding starts misreading "this campaign isn't converting." LuwiPress now reconstructs the conversion server-side: every WooCommerce payment hook fires a multi-cast dispatch to GA4 Measurement Protocol and Meta Conversions API with the buyer's hashed identifiers, the AI agent name from the ACP `affiliate_attribution` block (so you can segment ChatGPT vs Perplexity vs others in your reporting), and a stable `event_id` for cross-channel deduplication. Ships default-OFF with a debug mode that logs payloads instead of firing — credentials get tested against Meta's Events Manager test code before going live. Settings + audit log are managed via `GET/POST /attribution/settings`, `GET /attribution/log`, `POST /attribution/test`, and the four matching MCP tools (`attribution_settings_get`, `attribution_settings_set`, `attribution_log_recent`, `attribution_test_send`).
+- **Google Ads Enhanced Conversions for AI orders (3.1.44)** — extends the ACP attribution bridge with a third channel: server-side click conversion upload to Google Ads via the v17 REST API. Because ACP orders carry no GCLID, LuwiPress sends the conversion as an *enhanced conversion* — hashed email + phone + first/last name as `userIdentifiers` — which Google's docs explicitly support: "you can, and should, send all relevant data for a given conversion, even if you don't have a GCLID for it." OAuth tokens are refreshed on demand and cached for 50 minutes (10-minute headroom under Google's 1-hour expiry); refresh-token rotation is handled automatically so the operator pastes credentials once. Ad campaigns that drive AI-agent traffic finally close the loop in Smart Bidding instead of being silently downgraded as non-converting.
+- **Theme Builder template MCP (3.1.42)** — six new endpoints + MCP tools for managing Elementor Pro Theme Builder templates from the API: `elementor_templates_list`, `elementor_template_create`, `elementor_template_clone`, `elementor_template_conditions_get`, `elementor_template_conditions_set`, `elementor_template_delete`. AI agents can now enumerate every template (header / footer / single-post / single-product / archive / single-404 / search-results / cart / checkout / my-account / popup / kit / page / section), scaffold a missing template by cloning an existing one, set display conditions (`include/general`, `include/post`, `include/product_archive`, etc.), and delete obsolete templates safely (active header / footer / kit are protected unless `force=true`). Closes the gap that left LuwiPress AI workflows blind to Theme Builder; the operator can now ask "create a Single Post template cloned from Single Product, then apply it to all posts" in one MCP call instead of opening admin manually.
+- **Suspicious bot / fake customer audit (3.1.42)** — new `GET /crm/suspicious-bots` read-only endpoint scores every customer record on six bot signals: random-looking email local part (`dman7387@gmail.com`), disposable e-mail domain, zero orders, registered <30 days with no purchase, empty first/last name, never logged in. Returns a flagged list with score, reasons, and registration metadata so the operator can review + delete via the standard WP Users admin. The audit endpoint never deletes anything itself; an opt-in `purge` action is planned for the next release after threshold tuning. Tested on a 6,366-customer store: 6,247 flagged with zero false positives against the segmented buyer list.
+- **Snapshot rollback safety closed (3.1.42)** — three rounds of investigation finally pinned the root cause of the long-standing snapshot/rollback corruption (the Darbuka incident on 2026-05-01 was a fatal example): `update_post_meta` strips slashes deep into nested string values inside the snapshot array, so the legacy `data` field stored Elementor JSON without the escapes its parser depends on. New snapshots now store a `data_b64` payload alongside the legacy field — base64 is opaque to slash sanitisation, round-trips byte-perfect. Rollback prefers `data_b64` when present and writes via direct `$wpdb` to bypass the WP meta API entirely. Snapshot/rollback is now production-safe again.
+- **Customer feedback batch hotfix (3.1.42)** — eight bugs from the 2026-04-28 Tapadum feedback package closed in one release. `crm_segment_customers` returns proper customer JSON (was always `Unknown segment`); `aeo_save_faq` and `aeo_generate_faq` save FAQs (were always `Invalid product ID`); `seo_enrich_product` accepts `force_regen_faq=true` to clear cached FAQ before AI call; `content_stale` returns the right cutoff (was always `1970-01-01`); Knowledge Graph `top_products` exposes `id` and `issue_count` (were null); KG `top_sellers` filters out trashed products (was 50% empty rows on Tapadum); Elementor cron now skips pages with no translatable text instead of re-queuing forever; taxonomy translation failures now report a structured `reason` field instead of failing silently. Knowledge Graph opportunity scoring also drops the `missing_speakable` and `missing_howto` signals that Google deprecated late 2024 — Tapadum's score went from 2,934 → 2,423 (roughly 17% noise removed).
 - **WooCommerce is now optional (3.1.38)** — LuwiPress activates and runs on any WordPress site, not just WooCommerce stores. Generic features (content scheduler, customer chat with site-content RAG, AI provider settings, token tracking, generic SEO writer, native AEO writer for any post_type) work standalone. WooCommerce-dependent features (product enrichment, AEO product schema, marketplace publishing, CRM customer segmentation, product Knowledge Graph nodes, review analytics) self-disable when WC is missing. The dashboard's status ribbon shows one pill per integration category — green = friendly plugin detected, red = empty slot — with hover tooltips and one-click access to the WordPress plugin-information modal so the operator can review and install any recommended dependency without leaving the dashboard.
 - **Knowledge Graph density + filter feedback (3.1.26)** — stat bar cards shortened (smaller value font, tighter padding) so the graph is visible immediately on 1366px screens without scrolling. Filter / view switches now produce a visible pulse on the graph canvas plus a transient "N products · needs seo" chip in the top-left so the operator can see the action landed even when the redraw is instant. Header subtitle removed (redundant).
 - **Knowledge Graph layout refinement (3.1.25)** — Store Health hero is collapsible (compact by default, expand for chips + achievements). Next-wins action cards moved below the graph so operators explore first and act second. Graph stays centered on screen (weak radial pull prevents orphan drift). Long post/page titles trim to ~32 chars + ellipsis with the full title still in hover tooltip. Customers view reworked as a lifecycle chain: central "All customers" hub with the eight segment cohorts pinned left-to-right by lifecycle order (New → Active → Loyal → VIP → At-risk → Dormant → One-time → Lost) — healthy flow on the left, drift on the right, no more disconnected islands.
@@ -81,16 +89,18 @@ Shipped as a lean **365 KB core** plus two optional companion plugins — instal
 - **Fail-safe content protection** — if the AI returns an unparseable response, the translation is rejected and your existing content is left untouched (no risk of raw payloads ending up on your product page)
 - **Batch translate by language** — translate up to 200 missing posts in a single call (`POST /translation/batch`). Powers the "Translate N missing products" button on Knowledge Graph language nodes.
 
-### 4. Elementor Mastery (34+ tools)
-- Read full page structure via REST API (tree + flat widget view + compact outline)
+### 4. Elementor Mastery (38+ tools)
+- Read full page structure via REST API (tree + flat widget view + compact outline + **deep outline** with backgrounds)
+- **Inspect helpers** — find any element by ID with full ancestor chain, find by text without DOM scraping, deep outline including container/widget hierarchy
 - Edit widget text, styles, responsive overrides — breakpoint-aware
 - Add / delete / move / clone sections, columns, widgets programmatically
 - **Section reorder** — reorganize layouts by ID order
+- **Cross-post section copy** — copy a top-level section into another post with deep ID regeneration + auto-snapshot (sister to clone, but cross-post)
 - **Find & replace** — text or styles across multiple pages in one call
 - **Structure sync** — propagate layout changes to WPML translations (preserves translated texts)
 - **Global design tokens** — read/write Elementor Kit colors & typography
 - **Template library** — list + apply saved templates across multiple posts
-- **Kit CSS management** — append layered rules with named markers, batch-apply to many posts
+- **Kit CSS management** — append layered rules with named markers, batch-apply to many posts, **preflight size check** before pushing (prevents silent option-size truncation)
 - **CSS vars** — read/write CSS custom properties on Kit for instant design-token changes
 - **Production safety protocol**:
   - Named snapshot before every mutation (`/elementor/snapshot`), rollback by ID (`/elementor/rollback`)
@@ -114,7 +124,7 @@ Shipped as a lean **365 KB core** plus two optional companion plugins — instal
 
 ### 6. Open Claw — Admin AI Assistant — **companion plugin**
 
-Shipped as a separate **LuwiPress Open Claw** plugin from 3.1.0 onward. Chat-style command interface inside WP admin.
+Shipped as a separate **LuwiPress Open Claw** plugin (reactivated as a first-class active companion in 3.1.44). Chat-style command interface inside WP admin.
 
 - **Local commands** (zero AI cost):
   - `/scan` — site health check
@@ -192,37 +202,72 @@ A single REST endpoint plus an interactive D3.js admin page that turns your stor
 - Lifecycle event queue (post-purchase thank-you, review request, win-back) for downstream email pipelines
 - Configurable thresholds: VIP spend, loyal order count, active/at-risk/dormant windows
 
-### 11. Marketplace Integration (v2.0.8+)
-Multi-marketplace publishing:
-- **Amazon**, **eBay**, **Trendyol**, **Hepsiburada**, **N11**
-- **Alibaba**, **Etsy**, **Walmart**
-- Product field mapping per marketplace schema
-- Sync status tracking DB table
-- Batch publishing
+### 11. Marketplace Integration — **companion plugin (since 3.1.44)**
+Shipped as a separate **LuwiPress Marketplace Sync** plugin from 3.1.44 onward. Stores that don't sell on third-party marketplaces no longer carry the dormant adapter code in core.
+- Multi-marketplace publishing: **Amazon**, **eBay**, **Trendyol**, **Hepsiburada**, **N11**, **Alibaba**, **Etsy**, **Walmart**
+- Product field mapping per marketplace schema, batch publishing, per-product sync status
+- Standalone "LuwiPress → Marketplaces" submenu attaches under the core LuwiPress parent menu — operator finds it where they expect
+- All credentials and the sync table (`wp_luwipress_marketplace_listings`) carry over from earlier LuwiPress installs without migration
+- REST endpoints (`/wp-json/luwipress/v1/marketplace/*`) live on the companion; they only register when the companion is active
 
 ### 12. WebMCP Server (AI Agent Integration) — **companion plugin**
 
 Shipped as a separate **LuwiPress WebMCP** plugin from 3.0.0 onward. Install it alongside the core plugin to expose the Model Context Protocol endpoint. This keeps the core install lean for stores that don't need AI-agent integration.
 
-**130+ MCP tools** for AI agents:
-- Streamable HTTP transport (MCP spec draft 2025-03-26)
-- Origin validation (DNS rebinding protection)
-- Tools for: content, SEO, translation, Elementor, CRM, media, settings, cache, customer insights
-- Per-module settings tools (`enrich_settings_get/set`, `translation_settings_get/set`, `chat_settings_get/set`, `schedule_settings_get/set`)
+**155 MCP tools** for AI agents (as of WebMCP 1.0.10 / server 2.0.3):
+- Streamable HTTP transport (MCP spec 2025-03-26)
+- Origin validation (DNS rebinding protection per spec)
+- Tools for: content, SEO, AEO, translation, Elementor, CRM, media, settings, cache, customer insights, Theme Builder templates, ACP attribution, search index, plugin/theme management, taxonomy, comments, menus, post meta
+- Per-module settings tools (`enrich_settings_get/set`, `translation_settings_get/set`, `chat_settings_get/set`, `schedule_settings_get/set`, `attribution_settings_get/set`, `crm_settings_get/set`)
+- Tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so AI clients can reason about side-effects before invoking
 - Token-based authentication — same Bearer token as REST API
+- **JSON-RPC strictness** — rejects non-2.0 jsonrpc payloads with -32600
+- **Activation gate** — companion refuses to activate when core LuwiPress is not active and surfaces a clear "install core first" page; soft-paused notice appears only on the Plugins screen if core is later deactivated
+
+### 13. ACP Attribution Bridge (since 3.1.43)
+
+Reconstructs server-side conversion tracking for orders that arrive via Stripe's **Agentic Commerce Protocol** (the December 2025 launch with WooCommerce as a launch partner). ACP orders bypass the browser entirely — no GA4 gtag, no Meta Pixel cookie, no Google Ads gclid — so analytics platforms see nothing and Smart Bidding starts misreading "this campaign isn't converting." The bridge fills the gap.
+
+- **Three dispatch channels** — GA4 Measurement Protocol, Meta Conversions API, Google Ads Enhanced Conversions
+- **AI agent name extraction** — pulls `affiliate_attribution.provider` / `publisher_id` / `campaign_id` from the ACP order metadata so you can segment ChatGPT vs Perplexity vs Claude in your reporting
+- **Hashed user identifiers** — email, phone, first/last name (SHA-256) never leave your server in plain text; sent to Meta CAPI and Google Ads Enhanced Conversions for high match quality without GCLID
+- **Stable `event_id`** for cross-channel deduplication so a Pixel event and a CAPI event for the same order are not double-counted
+- **Async dispatch** via `wp_schedule_single_event` — checkout pages don't block on outbound HTTP to ad platforms (worst-case 15-20 s saved)
+- **Idempotency** — `_luwipress_attribution_dispatched` order meta prevents double-fires when WC fires multiple status hooks for one order
+- **Default OFF + debug mode** — credentials live in `/attribution/settings`; debug mode logs payloads to the audit table instead of firing real events; flip to live only after the operator validates with Meta's `test_event_code`
+- **Audit log** retains last 200 dispatches with channel-by-channel result codes and AI agent provider so the operator can verify the bridge is firing
+- **Google Ads OAuth refresh** is cached for 50 minutes (10-minute headroom under Google's 1-hour expiry) and rotated automatically; Manager (MCC) accounts supported via the optional `login_customer_id` setting
+- **Endpoints**: `GET|POST /attribution/settings`, `GET /attribution/log`, `POST /attribution/test`, `POST /attribution/dispatch {order_id, force}`
+- **MCP tools**: `attribution_settings_get`, `attribution_settings_set`, `attribution_log_recent`, `attribution_test_send`
+
+### 14. WordPress Abilities API Bridge (since 3.1.43)
+
+Mirrors LuwiPress's MCP tool registry into the **WordPress 6.9+ Abilities API** (`wp_register_ability`) so AI clients that read `wp_get_abilities()` — the upcoming WordPress 7.0 native AI client, the WooCommerce MCP adapter, third-party agent platforms — discover every LuwiPress capability through the standard WordPress registry without a second integration.
+
+- **Auto-mirror** — every WebMCP tool registers as `luwipress/<tool-name>` ability on the `wp_abilities_api_init` hook
+- **Soft-skip on older WordPress** — no-op on WP < 6.9 (no Abilities API present); the bridge never errors
+- **Read/write capability gating** — read-only abilities default to `read` (any logged-in user), mutating abilities default to `manage_options` (admin only); per-ability override available via the `luwipress_abilities_public_overrides` option
+- **Public/private flag** per ability — read-only tools default to public (visible in REST and the WC MCP namespace), mutating tools default to private; the operator opts each one in
+- **Token-based auth stays in WebMCP** — Abilities API gives `permission_callback` only the input args (no request headers), so token-gated workflows continue to use the WebMCP endpoint; both registries run side-by-side
+- **WooCommerce MCP namespace inclusion** — the standard `woocommerce_mcp_include_ability` filter wires LuwiPress public abilities into the WC MCP server (the official adapter shipped Feb 2026), so a single WC MCP endpoint reaches LuwiPress tools
 
 ---
 
 ## 📦 Companion Plugins
 
-Two optional plugins extend LuwiPress core. Install them only if you need the feature.
+Three optional plugins extend LuwiPress core. Install only the ones you actually need — the core stays lean for stores that ignore these verticals.
 
-| Plugin | Purpose | Size |
-|--------|---------|------|
-| **LuwiPress WebMCP** | MCP server exposing 130+ tools to AI agents. Needed if you use MCP clients (e.g. to let an AI agent manage your store remotely). | ~210 KB uncompressed |
-| **LuwiPress Open Claw** | In-admin AI chat assistant with slash commands. Needed if you want natural-language store management from the WordPress admin. | ~26 KB uncompressed |
+| Plugin | Version | Purpose | Size |
+|--------|---------|---------|------|
+| **LuwiPress WebMCP** | 1.0.10 | MCP server exposing 155 tools to AI agents (Claude, ChatGPT, custom clients) over Streamable HTTP. Needed if you let an AI agent manage your store. | ~58 KB ZIP |
+| **LuwiPress Marketplace Sync** | 1.0.1 | Multi-marketplace publishing (Amazon, eBay, Trendyol, Hepsiburada, N11, Etsy, Walmart, Alibaba). Needed if you sell on third-party marketplaces; otherwise dormant code stays out of your install. | ~29 KB ZIP |
+| **LuwiPress Open Claw** | 1.0.1 | In-admin AI chat assistant with slash commands. Needed if you want natural-language store management from the WordPress admin. | ~12 KB ZIP |
 
-Both companions require the core LuwiPress plugin. They attach to the same admin menu, reuse the core's authentication, and share the daily AI budget.
+**All three companions:**
+- Require the core LuwiPress plugin (3.1.43+) to be active. Each refuses to activate when core is missing and surfaces a clear "install core first" page rather than a silent no-op.
+- Attach to the same `LuwiPress` admin menu — operators find each feature where they expect it.
+- Reuse core's authentication (Bearer token, JWT, session cookie, HMAC) and share the daily AI budget where applicable.
+- Show a soft "paused" notice **only on the Plugins screen** (never on the dashboard or LuwiPress admin pages) when core is deactivated mid-flight.
 
 ---
 
@@ -266,25 +311,29 @@ Both companions require the core LuwiPress plugin. They attach to the same admin
 
 ---
 
-## 📊 REST API (70+ Endpoints)
+## 📊 REST API (130+ Endpoints)
 
-All endpoints under namespace `luwipress/v1`.
+All endpoints under namespace `luwipress/v1`. As of 3.1.44 the live route count on a typical install is around **129–135** depending on which companion plugins are active.
 
-**Core:** `/status`, `/health`, `/webhook`, `/token-usage`, `/token-stats`
+**Core:** `/status`, `/health`, `/webhook`, `/token-usage`, `/token-stats`, `/token-recent`
 **Products:** `/product/enrich`, `/product/enrich-batch`, `/product/enrich-batch/status`, `/enrich/settings` (GET/POST — remote read/write of the custom prompt and meta constraints)
-**SEO:** `/seo/meta`, `/seo/schema`
+**SEO:** `/seo/meta`, `/seo/schema`, `/seo/meta-bulk`
 **AEO:** `/aeo/generate-faq`, `/aeo/generate-howto`, `/aeo/coverage`, `/aeo/save-*`
-**Translation:** `/translation/missing`, `/translation/missing-all`, `/translation/request`, `/translation/batch` (bulk N posts × M languages), `/translation/quality-check`, `/translation/settings` (GET/POST)
+**Translation:** `/translation/missing`, `/translation/missing-all`, `/translation/request`, `/translation/batch` (bulk N posts × M languages), `/translation/quality-check`, `/translation/outdated`, `/translation/settings` (GET/POST)
 **Content:** `/content/stale`, `/content/opportunities`, `/content/resolve-links`
-**Scheduler:** `/schedule/list`, `/schedule/callback`, `/schedule/settings` (GET/POST)
+**Scheduler:** `/schedule/list`, `/schedule/delta`, `/schedule/callback`, `/schedule/settings` (GET/POST)
 **Chat:** `/chat/message`, `/chat/session/{id}`, `/chat/config`, `/chat/session/escalate`, `/chat/settings` (GET/POST)
-**Elementor (31 endpoints):** `/elementor/page/{id}`, `/outline/{id}`, `/widget`, `/style`, `/bulk-update`, `/add-widget`, `/add-section`, `/delete`, `/move`, `/clone`, `/custom-css`, `/responsive`, `/global-style`, `/sync-styles`, `/snapshot`, `/rollback`, `/snapshots/{id}`, `/audit/{id}`, `/responsive-audit/{id}`, `/auto-fix`, `/translate`, `/translate-queue`, `/global-css`, `/batch-css`, `/kit`, `/flush-css`, `/print-method`, `/google-fonts`, `/reorder-sections`, `/find-replace`, `/sync-structure`, `/css-vars`, `/templates`, `/apply-template`
-**CRM:** `/crm/overview`, `/crm/segments`, `/crm/customer/{id}`
+**Elementor (35+ endpoints):** `/elementor/page/{id}`, `/outline/{id}`, `/widget`, `/style`, `/bulk-update`, `/add-widget`, `/add-section`, `/delete`, `/move`, `/clone`, `/copy-section`, `/custom-css`, `/responsive`, `/global-style`, `/sync-styles`, `/snapshot`, `/rollback`, `/snapshots/{id}`, `/audit/{id}`, `/responsive-audit/{id}`, `/auto-fix`, `/translate`, `/translate-queue`, `/global-css`, `/batch-css`, `/kit`, `/flush-css`, `/print-method`, `/google-fonts`, `/reorder-sections`, `/find-replace`, `/sync-structure`, `/css-vars`, `/templates`, `/template/create`, `/template/clone`, `/template/conditions` (GET/POST), `/template/delete`, `/apply-template`, `/purge-page-cache`
+**CRM:** `/crm/overview`, `/crm/segments`, `/crm/segment/{slug}`, `/crm/customer/{id}`, `/crm/refresh-segments`, `/crm/suspicious-bots`, `/crm/lifecycle-queue`, `/crm/settings` (GET/POST)
 **Reviews:** `/review/sentiment-callback`, `/review/analytics`
-**Marketplace:** `/marketplace/publish`, `/publish-batch`, `/status/{id}`, `/overview`, `/categories`
 **Knowledge Graph:** `/knowledge-graph`
+**Attribution (3.1.43+):** `/attribution/settings` (GET/POST), `/attribution/log`, `/attribution/test`, `/attribution/dispatch`
+**Cache:** `/cache/purge`
 **Site:** `/site-config`, `/logs`
 **JWT:** `/jwt-auth/v1/token`, `/validate`, `/refresh`
+
+**Companion-provided (only register when companion is active):**
+- **Marketplace Sync** (1.0.1+): `/marketplace/publish`, `/marketplace/publish-batch`, `/marketplace/status/{id}`, `/marketplace/overview`, `/marketplace/test`, `/marketplace/categories`
 
 ---
 
@@ -308,27 +357,37 @@ All endpoints under namespace `luwipress/v1`.
 
 ## 🗄️ Database Tables
 
+Core LuwiPress creates 5 tables on activation (idempotent dbDelta — re-runs safely):
+
 1. `wp_luwipress_token_usage` — AI cost tracking
-2. `wp_luwipress_logs` — Activity logs (30d retention)
-3. `wp_luwipress_chat_conversations` — Customer chat sessions
-4. `wp_luwipress_chat_messages` — Chat message history
-5. `wp_luwipress_search_index` — BM25 full-text search
-6. `wp_luwipress_marketplace_listings` — Marketplace sync status
+2. `wp_luwipress_logs` — Activity logs (30 d retention)
+3. `wp_luwipress_chat_conversations` — Customer chat sessions (90 d retention)
+4. `wp_luwipress_chat_messages` — Chat message history (90 d retention)
+5. `wp_luwipress_search_index` — BM25 full-text search index
+
+**Companion-managed tables:**
+- `wp_luwipress_marketplace_listings` — Marketplace sync status. Created and owned by the **LuwiPress Marketplace Sync** companion (3.1.44+). Existing rows from earlier core-bundled marketplace versions are picked up unchanged — no migration needed.
+
+**Option-stored audit log:**
+- `luwipress_attribution_log` (WP option, rolling last 200 entries) — ACP attribution dispatches. Promoted to a custom table in a future release if volume warrants.
 
 ---
 
 ## 🖥️ Admin Pages
 
-1. **Dashboard** — Hero stats, content health ring, 7-day cost chart, workflow breakdown, translation coverage, recent logs
-2. **Settings** — 9 tabs (Connection, General, AI API Keys, AI Content, Translation, CRM, Customer Chat, Marketplaces, Security)
-3. **Usage & Logs** — Token tracking, cost breakdown, API call history
-4. **Knowledge Graph** — D3.js interactive store intelligence visualization
-5. **Content Scheduler** — Blog automation
-6. **Translation Manager** — Missing translations by language
+Core LuwiPress ships these admin pages out of the box:
 
-Add the companion plugins to light up:
-- **Open Claw** menu item (via LuwiPress Open Claw companion)
-- **WebMCP** menu item (via LuwiPress WebMCP companion)
+1. **Dashboard** — Store Health hero, Action Queue ("next wins" — top 3 ROI-scored cards), achievement badges, 8-card stat bar, knowledge graph canvas, live activity feed (30 s polling), 7-day trend deltas
+2. **Settings** — 8 tabs (Connection, General, AI API Keys, AI Content, Translation, CRM, Customer Chat, Security)
+3. **Usage & Logs** — Token tracking, 30-day cost sparkline, workflow bar chart, daily-budget meter, live activity log with debounced search (10 s polling, pauses when tab hidden)
+4. **Knowledge Graph** — D3.js interactive store intelligence visualization (Products / Posts / Pages / Customers views)
+5. **Content Scheduler** — 4-step wizard (Topics → Style → Schedule → Review), recurring plans, queue with delta polling
+6. **Translation Manager** — Missing translations by language, outdated-translation panel with one-click sync/re-translate
+
+**Companion plugins add their own submenu items** under the same `LuwiPress` parent menu when active:
+- **LuwiPress → Marketplaces** (via LuwiPress Marketplace Sync companion) — credentials grid for 8 marketplaces with live status badges and search filter
+- **LuwiPress → Open Claw** (via LuwiPress Open Claw companion) — admin AI chat assistant
+- **LuwiPress → WebMCP** (via LuwiPress WebMCP companion) — MCP server config + tool catalog
 
 ---
 
@@ -336,29 +395,31 @@ Add the companion plugins to light up:
 
 | Spec | Detail |
 |------|--------|
-| **WordPress** | 5.6+ (tested up to 6.9) |
+| **WordPress** | 5.6+ (tested up to 6.9; Abilities API mirror activates on 6.9+) |
 | **PHP** | 7.4+ |
-| **WooCommerce** | 5.0+ (optional) |
-| **Core bundle size** | ~365 KB (60 files) · WebMCP companion ~210 KB · Open Claw companion ~26 KB |
-| **Database** | Automatic cleanup, indexed tables |
-| **Caching** | Transient + object cache compatible |
-| **Cron** | WP Cron job queue for async work |
-| **Unicode** | Full multibyte string support |
+| **WooCommerce** | 5.0+ (soft dependency since 3.1.38 — generic features run WC-less) |
+| **Core bundle size** | ~545 KB ZIP (59 files) — WebMCP companion ~58 KB · Marketplace Sync companion ~29 KB · Open Claw companion ~12 KB |
+| **Database** | 6 indexed tables, automatic cleanup (logs 30 d, tokens 90 d, chat 90 d) |
+| **Caching** | Transient + object-cache compatible; REST responses stamp `Cache-Control: no-store` to prevent page-cache leaks of authenticated bodies |
+| **Cron** | WP Cron job queue for async work; ACP attribution dispatch is queued (not inline) so checkout pages never block on outbound HTTP |
+| **Unicode** | Full multibyte string support (Turkish, Arabic, CJK, RTL languages tested) |
 | **Image Upload** | 10 MB max, MIME validated |
 
 ---
 
 ## 🚀 Why LuwiPress?
 
-- **Standalone** — no external dependencies, works with existing stack
-- **Cost-conscious** — built-in budget controls prevent runaway AI costs
-- **AI-agent ready** — full REST + WebMCP integration for Claude Code, OpenAI, custom agents
-- **Multilingual-first** — WPML/Polylang native, not afterthought
-- **Elementor power-user tool** — 30+ programmatic editing endpoints
-- **Safety net** — snapshots before every destructive operation
-- **Enterprise-grade security** — JWT, HMAC, IP whitelist, rate limiting
-- **Modular** — 30+ feature classes, enable only what you need
+- **Standalone** — no external dependencies; integrates with the SEO/translation/email/cache plugins you already use instead of replacing them
+- **Cost-conscious** — built-in budget controls (daily cap, emergency stop, real-time check, separate chat budget) prevent runaway AI costs
+- **AI-agent ready** — full REST + WebMCP (155 tools) + WordPress 6.9 Abilities API mirror; works with Claude, ChatGPT, the upcoming WP 7.0 native AI client, and the WooCommerce MCP adapter
+- **Agentic-commerce-ready** — first WordPress AI plugin with native ACP attribution bridge: GA4 + Meta CAPI + Google Ads Enhanced Conversions for Stripe Agentic Commerce orders that bypass the browser
+- **Multilingual-first** — WPML / Polylang / TranslatePress native, not afterthought; outdated-translation detection with one-click sync
+- **Elementor power-user tool** — 35+ programmatic editing endpoints, including Theme Builder template management and snapshot-protected mutations
+- **Safety net** — snapshots before every destructive operation; idempotent dispatch with deduplication; default-OFF settings for outbound integrations
+- **Enterprise-grade security** — JWT, HMAC, IP whitelist, rate limiting, REST cache-layer isolation, secret masking in API responses
+- **Modular** — companion-plugin architecture (WebMCP, Marketplace Sync, Open Claw) keeps the core lean for stores that ignore those verticals; activation gates prevent broken-state installs
+- **Soft WC dependency** — runs WC-less since 3.1.38; generic content/chat/scheduler features work on any WordPress site
 
 ---
 
-*Document version 3.1.39 — updated 2026-04-28 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*
+*Document version 3.1.44 — updated 2026-05-05 · For technical API documentation, see individual endpoint documentation at `/wp-json/luwipress/v1/` or request the developer reference. For the WebMCP tool catalog, see the separate WebMCP feature overview.*

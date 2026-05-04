@@ -2711,6 +2711,12 @@ class LuwiPress_Translation {
         $saved = 0;
         $errors = [];
 
+        // 3.1.42-hotfix3 (BUG-013): silent fail elimination. Every skip path now
+        // emits a structured error with a reason field so failed entries surface
+        // why they failed in the response. Previously the silent `continue` on
+        // missing fields produced empty error reasons, making post_tag failures
+        // impossible to debug.
+        $skipped = 0;
         foreach ($translations as $item) {
             $term_id  = absint($item['term_id'] ?? 0);
             $language = sanitize_text_field($item['language'] ?? '');
@@ -2718,12 +2724,27 @@ class LuwiPress_Translation {
             $slug     = sanitize_title($item['slug'] ?? $name);
 
             if (!$term_id || empty($language) || empty($name)) {
+                $reasons = array();
+                if (!$term_id)         { $reasons[] = 'missing_term_id'; }
+                if (empty($language))  { $reasons[] = 'missing_language'; }
+                if (empty($name))      { $reasons[] = 'missing_name'; }
+                $errors[] = array(
+                    'term_id' => $term_id,
+                    'language' => $language,
+                    'reason' => 'skipped: ' . implode(',', $reasons),
+                );
+                $skipped++;
                 continue;
             }
 
             $result = $this->save_wpml_taxonomy_translation($term_id, $taxonomy, $language, $name, $slug);
             if (is_wp_error($result)) {
-                $errors[] = sprintf('term #%d â†’ %s: %s', $term_id, $language, $result->get_error_message());
+                $errors[] = array(
+                    'term_id'  => $term_id,
+                    'language' => $language,
+                    'reason'   => 'save_failed: ' . $result->get_error_message(),
+                    'code'     => $result->get_error_code(),
+                );
             } else {
                 $saved++;
             }

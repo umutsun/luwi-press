@@ -215,8 +215,10 @@ class LuwiPress_AEO {
      * POST /aeo/save-faq — Async callback with generated FAQ data
      */
     public function save_faq_data($request) {
-        $data = $request->get_json_params();
-        $product_id = isset($data['product_id']) ? absint($data['product_id']) : 0;
+        // Pull params from every channel — internal MCP callers populate via
+        // set_param() (proxy_rest_post in 3.1.42), real HTTP clients via JSON body.
+        $json_data = $request->get_json_params() ?: array();
+        $product_id = absint( $request->get_param('product_id') ?: ( $json_data['product_id'] ?? 0 ) );
 
         $wc_check = $this->require_woocommerce();
         if ( is_wp_error( $wc_check ) ) {
@@ -227,7 +229,11 @@ class LuwiPress_AEO {
             return new WP_Error('invalid_product', 'Invalid product ID', ['status' => 400]);
         }
 
-        $faq_items = isset($data['faq']) ? $data['faq'] : [];
+        // Accept both 'faq' (singular legacy) and 'faqs' (plural — matches the MCP
+        // tool schema in WebMCP). Either works; whichever arrives first wins.
+        $faq_items = $request->get_param('faqs')
+            ?: $request->get_param('faq')
+            ?: ( $json_data['faqs'] ?? $json_data['faq'] ?? array() );
         if (empty($faq_items) || !is_array($faq_items)) {
             return new WP_Error('invalid_data', 'FAQ data is required', ['status' => 400]);
         }
@@ -261,8 +267,9 @@ class LuwiPress_AEO {
      * POST /aeo/save-howto — Async callback with HowTo schema
      */
     public function save_howto_data($request) {
-        $data = $request->get_json_params();
-        $product_id = isset($data['product_id']) ? absint($data['product_id']) : 0;
+        // 3.1.42: support both internal MCP callers (set_param) and HTTP JSON.
+        $json_data = $request->get_json_params() ?: array();
+        $product_id = absint( $request->get_param('product_id') ?: ( $json_data['product_id'] ?? 0 ) );
 
         $wc_check = $this->require_woocommerce();
         if ( is_wp_error( $wc_check ) ) {
@@ -273,7 +280,7 @@ class LuwiPress_AEO {
             return new WP_Error('invalid_product', 'Invalid product ID', ['status' => 400]);
         }
 
-        $howto = isset($data['howto']) ? $data['howto'] : [];
+        $howto = $request->get_param('howto') ?: $request->get_param('steps') ?: ( $json_data['howto'] ?? $json_data['steps'] ?? array() );
         if (empty($howto)) {
             return new WP_Error('invalid_data', 'HowTo data is required', ['status' => 400]);
         }

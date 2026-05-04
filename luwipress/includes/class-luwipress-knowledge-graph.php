@@ -33,8 +33,8 @@ class LuwiPress_Knowledge_Graph {
 		'missing_translation'     => 8,
 		'missing_faq'             => 6,
 		'missing_schema'          => 5,
-		'missing_howto'           => 4,
-		'missing_speakable'       => 3,
+		// 'missing_howto'  => 4,  // disabled: HowTo deprecated by Google for product pages
+		// 'missing_speakable' => 3, // disabled: Speakable deprecated by Google late 2024
 		'no_reviews'              => 3,
 		'missing_alt_text'        => 3,
 		'stale_content'           => 5,
@@ -720,14 +720,13 @@ class LuwiPress_Knowledge_Graph {
 				$opps[] = 'missing_schema';
 				$score += $this->score_weights['missing_schema'];
 			}
-			if ( ! $has_howto ) {
-				$opps[] = 'missing_howto';
-				$score += $this->score_weights['missing_howto'];
-			}
-			if ( ! $has_speakable ) {
-				$opps[] = 'missing_speakable';
-				$score += $this->score_weights['missing_speakable'];
-			}
+			// 'missing_howto' and 'missing_speakable' opportunities are intentionally
+			// NOT counted in the score (3.1.42 IMP-006 / Schema Reality v1.1 doctrine).
+			// Google deprecated HowTo for product pages and Speakable entirely (late
+			// 2024). Counting them inflated the priority queue with dead signals
+			// (~%12 of total score on Tapadum). The booleans $has_howto/$has_speakable
+			// are still surfaced in the per-product `aeo` payload below for visibility,
+			// but they no longer drive prioritisation.
 			if ( $reviews['count'] === 0 ) {
 				$opps[] = 'no_reviews';
 				$score += $this->score_weights['no_reviews'];
@@ -1073,13 +1072,19 @@ class LuwiPress_Knowledge_Graph {
 		} );
 		$top_products = array_slice( $top_products, 0, 10 );
 
+		// 3.1.42-hotfix3 (BUG-008): expose `id` alongside `product_id` and add
+		// `issue_count` so admin UIs can render clickable rows without an extra
+		// REST roundtrip. Both keys point to the same product node id; older
+		// callers that read `product_id` are unaffected.
 		$top_list = array();
 		foreach ( $top_products as $p ) {
 			$top_list[] = array(
-				'product_id'       => $p['id'],
-				'name'             => $p['name'],
+				'id'                => $p['id'],
+				'product_id'        => $p['id'],
+				'name'              => $p['name'],
 				'opportunity_score' => $p['opportunity_score'],
-				'opportunities'    => $p['opportunities'],
+				'opportunities'     => $p['opportunities'],
+				'issue_count'       => is_array( $p['opportunities'] ?? null ) ? count( $p['opportunities'] ) : 0,
 			);
 		}
 
@@ -1285,12 +1290,25 @@ class LuwiPress_Knowledge_Graph {
 			_prime_post_caches( array_map( 'absint', $top_pids ), false, false );
 		}
 
+		// 3.1.42-hotfix3 (BUG-009): filter out trashed/deleted products. The
+		// aggregate query joins on order_itemmeta which retains rows even after
+		// the underlying product is deleted; without this filter, top_sellers
+		// returned empty `name` for ~50% of entries on Tapadum.
 		$top_list = array();
 		foreach ( $top_sellers as $ts ) {
 			$pid = absint( $ts->product_id );
+			$post_obj = $pid ? get_post( $pid ) : null;
+			if ( ! $post_obj || $post_obj->post_status !== 'publish' ) {
+				continue;
+			}
+			$title = get_the_title( $pid );
+			if ( ! $title ) {
+				continue;
+			}
 			$top_list[] = array(
 				'product_id' => $pid,
-				'name'       => get_the_title( $pid ),
+				'id'         => $pid,
+				'name'       => $title,
 				'qty_sold'   => absint( $ts->qty_sold ),
 				'revenue'    => round( floatval( $ts->revenue ), 2 ),
 			);

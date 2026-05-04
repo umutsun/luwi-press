@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.1.39
+ * Version: 3.1.44
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.1.39');
+define('LUWIPRESS_VERSION', '3.1.44');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -161,23 +161,22 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-knowledge-graph.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-elementor.php';
 
-        // Marketplace integration
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-adapter.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-amazon.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-ebay.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-trendyol.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-alibaba.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-hepsiburada.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-n11.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-etsy.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-walmart.php';
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-marketplace.php';
+        // Marketplace integration moved to the standalone "LuwiPress
+        // Marketplace Sync" companion plugin in 3.1.44. Existing
+        // luwipress_marketplace_* options + the wp_luwipress_marketplace_listings
+        // table are read directly by the companion — no migration needed.
 
         // BM25 search index
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-search-index.php';
 
         // Customer-facing chat
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-customer-chat.php';
+
+        // WordPress 6.9+ Abilities API bridge (no-op on older WP)
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-abilities.php';
+
+        // ACP/ACS attribution bridge — server-side multi-cast for AI agent orders
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-acp-attribution.php';
 
     }
     
@@ -193,7 +192,8 @@ class LuwiPress {
         LuwiPress_Token_Tracker::create_table();
         LuwiPress_Customer_Chat::create_table();
         LuwiPress_Search_Index::create_table();
-        LuwiPress_Marketplace::create_table();
+        // Marketplace listings table created by the LuwiPress Marketplace Sync
+        // companion plugin's own activation hook (3.1.44+).
 
         // Generate HMAC secret if not set
         LuwiPress_HMAC::ensure_secret();
@@ -258,9 +258,11 @@ class LuwiPress {
         LuwiPress_Review_Analytics::get_instance();
         LuwiPress_CRM_Bridge::get_instance();
         LuwiPress_Knowledge_Graph::get_instance();
-        LuwiPress_Marketplace::get_instance();
+        // LuwiPress_Marketplace::get_instance() — split into companion plugin (3.1.44).
         LuwiPress_Search_Index::get_instance();
         LuwiPress_Customer_Chat::get_instance();
+        LuwiPress_Abilities::get_instance();
+        LuwiPress_ACP_Attribution::get_instance();
 
         // Elementor integration (only if Elementor is active)
         if ( LuwiPress_Elementor::is_elementor_active() || is_admin() ) {

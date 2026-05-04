@@ -34,7 +34,7 @@ class LuwiPress_WebMCP {
 
     const MCP_PROTOCOL_VERSION = '2025-03-26';
     const SERVER_NAME          = 'luwipress-webmcp';
-    const SERVER_VERSION       = '2.0.1';
+    const SERVER_VERSION       = '2.0.3';
     const ENDPOINT_PATH        = '/luwipress/v1/mcp';
 
     /* ──────────────────────────── Properties ────────────────────────── */
@@ -721,6 +721,7 @@ class LuwiPress_WebMCP {
         $this->register_menu_tools();
         $this->register_meta_tools();
         $this->register_search_tools();
+        $this->register_attribution_tools();
 
         /**
          * Allow third-party extensions to register additional MCP tools.
@@ -749,6 +750,27 @@ class LuwiPress_WebMCP {
         $schema['name']          = $name;
         $this->tools[ $name ]    = $schema;
         $this->handlers[ $name ] = $handler;
+    }
+
+    /**
+     * Public read-only access to the tool registry for cross-plugin consumers.
+     * Used by LuwiPress core's Abilities API bridge to mirror MCP tools as
+     * abilities (`wp_register_ability`) without duplicating definitions.
+     *
+     * @return array<string, array{schema: array, handler: callable}>
+     */
+    public function get_tool_registry() {
+        $out = array();
+        foreach ( $this->tools as $name => $schema ) {
+            if ( ! isset( $this->handlers[ $name ] ) ) {
+                continue;
+            }
+            $out[ $name ] = array(
+                'schema'  => $schema,
+                'handler' => $this->handlers[ $name ],
+            );
+        }
+        return $out;
     }
 
     /* ───────────────────── System Tools ─────────────────────────────── */
@@ -1003,14 +1025,21 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'content_stale', array(
-            'description' => 'List stale content that needs refreshing',
+            'description' => 'List stale content (posts/products) that have not been modified within the freshness window. Default: products older than 180 days.',
             'inputSchema' => array(
                 'type'       => 'object',
-                'properties' => new stdClass(),
+                'properties' => array(
+                    'days'      => array( 'type' => 'integer', 'description' => 'Freshness window in days (default 180)', 'minimum' => 1, 'maximum' => 3650 ),
+                    'post_type' => array( 'type' => 'string', 'description' => 'Post type to scan (default product)' ),
+                    'per_page'  => array( 'type' => 'integer', 'description' => 'Max items to return (default 50, max 200)', 'minimum' => 1, 'maximum' => 200 ),
+                ),
             ),
-        ), function () {
+        ), function ( $args ) {
             $ai      = LuwiPress_AI_Content::get_instance();
             $request = new WP_REST_Request( 'GET', '/luwipress/v1/content/stale' );
+            if ( isset( $args['days'] ) )      { $request->set_param( 'days',      intval( $args['days'] ) ); }
+            if ( isset( $args['post_type'] ) ) { $request->set_param( 'post_type', sanitize_key( $args['post_type'] ) ); }
+            if ( isset( $args['per_page'] ) )  { $request->set_param( 'per_page',  intval( $args['per_page'] ) ); }
             $data    = $ai->handle_stale_content( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
@@ -1020,11 +1049,12 @@ class LuwiPress_WebMCP {
 
     private function register_seo_tools() {
         $this->register_tool( 'seo_enrich_product', array(
-            'description' => 'Trigger AI enrichment for a WooCommerce product (generates descriptions, meta, FAQ, schema via the LuwiPress AI pipeline)',
+            'description' => 'Trigger AI enrichment for a WooCommerce product (generates descriptions, meta, FAQ, schema via the LuwiPress AI pipeline). Pass force_regen_faq=true to clear existing FAQ meta before the AI call so the pipeline genuinely regenerates instead of echoing cached content (3.1.42-hotfix3, BUG-007).',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
-                    'product_id' => array( 'type' => 'integer', 'description' => 'WooCommerce product ID (required)' ),
+                    'product_id'      => array( 'type' => 'integer', 'description' => 'WooCommerce product ID (required)' ),
+                    'force_regen_faq' => array( 'type' => 'boolean', 'description' => 'Clear existing _luwipress_faq before enrichment so the AI cannot return cached/identical answers. Default false.' ),
                 ),
                 'required'   => array( 'product_id' ),
             ),
@@ -1038,7 +1068,18 @@ class LuwiPress_WebMCP {
         ), function ( $args ) {
             $ai      = LuwiPress_AI_Content::get_instance();
             $request = new WP_REST_Request( 'POST', '/luwipress/v1/product/enrich' );
-            $request->set_body_params( array( 'product_id' => intval( $args['product_id'] ) ) );
+            $body = array( 'product_id' => intval( $args['product_id'] ) );
+            $opts = array();
+            if ( ! empty( $args['force_regen_faq'] ) ) {
+                $opts['force_regen_faq'] = true;
+            }
+            if ( $opts ) {
+                $body['options'] = $opts;
+            }
+            $request->set_body_params( $body );
+            foreach ( $body as $k => $v ) {
+                $request->set_param( $k, $v );
+            }
             $data = $ai->handle_enrich_request( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
@@ -1445,7 +1486,11 @@ class LuwiPress_WebMCP {
             ),
         ), function ( $args ) {
             $crm     = LuwiPress_CRM_Bridge::get_instance();
-            $request = new WP_REST_Request( 'GET', '/luwipress/v1/crm/segment/' . sanitize_text_field( $args['segment'] ) );
+            $segment = sanitize_text_field( $args['segment'] ?? '' );
+            $limit   = isset( $args['limit'] ) ? absint( $args['limit'] ) : 20;
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/crm/segment/' . $segment );
+            $request->set_url_params( array( 'segment' => $segment ) );
+            $request->set_query_params( array( 'segment' => $segment, 'limit' => $limit ) );
             $data    = $crm->handle_segment_customers( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
@@ -1460,9 +1505,31 @@ class LuwiPress_WebMCP {
                 'required'   => array( 'customer_id' ),
             ),
         ), function ( $args ) {
-            $crm     = LuwiPress_CRM_Bridge::get_instance();
-            $request = new WP_REST_Request( 'GET', '/luwipress/v1/crm/customer/' . intval( $args['customer_id'] ) );
+            $crm         = LuwiPress_CRM_Bridge::get_instance();
+            $customer_id = intval( $args['customer_id'] ?? 0 );
+            $request     = new WP_REST_Request( 'GET', '/luwipress/v1/crm/customer/' . $customer_id );
+            $request->set_url_params( array( 'customer_id' => $customer_id ) );
+            $request->set_query_params( array( 'customer_id' => $customer_id ) );
             $data    = $crm->handle_customer_profile( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'crm_suspicious_bots', array(
+            'description' => 'Read-only audit of suspected bot/fake-customer registrations (random emails, disposable domains, zero orders, never-logged-in). Operator reviews and deletes via WP Users admin. Ships with 3.1.42 — purge action planned for 3.1.43.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'limit' => array( 'type' => 'integer', 'description' => 'Max flagged customers to return (default 100, max 500)', 'minimum' => 1, 'maximum' => 500 ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Suspicious Bot Customers (audit)', 'readOnlyHint' => true ),
+        ), function ( $args ) {
+            $crm     = LuwiPress_CRM_Bridge::get_instance();
+            $limit   = isset( $args['limit'] ) ? absint( $args['limit'] ) : 100;
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/crm/suspicious-bots' );
+            $request->set_param( 'limit', $limit );
+            $request->set_query_params( array( 'limit' => $limit ) );
+            $data = $crm->handle_suspicious_bots( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
 
@@ -2373,6 +2440,139 @@ class LuwiPress_WebMCP {
             return $result;
         } );
 
+        // ─────────────────── Theme Builder Templates (3.1.42-hotfix4) ───────────────────
+        // Manage Elementor Pro Theme Builder templates: header, footer, single-post,
+        // archive, single-product, 404, search-results, cart, checkout, etc. Lets the
+        // AI scaffold full template hierarchies on a fresh site or backfill missing
+        // templates on an existing one (e.g. Tapadum's missing Single Post template).
+
+        $this->register_tool( 'elementor_templates_list', array(
+            'description' => 'List Elementor Pro Theme Builder templates (header, footer, single-post, archive, etc). Filter by type to find what is missing or needs replacement.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'type'   => array( 'type' => 'string', 'description' => 'Filter by template_type (header/footer/single-post/single-product/archive/single-404/search-results/cart/checkout/my-account/popup/page/section/kit). Omit for all.' ),
+                    'status' => array( 'type' => 'string', 'description' => 'Post status (any/publish/draft). Default: any' ),
+                    'limit'  => array( 'type' => 'integer', 'description' => 'Max templates to return (default 100, max 500)', 'minimum' => 1, 'maximum' => 500 ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'List Theme Builder Templates', 'readOnlyHint' => true ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/elementor/templates' );
+            if ( isset( $args['type'] ) )   { $request->set_param( 'type',   sanitize_text_field( $args['type'] ) ); }
+            if ( isset( $args['status'] ) ) { $request->set_param( 'status', sanitize_text_field( $args['status'] ) ); }
+            if ( isset( $args['limit'] ) )  { $request->set_param( 'limit',  intval( $args['limit'] ) ); }
+            $data = $elem->rest_templates_list( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_template_create', array(
+            'description' => 'Create a new Elementor Pro Theme Builder template (header, footer, single-post, archive, single-404, search-results, cart, checkout, my-account, popup, etc). Optionally copy structure from an existing template (copy_from) or pass an Elementor data tree (data). Returns the new template ID + edit URL. Conditions can be set in the same call (e.g. ["include/general"] for sitewide, ["include/post"] for all posts, ["include/product_archive"] for product category pages).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'title'         => array( 'type' => 'string', 'description' => 'Template title shown in admin (required)' ),
+                    'template_type' => array( 'type' => 'string', 'description' => 'Type slug — header, footer, single-post, single-product, archive, product-archive, single-404, search-results, cart, checkout, my-account, popup, page, section (required)' ),
+                    'status'        => array( 'type' => 'string', 'description' => 'Initial post status — draft (default) or publish' ),
+                    'conditions'    => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Display conditions (e.g. ["include/general"], ["include/post"], ["include/product"], ["include/in_singular_singular_post_id_42"])' ),
+                    'copy_from'     => array( 'type' => 'integer', 'description' => 'Optional: source template ID to copy structure from (creates a duplicate with new title)' ),
+                ),
+                'required'   => array( 'title', 'template_type' ),
+            ),
+            'annotations' => array( 'title' => 'Create Theme Builder Template', 'readOnlyHint' => false, 'destructiveHint' => false ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/elementor/template/create' );
+            foreach ( array( 'title', 'template_type', 'status' ) as $k ) {
+                if ( isset( $args[ $k ] ) ) { $request->set_param( $k, sanitize_text_field( $args[ $k ] ) ); }
+            }
+            if ( isset( $args['conditions'] ) ) { $request->set_param( 'conditions', (array) $args['conditions'] ); }
+            if ( isset( $args['copy_from'] ) )  { $request->set_param( 'copy_from', intval( $args['copy_from'] ) ); }
+            $data = $elem->rest_template_create( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_template_clone', array(
+            'description' => 'Clone an existing Elementor Pro template under a new title (draft status). Useful for forking a working template (e.g. clone Single Product template as a starting point for Single Post). Returns the new template ID.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'source_id' => array( 'type' => 'integer', 'description' => 'Source template ID to clone (required)' ),
+                    'new_title' => array( 'type' => 'string', 'description' => 'Title for the cloned template (required)' ),
+                ),
+                'required'   => array( 'source_id', 'new_title' ),
+            ),
+            'annotations' => array( 'title' => 'Clone Theme Builder Template', 'readOnlyHint' => false ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/elementor/template/clone' );
+            $request->set_param( 'source_id', intval( $args['source_id'] ) );
+            $request->set_param( 'new_title', sanitize_text_field( $args['new_title'] ) );
+            $data = $elem->rest_template_clone( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_template_conditions_get', array(
+            'description' => 'Read display conditions for a Theme Builder template (which posts/pages/types it applies to).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'template_id' => array( 'type' => 'integer', 'description' => 'Template ID (required)' ),
+                ),
+                'required'   => array( 'template_id' ),
+            ),
+            'annotations' => array( 'title' => 'Get Template Conditions', 'readOnlyHint' => true ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/elementor/template/conditions' );
+            $request->set_param( 'template_id', intval( $args['template_id'] ) );
+            $data = $elem->rest_template_conditions_get( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_template_conditions_set', array(
+            'description' => 'Set display conditions for a Theme Builder template — controls where it applies. Common patterns: ["include/general"] for sitewide header/footer, ["include/post"] for all posts (Single Post), ["include/page"] for all pages, ["include/product"] for all WooCommerce products, ["include/product_archive"] for shop + category archives, ["include/in_singular_singular_post_id_42"] to target a specific post. Multiple conditions = OR. Use ["exclude/..."] prefix to exclude.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'template_id' => array( 'type' => 'integer', 'description' => 'Template ID (required)' ),
+                    'conditions'  => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Array of condition strings (required, can be empty array to clear)' ),
+                ),
+                'required'   => array( 'template_id', 'conditions' ),
+            ),
+            'annotations' => array( 'title' => 'Set Template Conditions', 'readOnlyHint' => false ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/elementor/template/conditions' );
+            $request->set_param( 'template_id', intval( $args['template_id'] ) );
+            $request->set_param( 'conditions', (array) $args['conditions'] );
+            $data = $elem->rest_template_conditions_set( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_template_delete', array(
+            'description' => 'Delete a Theme Builder template (skips trash, permanent). Refuses to delete an active header/footer/kit unless force=true. Requires confirm_token="I_KNOW_WHAT_IM_DOING".',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'template_id'   => array( 'type' => 'integer', 'description' => 'Template ID (required)' ),
+                    'confirm_token' => array( 'type' => 'string', 'description' => 'Must equal "I_KNOW_WHAT_IM_DOING" (required)' ),
+                    'force'         => array( 'type' => 'boolean', 'description' => 'Set true to delete an active header/footer/kit despite the safety guard (default false)' ),
+                ),
+                'required'   => array( 'template_id', 'confirm_token' ),
+            ),
+            'annotations' => array( 'title' => 'Delete Template', 'readOnlyHint' => false, 'destructiveHint' => true ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/elementor/template/delete' );
+            $request->set_param( 'template_id', intval( $args['template_id'] ) );
+            $request->set_param( 'confirm_token', sanitize_text_field( $args['confirm_token'] ?? '' ) );
+            $request->set_param( 'force', ! empty( $args['force'] ) );
+            $data = $elem->rest_template_delete( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
         // ── CSS & Responsive tools ──
 
         $this->register_tool( 'elementor_custom_css', array(
@@ -2746,6 +2946,200 @@ class LuwiPress_WebMCP {
             }
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
+
+        /* ── Inspect tools (1.0.6 — paired with core 3.1.40) ────────────── */
+
+        $this->register_tool( 'elementor_outline_deep', array(
+            'description' => 'Deep page outline: walks every section, container, column, and widget and returns a tree with element IDs, types, widget types, text previews, and (optionally) background color/image info. Use this when the lighter elementor_page_outline does not include the element you need to find.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'          => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'include_bg_info'  => array( 'type' => 'boolean', 'description' => 'Include section/container background color + image (default true)' ),
+                    'include_settings' => array( 'type' => 'boolean', 'description' => 'Include full Elementor settings on every node (heavy; default false)' ),
+                    'preview_chars'    => array( 'type' => 'integer', 'description' => 'Max chars per text preview (20-200, default 80)' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Elementor Deep Outline',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'GET', '' );
+            $request->set_param( 'post_id', intval( $args['post_id'] ) );
+            if ( isset( $args['include_bg_info'] ) ) {
+                $request->set_param( 'include_bg_info', (bool) $args['include_bg_info'] );
+            }
+            if ( isset( $args['include_settings'] ) ) {
+                $request->set_param( 'include_settings', (bool) $args['include_settings'] );
+            }
+            if ( isset( $args['preview_chars'] ) ) {
+                $request->set_param( 'preview_chars', intval( $args['preview_chars'] ) );
+            }
+            $data = $elem->rest_outline_deep( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_find_by_id', array(
+            'description' => 'Locate an Elementor element by its ID and return its full ancestor chain (root → element), type, widget type, text content, and style summary. Useful when you have an element ID from rendered HTML and need to learn what it actually is in the page tree.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'element_id' => array( 'type' => 'string',  'description' => 'Elementor element ID, hex string (required)' ),
+                ),
+                'required'   => array( 'post_id', 'element_id' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Find Elementor Element by ID',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'GET', '' );
+            $request->set_param( 'post_id', intval( $args['post_id'] ) );
+            $request->set_param( 'element_id', sanitize_text_field( $args['element_id'] ) );
+            $data = $elem->rest_find_by_id( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_find_by_text', array(
+            'description' => 'Search every translatable widget text in a page and return matching elements with their ancestor chain. Use this to locate which widget owns a piece of rendered text without DOM scraping. Match modes: contains, exact, starts, ends.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'        => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'text'           => array( 'type' => 'string',  'description' => 'Text to search for (required)' ),
+                    'match'          => array( 'type' => 'string',  'description' => 'Match mode: contains | exact | starts | ends (default contains)' ),
+                    'case_sensitive' => array( 'type' => 'boolean', 'description' => 'Case-sensitive comparison (default false)' ),
+                    'limit'          => array( 'type' => 'integer', 'description' => 'Max matches to return (1-50, default 20)' ),
+                ),
+                'required'   => array( 'post_id', 'text' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Find Elementor Element by Text',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'POST', '' );
+            $request->set_param( 'post_id', intval( $args['post_id'] ) );
+            $request->set_param( 'text', (string) $args['text'] );
+            if ( isset( $args['match'] ) ) {
+                $request->set_param( 'match', sanitize_text_field( $args['match'] ) );
+            }
+            if ( isset( $args['case_sensitive'] ) ) {
+                $request->set_param( 'case_sensitive', (bool) $args['case_sensitive'] );
+            }
+            if ( isset( $args['limit'] ) ) {
+                $request->set_param( 'limit', intval( $args['limit'] ) );
+            }
+            $data = $elem->rest_find_by_text( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'elementor_kit_css_preflight', array(
+            'description' => 'Check whether a candidate Kit CSS payload would fit under the option size limit before pushing. Returns size, headroom, paired angle-bracket warning (wp_strip_all_tags risk), and savings candidates (existing layer markers that could be stripped). Always run before elementor_kit_css_set when adding a new layer.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'candidate_css' => array( 'type' => 'string', 'description' => 'Candidate full Kit CSS payload (required)' ),
+                ),
+                'required'   => array( 'candidate_css' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Kit CSS Preflight Size Check',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem    = LuwiPress_Elementor::get_instance();
+            $request = new WP_REST_Request( 'POST', '' );
+            $request->set_param( 'candidate_css', (string) $args['candidate_css'] );
+            $data = $elem->rest_kit_css_preflight( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        /* ───── Raw post_meta access (recovery surface, whitelist-enforced) ───── */
+
+        $this->register_tool( 'post_meta_raw_get', array(
+            'description' => 'Read a single post_meta value as base64-encoded raw bytes plus diagnostic info (length, sha, slash counts, json_decode probe). Recovery-only. Whitelist: _elementor_data, _elementor_page_settings, _elementor_css, _luwipress_elementor_snapshots. Use when /elementor/* endpoints return parse_error and you need to inspect actual stored bytes.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'  => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'meta_key' => array( 'type' => 'string', 'description' => 'Whitelisted meta key (required)' ),
+                ),
+                'required'   => array( 'post_id', 'meta_key' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Raw post_meta read (recovery)',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            $data = $elem->read_post_meta_raw( intval( $args['post_id'] ), (string) $args['meta_key'] );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message(), 'code' => $data->get_error_code() );
+            }
+            return $data;
+        } );
+
+        $this->register_tool( 'post_meta_raw_set', array(
+            'description' => 'Write a post_meta value from base64-encoded raw bytes. RECOVERY-ONLY DESTRUCTIVE TOOL — caller MUST pass confirm_token = "I_KNOW_WHAT_IM_DOING". Whitelist enforced (same as post_meta_raw_get). Always backs up the prior value into a parallel meta key before overwriting. For _elementor_data writes, regenerates Elementor CSS + purges page cache automatically.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'       => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'meta_key'      => array( 'type' => 'string', 'description' => 'Whitelisted meta key (required)' ),
+                    'value_b64'     => array( 'type' => 'string', 'description' => 'Base64-encoded new bytes (required)' ),
+                    'confirm_token' => array( 'type' => 'string', 'description' => 'Must equal "I_KNOW_WHAT_IM_DOING" (required)' ),
+                ),
+                'required'   => array( 'post_id', 'meta_key', 'value_b64', 'confirm_token' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Raw post_meta write (recovery)',
+                'readOnlyHint'    => false,
+                'destructiveHint' => true,
+                'idempotentHint'  => false,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            $data = $elem->write_post_meta_raw(
+                intval( $args['post_id'] ),
+                (string) $args['meta_key'],
+                (string) $args['value_b64'],
+                (string) ( $args['confirm_token'] ?? '' )
+            );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_message(), 'code' => $data->get_error_code() );
+            }
+            return $data;
+        } );
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -2766,7 +3160,16 @@ class LuwiPress_WebMCP {
         }
         $instance = $class_name::get_instance();
         $request  = new WP_REST_Request( 'POST', '' );
+        // Set params on every channel so handlers using get_param(), get_body_params(),
+        // or get_json_params() all receive the data. Internal callbacks bypass the
+        // HTTP body parser so we cannot rely on Content-Type negotiation.
         $request->set_body_params( $body_params );
+        $request->set_query_params( $body_params );
+        $request->set_header( 'content-type', 'application/json' );
+        $request->set_body( wp_json_encode( $body_params ) );
+        foreach ( $body_params as $key => $value ) {
+            $request->set_param( $key, $value );
+        }
         $data = $instance->$method( $request );
         return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
     }
@@ -4714,6 +5117,107 @@ class LuwiPress_WebMCP {
         ), function () {
             $index = LuwiPress_Search_Index::get_instance();
             return $index->get_stats();
+        } );
+    }
+
+    /* ───────────────────── ACP Attribution Tools ────────────────────── */
+
+    private function register_attribution_tools() {
+        if ( ! class_exists( 'LuwiPress_ACP_Attribution' ) ) {
+            return;
+        }
+
+        $this->register_tool( 'attribution_settings_get', array(
+            'description' => 'Read ACP attribution bridge settings (GA4 Measurement Protocol, Meta CAPI, Google Ads) — secrets are masked, only presence + last-4 returned',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array(
+                'title'           => 'Attribution Settings',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function () {
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/attribution/settings' );
+            $response = LuwiPress_ACP_Attribution::get_instance()->rest_get_settings( $request );
+            return $response instanceof WP_REST_Response ? $response->get_data() : $response;
+        } );
+
+        $this->register_tool( 'attribution_settings_set', array(
+            'description' => 'Update ACP attribution bridge settings. Partial-update — only present keys are touched. Set debug_mode=false to start firing real events.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'enabled'                        => array( 'type' => 'boolean', 'description' => 'Master on/off switch' ),
+                    'debug_mode'                     => array( 'type' => 'boolean', 'description' => 'When true, log payloads instead of dispatching' ),
+                    'ga4_measurement_id'             => array( 'type' => 'string', 'description' => 'GA4 Measurement ID (G-XXXXXXXXXX)' ),
+                    'ga4_api_secret'                 => array( 'type' => 'string', 'description' => 'GA4 Measurement Protocol API secret' ),
+                    'meta_pixel_id'                  => array( 'type' => 'string', 'description' => 'Meta Pixel ID (15+ digit number)' ),
+                    'meta_capi_token'                => array( 'type' => 'string', 'description' => 'Meta Conversions API access token' ),
+                    'meta_test_event_code'           => array( 'type' => 'string', 'description' => 'Meta Events Manager test code (omit for production)' ),
+                    'google_ads_customer_id'         => array( 'type' => 'string', 'description' => 'Google Ads customer ID (no dashes)' ),
+                    'google_ads_conversion_action'   => array( 'type' => 'string', 'description' => 'Google Ads conversion action resource name (customers/X/conversionActions/Y)' ),
+                    'google_ads_developer_token'     => array( 'type' => 'string', 'description' => 'Google Ads API developer token' ),
+                    'google_ads_login_customer_id'   => array( 'type' => 'string', 'description' => 'Manager (MCC) account ID — required only when using a manager OAuth flow' ),
+                    'google_ads_oauth_client_id'     => array( 'type' => 'string', 'description' => 'OAuth 2.0 client_id from Google Cloud Console' ),
+                    'google_ads_oauth_client_secret' => array( 'type' => 'string', 'description' => 'OAuth 2.0 client_secret' ),
+                    'google_ads_oauth_refresh_token' => array( 'type' => 'string', 'description' => 'OAuth refresh_token (long-lived, scope https://www.googleapis.com/auth/adwords)' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Update Attribution Settings',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/attribution/settings' );
+            foreach ( (array) $args as $k => $v ) {
+                $request->set_param( $k, $v );
+            }
+            $response = LuwiPress_ACP_Attribution::get_instance()->rest_save_settings( $request );
+            return $response instanceof WP_REST_Response ? $response->get_data() : $response;
+        } );
+
+        $this->register_tool( 'attribution_log_recent', array(
+            'description' => 'List the most recent ACP attribution dispatches with channel results (GA4, Meta CAPI). Use to verify events are firing after enabling.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'limit' => array( 'type' => 'integer', 'description' => 'Max entries (default 50, max 200)' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Attribution Audit Log',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $limit = absint( $args['limit'] ?? 50 );
+            return array(
+                'entries' => LuwiPress_ACP_Attribution::get_instance()->get_audit_log( $limit ),
+            );
+        } );
+
+        $this->register_tool( 'attribution_test_send', array(
+            'description' => 'Fire a synthetic test event to all configured channels (GA4, Meta CAPI). Use Meta test_event_code to verify in Events Manager without polluting production.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array(
+                'title'           => 'Send Attribution Test Event',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => false,
+                'openWorldHint'   => true,
+            ),
+        ), function () {
+            return LuwiPress_ACP_Attribution::get_instance()->test_dispatch();
         } );
     }
 

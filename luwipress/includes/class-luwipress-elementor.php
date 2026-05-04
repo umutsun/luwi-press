@@ -49,6 +49,19 @@ class LuwiPress_Elementor {
             @set_time_limit( 300 );
         }
 
+        // Skip: previously identified as having no translatable text (shortcode-only,
+        // pure-template page, etc.). BUG-014 fix — without this guard the cron keeps
+        // re-queueing the same empty page on every sweep, wasting tokens and bloating
+        // the snapshot list (`elementor-translation` workflow burned ~2.58M tokens/30d
+        // in part because of this loop).
+        if ( get_post_meta( $source_id, '_luwipress_no_translatable_text', true ) ) {
+            LuwiPress_Logger::log( sprintf(
+                'Cron: post #%d previously flagged no_translatable_text -- skipping %s translation cycle.',
+                $source_id, $target_language
+            ), 'info' );
+            return;
+        }
+
         // CRITICAL guard: refuse to translate a post that is itself a translation OR a
         // cascade duplicate. Without this, queued cron jobs from a previous bad state
         // keep producing duplicates even after the UI/REST guards are in place.
@@ -356,6 +369,31 @@ class LuwiPress_Elementor {
             'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
         ) );
 
+        // Inspect helpers (3.1.40)
+        register_rest_route( $ns, '/elementor/outline-deep/(?P<post_id>\d+)', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'rest_outline_deep' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        register_rest_route( $ns, '/elementor/find/(?P<post_id>\d+)/(?P<element_id>[a-f0-9]+)', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'rest_find_by_id' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        register_rest_route( $ns, '/elementor/find-by-text', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_find_by_text' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        register_rest_route( $ns, '/elementor/kit-css/preflight', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_kit_css_preflight' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
         register_rest_route( $ns, '/elementor/custom-css', array(
             'methods'             => 'POST',
             'callback'            => array( $this, 'rest_set_custom_css' ),
@@ -406,9 +444,67 @@ class LuwiPress_Elementor {
             'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
         ) );
 
+        // Raw post_meta access — recovery surface, whitelist-enforced.
+        register_rest_route( $ns, '/post-meta/raw', array(
+            array(
+                'methods'             => 'GET',
+                'callback'            => array( $this, 'rest_post_meta_raw_get' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+            array(
+                'methods'             => 'POST',
+                'callback'            => array( $this, 'rest_post_meta_raw_set' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+        ) );
+
         register_rest_route( $ns, '/elementor/auto-fix', array(
             'methods'             => 'POST',
             'callback'            => array( $this, 'rest_auto_fix' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        // Theme Builder template management (3.1.42-hotfix4 — Tapadum partnership feature).
+        // List, create, clone, set conditions, get/set type for elementor_library posts.
+        register_rest_route( $ns, '/elementor/templates', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'rest_templates_list' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            'args' => array(
+                'type'   => array( 'description' => 'Filter by template type (header/footer/single-post/single-product/archive/single-404/search-results/cart/checkout/my-account/popup/page/section)' ),
+                'status' => array( 'default' => 'any' ),
+                'limit'  => array( 'default' => 100, 'sanitize_callback' => 'absint' ),
+            ),
+        ) );
+
+        register_rest_route( $ns, '/elementor/template/create', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_template_create' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        register_rest_route( $ns, '/elementor/template/clone', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_template_clone' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        register_rest_route( $ns, '/elementor/template/conditions', array(
+            array(
+                'methods'             => 'GET',
+                'callback'            => array( $this, 'rest_template_conditions_get' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+            array(
+                'methods'             => 'POST',
+                'callback'            => array( $this, 'rest_template_conditions_set' ),
+                'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+            ),
+        ) );
+
+        register_rest_route( $ns, '/elementor/template/delete', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_template_delete' ),
             'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
         ) );
 
@@ -994,6 +1090,12 @@ class LuwiPress_Elementor {
                     update_post_meta( $tid, '_luwipress_synced_source_modified', get_post_field( 'post_modified_gmt', $post_id ) );
                 }
             }
+            // Mark the source post so future cron sweeps skip it (avoids the
+            // "shortcode-only page re-queued every cron tick" loop documented as
+            // BUG-014 — the queue would otherwise schedule the same post forever
+            // since it has no translatable content to flip the "needs translation"
+            // signal off).
+            update_post_meta( $post_id, '_luwipress_no_translatable_text', '1' );
             LuwiPress_Logger::log( sprintf( 'Elementor translate #%d -> %s: no translatable text (shortcode-only page) -- structure-only WPML pair created', $post_id, $target_language ), 'info' );
             return array( 'translated_id' => $tid, 'note' => 'structure_only_no_text' );
         }
@@ -1006,6 +1108,13 @@ class LuwiPress_Elementor {
             $widget_title = $info['texts']['ekit_heading_title'] ?? '';
 
             foreach ( $info['texts'] as $field => $text ) {
+                // Defensive: widget settings can contain non-string values (arrays for
+                // typography, objects for links, null for empty repeaters). trim() on
+                // non-string is a fatal in PHP 8.1+. Coerce + skip empties.
+                if ( ! is_scalar( $text ) ) {
+                    continue;
+                }
+                $text = (string) $text;
                 if ( ! empty( trim( strip_tags( $text ) ) ) ) {
                     // Strip leading <h1> from ekit_heading_extra_title if it duplicates ekit_heading_title
                     if ( 'ekit_heading_extra_title' === $field && ! empty( $widget_title ) ) {
@@ -2497,6 +2606,285 @@ class LuwiPress_Elementor {
         }
 
         return rest_ensure_response( $this->auto_fix_spacing( $post_id, $options ) );
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+     *  THEME BUILDER TEMPLATE MANAGEMENT (3.1.42-hotfix4)
+     *  ═══════════════════════════════════════════════════════════════════
+     *  Lets MCP clients enumerate, create, clone, and configure Elementor
+     *  Pro Theme Builder templates (header/footer/single-post/archive/etc).
+     *  Bridges the gap between LuwiPress AI workflows and Elementor Pro's
+     *  template system so AI agents can scaffold full template hierarchies
+     *  for new sites or backfill missing templates on existing ones.
+     */
+
+    private static function template_type_whitelist() {
+        return array(
+            'page', 'section', 'widget', 'kit',
+            'header', 'footer', 'popup',
+            'single', 'single-post', 'single-page',
+            'product', 'single-product',
+            'archive', 'product-archive', 'search-results',
+            'single-404', 'cart', 'checkout', 'my-account',
+        );
+    }
+
+    public function rest_templates_list( $request ) {
+        $type   = sanitize_text_field( $request->get_param( 'type' ) ?? '' );
+        $status = sanitize_text_field( $request->get_param( 'status' ) ?: 'any' );
+        $limit  = max( 1, min( intval( $request->get_param( 'limit' ) ?: 100 ), 500 ) );
+
+        if ( ! post_type_exists( 'elementor_library' ) ) {
+            return new WP_Error( 'no_elementor_pro', 'elementor_library post type missing — Elementor Pro required for template features', array( 'status' => 412 ) );
+        }
+
+        $args = array(
+            'post_type'      => 'elementor_library',
+            'post_status'    => $status === 'any' ? array( 'publish', 'draft', 'pending', 'private' ) : $status,
+            'posts_per_page' => $limit,
+            'orderby'        => 'modified',
+            'order'          => 'DESC',
+        );
+        if ( $type !== '' ) {
+            $args['meta_query'] = array(
+                array( 'key' => '_elementor_template_type', 'value' => $type ),
+            );
+        }
+
+        $q = new WP_Query( $args );
+        $items = array();
+        foreach ( $q->posts as $p ) {
+            $tpl_type   = get_post_meta( $p->ID, '_elementor_template_type', true );
+            $conditions = get_post_meta( $p->ID, '_elementor_conditions', true );
+            $items[] = array(
+                'id'          => $p->ID,
+                'title'       => $p->post_title,
+                'slug'        => $p->post_name,
+                'status'      => $p->post_status,
+                'template_type' => $tpl_type ?: '',
+                'conditions'  => is_array( $conditions ) ? $conditions : array(),
+                'modified'    => $p->post_modified,
+                'edit_url'    => admin_url( 'post.php?post=' . $p->ID . '&action=elementor' ),
+            );
+        }
+
+        return rest_ensure_response( array(
+            'count'     => count( $items ),
+            'templates' => $items,
+        ) );
+    }
+
+    public function rest_template_create( $request ) {
+        $title         = sanitize_text_field( $request->get_param( 'title' ) ?? '' );
+        $template_type = sanitize_text_field( $request->get_param( 'template_type' ) ?? '' );
+        $status        = sanitize_text_field( $request->get_param( 'status' ) ?: 'draft' );
+        $conditions    = $request->get_param( 'conditions' );  // optional array
+        $copy_from     = intval( $request->get_param( 'copy_from' ) ?: 0 );  // optional source template ID
+        $data          = $request->get_param( 'data' );  // optional Elementor data array
+
+        if ( ! $title || ! $template_type ) {
+            return new WP_Error( 'missing_params', 'title and template_type required', array( 'status' => 400 ) );
+        }
+        if ( ! in_array( $template_type, self::template_type_whitelist(), true ) ) {
+            return new WP_Error( 'invalid_type', 'template_type not in whitelist: ' . implode( ',', self::template_type_whitelist() ), array( 'status' => 400 ) );
+        }
+        if ( ! post_type_exists( 'elementor_library' ) ) {
+            return new WP_Error( 'no_elementor_pro', 'Elementor Pro required', array( 'status' => 412 ) );
+        }
+
+        // If copy_from provided, source the data + type from it
+        if ( $copy_from ) {
+            $src = get_post( $copy_from );
+            if ( ! $src || $src->post_type !== 'elementor_library' ) {
+                return new WP_Error( 'invalid_source', 'copy_from is not a valid elementor_library post', array( 'status' => 400 ) );
+            }
+            global $wpdb;
+            $data_raw = $wpdb->get_var( $wpdb->prepare(
+                "SELECT meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = '_elementor_data' LIMIT 1",
+                $copy_from
+            ) );
+        } elseif ( is_array( $data ) ) {
+            $data_raw = wp_slash( wp_json_encode( $data ) );
+        } else {
+            // Empty starter
+            $data_raw = wp_slash( '[]' );
+        }
+
+        // Create the post
+        $insert_result = wp_insert_post( array(
+            'post_title'  => $title,
+            'post_status' => $status,
+            'post_type'   => 'elementor_library',
+        ), true );
+
+        if ( is_wp_error( $insert_result ) ) {
+            return new WP_Error( 'create_failed', 'wp_insert_post failed: ' . $insert_result->get_error_message(), array( 'status' => 500 ) );
+        }
+        $new_id = (int) $insert_result;
+        // wp_insert_post with throw-on-error returns either WP_Error or a positive int,
+        // so an explicit zero-check would be dead code per PHPStan; the WP_Error guard
+        // above already covers the failure path.
+
+        // Set Elementor type metas — these are what Theme Builder uses
+        update_post_meta( $new_id, '_elementor_template_type', $template_type );
+        update_post_meta( $new_id, '_elementor_edit_mode', 'builder' );
+        update_post_meta( $new_id, '_wp_page_template', 'default' );
+
+        // Write data via direct wpdb (preserve slashing)
+        if ( $data_raw ) {
+            global $wpdb;
+            $wpdb->query( $wpdb->prepare(
+                "INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value) VALUES (%d, '_elementor_data', %s)",
+                $new_id, $data_raw
+            ) );
+        }
+
+        // Set library type taxonomy if it exists
+        if ( taxonomy_exists( 'elementor_library_type' ) ) {
+            wp_set_object_terms( $new_id, $template_type, 'elementor_library_type' );
+        }
+
+        // Set conditions if provided
+        if ( is_array( $conditions ) && ! empty( $conditions ) ) {
+            $clean_conds = array_values( array_filter( array_map( 'sanitize_text_field', $conditions ) ) );
+            update_post_meta( $new_id, '_elementor_conditions', $clean_conds );
+        }
+
+        wp_cache_delete( $new_id, 'post_meta' );
+
+        LuwiPress_Logger::log( sprintf(
+            'Theme Builder template created: #%d (%s) type=%s status=%s%s',
+            $new_id, $title, $template_type, $status,
+            $copy_from ? ' copy_from=' . $copy_from : ''
+        ), 'info' );
+
+        return rest_ensure_response( array(
+            'status'        => 'created',
+            'id'            => $new_id,
+            'title'         => $title,
+            'template_type' => $template_type,
+            'post_status'   => $status,
+            'edit_url'      => admin_url( 'post.php?post=' . $new_id . '&action=elementor' ),
+            'conditions'    => is_array( $conditions ) ? $conditions : array(),
+            'copied_from'   => $copy_from ?: null,
+        ) );
+    }
+
+    public function rest_template_clone( $request ) {
+        $source_id  = intval( $request->get_param( 'source_id' ) ?? 0 );
+        $new_title  = sanitize_text_field( $request->get_param( 'new_title' ) ?? '' );
+
+        if ( ! $source_id || ! $new_title ) {
+            return new WP_Error( 'missing_params', 'source_id and new_title required', array( 'status' => 400 ) );
+        }
+        $src = get_post( $source_id );
+        if ( ! $src || $src->post_type !== 'elementor_library' ) {
+            return new WP_Error( 'invalid_source', 'source_id is not an elementor_library post', array( 'status' => 400 ) );
+        }
+
+        $tpl_type = get_post_meta( $source_id, '_elementor_template_type', true ) ?: 'page';
+
+        // Use template_create with copy_from
+        $new_request = new WP_REST_Request( 'POST', '' );
+        $new_request->set_param( 'title', $new_title );
+        $new_request->set_param( 'template_type', $tpl_type );
+        $new_request->set_param( 'status', 'draft' );
+        $new_request->set_param( 'copy_from', $source_id );
+
+        return $this->rest_template_create( $new_request );
+    }
+
+    public function rest_template_conditions_get( $request ) {
+        $template_id = intval( $request->get_param( 'template_id' ) ?? 0 );
+        if ( ! $template_id ) {
+            return new WP_Error( 'missing_params', 'template_id required', array( 'status' => 400 ) );
+        }
+        $conds = get_post_meta( $template_id, '_elementor_conditions', true );
+        return rest_ensure_response( array(
+            'template_id' => $template_id,
+            'conditions'  => is_array( $conds ) ? $conds : array(),
+        ) );
+    }
+
+    public function rest_template_conditions_set( $request ) {
+        $template_id = intval( $request->get_param( 'template_id' ) ?? 0 );
+        $conditions  = $request->get_param( 'conditions' );
+
+        if ( ! $template_id ) {
+            return new WP_Error( 'missing_params', 'template_id required', array( 'status' => 400 ) );
+        }
+        if ( ! is_array( $conditions ) ) {
+            return new WP_Error( 'invalid_conditions', 'conditions must be an array of strings (e.g. ["include/general","include/post"])', array( 'status' => 400 ) );
+        }
+
+        $tpl = get_post( $template_id );
+        if ( ! $tpl || $tpl->post_type !== 'elementor_library' ) {
+            return new WP_Error( 'not_found', 'Template not found', array( 'status' => 404 ) );
+        }
+
+        $clean = array_values( array_filter( array_map( 'sanitize_text_field', $conditions ) ) );
+        update_post_meta( $template_id, '_elementor_conditions', $clean );
+
+        // Also trigger Elementor's conditions cache rebuild if available
+        if ( class_exists( '\\ElementorPro\\Modules\\ThemeBuilder\\Classes\\Conditions_Cache' ) ) {
+            try {
+                \ElementorPro\Modules\ThemeBuilder\Classes\Conditions_Cache::clear();
+            } catch ( \Throwable $e ) {
+                // graceful — log but don't fail the request
+                LuwiPress_Logger::log( 'Conditions_Cache::clear failed: ' . $e->getMessage(), 'warning' );
+            }
+        }
+
+        LuwiPress_Logger::log( sprintf(
+            'Template conditions updated: #%d %s',
+            $template_id, implode( ',', $clean )
+        ), 'info' );
+
+        return rest_ensure_response( array(
+            'status'      => 'updated',
+            'template_id' => $template_id,
+            'conditions'  => $clean,
+        ) );
+    }
+
+    public function rest_template_delete( $request ) {
+        $template_id   = intval( $request->get_param( 'template_id' ) ?? 0 );
+        $confirm_token = sanitize_text_field( $request->get_param( 'confirm_token' ) ?? '' );
+        $force         = (bool) $request->get_param( 'force' );
+
+        if ( ! $template_id ) {
+            return new WP_Error( 'missing_params', 'template_id required', array( 'status' => 400 ) );
+        }
+        if ( $confirm_token !== 'I_KNOW_WHAT_IM_DOING' ) {
+            return new WP_Error( 'confirm_required', 'confirm_token must equal "I_KNOW_WHAT_IM_DOING"', array( 'status' => 400 ) );
+        }
+
+        $tpl = get_post( $template_id );
+        if ( ! $tpl || $tpl->post_type !== 'elementor_library' ) {
+            return new WP_Error( 'not_found', 'Template not found', array( 'status' => 404 ) );
+        }
+
+        // Refuse to delete an actively-applied header/footer/kit
+        $tpl_type   = get_post_meta( $template_id, '_elementor_template_type', true );
+        $conditions = get_post_meta( $template_id, '_elementor_conditions', true );
+        if ( ! $force && in_array( $tpl_type, array( 'header', 'footer', 'kit' ), true ) && ! empty( $conditions ) ) {
+            return new WP_Error( 'protected', 'Refusing to delete an active header/footer/kit. Pass force=true to override.', array( 'status' => 409 ) );
+        }
+
+        $deleted = wp_delete_post( $template_id, true );  // skip trash
+        if ( ! $deleted ) {
+            return new WP_Error( 'delete_failed', 'wp_delete_post returned false', array( 'status' => 500 ) );
+        }
+
+        LuwiPress_Logger::log( sprintf(
+            'Template deleted: #%d (%s, type=%s)',
+            $template_id, $tpl->post_title, $tpl_type
+        ), 'warning' );
+
+        return rest_ensure_response( array(
+            'status' => 'deleted',
+            'id'     => $template_id,
+        ) );
     }
 
     public function rest_responsive_audit( $request ) {
@@ -4262,7 +4650,22 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
      * @return array|WP_Error Snapshot info or error.
      */
     public function create_snapshot( $post_id, $label = '' ) {
-        $raw = get_post_meta( $post_id, '_elementor_data', true );
+        // 3.1.42 hotfix-3 (snapshot slash discipline, finally correct):
+        // Snapshots store the _elementor_data payload as base64-encoded bytes
+        // alongside an opaque "encoding" tag. base64 is opaque to WP's slash
+        // sanitization layer (no backslash characters in the payload), which means
+        // round-tripping through update_post_meta + get_post_meta preserves byte
+        // exactness — the prior approach of storing the raw JSON string lost the
+        // single backslash layer that Elementor's parser depends on (HTML quotes
+        // inside string values arrive unescaped, JSON parse fails). Reading is
+        // unchanged via get_post_meta($snapshots); we just decode `data_b64` at
+        // restore time.
+        global $wpdb;
+        $raw = $wpdb->get_var( $wpdb->prepare(
+            "SELECT meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = '_elementor_data' LIMIT 1",
+            $post_id
+        ) );
+
         if ( empty( $raw ) ) {
             return new WP_Error( 'no_data', 'No Elementor data to snapshot', array( 'status' => 400 ) );
         }
@@ -4278,7 +4681,15 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
             'label'     => $label ?: 'Snapshot',
             'timestamp' => current_time( 'c' ),
             'user'      => get_current_user_id(),
-            'data'      => $raw, // Store raw JSON string
+            // Legacy field kept for backwards-compatibility with old rollback callers.
+            // For new snapshots created on 3.1.42-hotfix3+, the authoritative payload
+            // lives in `data_b64` (opaque, slash-safe). Old snapshots may have only
+            // `data` populated and are best restored via the JSON repair pipeline.
+            'data'        => $raw,
+            'data_b64'    => base64_encode( $raw ),
+            'encoding'    => 'b64-v1',
+            'sha256_16'   => substr( hash( 'sha256', $raw ), 0, 16 ),
+            'byte_length' => strlen( $raw ),
         );
 
         // Prepend (newest first)
@@ -4334,12 +4745,47 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
             }
         }
 
-        if ( ! $target || empty( $target['data'] ) ) {
+        if ( ! $target ) {
             return new WP_Error( 'snapshot_not_found', 'Snapshot not found: ' . $snapshot_id, array( 'status' => 404 ) );
         }
 
-        // Restore the data
-        update_post_meta( $post_id, '_elementor_data', wp_slash( $target['data'] ) );
+        // 3.1.42-hotfix3: Prefer the b64-encoded payload (slash-safe). Fall back
+        // to legacy `data` field for snapshots created before this hotfix.
+        $payload = null;
+        $encoding = $target['encoding'] ?? '';
+        if ( $encoding === 'b64-v1' && ! empty( $target['data_b64'] ) ) {
+            $decoded = base64_decode( $target['data_b64'], true );
+            if ( $decoded === false ) {
+                return new WP_Error( 'snapshot_corrupt', 'Snapshot b64 payload failed to decode', array( 'status' => 500 ) );
+            }
+            $payload = $decoded;
+        } elseif ( ! empty( $target['data'] ) ) {
+            $payload = $target['data'];
+        }
+
+        if ( $payload === null ) {
+            return new WP_Error( 'snapshot_empty', 'Snapshot has no usable payload', array( 'status' => 500 ) );
+        }
+
+        // Restore via direct $wpdb to bypass the WP meta API slash dance — write
+        // the exact bytes the snapshot captured.
+        global $wpdb;
+        $existing = $wpdb->get_var( $wpdb->prepare(
+            "SELECT meta_id FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = '_elementor_data' LIMIT 1",
+            $post_id
+        ) );
+        if ( $existing ) {
+            $wpdb->query( $wpdb->prepare(
+                "UPDATE {$wpdb->postmeta} SET meta_value = %s WHERE meta_id = %d",
+                $payload, $existing
+            ) );
+        } else {
+            $wpdb->query( $wpdb->prepare(
+                "INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value) VALUES (%d, '_elementor_data', %s)",
+                $post_id, $payload
+            ) );
+        }
+        wp_cache_delete( $post_id, 'post_meta' );
         $this->regenerate_css( $post_id );
 
         LuwiPress_Logger::log(
@@ -4379,6 +4825,179 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
         }
 
         return array( 'post_id' => $post_id, 'snapshots' => $list );
+    }
+
+    /**
+     * Whitelist of meta keys allowed via raw post_meta REST/MCP access.
+     * Recovery-only surface — never widen without explicit user authorization.
+     *
+     * @return array
+     */
+    public static function raw_meta_whitelist() {
+        return array(
+            '_elementor_data',
+            '_elementor_page_settings',
+            '_elementor_css',
+            '_luwipress_elementor_snapshots',
+        );
+    }
+
+    /**
+     * Read a single post_meta value as raw bytes, with diagnostic shape.
+     *
+     * Returns base64 of the raw stored bytes (post-WP unserialize) plus
+     * length + slash counters so a caller can measure escaping depth without
+     * the byte stream having to survive JSON transport.
+     *
+     * @param int    $post_id
+     * @param string $meta_key
+     * @return array|WP_Error
+     */
+    public function read_post_meta_raw( $post_id, $meta_key ) {
+        if ( ! in_array( $meta_key, self::raw_meta_whitelist(), true ) ) {
+            return new WP_Error( 'meta_key_not_allowed', 'meta_key not in raw whitelist', array( 'status' => 403 ) );
+        }
+
+        $post = get_post( $post_id );
+        if ( ! $post ) {
+            return new WP_Error( 'not_found', 'Post not found', array( 'status' => 404 ) );
+        }
+
+        $value = get_post_meta( $post_id, $meta_key, true );
+
+        $is_string = is_string( $value );
+        $stringified = $is_string ? $value : maybe_serialize( $value );
+
+        $info = array(
+            'post_id'         => $post_id,
+            'meta_key'        => $meta_key,
+            'exists'          => ! ( $value === '' || $value === null || $value === false ),
+            'is_string'       => $is_string,
+            'php_type'        => gettype( $value ),
+            'length'          => strlen( $stringified ),
+            'sha256_16'       => substr( hash( 'sha256', $stringified ), 0, 16 ),
+            'value_b64'       => base64_encode( $stringified ),
+        );
+
+        if ( $is_string ) {
+            $info['leading_chars']    = substr( $stringified, 0, 16 );
+            $info['backslash_runs']   = array(
+                'count_1' => substr_count( $stringified, '\\' ),
+                'count_2' => substr_count( $stringified, '\\\\' ),
+                'count_4' => substr_count( $stringified, '\\\\\\\\' ),
+            );
+            // Probe how many stripslashes() passes are needed to reach valid
+            // JSON whose first element looks like an Elementor section.
+            $diagnostic = null;
+            $candidate  = $stringified;
+            for ( $i = 0; $i <= 4; $i++ ) {
+                $decoded = json_decode( $candidate, true );
+                if ( is_array( $decoded ) && isset( $decoded[0]['id'] ) && isset( $decoded[0]['elType'] ) ) {
+                    $diagnostic = array(
+                        'json_decode_pass_index' => $i,
+                        'top_level_count'        => count( $decoded ),
+                        'first_id'               => $decoded[0]['id'],
+                    );
+                    break;
+                }
+                $candidate = stripslashes( $candidate );
+            }
+            $info['decode_probe'] = $diagnostic;
+        }
+
+        return $info;
+    }
+
+    /**
+     * Write a post_meta value from base64-encoded raw bytes.
+     *
+     * Recovery surface only. Caller must pass `confirm_token == "I_KNOW_WHAT_IM_DOING"`
+     * to proceed. Always creates a pre-write snapshot of the current value into
+     * a parallel meta key (`_luwipress_raw_pre_write_<key>_<epoch>`) so a
+     * follow-up restore is possible without DB access.
+     *
+     * @param int    $post_id
+     * @param string $meta_key
+     * @param string $base64_value
+     * @param string $confirm_token
+     * @return array|WP_Error
+     */
+    public function write_post_meta_raw( $post_id, $meta_key, $base64_value, $confirm_token = '' ) {
+        if ( $confirm_token !== 'I_KNOW_WHAT_IM_DOING' ) {
+            return new WP_Error( 'confirm_required', 'confirm_token must equal "I_KNOW_WHAT_IM_DOING"', array( 'status' => 400 ) );
+        }
+        if ( ! in_array( $meta_key, self::raw_meta_whitelist(), true ) ) {
+            return new WP_Error( 'meta_key_not_allowed', 'meta_key not in raw whitelist', array( 'status' => 403 ) );
+        }
+        $post = get_post( $post_id );
+        if ( ! $post ) {
+            return new WP_Error( 'not_found', 'Post not found', array( 'status' => 404 ) );
+        }
+
+        $decoded = base64_decode( $base64_value, true );
+        if ( $decoded === false ) {
+            return new WP_Error( 'invalid_base64', 'value_b64 not valid base64', array( 'status' => 400 ) );
+        }
+
+        // Backup current value into a parallel key (raw, no whitelist check).
+        $current = get_post_meta( $post_id, $meta_key, true );
+        $backup_key = '_luwipress_raw_pre_write_' . preg_replace( '/[^a-z0-9_]/i', '', $meta_key ) . '_' . time();
+        update_post_meta( $post_id, $backup_key, $current );
+
+        // Write new value. We pass the bytes through wp_slash() so WP's internal
+        // wp_unslash() in update_post_meta lands clean bytes in the DB — same
+        // contract as save_elementor_data().
+        update_post_meta( $post_id, $meta_key, wp_slash( $decoded ) );
+
+        // For _elementor_data writes, regenerate Elementor CSS + purge page cache.
+        if ( $meta_key === '_elementor_data' ) {
+            $this->regenerate_css( $post_id );
+            $this->purge_page_cache_for_post( $post_id );
+        }
+
+        LuwiPress_Logger::log( sprintf(
+            'Elementor: raw post_meta written for post #%d key=%s len=%d backup=%s',
+            $post_id, $meta_key, strlen( $decoded ), $backup_key
+        ), 'warning' );
+
+        return array(
+            'status'      => 'written',
+            'post_id'     => $post_id,
+            'meta_key'    => $meta_key,
+            'bytes'       => strlen( $decoded ),
+            'sha256_16'   => substr( hash( 'sha256', $decoded ), 0, 16 ),
+            'backup_key'  => $backup_key,
+        );
+    }
+
+    /**
+     * REST: GET /post-meta/raw?post_id=X&meta_key=Y
+     */
+    public function rest_post_meta_raw_get( $request ) {
+        $post_id  = intval( $request->get_param( 'post_id' ) );
+        $meta_key = sanitize_text_field( $request->get_param( 'meta_key' ) ?? '' );
+
+        if ( ! $post_id || ! $meta_key ) {
+            return new WP_Error( 'missing_params', 'post_id and meta_key required', array( 'status' => 400 ) );
+        }
+
+        return rest_ensure_response( $this->read_post_meta_raw( $post_id, $meta_key ) );
+    }
+
+    /**
+     * REST: POST /post-meta/raw  body: {post_id, meta_key, value_b64, confirm_token}
+     */
+    public function rest_post_meta_raw_set( $request ) {
+        $post_id       = intval( $request->get_param( 'post_id' ) );
+        $meta_key      = sanitize_text_field( $request->get_param( 'meta_key' ) ?? '' );
+        $value_b64     = (string) ( $request->get_param( 'value_b64' ) ?? '' );
+        $confirm_token = sanitize_text_field( $request->get_param( 'confirm_token' ) ?? '' );
+
+        if ( ! $post_id || ! $meta_key || $value_b64 === '' ) {
+            return new WP_Error( 'missing_params', 'post_id, meta_key, value_b64 required', array( 'status' => 400 ) );
+        }
+
+        return rest_ensure_response( $this->write_post_meta_raw( $post_id, $meta_key, $value_b64, $confirm_token ) );
     }
 
     /**
@@ -4905,6 +5524,302 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
         }
 
         return array( $existing, $updated, $added );
+    }
+
+    /* ──────────────────── Inspect endpoints (3.1.40) ──────────────────── */
+
+    /**
+     * GET /elementor/outline-deep/{post_id}
+     *
+     * Deep variant of the outline. Walks every section, column, container, and
+     * widget, returning a tree with type + tag + bg color + text preview info.
+     * Caps text preview at 80 chars; entire payload at 64 KB to keep responses
+     * manageable.
+     */
+    public function rest_outline_deep( $request ) {
+        $post_id          = intval( $request['post_id'] );
+        $include_settings = (bool) $request->get_param( 'include_settings' );
+        $include_bg_info  = $request->get_param( 'include_bg_info' );
+        $include_bg_info  = ( null === $include_bg_info ) ? true : (bool) $include_bg_info;
+        $preview_chars    = max( 20, min( 200, intval( $request->get_param( 'preview_chars' ) ?: 80 ) ) );
+
+        $data = $this->get_elementor_data( $post_id );
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+
+        $build = function ( array $elements ) use ( &$build, $include_settings, $include_bg_info, $preview_chars ) {
+            $out = array();
+            foreach ( $elements as $el ) {
+                $node = array(
+                    'id'      => $el['id'] ?? '',
+                    'el_type' => $el['elType'] ?? '',
+                );
+                $widget_type = $el['widgetType'] ?? null;
+                if ( $widget_type ) {
+                    $node['widget_type'] = $widget_type;
+                }
+                $settings = $el['settings'] ?? array();
+                if ( $widget_type ) {
+                    $texts = $this->extract_widget_texts( $widget_type, $settings );
+                    if ( ! empty( $texts ) ) {
+                        $first = reset( $texts );
+                        $node['text_preview'] = mb_substr( wp_strip_all_tags( (string) $first ), 0, $preview_chars );
+                    }
+                }
+                if ( $include_bg_info ) {
+                    $bg = array();
+                    if ( ! empty( $settings['background_color'] ) ) {
+                        $bg['color'] = $settings['background_color'];
+                    }
+                    if ( ! empty( $settings['background_image']['url'] ) ) {
+                        $bg['image'] = $settings['background_image']['url'];
+                    }
+                    if ( ! empty( $settings['background_overlay_color'] ) ) {
+                        $bg['overlay'] = $settings['background_overlay_color'];
+                    }
+                    if ( ! empty( $bg ) ) {
+                        $node['background'] = $bg;
+                    }
+                }
+                if ( $include_settings ) {
+                    $node['settings'] = $settings;
+                }
+                if ( ! empty( $el['elements'] ) && is_array( $el['elements'] ) ) {
+                    $node['children'] = $build( $el['elements'] );
+                }
+                $out[] = $node;
+            }
+            return $out;
+        };
+
+        $tree = $build( $data );
+        $post = get_post( $post_id );
+
+        return rest_ensure_response( array(
+            'post_id'   => $post_id,
+            'title'     => $post ? $post->post_title : '',
+            'post_type' => $post ? $post->post_type : '',
+            'tree'      => $tree,
+        ) );
+    }
+
+    /**
+     * GET /elementor/find/{post_id}/{element_id}
+     *
+     * Locate one element in the page tree, returning its full ancestor chain
+     * (root → element), type, widget_type, text preview, and settings summary.
+     */
+    public function rest_find_by_id( $request ) {
+        $post_id    = intval( $request['post_id'] );
+        $element_id = sanitize_text_field( $request['element_id'] );
+
+        $data = $this->get_elementor_data( $post_id );
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+
+        $found = null;
+
+        $walk = function ( array $elements, array $chain ) use ( &$walk, &$found, $element_id ) {
+            foreach ( $elements as $el ) {
+                $eid = $el['id'] ?? '';
+                $next_chain = array_merge( $chain, array( array(
+                    'id'          => $eid,
+                    'el_type'     => $el['elType'] ?? '',
+                    'widget_type' => $el['widgetType'] ?? null,
+                ) ) );
+                if ( $eid === $element_id ) {
+                    $found = array(
+                        'element'        => $el,
+                        'ancestor_chain' => $chain,
+                        'full_path'      => $next_chain,
+                    );
+                    return;
+                }
+                if ( ! empty( $el['elements'] ) && is_array( $el['elements'] ) && null === $found ) {
+                    $walk( $el['elements'], $next_chain );
+                }
+            }
+        };
+
+        $walk( $data, array() );
+
+        if ( null === $found ) {
+            return new WP_Error( 'not_found', sprintf( 'Element %s not found in post %d', $element_id, $post_id ), array( 'status' => 404 ) );
+        }
+
+        $el          = $found['element'];
+        $widget_type = $el['widgetType'] ?? null;
+        $settings    = $el['settings'] ?? array();
+        $resp        = array(
+            'post_id'        => $post_id,
+            'element_id'     => $element_id,
+            'el_type'        => $el['elType'] ?? '',
+            'widget_type'    => $widget_type,
+            'ancestor_chain' => $found['ancestor_chain'],
+            'full_path'      => $found['full_path'],
+            'style_summary'  => $this->summarize_styles( $settings, $widget_type ?: '' ),
+        );
+        if ( $widget_type ) {
+            $texts = $this->extract_widget_texts( $widget_type, $settings );
+            if ( ! empty( $texts ) ) {
+                $resp['texts'] = $texts;
+            }
+        }
+        $resp['child_count'] = ! empty( $el['elements'] ) ? count( $el['elements'] ) : 0;
+        return rest_ensure_response( $resp );
+    }
+
+    /**
+     * POST /elementor/find-by-text
+     * Body: { post_id, text, match: 'contains'|'exact'|'starts'|'ends' (default contains) }
+     *
+     * Walks every widget, runs extract_widget_texts, and returns matches with
+     * ancestor chain so callers can locate the element without DOM scraping.
+     */
+    public function rest_find_by_text( $request ) {
+        $post_id = intval( $request->get_param( 'post_id' ) );
+        $needle  = (string) $request->get_param( 'text' );
+        $match   = sanitize_text_field( $request->get_param( 'match' ) ?: 'contains' );
+        $limit   = max( 1, min( 50, intval( $request->get_param( 'limit' ) ?: 20 ) ) );
+        $case_sensitive = (bool) $request->get_param( 'case_sensitive' );
+
+        if ( ! $post_id || '' === $needle ) {
+            return new WP_Error( 'missing_params', 'post_id and text are required', array( 'status' => 400 ) );
+        }
+
+        $data = $this->get_elementor_data( $post_id );
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+
+        $cmp = function ( $haystack ) use ( $needle, $match, $case_sensitive ) {
+            $hay = (string) $haystack;
+            if ( ! $case_sensitive ) {
+                $hay    = mb_strtolower( $hay );
+                $needle = mb_strtolower( $needle );
+            }
+            switch ( $match ) {
+                case 'exact':
+                    return $hay === $needle;
+                case 'starts':
+                    return 0 === mb_strpos( $hay, $needle );
+                case 'ends':
+                    return mb_strlen( $hay ) >= mb_strlen( $needle ) && mb_substr( $hay, -mb_strlen( $needle ) ) === $needle;
+                case 'contains':
+                default:
+                    return false !== mb_strpos( $hay, $needle );
+            }
+        };
+
+        $matches = array();
+
+        $walk = function ( array $elements, array $chain ) use ( &$walk, &$matches, $cmp, $limit ) {
+            foreach ( $elements as $el ) {
+                if ( count( $matches ) >= $limit ) {
+                    return;
+                }
+                $eid          = $el['id'] ?? '';
+                $widget_type  = $el['widgetType'] ?? null;
+                $settings     = $el['settings'] ?? array();
+                $next_chain   = array_merge( $chain, array( array(
+                    'id'          => $eid,
+                    'el_type'     => $el['elType'] ?? '',
+                    'widget_type' => $widget_type,
+                ) ) );
+                if ( $widget_type ) {
+                    $texts = $this->extract_widget_texts( $widget_type, $settings );
+                    foreach ( $texts as $field => $val ) {
+                        $stripped = wp_strip_all_tags( (string) $val );
+                        if ( $cmp( $stripped ) || $cmp( (string) $val ) ) {
+                            $matches[] = array(
+                                'element_id'     => $eid,
+                                'el_type'        => $el['elType'] ?? '',
+                                'widget_type'    => $widget_type,
+                                'field'          => $field,
+                                'preview'        => mb_substr( $stripped, 0, 200 ),
+                                'ancestor_chain' => $chain,
+                            );
+                            break;
+                        }
+                    }
+                }
+                if ( ! empty( $el['elements'] ) && is_array( $el['elements'] ) ) {
+                    $walk( $el['elements'], $next_chain );
+                }
+            }
+        };
+
+        $walk( $data, array() );
+
+        return rest_ensure_response( array(
+            'post_id'        => $post_id,
+            'needle'         => $needle,
+            'match'          => $match,
+            'case_sensitive' => $case_sensitive,
+            'count'          => count( $matches ),
+            'matches'        => $matches,
+        ) );
+    }
+
+    /**
+     * POST /elementor/kit-css/preflight
+     * Body: { candidate_css: string }
+     *
+     * Estimates whether the candidate Kit CSS would fit under the option size
+     * limit. Detects existing layer markers and reports redundancy candidates
+     * so callers can decide what to strip before pushing.
+     *
+     * Limit estimate is conservative (~412 KB observed in production); real
+     * MariaDB longtext is much larger but the option storage path silently
+     * truncates well below that on some hosts.
+     */
+    public function rest_kit_css_preflight( $request ) {
+        $candidate = (string) $request->get_param( 'candidate_css' );
+        if ( '' === $candidate ) {
+            return new WP_Error( 'missing_params', 'candidate_css is required', array( 'status' => 400 ) );
+        }
+
+        $current_live = (string) get_option( 'luwipress_kit_css', '' );
+        $candidate_size  = strlen( $candidate );
+        $live_size       = strlen( $current_live );
+        $option_limit    = 412000; // conservative threshold per production observation
+        $would_fit       = $candidate_size <= $option_limit;
+        $headroom_bytes  = $option_limit - $candidate_size;
+
+        // Detect existing layer markers in the live CSS as removal candidates
+        $candidates = array();
+        $patterns = array(
+            'PERCUSSIONS-FIX-V2' => '#/\* PERCUSSIONS-FIX-V2.*?/\* /PERCUSSIONS-FIX-V2 \*/#s',
+            'V47'                => '#/\* V47 BEGIN.*?/\* end V47 \*/#s',
+            'V48'                => '#/\* V48 BEGIN.*?/\* end V48 \*/#s',
+            'V49'                => '#/\* V49 BEGIN.*?/\* end V49 \*/#s',
+            'V50'                => '#/\* V50 BEGIN.*?/\* end V50 \*/#s',
+        );
+        foreach ( $patterns as $label => $pattern ) {
+            if ( preg_match( $pattern, $current_live, $m ) ) {
+                $candidates[] = array(
+                    'label' => $label,
+                    'size'  => strlen( $m[0] ),
+                    'note'  => 'Removable layer; check whether the rules it owns are still in use before stripping.',
+                );
+            }
+        }
+
+        // Scan candidate for paired angle-bracket comments which wp_strip_all_tags can eat
+        $angle_pairs = preg_match_all( '/<[^>]+>/', $candidate, $m );
+
+        return rest_ensure_response( array(
+            'candidate_size'    => $candidate_size,
+            'current_live_size' => $live_size,
+            'option_limit'      => $option_limit,
+            'would_fit'         => $would_fit,
+            'headroom_bytes'    => $headroom_bytes,
+            'angle_pair_count'  => intval( $angle_pairs ),
+            'angle_pair_warning' => $angle_pairs > 0 ? 'Candidate contains <...> pairs. wp_strip_all_tags may eat content between them at write time.' : null,
+            'savings_candidates' => $candidates,
+        ) );
     }
 
     /* ──────────────────── Static Helpers ─────────────────────────────── */

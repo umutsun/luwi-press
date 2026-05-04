@@ -500,7 +500,9 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 	<div class="lp-card">
 		<div class="lp-card-header">
 			<h3><span class="dashicons dashicons-groups"></span> <?php esc_html_e( 'Customer Segments', 'luwipress' ); ?></h3>
+			<?php if ( class_exists( 'LuwiPress_Open_Claw' ) || defined( 'LUWIPRESS_OPEN_CLAW_VERSION' ) ) : ?>
 			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-claw' ) ); ?>" class="lp-link-small"><?php esc_html_e( 'Ask AI', 'luwipress' ); ?> &rarr;</a>
+			<?php endif; ?>
 		</div>
 		<?php if ( ! empty( $crm_counts ) ) : ?>
 		<div class="lp-segments">
