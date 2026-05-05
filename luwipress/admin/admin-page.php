@@ -57,6 +57,26 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			<span class="lp-pill pill-neutral" title="<?php esc_attr_e( 'Plugin version', 'luwipress' ); ?>">
 				v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
 			</span>
+			<?php
+			// Theme-pairing pill — when the active theme registers itself as
+			// an official LuwiPress companion (default: `luwipress-gold`), show
+			// a green ✓ pill; otherwise a muted pill names the active theme
+			// so the operator knows which template they're running on.
+			if ( class_exists( 'LuwiPress_Plugin_Detector' ) ) {
+				$lp_theme = LuwiPress_Plugin_Detector::get_instance()->detect_theme();
+				if ( ! empty( $lp_theme['detected'] ) ) {
+					$is_companion = ! empty( $lp_theme['is_official_companion'] );
+					$theme_label  = trim( (string) ( $lp_theme['name'] ?? $lp_theme['slug'] ) );
+					$theme_ver    = trim( (string) ( $lp_theme['version'] ?? '' ) );
+					$pill_class   = $is_companion ? 'pill-success' : 'pill-neutral';
+					$pill_title   = $is_companion
+						? esc_attr__( 'Official LuwiPress companion theme — full ecosystem features active.', 'luwipress' )
+						: esc_attr__( 'Active theme is not an official LuwiPress companion — some ecosystem features may not be amplified.', 'luwipress' );
+					$pill_text    = ( $is_companion ? '✓ ' : '' ) . $theme_label . ( $theme_ver ? ' v' . $theme_ver : '' );
+					echo '<span class="lp-pill ' . esc_attr( $pill_class ) . '" title="' . $pill_title . '">' . esc_html( $pill_text ) . '</span>';
+				}
+			}
+			?>
 			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-settings' ) ); ?>"
 			   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
 			   title="<?php esc_attr_e( 'Settings — API keys, providers, budget, integrations.', 'luwipress' ); ?>">

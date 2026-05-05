@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.44
+Stable tag: 3.1.47
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,34 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.47 — KG Autopilot (Track D.3) =
+* **NEW (`LuwiPress_KG_Autopilot`)**: Third layer of the KG middleware backbone. Reads candidates from `LuwiPress_KG_Opportunities` (Track D.2), filters by `min_confidence`, enforces per-workflow daily caps, and dispatches AI workflows asynchronously via `wp_schedule_single_event`. Default OFF; first run after enable defaults to dry-run (logs `would_dispatch` only, no real workflow fires) so the operator validates before flipping to live.
+* **NEW (Confidence scoring on candidates)**: `LuwiPress_KG_Opportunities::build_candidates()` now attaches a `confidence_score` (0..100) per candidate, derived from the candidate's signal strength. RECENTLY_REGRESSED scales with pct_change; STALE_ENRICHED scales with days since enrichment. Autopilot's `min_confidence` setting gates dispatch on this value.
+* **NEW (REST endpoints — `/knowledge-graph/autopilot/*`)**: `GET|POST /settings` (partial-update), `POST /run-now` (manual cycle trigger, respects caps + dry-run), `GET /log?limit=50` (recent dispatches with full context). All token-or-admin gated like the rest of `/knowledge-graph/*`.
+* **NEW (Daily cron `luwipress_kg_autopilot_cycle`)**: Auto-registered on `init`. Reads `enabled` flag — exits immediately if false so cron is cheap when off.
+* **NEW (Idempotency meta `_luwipress_kg_autopilot_dispatched_at`)**: Per-entity timestamp prevents double-dispatch within `dispatch_window_hours` (default 24h). Window is configurable per setting.
+* **NEW (Admin UI on KG dashboard)**: New "AI Autopilot" panel above the activity feed — enabled / dry-run toggles, min-confidence + window inputs, per-workflow caps (enrich / seo / translate), Save + Run-now buttons, recent dispatches log with action icons (🚀 dispatched, 👁 would-dispatch, ✅ completed, ⚠ failed). State pill (Disabled / dry-run / LIVE) updates on save.
+* **NEW (Audit log integration)**: All dispatches + would-dispatches + dispatch outcomes go through `LuwiPress_Logger` with `level='kg_autopilot'`. Cap counter reads the same rows so cycle accounting is single-source-of-truth. Daily cleanup cron prunes per existing 30-day retention.
+* **NEW (v1 workflow support — `enrich`)**: Dispatched candidates whose `workflow=enrich` actually fire `LuwiPress_AI_Content::handle_enrich_request()` synthetically (full validation chain: WPML guards, locks, auto-snapshot). `seo` + `translate` candidates record a `pending_implementation` outcome — operator can see what autopilot would have done, ready for v2 release wiring those workflows.
+
+= 3.1.46 — KG Middleware Backbone (Signal Layer + Opportunities v2) =
+* **NEW (`LuwiPress_KG_Signals`)**: Subscribes to the 3 plugin action hooks added in 3.1.45 (`luwipress_after_product_enrich` / `_seo_meta_write` / `_translation_request`) and writes structured `kg_event` rows into `wp_luwipress_logs` with full context payload (event_type, entity_type, entity_id, snapshot_at, optional kg_score_after). Fires `luwipress_kg_event_recorded` so companions can subscribe without re-hooking source events. Auto-busts the KG response cache so the next dashboard refresh picks up the change deterministically.
+* **NEW (`GET /knowledge-graph/events`)**: Filtered KG event stream (limit / since / event_types[] / entity_id) backed by the logger table. `?summary=1&hours=24` returns aggregate counts.
+* **NEW (`LuwiPress_KG_Opportunities`)**: Action Queue v2 with two new server-computed candidate types: **RECENTLY_REGRESSED** (entity coverage that lost ground in the last 7 days vs the existing `luwipress_kg_summary_history` 30-day ring) and **STALE_ENRICHED** (products enriched > 90 days ago whose source content has been edited since). Each candidate carries a `why` payload (primary_signal, supporting_signals, baseline_comparison) so the UI can explain ranking instead of just showing a number.
+* **NEW (Persistent candidate state)**: Snooze (default 24h, max 30d), dismiss (auto-prunes after 30d), in_progress states stored in `luwipress_kg_candidate_state` option keyed by stable candidate ID. Endpoints: `POST /knowledge-graph/candidate/{snooze|dismiss|clear}`. Action Queue cards now render a snooze 💤 + dismiss ✕ button for v2 candidates; cards fade out and the queue refreshes.
+* **NEW (Action Queue v2 in KG response)**: `next_wins_v2` array added under `opportunities` in the main `/knowledge-graph` response — additive (existing `by_type` + `top_products` keys unchanged so old clients keep working).
+* **NEW (Activity feed kg_event styling)**: kg_event rows in the activity feed render a per-event-type icon (🪄 enrich, 🎯 seo, 🌐 translate) plus a gold-accent gradient row so structural KG activity stands apart from generic info logs.
+* **CHANGE**: `luwipress_daily_cleanup` cron now also prunes the KG candidate state option (drops dismissed entries older than 30 days, auto-clears expired snoozes).
+
+= 3.1.45 — Theme companion contract + reciprocal awareness =
+* **NEW (`LuwiPress_Plugin_Detector::detect_theme()`)**: Mirrors `detect_seo()` / `detect_translation()`. Returns `{detected, slug, name, version, author, is_child_theme, template, is_official_companion, official_themes}`. Drives a green "✓ Theme paired: {name} v{version}" pill on the LuwiPress admin dashboard when an official companion theme is active.
+* **NEW (`luwipress_official_themes` filter)**: Registry of official theme slugs. Defaults to `['luwipress-gold']`. Themes (or third-party plugins) hook in to register additional official themes — drives the companion pill + future capability lookups.
+* **NEW (Action hooks for theme cache busting)**: First-class signals replace generic `save_post_*` inference for downstream consumers.
+  * `luwipress_after_product_enrich( $product_id, $updated_fields )` — fires after `class-luwipress-ai-content.php::enrich_product()` completes.
+  * `luwipress_after_seo_meta_write( $post_id, $fields )` — fires after `POST /seo/meta`.
+  * `luwipress_after_translation_request( $product_id, $language, $status )` — fires after a translation callback writes meta + creates the WPML/Polylang translated post (`saved` or `partial`).
+* **NEW (`luwipress_theme_companion` filter contract)**: Capability matrix the active theme can populate so plugin admin (and companion plugins like WebMCP, Marketplace Sync, Open Claw) can introspect what storefront features the paired theme ships. Foundation for tiered packaging; already useful as single source of truth.
 
 = 3.1.44 — Marketplace + Open Claw companion split =
 * **CHANGE (Marketplace split)**: Multi-marketplace publishing (Amazon, eBay, Trendyol, Hepsiburada, N11, Etsy, Walmart, Alibaba) moved to a dedicated companion plugin: **LuwiPress Marketplace Sync** (v1.0.0). Stores that don't sell on third-party marketplaces no longer carry ~80 KB of dormant adapter code. All `luwipress_*` option keys and the `wp_luwipress_marketplace_listings` table are unchanged — install the companion and previously-saved credentials light up instantly. The Marketplaces settings tab in core is removed; the companion ships its own "LuwiPress -> Marketplaces" submenu. REST endpoints (`/wp-json/luwipress/v1/marketplace/*`) move with the companion.

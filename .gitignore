@@ -37,6 +37,16 @@ temp/
 # Parked (out-of-focus) companion work
 parked/
 
+# Themes live in their own repo (umutsun/luwi-themes)
+# Local copy under themes/ is workdir-only for build-theme-zip.php.
+themes/
+
+# Untracked operator scratch in repo root
+.obsidian/
+2026-*.md
+Untitled.*
+audit_*.json
+
 # Legacy plugins (deprecated)
 n8npress-seo-off/
 n8npress-seo-woo/

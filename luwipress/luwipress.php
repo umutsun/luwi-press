@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.1.44
+ * Version: 3.1.47
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.1.44');
+define('LUWIPRESS_VERSION', '3.1.47');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -159,6 +159,9 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-review-analytics.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-crm-bridge.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-knowledge-graph.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-kg-signals.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-kg-opportunities.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-kg-autopilot.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-elementor.php';
 
         // Marketplace integration moved to the standalone "LuwiPress
@@ -258,6 +261,9 @@ class LuwiPress {
         LuwiPress_Review_Analytics::get_instance();
         LuwiPress_CRM_Bridge::get_instance();
         LuwiPress_Knowledge_Graph::get_instance();
+        LuwiPress_KG_Signals::get_instance();
+        LuwiPress_KG_Opportunities::get_instance();
+        LuwiPress_KG_Autopilot::get_instance();
         // LuwiPress_Marketplace::get_instance() — split into companion plugin (3.1.44).
         LuwiPress_Search_Index::get_instance();
         LuwiPress_Customer_Chat::get_instance();

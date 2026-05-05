@@ -410,6 +410,17 @@ class LuwiPress_AI_Content {
             'updated_fields' => $updated_fields,
         ));
 
+        /**
+         * Fires after a successful product enrichment so theme companions
+         * and other plugins can invalidate downstream caches (related rails,
+         * KG transients, BM25 search index slots, etc.).
+         *
+         * @param int   $product_id     The enriched product post ID.
+         * @param array $updated_fields List of meta keys / fields that were
+         *                              actually written on this run.
+         */
+        do_action( 'luwipress_after_product_enrich', $product_id, $updated_fields );
+
         return array(
             'success'        => true,
             'product_id'     => $product_id,

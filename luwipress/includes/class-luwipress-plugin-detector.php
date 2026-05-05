@@ -759,4 +759,59 @@ class LuwiPress_Plugin_Detector {
 				return new WP_Error( 'no_translation_plugin', 'No supported translation plugin detected' );
 		}
 	}
+
+	/**
+	 * Detect the active theme. Mirrors `detect_seo()` / `detect_translation()`
+	 * shape so theme-aware admin surfaces and the WebMCP `theme_status` tool
+	 * can read it uniformly.
+	 *
+	 * The `is_official_companion` flag uses the `luwipress_official_themes`
+	 * filter — by default `luwipress-gold` is the only official theme. Other
+	 * themes (or third parties shipping LuwiPress-friendly themes) can hook
+	 * into the filter to register additional slugs.
+	 *
+	 * @return array {
+	 *   @type bool   $detected
+	 *   @type string $slug                  Stylesheet slug (active theme).
+	 *   @type string $name
+	 *   @type string $version
+	 *   @type string $author
+	 *   @type bool   $is_child_theme
+	 *   @type string $template              Parent template slug (or same as slug).
+	 *   @type bool   $is_official_companion
+	 *   @type array  $official_themes       Resolved registry from the filter.
+	 * }
+	 */
+	public function detect_theme() {
+		if ( isset( $this->cache['theme'] ) ) {
+			return $this->cache['theme'];
+		}
+
+		$stylesheet = get_stylesheet();
+		$theme      = wp_get_theme( $stylesheet );
+
+		$official = apply_filters( 'luwipress_official_themes', array( 'luwipress-gold' ) );
+		if ( ! is_array( $official ) ) {
+			$official = array( 'luwipress-gold' );
+		}
+		$official = array_values( array_unique( array_filter( array_map( 'sanitize_key', $official ) ) ) );
+
+		// wp_get_theme() always returns a WP_Theme instance (a "broken" one
+		// when the directory is missing), so no null check needed — `get()`
+		// returns the header value or false; we coerce to string for the API.
+		$result = array(
+			'detected'              => ! empty( $stylesheet ),
+			'slug'                  => $stylesheet,
+			'name'                  => (string) $theme->get( 'Name' ),
+			'version'               => (string) $theme->get( 'Version' ),
+			'author'                => (string) $theme->get( 'Author' ),
+			'is_child_theme'        => ( $theme->get_template() !== $stylesheet ),
+			'template'              => $theme->get_template(),
+			'is_official_companion' => in_array( $stylesheet, $official, true ),
+			'official_themes'       => $official,
+		);
+
+		$this->cache['theme'] = $result;
+		return $result;
+	}
 }

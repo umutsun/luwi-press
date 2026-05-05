@@ -951,6 +951,7 @@ class LuwiPress_WebMCP {
                     'content'    => array( 'type' => 'string', 'description' => 'New content (HTML)' ),
                     'excerpt'    => array( 'type' => 'string', 'description' => 'New excerpt' ),
                     'status'     => array( 'type' => 'string', 'enum' => array( 'draft', 'publish', 'private', 'pending' ), 'description' => 'New status' ),
+                    'slug'       => array( 'type' => 'string', 'description' => 'New URL slug (post_name). WPML translation links are preserved — slug is per-language.' ),
                     'categories' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Category IDs — replaces existing categories when provided' ),
                     'tags'       => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Tag names — replaces existing tags when provided. Pass [] to clear all tags.' ),
                 ),
@@ -3276,6 +3277,9 @@ class LuwiPress_WebMCP {
         if ( isset( $args['status'] ) ) {
             $update['post_status'] = sanitize_text_field( $args['status'] );
         }
+        if ( isset( $args['slug'] ) ) {
+            $update['post_name'] = sanitize_title( $args['slug'] );
+        }
 
         $result = wp_update_post( $update, true );
         if ( is_wp_error( $result ) ) {
@@ -4813,6 +4817,229 @@ class LuwiPress_WebMCP {
             }
             switch_theme( $theme_slug );
             return array( 'theme' => $theme_slug, 'activated' => true );
+        } );
+
+        // ─────────────────── Theme inspection & Customizer (1.0.11) ───────────────────
+        // Lets an AI orchestrator drive every theme-side process end-to-end:
+        // diagnose what's live, dump current Customizer state, tune individual
+        // settings, and confirm the change took effect — without leaving the
+        // MCP transport. Pairs with the LuwiPress Gold theme 1.3.0 which
+        // exposes its surfaces (AI search, chat, KG-related rail) under a
+        // consistent `luwipress_gold_*` theme_mod namespace.
+
+        $this->register_tool( 'theme_status', array(
+            'description' => 'Detailed status of the active theme: version, parent, ecosystem capabilities (LuwiPress AI surface live? customer chat enabled? required friendly plugins detected?), and which Customizer-driven features are configured. Pair with theme_customizer_dump for the full picture.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Theme Status', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $stylesheet = get_stylesheet();
+            $template   = get_template();
+            $theme      = wp_get_theme();
+
+            $is_gold = ( $stylesheet === 'luwipress-gold' ) || ( $template === 'luwipress-gold' );
+
+            $detector_data = array();
+            if ( class_exists( 'LuwiPress_Plugin_Detector' ) ) {
+                $det = LuwiPress_Plugin_Detector::get_instance();
+                $detector_data = array(
+                    'seo'         => $det->detect_seo()['plugin']         ?? 'none',
+                    'translation' => $det->detect_translation()['plugin'] ?? 'none',
+                    'page_builder'=> $det->detect_page_builder()['plugin']?? 'none',
+                    'cache'       => $det->detect_cache()['plugin']       ?? 'none',
+                    'crm'         => $det->detect_crm()['plugin']         ?? 'none',
+                );
+            }
+
+            // Theme-specific capability inventory (works for any theme; the
+            // luwipress_gold_* keys simply come back empty when a different
+            // theme is active — so the tool stays useful in mixed setups).
+            $caps = array(
+                'requires_plugins' => $theme->get( 'RequiresPlugins' ),
+                'wc_active'        => class_exists( 'WooCommerce' ),
+                'elementor_active' => did_action( 'elementor/loaded' ) > 0,
+                'luwipress_active' => class_exists( 'LuwiPress' ),
+                'chat_enabled'     => (bool) get_option( 'luwipress_chat_enabled', 0 ),
+                'gold_topbar_promo'=> (string) get_theme_mod( 'luwipress_gold_topbar_promo', '' ),
+                'gold_logo_accent' => (string) get_theme_mod( 'luwipress_gold_logo_accent_letter', '' ),
+            );
+
+            return array(
+                'active_theme' => array(
+                    'slug'    => $stylesheet,
+                    'name'    => $theme->get( 'Name' ),
+                    'version' => $theme->get( 'Version' ),
+                    'author'  => wp_strip_all_tags( (string) $theme->get( 'Author' ) ),
+                    'parent'  => $theme->parent() ? $theme->parent()->get_stylesheet() : null,
+                    'is_luwipress_gold' => $is_gold,
+                ),
+                'ecosystem'    => $detector_data,
+                'capabilities' => $caps,
+            );
+        } );
+
+        $this->register_tool( 'theme_customizer_dump', array(
+            'description' => 'Dump every theme_mod for the active theme as a flat key-value map. Optionally filter by prefix (e.g. "luwipress_gold_") so an AI can read only the theme-owned settings without WordPress core noise (nav_menu_locations, custom_css_post_id, etc).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'prefix' => array( 'type' => 'string', 'description' => 'Return only mods whose key starts with this prefix. Common: "luwipress_gold_". Omit for all.' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Dump Theme Customizer', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $prefix = isset( $args['prefix'] ) ? sanitize_text_field( $args['prefix'] ) : '';
+            $mods   = get_theme_mods();
+            if ( ! is_array( $mods ) ) {
+                $mods = array();
+            }
+            if ( $prefix !== '' ) {
+                $mods = array_filter( $mods, function ( $k ) use ( $prefix ) {
+                    return is_string( $k ) && strpos( $k, $prefix ) === 0;
+                }, ARRAY_FILTER_USE_KEY );
+            }
+            return array(
+                'theme'   => get_stylesheet(),
+                'prefix'  => $prefix,
+                'count'   => count( $mods ),
+                'mods'    => $mods,
+            );
+        } );
+
+        $this->register_tool( 'theme_customizer_get', array(
+            'description' => 'Read a single theme_mod by key. Returns the value plus the resolved type so an AI can confirm what it is reading before it writes back.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'key'     => array( 'type' => 'string', 'description' => 'theme_mod key e.g. "luwipress_gold_topbar_promo" (required)' ),
+                    'default' => array( 'description' => 'Optional default to return when the mod is unset. Any JSON-serializable value.' ),
+                ),
+                'required' => array( 'key' ),
+            ),
+            'annotations' => array( 'title' => 'Get Theme Customizer Setting', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $key     = sanitize_key( $args['key'] );
+            $default = $args['default'] ?? null;
+            $value   = get_theme_mod( $key, $default );
+            return array(
+                'key'      => $key,
+                'value'    => $value,
+                'type'     => gettype( $value ),
+                'is_default' => ( $value === $default ),
+            );
+        } );
+
+        $this->register_tool( 'theme_customizer_set', array(
+            'description' => 'Write a single theme_mod. Use this to remote-tune the active theme (topbar promo, logo accent letter, journal subtitle, footer blurb, social URLs, etc). Mod keys for LuwiPress Gold all start with "luwipress_gold_". Reads back the saved value so the caller can verify.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'key'   => array( 'type' => 'string', 'description' => 'theme_mod key (required). Common LuwiPress Gold keys: luwipress_gold_topbar_location, luwipress_gold_topbar_phone, luwipress_gold_topbar_email, luwipress_gold_topbar_promo, luwipress_gold_topbar_track_url, luwipress_gold_topbar_track_label, luwipress_gold_logo_accent_letter, luwipress_gold_footer_blurb, luwipress_gold_footer_legal, luwipress_gold_footer_byline, luwipress_gold_social_instagram, luwipress_gold_social_youtube, luwipress_gold_social_facebook, luwipress_gold_social_whatsapp, luwipress_gold_journal_subtitle.' ),
+                    'value' => array( 'description' => 'Value to store (required). Strings are sanitized with sanitize_text_field; URLs (keys ending in _url) with esc_url_raw; booleans/integers passed through.' ),
+                ),
+                'required' => array( 'key', 'value' ),
+            ),
+            'annotations' => array( 'title' => 'Set Theme Customizer Setting', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $key = sanitize_key( $args['key'] );
+            if ( $key === '' ) {
+                throw new Exception( 'Invalid theme_mod key' );
+            }
+            $raw = $args['value'];
+
+            // Sanitize by key shape — URL-ish keys get esc_url_raw, scalars
+            // get sanitize_text_field, others (arrays/objects) pass through.
+            if ( is_string( $raw ) ) {
+                if ( preg_match( '/_(url|link|href)$/', $key ) ) {
+                    $value = esc_url_raw( $raw );
+                } else {
+                    $value = sanitize_text_field( $raw );
+                }
+            } else {
+                $value = $raw;
+            }
+
+            set_theme_mod( $key, $value );
+
+            return array(
+                'key'        => $key,
+                'value'      => get_theme_mod( $key ),
+                'wrote'      => true,
+                'sanitized_from_string' => is_string( $raw ),
+            );
+        } );
+
+        $this->register_tool( 'theme_ecosystem_status', array(
+            'description' => 'Single-call ecosystem snapshot from the active theme\'s perspective: which storefront AI surfaces are live (search suggestions, customer chat, KG-related rail), which friendly plugins are detected and what feature each gains, plus token-tracker daily spend. Mirrors the LuwiPress Gold "Appearance -> LuwiPress Gold" admin dashboard so an AI orchestrator sees the same story the operator sees.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Theme Ecosystem Status', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $stylesheet = get_stylesheet();
+            $is_gold    = ( 'luwipress-gold' === $stylesheet ) || ( 'luwipress-gold' === get_template() );
+
+            // Friendly-plugin layer — same source the theme dashboard consumes.
+            $detector_data = array();
+            if ( class_exists( 'LuwiPress_Plugin_Detector' ) ) {
+                $det = LuwiPress_Plugin_Detector::get_instance();
+                $detector_data = array(
+                    'seo'          => $det->detect_seo(),
+                    'translation'  => $det->detect_translation(),
+                    'page_builder' => $det->detect_page_builder(),
+                    'cache'        => $det->detect_cache(),
+                    'crm'          => $det->detect_crm(),
+                );
+            }
+
+            // Storefront surface state — what's actually rendered for visitors.
+            $surfaces = array(
+                'ai_search_suggestions' => array(
+                    'live'   => class_exists( 'LuwiPress_AI_Engine' ),
+                    'reason' => class_exists( 'LuwiPress_AI_Engine' ) ? 'LuwiPress AI Engine available' : 'LuwiPress missing',
+                ),
+                'customer_chat' => array(
+                    'live'   => (bool) get_option( 'luwipress_chat_enabled', 0 ),
+                    'reason' => get_option( 'luwipress_chat_enabled', 0 ) ? 'Chat module enabled' : 'Toggle chat in LuwiPress -> Customer Chat',
+                ),
+                'kg_related_rail' => array(
+                    'live'   => $is_gold && class_exists( 'WooCommerce' ),
+                    'reason' => ! $is_gold
+                        ? 'Theme is not LuwiPress Gold'
+                        : ( class_exists( 'WooCommerce' ) ? 'WooCommerce active' : 'WooCommerce missing' ),
+                ),
+            );
+
+            // Today's AI spend — small, cheap query against the token tracker.
+            // The real method on LuwiPress_Token_Tracker is `get_today_cost`
+            // (not `get_today_total`); the method_exists check is kept so this
+            // tool stays graceful if the core plugin renames it.
+            $today_spend = null;
+            if ( class_exists( 'LuwiPress_Token_Tracker' ) && method_exists( 'LuwiPress_Token_Tracker', 'get_today_cost' ) ) {
+                try {
+                    $today_spend = LuwiPress_Token_Tracker::get_today_cost();
+                } catch ( Throwable $e ) {
+                    $today_spend = null;
+                }
+            }
+
+            return array(
+                'theme'         => array(
+                    'slug'             => $stylesheet,
+                    'is_luwipress_gold'=> $is_gold,
+                    'wc_active'        => class_exists( 'WooCommerce' ),
+                    'elementor_active' => did_action( 'elementor/loaded' ) > 0,
+                    'luwipress_active' => class_exists( 'LuwiPress' ),
+                ),
+                'surfaces'      => $surfaces,
+                'friendly'      => $detector_data,
+                'token_tracker' => array(
+                    'today_total' => $today_spend,
+                ),
+            );
         } );
     }
 

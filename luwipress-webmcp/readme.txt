@@ -4,11 +4,11 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.5
+Stable tag: 1.0.11
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Model Context Protocol (MCP) server for LuwiPress — exposes 130+ tools to AI agents via Streamable HTTP. Requires LuwiPress core.
+Model Context Protocol (MCP) server for LuwiPress — exposes 140+ tools to AI agents via Streamable HTTP. Requires LuwiPress core. Pairs with LuwiPress Gold theme.
 
 == Description ==
 
@@ -81,6 +81,14 @@ Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress
 = 1.0.2 — Customers view + Elementor Audit =
 * NEW: CRM tools surface segment drill-down data matching the new Customers view.
 * NEW: Elementor Audit drill-down exposes per-page spacing/responsive findings.
+
+= 1.0.11 — Theme orchestration =
+* NEW: `theme_status` — full inventory of the active theme (slug, version, parent, RequiresPlugins) plus capability flags (LuwiPress active, WC active, Elementor active, customer chat enabled) and friendly-plugin detector results in one call.
+* NEW: `theme_customizer_dump` — flat key-value map of every theme_mod for the active theme, optionally filtered by prefix (e.g. `luwipress_gold_`) so an AI orchestrator reads only theme-owned settings without WP core noise.
+* NEW: `theme_customizer_get` — read a single theme_mod with type info + default detection.
+* NEW: `theme_customizer_set` — write a single theme_mod with key-shape-aware sanitization (URL keys go through esc_url_raw; scalar keys through sanitize_text_field). Reads back the saved value so the caller can verify.
+* NEW: `theme_ecosystem_status` — single-call ecosystem snapshot mirroring the LuwiPress Gold "Appearance -> LuwiPress Gold" admin dashboard: which storefront AI surfaces are live (search, chat, KG-related rail), every detected friendly plugin and what it gains, plus today's AI token spend.
+* PAIRS WITH: LuwiPress Gold theme 1.3.0 — every Customizer-driven feature on the theme (topbar promo, logo accent, journal subtitle, footer blurb, social URLs) is now AI-orchestrable end-to-end through this tool set.
 
 = 1.0.1 — Post Term Management =
 * NEW: `taxonomy_assign_terms` MCP tool — assign/replace/append terms on any post for any taxonomy (post_tag, category, product_tag, product_cat, pa_*). Non-hierarchical terms accept names and auto-create missing ones; hierarchical taxonomies require IDs. Pass `append:true` to add without removing existing terms, or `terms:[]` to clear them all.

@@ -1025,6 +1025,17 @@ class LuwiPress_Translation {
         $detector = LuwiPress_Plugin_Detector::get_instance();
         $detector->purge_post_cache($product_id);
 
+        /**
+         * Fires after a translation request completes (saved or partial).
+         * Theme companions can invalidate language-bound caches (related-products
+         * rail, hreflang sitemap, language-specific KG snapshots) on this signal.
+         *
+         * @param int    $product_id Source post id whose translation was written.
+         * @param string $language   Target language code (e.g. 'it', 'fr', 'es').
+         * @param string $status     'saved' or 'partial' (WPML/Polylang post create failed).
+         */
+        do_action( 'luwipress_after_translation_request', $product_id, $language, $save_error ? 'partial' : 'saved' );
+
         return rest_ensure_response([
             'status'     => $save_error ? 'partial' : 'saved',
             'product_id' => $product_id,

@@ -193,6 +193,63 @@ if ( ! current_user_can( 'manage_options' ) ) {
 		<div class="kg-action-queue-list" id="kg-action-queue-list"></div>
 	</div>
 
+	<!-- Autopilot panel (Track D.3) — settings + manual run + recent dispatch log.
+	     Default: disabled + dry-run. Operator opts in explicitly. -->
+	<div class="kg-autopilot" id="kg-autopilot">
+		<div class="kg-autopilot-header">
+			<span class="kg-autopilot-title">
+				<span class="kg-autopilot-icon" aria-hidden="true">⚙</span>
+				<?php esc_html_e( 'AI Autopilot', 'luwipress' ); ?>
+			</span>
+			<span class="kg-autopilot-sub" id="kg-autopilot-state">—</span>
+		</div>
+		<div class="kg-autopilot-body" id="kg-autopilot-body">
+			<div class="kg-autopilot-settings" id="kg-autopilot-settings">
+				<div class="kg-autopilot-row">
+					<label class="kg-autopilot-toggle">
+						<input type="checkbox" id="kg-autopilot-enabled" />
+						<span><?php esc_html_e( 'Enable autopilot', 'luwipress' ); ?></span>
+					</label>
+					<label class="kg-autopilot-toggle">
+						<input type="checkbox" id="kg-autopilot-dry-run" checked />
+						<span><?php esc_html_e( 'Dry-run only (logs, no real dispatch)', 'luwipress' ); ?></span>
+					</label>
+				</div>
+				<div class="kg-autopilot-row">
+					<label class="kg-autopilot-field">
+						<span><?php esc_html_e( 'Min confidence', 'luwipress' ); ?></span>
+						<input type="number" id="kg-autopilot-min-confidence" min="0" max="100" value="60" />
+					</label>
+					<label class="kg-autopilot-field">
+						<span><?php esc_html_e( 'Window (hours)', 'luwipress' ); ?></span>
+						<input type="number" id="kg-autopilot-window" min="1" max="720" value="24" />
+					</label>
+					<label class="kg-autopilot-field">
+						<span><?php esc_html_e( 'Cap: enrich/day', 'luwipress' ); ?></span>
+						<input type="number" id="kg-autopilot-cap-enrich" min="0" max="100" value="5" />
+					</label>
+					<label class="kg-autopilot-field">
+						<span><?php esc_html_e( 'Cap: seo/day', 'luwipress' ); ?></span>
+						<input type="number" id="kg-autopilot-cap-seo" min="0" max="100" value="5" />
+					</label>
+					<label class="kg-autopilot-field">
+						<span><?php esc_html_e( 'Cap: translate/day', 'luwipress' ); ?></span>
+						<input type="number" id="kg-autopilot-cap-translate" min="0" max="100" value="3" />
+					</label>
+				</div>
+				<div class="kg-autopilot-actions">
+					<button type="button" class="button button-secondary" id="kg-autopilot-save"><?php esc_html_e( 'Save', 'luwipress' ); ?></button>
+					<button type="button" class="button" id="kg-autopilot-run-now"><?php esc_html_e( 'Run cycle now', 'luwipress' ); ?></button>
+					<span class="kg-autopilot-msg" id="kg-autopilot-msg"></span>
+				</div>
+			</div>
+			<div class="kg-autopilot-log-wrap">
+				<h4 class="kg-autopilot-log-title"><?php esc_html_e( 'Recent dispatches', 'luwipress' ); ?></h4>
+				<div class="kg-autopilot-log" id="kg-autopilot-log"><?php esc_html_e( 'Loading…', 'luwipress' ); ?></div>
+			</div>
+		</div>
+	</div>
+
 	<!-- Activity Feed — last N operator actions (enrichment, translation, AEO).
 	     Polls /logs every 30s while visible to surface background job completions. -->
 	<div class="kg-activity" id="kg-activity" hidden>

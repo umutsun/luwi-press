@@ -1069,6 +1069,17 @@ class LuwiPress_API {
             'fields'  => array_keys( $data ),
         ) );
 
+        /**
+         * Fires after a successful SEO meta write via REST. Theme companions
+         * and other plugins can invalidate caches (post page cache, sitemap
+         * cache, KG snapshots) on this signal.
+         *
+         * @param int   $post_id The post whose meta changed.
+         * @param array $fields  Field names that were written (subset of
+         *                       title/description/focus_keyword).
+         */
+        do_action( 'luwipress_after_seo_meta_write', $post_id, array_keys( $data ) );
+
         return rest_ensure_response( array(
             'success' => true,
             'post_id' => $post_id,

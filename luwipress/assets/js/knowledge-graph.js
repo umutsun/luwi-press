@@ -1800,13 +1800,26 @@ function renderActivityFeed(logs) {
 	_kgActivityLastCount = logs.length;
 
 	// Render the 20 most-recent entries (backend returns newest first).
+	// kg_event level rows (D.1) get a parsed icon + accent so the operator
+	// distinguishes structural KG activity from generic info logs at a glance.
+	var KG_EVENT_ICON = { enrich: '🪄', seo: '🎯', translate: '🌐' };
 	var html = logs.slice(0, 20).map(function(entry) {
 		var ts = entry.timestamp ? formatActivityTime(entry.timestamp) : '';
 		var level = (entry.level || 'info').toLowerCase();
 		var msg = entry.message || '';
-		return '<div class="kg-activity-row">'
+		var icon = '';
+		if (level === 'kg_event' && entry.context) {
+			try {
+				var ctx = (typeof entry.context === 'string') ? JSON.parse(entry.context) : entry.context;
+				if (ctx && ctx.event_type && KG_EVENT_ICON[ctx.event_type]) {
+					icon = '<span class="kg-activity-event-icon" aria-hidden="true">' + KG_EVENT_ICON[ctx.event_type] + '</span>';
+				}
+			} catch (e) {}
+		}
+		return '<div class="kg-activity-row" data-level="' + escHtml(level) + '">'
 			+ '<span class="kg-activity-time" title="' + escHtml(entry.timestamp || '') + '">' + escHtml(ts) + '</span>'
 			+ '<span class="kg-activity-level" data-level="' + escHtml(level) + '">' + escHtml(level) + '</span>'
+			+ icon
 			+ '<span class="kg-activity-msg" title="' + escHtml(msg) + '">' + escHtml(msg) + '</span>'
 			+ '</div>';
 	}).join('');
@@ -1915,6 +1928,36 @@ function renderActionQueue(data) {
 	var taxonomies = data.nodes.taxonomies || [];
 	var media = data.nodes.media_inventory || null;
 	var candidates = [];
+
+	// Track D.2 — server-computed candidates with `why` metadata, snooze
+	// state already filtered. They lead the queue when present so the
+	// regression / stale-enriched signals surface above coverage maths.
+	var v2 = (data.opportunities && data.opportunities.next_wins_v2) || [];
+	v2.forEach(function (sc) {
+		candidates.push({
+			tier:   sc.tier || 'medium',
+			label:  sc.title,
+			why:    sc.body || (sc.why && sc.why.primary_signal) || '',
+			meta:   [
+				(sc.workflow || '').toUpperCase(),
+				'~' + (sc.effort_min || 0) + 'min',
+				'roi ' + (sc.roi || 0)
+			].filter(Boolean),
+			impact: sc.impact || 0,
+			effort: sc.effort_min || 1,
+			candidateId: sc.id,
+			candidateType: sc.type,
+			candidateWhy: sc.why || null,
+			onClick: function (btn) {
+				if (sc.entity_type === 'product' && sc.entity_id && typeof openDetailPanel === 'function') {
+					openDetailPanel('product', sc.entity_id);
+				} else if (sc.workflow === 'queue-review') {
+					var preset = document.querySelector('[data-preset="high-opportunity"]');
+					if (preset) preset.click();
+				}
+			}
+		});
+	});
 
 	// CANDIDATE 1: Worst-covered category for SEO — one batch enrich hits the most products at once.
 	// Skip categories with < 3 products (not worth a batch) and those already >= 80% SEO.
@@ -2108,14 +2151,28 @@ function renderActionQueue(data) {
 	candidates.forEach(function(c, i) {
 		var ctaId = c.ctaId || ('kg-aq-cta-' + i);
 		var ctaLabel = c.ctaLabel || 'Review →';
-		html += '<div class="kg-aq-card" data-tier="' + c.tier + '" data-idx="' + i + '">';
+		var hasState = !!c.candidateId; // server-side v2 candidate
+		html += '<div class="kg-aq-card" data-tier="' + c.tier + '" data-idx="' + i + '"' + (hasState ? ' data-cid="' + escHtml(c.candidateId) + '"' : '') + '>';
 		html += '<span class="kg-aq-rank">#' + (i + 1) + '</span>';
 		html += '<div class="kg-aq-label">' + escHtml(c.label) + '</div>';
 		html += '<div class="kg-aq-why">' + escHtml(c.why) + '</div>';
+		// v2 candidates surface their server-side primary signal as a small chip row.
+		if (c.candidateWhy && c.candidateWhy.primary_signal) {
+			html += '<div class="kg-aq-signal" title="Primary signal driving this rank">' +
+				'<span class="kg-aq-signal-icon" aria-hidden="true">⚡</span>' +
+				escHtml(c.candidateWhy.primary_signal) +
+			'</div>';
+		}
 		html += '<div class="kg-aq-meta">';
 		c.meta.forEach(function(m) { html += '<span class="kg-aq-meta-chip">' + escHtml(m) + '</span>'; });
 		html += '</div>';
+		html += '<div class="kg-aq-actions">';
 		html += '<button type="button" class="kg-aq-cta" id="' + ctaId + '">' + escHtml(ctaLabel) + '</button>';
+		if (hasState) {
+			html += '<button type="button" class="kg-aq-snooze" data-cid="' + escHtml(c.candidateId) + '" title="Snooze for 24 hours" aria-label="Snooze">💤</button>';
+			html += '<button type="button" class="kg-aq-dismiss" data-cid="' + escHtml(c.candidateId) + '" title="Dismiss permanently" aria-label="Dismiss">✕</button>';
+		}
+		html += '</div>';
 		html += '</div>';
 	});
 	list.innerHTML = html;
@@ -2131,6 +2188,33 @@ function renderActionQueue(data) {
 		};
 		card.addEventListener('click', handler);
 		if (cta) cta.addEventListener('click', handler);
+
+		// Snooze / dismiss for v2 server candidates.
+		var snooze = card.querySelector('.kg-aq-snooze');
+		if (snooze) {
+			snooze.addEventListener('click', function (e) {
+				e.stopPropagation();
+				snooze.disabled = true;
+				kgCandidateAction('snooze', snooze.getAttribute('data-cid'), { hours: 24 }, function () {
+					card.style.transition = 'opacity 200ms';
+					card.style.opacity = '0.4';
+					setTimeout(function () { if (typeof init === 'function') init(true); }, 220);
+				});
+			});
+		}
+		var dismiss = card.querySelector('.kg-aq-dismiss');
+		if (dismiss) {
+			dismiss.addEventListener('click', function (e) {
+				e.stopPropagation();
+				if (!confirm('Dismiss this recommendation? You can clear dismissed items from KG settings later.')) return;
+				dismiss.disabled = true;
+				kgCandidateAction('dismiss', dismiss.getAttribute('data-cid'), {}, function () {
+					card.style.transition = 'opacity 200ms';
+					card.style.opacity = '0.4';
+					setTimeout(function () { if (typeof init === 'function') init(true); }, 220);
+				});
+			});
+		}
 	});
 
 	wrap.hidden = false;
@@ -3315,6 +3399,24 @@ window.lpKg = {
 var lpKgRestUrl = (window.lpKgConfig && window.lpKgConfig.restBase) || '';
 var lpKgNonce = (window.lpKgConfig && window.lpKgConfig.nonce) || '';
 
+/**
+ * Action Queue v2 (Track D.2) — snooze / dismiss / clear a server-side
+ * candidate. Endpoints: /knowledge-graph/candidate/{action}.
+ */
+function kgCandidateAction(action, candidateId, payload, cb) {
+	if (!candidateId) return;
+	var body = Object.assign({ id: candidateId }, payload || {});
+	fetch(lpKgRestUrl + 'knowledge-graph/candidate/' + action, {
+		method:  'POST',
+		headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce },
+		credentials: 'same-origin',
+		body: JSON.stringify(body)
+	})
+	.then(function (r) { return r.json(); })
+	.then(function (j) { if (typeof cb === 'function') cb(null, j); })
+	.catch(function (e) { if (typeof cb === 'function') cb(e); });
+}
+
 function kgOpenAuditDrill(idx) {
 	var pages = window._kgDesignAuditPages || [];
 	var page = pages[idx];
@@ -3837,3 +3939,141 @@ function kgExportSegmentCsv(segKey, btn) {
 			if (window.console) console.error('[lpKg] segment export error:', err);
 		});
 }
+
+/* ────────────────────────────────────────────────────────────────────── *
+ * KG Autopilot (Track D.3) — admin UI                                     *
+ * Backed by /knowledge-graph/autopilot/* REST endpoints. Loaded on init   *
+ * via kgAutopilotInit().                                                  *
+ * ────────────────────────────────────────────────────────────────────── */
+
+function kgAutopilotInit() {
+	var saveBtn  = document.getElementById('kg-autopilot-save');
+	var runBtn   = document.getElementById('kg-autopilot-run-now');
+	if (!saveBtn || !runBtn) return; // panel not on this page
+
+	function $(id) { return document.getElementById(id); }
+	var state = $('kg-autopilot-state');
+	var msg   = $('kg-autopilot-msg');
+	var logEl = $('kg-autopilot-log');
+
+	function load() {
+		fetch(lpKgRestUrl + 'knowledge-graph/autopilot/settings', {
+			headers: { 'X-WP-Nonce': lpKgNonce }, credentials: 'same-origin'
+		})
+		.then(function (r) { return r.json(); })
+		.then(function (s) {
+			$('kg-autopilot-enabled').checked        = !!s.enabled;
+			$('kg-autopilot-dry-run').checked        = !!s.dry_run;
+			$('kg-autopilot-min-confidence').value   = s.min_confidence || 60;
+			$('kg-autopilot-window').value           = s.dispatch_window_hours || 24;
+			$('kg-autopilot-cap-enrich').value       = (s.caps && s.caps.enrich) || 0;
+			$('kg-autopilot-cap-seo').value          = (s.caps && s.caps.seo) || 0;
+			$('kg-autopilot-cap-translate').value    = (s.caps && s.caps.translate) || 0;
+			renderState(s);
+			loadLog();
+		});
+	}
+
+	function renderState(s) {
+		if (!state) return;
+		if (!s.enabled) {
+			state.textContent = 'Disabled';
+			state.setAttribute('data-state', 'off');
+			return;
+		}
+		state.textContent = s.dry_run ? 'Enabled · dry-run' : 'Enabled · LIVE';
+		state.setAttribute('data-state', s.dry_run ? 'dry' : 'live');
+	}
+
+	function save() {
+		saveBtn.disabled = true;
+		var body = {
+			enabled:               $('kg-autopilot-enabled').checked,
+			dry_run:               $('kg-autopilot-dry-run').checked,
+			min_confidence:        parseInt($('kg-autopilot-min-confidence').value, 10),
+			dispatch_window_hours: parseInt($('kg-autopilot-window').value, 10),
+			caps: {
+				enrich:    parseInt($('kg-autopilot-cap-enrich').value, 10),
+				seo:       parseInt($('kg-autopilot-cap-seo').value, 10),
+				translate: parseInt($('kg-autopilot-cap-translate').value, 10)
+			}
+		};
+		fetch(lpKgRestUrl + 'knowledge-graph/autopilot/settings', {
+			method:  'POST',
+			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce },
+			credentials: 'same-origin',
+			body: JSON.stringify(body)
+		})
+		.then(function (r) { return r.json(); })
+		.then(function (s) {
+			saveBtn.disabled = false;
+			renderState(s);
+			if (msg) {
+				msg.textContent = 'Saved';
+				setTimeout(function () { msg.textContent = ''; }, 2000);
+			}
+		})
+		.catch(function () {
+			saveBtn.disabled = false;
+			if (msg) msg.textContent = 'Save failed';
+		});
+	}
+
+	function runNow() {
+		runBtn.disabled = true;
+		if (msg) msg.textContent = 'Running…';
+		fetch(lpKgRestUrl + 'knowledge-graph/autopilot/run-now', {
+			method:  'POST',
+			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce },
+			credentials: 'same-origin',
+			body: JSON.stringify({ force: true })
+		})
+		.then(function (r) { return r.json(); })
+		.then(function (out) {
+			runBtn.disabled = false;
+			if (msg) {
+				msg.textContent = 'Cycle: dispatched ' + (out.dispatched || 0)
+					+ ', would-dispatch ' + (out.would_dispatch || 0)
+					+ ', skipped ' + (out.skipped || 0);
+			}
+			loadLog();
+		})
+		.catch(function () {
+			runBtn.disabled = false;
+			if (msg) msg.textContent = 'Run failed';
+		});
+	}
+
+	function loadLog() {
+		fetch(lpKgRestUrl + 'knowledge-graph/autopilot/log?limit=20', {
+			headers: { 'X-WP-Nonce': lpKgNonce }, credentials: 'same-origin'
+		})
+		.then(function (r) { return r.json(); })
+		.then(function (j) {
+			var rows = (j && j.log) || [];
+			if (!rows.length) {
+				logEl.innerHTML = '<div class="kg-autopilot-log-empty">No autopilot activity yet. Run a cycle to populate.</div>';
+				return;
+			}
+			logEl.innerHTML = rows.slice(0, 20).map(function (r) {
+				var c = r.context || {};
+				var act = c.action || '';
+				var icon = act === 'dispatched' ? '🚀' : (act === 'would_dispatch' ? '👁' : (act === 'dispatch_outcome' ? (c.outcome === 'completed' ? '✅' : '⚠') : '·'));
+				var line = '<div class="kg-autopilot-log-row" data-action="' + escHtml(act) + '">'
+					+ '<span class="kg-autopilot-log-icon">' + icon + '</span>'
+					+ '<span class="kg-autopilot-log-time">' + escHtml(r.timestamp || '') + '</span>'
+					+ '<span class="kg-autopilot-log-msg">' + escHtml(r.message || '') + '</span>';
+				if (c.workflow) line += '<span class="kg-autopilot-log-wf">' + escHtml(c.workflow) + '</span>';
+				if (c.confidence) line += '<span class="kg-autopilot-log-conf">conf ' + (c.confidence|0) + '</span>';
+				line += '</div>';
+				return line;
+			}).join('');
+		});
+	}
+
+	saveBtn.addEventListener('click', save);
+	runBtn.addEventListener('click', runNow);
+	load();
+}
+
+document.addEventListener('DOMContentLoaded', kgAutopilotInit);

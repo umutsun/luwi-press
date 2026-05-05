@@ -103,6 +103,216 @@ class LuwiPress_Knowledge_Graph {
 				),
 			),
 		) );
+
+		// KG Opportunities v2 (Track D.2) — server-computed candidates with
+		// `why` metadata + persistent state (snooze/dismiss/in_progress).
+		register_rest_route( 'luwipress/v1', '/knowledge-graph/candidates', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'handle_kg_candidates' ),
+			'permission_callback' => array( $this, 'check_permission' ),
+			'args'                => array(
+				'limit' => array( 'type' => 'integer', 'default' => 6, 'sanitize_callback' => 'absint' ),
+			),
+		) );
+		register_rest_route( 'luwipress/v1', '/knowledge-graph/candidate/snooze', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'handle_kg_candidate_snooze' ),
+			'permission_callback' => array( $this, 'check_permission' ),
+			'args'                => array(
+				'id'    => array( 'type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
+				'hours' => array( 'type' => 'integer', 'default' => 24, 'sanitize_callback' => 'absint' ),
+			),
+		) );
+		register_rest_route( 'luwipress/v1', '/knowledge-graph/candidate/dismiss', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'handle_kg_candidate_dismiss' ),
+			'permission_callback' => array( $this, 'check_permission' ),
+			'args'                => array(
+				'id' => array( 'type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
+			),
+		) );
+		register_rest_route( 'luwipress/v1', '/knowledge-graph/candidate/clear', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'handle_kg_candidate_clear' ),
+			'permission_callback' => array( $this, 'check_permission' ),
+			'args'                => array(
+				'id' => array( 'type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
+			),
+		) );
+
+		// KG Autopilot (Track D.3) — settings + manual run + dispatch log.
+		register_rest_route( 'luwipress/v1', '/knowledge-graph/autopilot/settings', array(
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'handle_autopilot_settings_get' ),
+				'permission_callback' => array( $this, 'check_permission' ),
+			),
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'handle_autopilot_settings_set' ),
+				'permission_callback' => array( $this, 'check_permission' ),
+			),
+		) );
+		register_rest_route( 'luwipress/v1', '/knowledge-graph/autopilot/run-now', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'handle_autopilot_run_now' ),
+			'permission_callback' => array( $this, 'check_permission' ),
+			'args'                => array(
+				'force' => array( 'type' => 'boolean', 'default' => false ),
+			),
+		) );
+		register_rest_route( 'luwipress/v1', '/knowledge-graph/autopilot/log', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'handle_autopilot_log' ),
+			'permission_callback' => array( $this, 'check_permission' ),
+			'args'                => array(
+				'limit' => array( 'type' => 'integer', 'default' => 50, 'sanitize_callback' => 'absint' ),
+			),
+		) );
+
+		// KG Signals (Track D.1) — recent KG events stream + summary aggregate.
+		register_rest_route( 'luwipress/v1', '/knowledge-graph/events', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'handle_kg_events' ),
+			'permission_callback' => array( $this, 'check_permission' ),
+			'args'                => array(
+				'limit' => array(
+					'type'              => 'integer',
+					'default'           => 50,
+					'sanitize_callback' => 'absint',
+				),
+				'since' => array(
+					'type'              => 'string',
+					'description'       => 'MySQL datetime to floor on (UTC).',
+					'sanitize_callback' => 'sanitize_text_field',
+				),
+				'event_types' => array(
+					'description' => 'Comma-separated whitelist: enrich, seo, translate.',
+					'type'        => 'string',
+					'sanitize_callback' => 'sanitize_text_field',
+				),
+				'entity_id' => array(
+					'type'    => 'integer',
+					'default' => 0,
+				),
+				'summary' => array(
+					'description' => 'When true, return aggregated counts over the last `hours` window instead of the row stream.',
+					'type'        => 'boolean',
+					'default'     => false,
+				),
+				'hours' => array(
+					'description' => 'Window for the summary aggregate. 1..720. Defaults to 24.',
+					'type'        => 'integer',
+					'default'     => 24,
+				),
+			),
+		) );
+	}
+
+	/**
+	 * GET /knowledge-graph/events — KG event stream backed by the logger
+	 * `kg_event` rows written by `LuwiPress_KG_Signals`. When `summary=1`
+	 * is set, returns aggregate counts over the `hours` window instead.
+	 */
+	public function handle_kg_events( $request ) {
+		if ( ! class_exists( 'LuwiPress_KG_Signals' ) ) {
+			return new WP_Error( 'kg_signals_unavailable', 'KG signals layer not loaded.', array( 'status' => 503 ) );
+		}
+
+		if ( $request->get_param( 'summary' ) ) {
+			return rest_ensure_response( LuwiPress_KG_Signals::get_summary( (int) $request->get_param( 'hours' ) ) );
+		}
+
+		$types_raw = (string) $request->get_param( 'event_types' );
+		$types     = array_filter( array_map( 'trim', explode( ',', $types_raw ) ) );
+
+		return rest_ensure_response( array(
+			'events' => LuwiPress_KG_Signals::get_events( array(
+				'limit'       => (int) $request->get_param( 'limit' ),
+				'since'       => (string) $request->get_param( 'since' ),
+				'event_types' => $types,
+				'entity_id'   => (int) $request->get_param( 'entity_id' ),
+			) ),
+		) );
+	}
+
+	/**
+	 * GET /knowledge-graph/candidates — Action Queue v2 (Track D.2). Returns
+	 * server-computed candidates with `why` metadata, snooze/dismiss state
+	 * already filtered out.
+	 */
+	public function handle_kg_candidates( $request ) {
+		if ( ! class_exists( 'LuwiPress_KG_Opportunities' ) ) {
+			return new WP_Error( 'kg_opps_unavailable', 'KG opportunities layer not loaded.', array( 'status' => 503 ) );
+		}
+		$limit = max( 1, min( 24, (int) $request->get_param( 'limit' ) ) );
+		return rest_ensure_response( array(
+			'candidates' => LuwiPress_KG_Opportunities::get_instance()->build_candidates( $limit ),
+		) );
+	}
+
+	public function handle_kg_candidate_snooze( $request ) {
+		if ( ! class_exists( 'LuwiPress_KG_Opportunities' ) ) {
+			return new WP_Error( 'kg_opps_unavailable', 'KG opportunities layer not loaded.', array( 'status' => 503 ) );
+		}
+		return rest_ensure_response( array(
+			'state' => LuwiPress_KG_Opportunities::get_instance()->snooze(
+				(string) $request->get_param( 'id' ),
+				(int) $request->get_param( 'hours' )
+			),
+		) );
+	}
+
+	public function handle_kg_candidate_dismiss( $request ) {
+		if ( ! class_exists( 'LuwiPress_KG_Opportunities' ) ) {
+			return new WP_Error( 'kg_opps_unavailable', 'KG opportunities layer not loaded.', array( 'status' => 503 ) );
+		}
+		return rest_ensure_response( array(
+			'state' => LuwiPress_KG_Opportunities::get_instance()->dismiss( (string) $request->get_param( 'id' ) ),
+		) );
+	}
+
+	public function handle_kg_candidate_clear( $request ) {
+		if ( ! class_exists( 'LuwiPress_KG_Opportunities' ) ) {
+			return new WP_Error( 'kg_opps_unavailable', 'KG opportunities layer not loaded.', array( 'status' => 503 ) );
+		}
+		LuwiPress_KG_Opportunities::get_instance()->clear( (string) $request->get_param( 'id' ) );
+		return rest_ensure_response( array( 'cleared' => true ) );
+	}
+
+	/* ─── Autopilot (Track D.3) ──────────────────────────────────────── */
+
+	private function autopilot_or_err() {
+		if ( ! class_exists( 'LuwiPress_KG_Autopilot' ) ) {
+			return new WP_Error( 'kg_autopilot_unavailable', 'KG autopilot not loaded.', array( 'status' => 503 ) );
+		}
+		return LuwiPress_KG_Autopilot::get_instance();
+	}
+
+	public function handle_autopilot_settings_get( $request ) {
+		$ap = $this->autopilot_or_err();
+		if ( is_wp_error( $ap ) ) return $ap;
+		return rest_ensure_response( $ap->get_settings() );
+	}
+
+	public function handle_autopilot_settings_set( $request ) {
+		$ap = $this->autopilot_or_err();
+		if ( is_wp_error( $ap ) ) return $ap;
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) $body = array();
+		return rest_ensure_response( $ap->set_settings( $body ) );
+	}
+
+	public function handle_autopilot_run_now( $request ) {
+		$ap = $this->autopilot_or_err();
+		if ( is_wp_error( $ap ) ) return $ap;
+		return rest_ensure_response( $ap->run_cycle( (bool) $request->get_param( 'force' ) ) );
+	}
+
+	public function handle_autopilot_log( $request ) {
+		$ap = $this->autopilot_or_err();
+		if ( is_wp_error( $ap ) ) return $ap;
+		return rest_ensure_response( array( 'log' => $ap->get_log( (int) $request->get_param( 'limit' ) ) ) );
 	}
 
 	public function check_permission( $request ) {
@@ -304,6 +514,13 @@ class LuwiPress_Knowledge_Graph {
 		// Opportunities
 		if ( in_array( 'opportunities', $sections, true ) ) {
 			$response['opportunities'] = $this->build_opportunities( $product_nodes );
+
+			// Track D.2 — Action Queue v2 candidates with `why` metadata.
+			// Additive: existing keys (`by_type`, `top_products`) stay so old
+			// JS clients keep working; new clients pick up `next_wins_v2`.
+			if ( class_exists( 'LuwiPress_KG_Opportunities' ) ) {
+				$response['opportunities']['next_wins_v2'] = LuwiPress_KG_Opportunities::get_instance()->build_candidates( 6 );
+			}
 		}
 
 		// Extend summary with new section counts
