@@ -1,12 +1,18 @@
 # LuwiPress Gold — Theme Feature Overview
 
-**Version:** 1.5.0 · **License:** GPLv2+ · **Target:** WooCommerce stores using LuwiPress
+**Version:** 1.5.1 · **License:** GPLv2+ · **Target:** WooCommerce stores using LuwiPress
 
 LuwiPress Gold is the first **ecosystem-integrated** WordPress theme: built specifically to surface the LuwiPress AI plugin's intelligence on the storefront. Where most themes stop at layout and typography, Gold turns AI Knowledge Graph signals, customer chat, plugin-detection, and live search suggestions into first-class store features the visitor actually feels.
 
-Ships as a lean **281 KB ZIP** with a 12-screen Elementor Kit, six custom Elementor widgets, native Customizer panel, and a slug-conflict migration tool — paired with the LuwiPress core plugin (3.1.45+) for full reciprocal awareness.
+Ships as a lean **289 KB ZIP** with a 12-screen Elementor Kit, six custom Elementor widgets, native Customizer panel, and a slug-conflict migration tool — paired with the LuwiPress core plugin (3.1.45+) for full reciprocal awareness.
 
 ---
+
+## 🆕 What's new in 1.5.1
+
+- **Atelier-ledger mobile drawer** — the slide-in mobile menu got a full visual upgrade based on the Tapadum design handoff. Warm cream background (not the restaurant black-with-gold trope), italic-serif category names with a circular plus/minus glyph instead of generic chevrons, hairline-gold rules between rows, and a perf-safe paper-grain dot pattern under everything that gives the panel a "luthier ledger" feel. Stagger entrance for the L1 rows when the drawer opens. AI-aware search field at the top with a gold focus ring, a single-thumb-zone utility row (Account · Cart · Track) with the cart count badge, an "Atelier pick" featured-product card pulled from the page (or the operator-defined `window.LuwiGold.drawer.pick`), and a warm-deeper-bg footer bay for language pills, social row, and contact line. Falls back gracefully on `prefers-reduced-motion`.
+- **Hamburger inject across all header rendering paths** — the toggle button now finds a host inside Gold's fallback header, an Elementor Pro Theme Builder header, or any generic theme header — so the drawer works on stores that override the header template.
+- **Mega menu now strips WPML / Polylang language switcher items** — operators saw "Español" pop up as a fake top-level menu entry next to real categories. Topbar already surfaces languages as a pill, so the mega-menu walker filters those items out at render time (no menu structure change required).
 
 ## 🆕 What's new in 1.5.0
 
@@ -187,4 +193,4 @@ All tokens override-able from Customizer → LuwiPress Gold → Brand.
 
 ---
 
-*Document version 1.5.0 — updated 2026-05-06 · Pairs with LuwiPress core 3.1.45+ (3.1.47 recommended for full Knowledge Graph Autopilot integration). For the LuwiPress core plugin's full feature list, see the separate **LUWIPRESS-FEATURES.md** document.*
+*Document version 1.5.1 — updated 2026-05-06 · Pairs with LuwiPress core 3.1.45+ (3.1.47 recommended for full Knowledge Graph Autopilot integration). For the LuwiPress core plugin's full feature list, see the separate **LUWIPRESS-FEATURES.md** document.*
