@@ -982,7 +982,19 @@ class LuwiPress_AI_Content {
 
     public static function init_frontend_hooks() {
         add_action('wp_head', array(__CLASS__, 'output_schema_markup'), 1);
-        add_action('woocommerce_after_single_product_summary', array(__CLASS__, 'output_faq_block'), 25);
+        // FAQ as a WooCommerce product tab (next to Description / Additional
+        // Information / Reviews). Previously rendered as a standalone block
+        // via `woocommerce_after_single_product_summary` priority 25 — that
+        // placement broke the sticky gallery layout because it sat between
+        // the tabs row and the related-products row, fragmenting the right
+        // column. Putting it inside the tab structure keeps the PDP grid
+        // clean: gallery LEFT (sticky), tabs RIGHT (Description / Additional
+        // Information / FAQ / Reviews), related FULL WIDTH below.
+        add_filter('woocommerce_product_tabs', array(__CLASS__, 'register_faq_tab'));
+        // Schema (JSON-LD FAQPage) still needs to fire in <head> regardless
+        // of tab activation — keep it on wp_footer so the schema lands even
+        // when the user never clicks the FAQ tab.
+        add_action('wp_footer', array(__CLASS__, 'output_faq_schema'), 20);
     }
 
     /**
@@ -1008,52 +1020,72 @@ class LuwiPress_AI_Content {
     }
 
     /**
-     * Output FAQ accordion below product summary
+     * Register the FAQ tab on WooCommerce product pages.
      */
-    public static function output_faq_block() {
-        if (!is_singular('product')) {
+    public static function register_faq_tab( $tabs ) {
+        if ( ! is_singular( 'product' ) ) {
+            return $tabs;
+        }
+        $faq = get_post_meta( get_the_ID(), '_luwipress_faq', true );
+        if ( empty( $faq ) || ! is_array( $faq ) ) {
+            return $tabs;
+        }
+        $tabs['luwipress_faq'] = array(
+            'title'    => __( 'FAQ', 'luwipress' ),
+            'priority' => 30,
+            'callback' => array( __CLASS__, 'output_faq_tab' ),
+        );
+        return $tabs;
+    }
+
+    /**
+     * Render the FAQ accordion inside the WC tab panel.
+     */
+    public static function output_faq_tab() {
+        $faq = get_post_meta( get_the_ID(), '_luwipress_faq', true );
+        if ( empty( $faq ) || ! is_array( $faq ) ) {
             return;
         }
-
-        $faq = get_post_meta(get_the_ID(), '_luwipress_faq', true);
-        if (empty($faq) || !is_array($faq)) {
-            return;
-        }
-
-        // Output FAQ HTML
-        echo '<div class="luwipress-faq" style="margin-top:2em;">';
-        echo '<h2>' . esc_html__( 'Frequently Asked Questions', 'luwipress' ) . '</h2>';
-
-        foreach ($faq as $item) {
-            $q = esc_html($item['question']);
-            $a = wp_kses_post($item['answer']);
-            echo '<details style="margin-bottom:1em;border:1px solid #ddd;padding:12px;border-radius:4px;">';
-            echo '<summary style="cursor:pointer;font-weight:bold;">' . $q . '</summary>';
-            echo '<div style="margin-top:8px;">' . $a . '</div>';
+        echo '<div class="luwipress-faq">';
+        foreach ( $faq as $item ) {
+            $q = esc_html( $item['question'] );
+            $a = wp_kses_post( $item['answer'] );
+            echo '<details class="luwipress-faq__item">';
+            echo '<summary class="luwipress-faq__q">' . $q . '</summary>';
+            echo '<div class="luwipress-faq__a">' . $a . '</div>';
             echo '</details>';
         }
-
         echo '</div>';
+    }
 
-        // Also output FAQ schema
+    /**
+     * Emit the FAQPage JSON-LD schema. Hooked on wp_footer so the schema
+     * still ships even when the tab panel isn't clicked open.
+     */
+    public static function output_faq_schema() {
+        if ( ! is_singular( 'product' ) ) {
+            return;
+        }
+        $faq = get_post_meta( get_the_ID(), '_luwipress_faq', true );
+        if ( empty( $faq ) || ! is_array( $faq ) ) {
+            return;
+        }
         $schema = array(
             '@context'   => 'https://schema.org',
             '@type'      => 'FAQPage',
             'mainEntity' => array(),
         );
-
-        foreach ($faq as $item) {
+        foreach ( $faq as $item ) {
             $schema['mainEntity'][] = array(
-                '@type' => 'Question',
-                'name'  => $item['question'],
+                '@type'          => 'Question',
+                'name'           => $item['question'],
                 'acceptedAnswer' => array(
                     '@type' => 'Answer',
                     'text'  => $item['answer'],
                 ),
             );
         }
-
-        echo '<script type="application/ld+json">' . wp_json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>' . "\n";
+        echo '<script type="application/ld+json">' . wp_json_encode( $schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . '</script>' . "\n";
     }
 
     // ─── HELPERS ────────────────────────────────────────────────────────

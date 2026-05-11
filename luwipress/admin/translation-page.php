@@ -767,7 +767,155 @@ if ( $is_wpml ) {
 			}
 		}
 	}
+
+	// ─── Translation Quality Audit ───
+	// Existence-based coverage (Translation Manager %97 above) lies when the
+	// translation post EXISTS but its body is still in the source language —
+	// the silent-failure mode that makes operators trust the green ✓ then
+	// discover broken Spanish/Italian/French blogs in production.
+	//
+	// Detection runs `score_text_language()` (stop-word ratio) over every
+	// translated post + page. Posts whose target-language score falls below
+	// the threshold get grouped here per-source. One-click "Re-translate"
+	// fires /translation/force-retranslate, which clears the elementor guard
+	// meta and re-runs the AI pipeline.
+	$drift_items_by_source = array();
+	$drift_total           = 0;
+	$drift_per_lang        = array();
+	if ( $is_wpml ) {
+		foreach ( array( 'post', 'page' ) as $pt ) {
+			$dreq = new WP_REST_Request( 'GET', '/luwipress/v1/translation/language-drift' );
+			$dreq->set_param( 'post_type', $pt );
+			$dreq->set_param( 'languages', implode( ',', $target_langs ) );
+			$dreq->set_param( 'limit', 200 );
+			$dresp = LuwiPress_Translation::get_instance()->get_language_drift( $dreq );
+			if ( is_wp_error( $dresp ) ) { continue; }
+			$ddata = $dresp->get_data();
+			if ( empty( $ddata['items'] ) ) { continue; }
+			foreach ( $ddata['items'] as $it ) {
+				$sid = (int) $it['source_id'];
+				if ( ! isset( $drift_items_by_source[ $sid ] ) ) {
+					$drift_items_by_source[ $sid ] = array(
+						'source_id'    => $sid,
+						'source_title' => (string) $it['source_title'],
+						'post_type'    => $pt,
+						'langs'        => array(),
+					);
+				}
+				$drift_items_by_source[ $sid ]['langs'][] = array(
+					'language'      => $it['language'],
+					'score'         => $it['score'],
+					'translation_id'=> $it['translation_id'],
+					'edit_url'      => $it['edit_url'],
+					'permalink'     => $it['permalink'],
+				);
+				$drift_total++;
+				$lc = $it['language'];
+				$drift_per_lang[ $lc ] = ( $drift_per_lang[ $lc ] ?? 0 ) + 1;
+			}
+		}
+	}
 	?>
+	<?php if ( ! empty( $drift_items_by_source ) ) : ?>
+	<div class="tm-drift-panel">
+		<div class="tm-drift-header">
+			<span class="dashicons dashicons-warning tm-drift-icon"></span>
+			<div class="tm-drift-header-text">
+				<strong class="tm-drift-title">
+					<?php
+					/* translators: 1: drift count, 2: source post count */
+					printf(
+						esc_html( _n( '%1$d translated body still in source language across %2$d source post', '%1$d translated bodies still in source language across %2$d source posts', $drift_total, 'luwipress' ) ),
+						(int) $drift_total,
+						(int) count( $drift_items_by_source )
+					);
+					?>
+				</strong>
+				<p class="tm-drift-sub">
+					<?php esc_html_e( 'Coverage above shows green because translation posts exist — but the body content was never actually translated. One-click sweeps below clear the Elementor guard meta and re-fire the AI pipeline.', 'luwipress' ); ?>
+				</p>
+				<div class="tm-drift-langchips">
+					<?php foreach ( $drift_per_lang as $lc => $cnt ) : ?>
+						<span class="tm-drift-langchip"><?php echo esc_html( strtoupper( $lc ) ); ?>: <?php echo (int) $cnt; ?></span>
+					<?php endforeach; ?>
+				</div>
+			</div>
+			<div class="tm-drift-header-actions">
+				<button type="button" class="tm-btn tm-btn-primary tm-drift-sweep-all" data-count="<?php echo (int) $drift_total; ?>">
+					<span class="dashicons dashicons-translation"></span>
+					<?php
+					/* translators: %d: total drifted translations */
+					printf( esc_html__( 'Sweep all %d', 'luwipress' ), (int) $drift_total );
+					?>
+				</button>
+			</div>
+		</div>
+		<div class="tm-drift-list">
+			<?php foreach ( $drift_items_by_source as $row ) :
+				$source_langs = wp_list_pluck( $row['langs'], 'language' );
+			?>
+				<div class="tm-drift-row" data-source="<?php echo esc_attr( (string) $row['source_id'] ); ?>" data-langs="<?php echo esc_attr( implode( ',', $source_langs ) ); ?>">
+					<div class="tm-drift-info">
+						<span class="tm-drift-pt-badge tm-drift-pt-<?php echo esc_attr( $row['post_type'] ); ?>"><?php echo esc_html( strtoupper( $row['post_type'] ) ); ?></span>
+						<span class="tm-drift-name" title="<?php echo esc_attr( $row['source_title'] ); ?>"><?php echo esc_html( $row['source_title'] ); ?></span>
+						<span class="tm-drift-langs">
+							<?php foreach ( $row['langs'] as $l ) :
+								$pct = (int) round( (float) $l['score'] * 100 );
+							?>
+								<a href="<?php echo esc_url( $l['permalink'] ); ?>" target="_blank" rel="noopener"
+								   class="tm-drift-lang-chip"
+								   title="<?php
+								   /* translators: 1: language code, 2: target-language score percentage */
+								   echo esc_attr( sprintf( __( '%1$s — only %2$d%% of body words match target language stop-words. Click to view.', 'luwipress' ), strtoupper( $l['language'] ), $pct ) );
+								   ?>">
+									<?php echo esc_html( strtoupper( $l['language'] ) ); ?>
+									<small class="tm-drift-score"><?php echo (int) $pct; ?>%</small>
+								</a>
+							<?php endforeach; ?>
+						</span>
+					</div>
+					<div class="tm-drift-actions">
+						<button type="button" class="tm-btn tm-btn-secondary tm-drift-retranslate-btn"
+						        data-source="<?php echo esc_attr( (string) $row['source_id'] ); ?>"
+						        data-langs="<?php echo esc_attr( implode( ',', $source_langs ) ); ?>"
+						        title="<?php esc_attr_e( 'Clear the Elementor guard meta and re-run AI translation for every drifted language on this post.', 'luwipress' ); ?>">
+							<span class="dashicons dashicons-translation"></span>
+							<?php esc_html_e( 'Re-translate', 'luwipress' ); ?>
+						</button>
+					</div>
+				</div>
+			<?php endforeach; ?>
+		</div>
+	</div>
+	<style>
+		.tm-drift-panel { margin: 16px 0; border: 1px solid var(--lp-error, #dc2626); border-left: 4px solid var(--lp-error, #dc2626); border-radius: 8px; background: #fef2f2; padding: 16px; }
+		.tm-drift-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+		.tm-drift-icon { color: var(--lp-error, #dc2626); font-size: 24px; width: 24px; height: 24px; flex-shrink: 0; }
+		.tm-drift-header-text { flex: 1 1 auto; min-width: 220px; }
+		.tm-drift-title { color: #991b1b; font-size: 14px; }
+		.tm-drift-sub { margin: 4px 0 8px; font-size: 12px; color: #7f1d1d; line-height: 1.5; max-width: 720px; }
+		.tm-drift-langchips { display: flex; gap: 6px; flex-wrap: wrap; }
+		.tm-drift-langchip { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 8px; background: #fee2e2; color: #991b1b; border-radius: 999px; border: 1px solid #fecaca; }
+		.tm-drift-header-actions { flex-shrink: 0; }
+		.tm-drift-header-actions .tm-btn-primary { background: var(--lp-error, #dc2626); border-color: var(--lp-error, #dc2626); color: #fff; }
+		.tm-drift-header-actions .tm-btn-primary:hover { background: #b91c1c; border-color: #b91c1c; }
+		.tm-drift-list { display: flex; flex-direction: column; gap: 8px; }
+		.tm-drift-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; background: #fff; border: 1px solid #fecaca; border-radius: 6px; flex-wrap: wrap; }
+		.tm-drift-info { display: flex; align-items: center; gap: 10px; flex: 1 1 50%; min-width: 0; }
+		.tm-drift-pt-badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 3px; background: var(--lp-blue, #3b82f6); color: #fff; }
+		.tm-drift-pt-page { background: var(--lp-success, #10b981); }
+		.tm-drift-name { font-weight: 500; color: #1f2937; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.tm-drift-langs { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+		.tm-drift-lang-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; background: #fee2e2; color: #991b1b; border-radius: 4px; cursor: pointer; text-decoration: none; border: 1px solid #fecaca; }
+		.tm-drift-lang-chip:hover { background: #fecaca; color: #7f1d1d; }
+		.tm-drift-score { font-weight: 400; opacity: 0.85; }
+		.tm-drift-actions { display: flex; gap: 6px; flex-shrink: 0; }
+		.tm-drift-actions .tm-btn { font-size: 12px; padding: 6px 10px; }
+		.tm-drift-actions .tm-btn .dashicons { font-size: 14px; width: 14px; height: 14px; }
+		.tm-drift-row.tm-drift-done { background: #ecfdf5; border-color: #6ee7b7; }
+		.tm-drift-row.tm-drift-error { background: #fef2f2; border-color: #fca5a5; }
+	</style>
+	<?php endif; ?>
 	<?php if ( ! empty( $outdated_sources ) ) : ?>
 	<div class="tm-outdated-panel">
 		<div class="tm-outdated-header">
@@ -1369,6 +1517,90 @@ if ( $is_wpml ) {
 				});
 			});
 		});
+
+		// ─── Translation Quality Audit — drift sweep + per-row retranslate ───
+		// Both call /translation/force-retranslate which clears the elementor
+		// "already-translated" guard meta and re-runs the AI pipeline. Async path
+		// kicks in automatically on the backend when work units > 5.
+		function lpDriftFire(sourceId, langs, btn, row, done) {
+			btn.disabled = true;
+			var origHTML = btn.innerHTML;
+			btn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + '<?php echo esc_js( __( 'Queuing…', 'luwipress' ) ); ?>';
+			fetch(lpRestBase + 'translation/force-retranslate', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpRestNonce },
+				body: JSON.stringify({
+					post_ids: [ parseInt(sourceId, 10) ],
+					languages: langs,
+					async: true
+				}),
+				credentials: 'same-origin'
+			}).then(function(r){ return r.json(); }).then(function(d) {
+				if (d.code) {
+					btn.innerHTML = '<span class="dashicons dashicons-warning"></span> ' + (d.message || 'Error');
+					if (row) row.classList.add('tm-drift-error');
+					setTimeout(function(){ btn.disabled = false; btn.innerHTML = origHTML; }, 4000);
+					if (done) done(false);
+					return;
+				}
+				btn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> ' +
+					(d.mode === 'async' ? '<?php echo esc_js( __( 'Queued', 'luwipress' ) ); ?>' : '<?php echo esc_js( __( 'Done', 'luwipress' ) ); ?>') +
+					' (' + (d.dispatched || 0) + ')';
+				if (row) {
+					row.classList.add('tm-drift-done');
+					setTimeout(function(){ row.style.display = 'none'; }, 2200);
+				}
+				if (done) done(true);
+			}).catch(function(){
+				btn.innerHTML = '<span class="dashicons dashicons-warning"></span> ' + '<?php echo esc_js( __( 'Network error', 'luwipress' ) ); ?>';
+				if (row) row.classList.add('tm-drift-error');
+				setTimeout(function(){ btn.disabled = false; btn.innerHTML = origHTML; }, 4000);
+				if (done) done(false);
+			});
+		}
+
+		document.querySelectorAll('.tm-drift-retranslate-btn').forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				var sourceId = btn.dataset.source;
+				var langs = (btn.dataset.langs || '').split(',').filter(Boolean);
+				if (!sourceId || !langs.length) return;
+				if (!confirm('<?php echo esc_js( __( 'Clear guard meta and re-translate every drifted language for this post? Costs AI tokens.', 'luwipress' ) ); ?>')) return;
+				var row = btn.closest('.tm-drift-row');
+				lpDriftFire(sourceId, langs, btn, row);
+			});
+		});
+
+		var lpDriftSweepBtn = document.querySelector('.tm-drift-sweep-all');
+		if (lpDriftSweepBtn) {
+			lpDriftSweepBtn.addEventListener('click', function() {
+				var rows = document.querySelectorAll('.tm-drift-row:not(.tm-drift-done):not(.tm-drift-error)');
+				var count = rows.length;
+				if (!count) { alert('<?php echo esc_js( __( 'Nothing to sweep — list is already clear.', 'luwipress' ) ); ?>'); return; }
+				if (!confirm('<?php echo esc_js( __( 'Sweep ALL drifted posts? Each post fires AI translation per missing language. May cost several US$ in tokens.', 'luwipress' ) ); ?>' + ' (' + count + ')')) return;
+				lpDriftSweepBtn.disabled = true;
+				var origHTML = lpDriftSweepBtn.innerHTML;
+				lpDriftSweepBtn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' + '<?php echo esc_js( __( 'Sweeping…', 'luwipress' ) ); ?>';
+				var done = 0, ok = 0, fail = 0;
+				rows.forEach(function(row) {
+					var sourceId = row.dataset.source;
+					var langs = (row.dataset.langs || '').split(',').filter(Boolean);
+					var btn = row.querySelector('.tm-drift-retranslate-btn');
+					if (!sourceId || !langs.length || !btn) { done++; return; }
+					lpDriftFire(sourceId, langs, btn, row, function(success) {
+						if (success) ok++; else fail++;
+						done++;
+						lpDriftSweepBtn.innerHTML = '<span class="dashicons dashicons-update" style="animation:spin 1s linear infinite;"></span> ' +
+							done + '/' + count + '  ✓' + ok + (fail ? '  ✗' + fail : '');
+						if (done === count) {
+							lpDriftSweepBtn.disabled = false;
+							lpDriftSweepBtn.innerHTML = '<span class="dashicons dashicons-yes-alt"></span> ' +
+								('<?php echo esc_js( __( 'Swept', 'luwipress' ) ); ?>') +
+								' ✓' + ok + (fail ? '  ✗' + fail : '');
+						}
+					});
+				});
+			});
+		}
 
 		// ─── Maintenance tools — spinner + result feedback ───
 		var toolNonces = {

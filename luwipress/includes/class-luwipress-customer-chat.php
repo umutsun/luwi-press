@@ -17,6 +17,46 @@ class LuwiPress_Customer_Chat {
 
 	private static $instance = null;
 
+	/**
+	 * Canonical English source for every fallback chip / chip-row label
+	 * the widget can emit. This is the DATA dictionary — runtime UX strings
+	 * are derived from this via localize_chips() (AI-translated + cached
+	 * per language) or via the `luwipress_chat_chip_strings` filter for
+	 * power-user overrides. Never read this map directly from rendering
+	 * code — always go through localize_chips() so the global ecosystem
+	 * gets the right language for the customer.
+	 *
+	 * Placeholders: %s = product/category label (already in customer's
+	 * language because it comes from the WPML-translated post/term).
+	 */
+	private const CHIP_VOCAB_EN = array(
+		// Action chips — appear as clickable next-message text. English
+		// here is the canonical source for AI translation; templates are
+		// phrased to translate cleanly across languages (avoid awkward
+		// constructions like "Other %s options" where translators struggle
+		// to keep %s in a grammatical position).
+		'shipping'       => 'How long is shipping?',
+		'returns'        => 'What about returns?',
+		'talk_to_team'   => 'Talk to our team',
+		'premium_picks'  => 'Show premium picks',
+		'top_rated'      => 'Best picks',
+		'whats_new'      => "What's new?",
+		'did_you_mean'   => 'Did you mean %s?',
+		'show_me'        => 'Show me %s',
+		'more_like'      => 'Show similar to %s',
+		'other_options'  => 'More from %s',
+		'top_rated_x'    => 'Best %s',
+		'whats_new_in'   => "What's new in %s?",
+		'yes_show_me'    => 'Yes, show me %s',
+		// Row labels — appear above the chip row.
+		'clarify_label'  => 'Pick one to clarify:',
+		'followup_label' => 'You can also ask:',
+		// System messages — assistant-voice fallbacks shown in-bubble.
+		'msg_rate_limit' => "You're sending messages too quickly. Please wait a moment.",
+		'msg_error'      => 'Sorry, something went wrong. Please try again.',
+		'msg_connecting' => 'Connecting you with our team. A new window will open shortly.',
+	);
+
 	public static function get_instance() {
 		if ( null === self::$instance ) {
 			self::$instance = new self();
@@ -26,6 +66,9 @@ class LuwiPress_Customer_Chat {
 
 	private function __construct() {
 		add_action( 'rest_api_init', array( $this, 'register_endpoints' ) );
+		// Async chip-pack translator — fires from wp_cron so first-visitor
+		// page loads never block on the AI round-trip.
+		add_action( 'luwipress_chat_translate_chip_pack', array( $this, 'cron_translate_chip_pack' ), 10, 1 );
 	}
 
 	/**
@@ -148,6 +191,20 @@ class LuwiPress_Customer_Chat {
 			'permission_callback' => array( $this, 'check_admin_permission' ),
 		) );
 
+		// Admin trigger to warm / re-translate chip packs for one or all
+		// active site languages. POST with no body warms all uncached;
+		// POST { lang: "fr", force: true } re-translates a specific lang
+		// from scratch (deletes the cached option first).
+		register_rest_route( 'luwipress/v1', '/chat/warm-translations', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'handle_warm_translations' ),
+			'permission_callback' => array( $this, 'check_admin_permission' ),
+			'args'                => array(
+				'lang'  => array( 'required' => false, 'type' => 'string' ),
+				'force' => array( 'required' => false, 'type' => 'boolean' ),
+			),
+		) );
+
 		// Write chat module settings — partial update
 		register_rest_route( 'luwipress/v1', '/chat/settings', array(
 			'methods'             => 'POST',
@@ -173,6 +230,42 @@ class LuwiPress_Customer_Chat {
 	 */
 	public function check_admin_permission( $request ) {
 		return LuwiPress_Permission::check_token_or_admin( $request );
+	}
+
+	/**
+	 * POST /chat/warm-translations — admin trigger.
+	 *
+	 * Body:
+	 *   {}                          — queue every active site lang that's uncached
+	 *   { "lang": "fr" }            — queue just FR
+	 *   { "lang": "fr", "force": 1 } — delete FR cache then queue (re-translate)
+	 */
+	public function handle_warm_translations( $request ) {
+		$data  = $request->get_json_params();
+		if ( empty( $data ) ) { $data = $request->get_body_params(); }
+		$lang  = isset( $data['lang'] )  ? sanitize_key( substr( (string) $data['lang'], 0, 2 ) ) : '';
+		$force = ! empty( $data['force'] );
+
+		if ( $lang ) {
+			if ( $force ) {
+				delete_option( 'luwipress_chat_chips_' . $lang );
+			}
+			$this->schedule_chip_pack_translation( $lang );
+			return rest_ensure_response( array( 'scheduled' => array( $lang ), 'force' => $force ) );
+		}
+
+		$scheduled = array();
+		foreach ( $this->get_active_site_languages() as $l ) {
+			if ( $l === 'en' ) { continue; }
+			if ( $force ) {
+				delete_option( 'luwipress_chat_chips_' . $l );
+			}
+			if ( ! get_option( 'luwipress_chat_chips_' . $l, null ) ) {
+				$this->schedule_chip_pack_translation( $l );
+				$scheduled[] = $l;
+			}
+		}
+		return rest_ensure_response( array( 'scheduled' => $scheduled, 'force' => $force ) );
 	}
 
 	/**
@@ -258,6 +351,17 @@ class LuwiPress_Customer_Chat {
 		if ( ! get_option( 'luwipress_chat_enabled', 0 ) ) {
 			return new WP_Error( 'chat_disabled', 'Chat is not available', array( 'status' => 403 ) );
 		}
+
+		// Only message-send + escalate (write methods) consume the
+		// rate-limit budget. The chat widget fires a GET on every
+		// page load to bootstrap the session — counting those drains
+		// the per-IP allowance within a normal browsing session and
+		// shows up as a sitewide 429 on /chat/session/{id}.
+		$method = strtoupper( $request->get_method() );
+		if ( ! in_array( $method, array( 'POST', 'PUT', 'DELETE' ), true ) ) {
+			return true;
+		}
+
 		$ip    = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0' );
 		$key   = 'luwipress_chatrl_' . md5( $ip );
 		$count = (int) get_transient( $key );
@@ -316,6 +420,11 @@ class LuwiPress_Customer_Chat {
 			'message_count'       => $msg_count + 1,
 			'suggest_escalation'  => ( $msg_count + 1 ) >= $max_msgs,
 		);
+
+		if ( ! empty( $response['chips'] ) ) {
+			$result['chips']     = array_values( $response['chips'] );
+			$result['chip_kind'] = $response['chip_kind'] ?? 'follow_up';
+		}
 
 		// Include cost/token info for transparency (visible in network tab)
 		if ( ! empty( $response['metadata'] ) ) {
@@ -424,10 +533,13 @@ class LuwiPress_Customer_Chat {
 		// 2. FAQ short-circuit (zero AI cost)
 		$faq_answer = $this->try_faq_match( $message );
 		if ( $faq_answer ) {
+			$faq_context = $this->build_rag_context( $message, $intent, $conversation );
 			return array(
-				'content'  => $faq_answer['answer'],
-				'source'   => 'faq',
-				'metadata' => wp_json_encode( array(
+				'content'   => $faq_answer['answer'],
+				'source'    => 'faq',
+				'chips'     => $this->fallback_chips( $faq_context, 'follow_up', $message ),
+				'chip_kind' => 'follow_up',
+				'metadata'  => wp_json_encode( array(
 					'product_id' => $faq_answer['product_id'],
 					'intent'     => $intent,
 				) ),
@@ -440,8 +552,10 @@ class LuwiPress_Customer_Chat {
 		// 4. Check chat budget
 		if ( $this->is_chat_budget_exceeded() ) {
 			return array(
-				'content' => get_option( 'luwipress_chat_budget_message', 'Our chat assistant is currently unavailable. Please contact our team directly.' ),
-				'source'  => 'local',
+				'content'   => get_option( 'luwipress_chat_budget_message', 'Our chat assistant is currently unavailable. Please contact our team directly.' ),
+				'source'    => 'local',
+				'chips'     => $this->fallback_chips( $context, 'clarify', $message ),
+				'chip_kind' => 'clarify',
 			);
 		}
 
@@ -462,24 +576,165 @@ class LuwiPress_Customer_Chat {
 		$result = LuwiPress_AI_Engine::dispatch( 'customer-chat', $messages, array(
 			'temperature' => 0.3,
 			'timeout'     => 15,
+			'max_tokens'  => 500,
 		) );
 
 		if ( is_wp_error( $result ) ) {
 			LuwiPress_Logger::log( 'Customer chat AI error: ' . $result->get_error_message(), 'error' );
 			return array(
-				'content' => 'I apologize, but I\'m having trouble right now. Would you like to speak with our team directly?',
-				'source'  => 'local',
+				'content'   => 'I apologize, but I\'m having trouble right now. Would you like to speak with our team directly?',
+				'source'    => 'local',
+				'chips'     => $this->fallback_chips( $context, 'clarify', $message ),
+				'chip_kind' => 'clarify',
 			);
 		}
 
+		// Parse JSON envelope { reply, chip_kind, chips }. Tolerant fallback:
+		// if the model returned plain prose, treat it as the reply and
+		// generate browse-style chips from category context so the
+		// customer always has a next step.
+		$parsed = LuwiPress_AI_Engine::extract_json( $result['content'] );
+		$reply  = '';
+		$chips  = array();
+		$kind   = 'follow_up';
+
+		if ( is_array( $parsed ) && ! empty( $parsed['reply'] ) ) {
+			$reply = (string) $parsed['reply'];
+			if ( ! empty( $parsed['chips'] ) && is_array( $parsed['chips'] ) ) {
+				foreach ( $parsed['chips'] as $chip ) {
+					$chip = trim( (string) $chip );
+					if ( $chip !== '' ) {
+						$chips[] = mb_substr( $chip, 0, 80 );
+					}
+					if ( count( $chips ) >= 4 ) {
+						break;
+					}
+				}
+			}
+			if ( ! empty( $parsed['chip_kind'] ) && in_array( $parsed['chip_kind'], array( 'clarify', 'follow_up' ), true ) ) {
+				$kind = $parsed['chip_kind'];
+			}
+		} else {
+			// Model ignored the JSON envelope (older provider, mid-flight
+			// reroute) — treat the raw content as the reply, but only if it
+			// doesn't look like a JSON object we just failed to parse.
+			$raw = trim( $result['content'] );
+			$reply = ( strlen( $raw ) > 0 && $raw[0] === '{' && substr( $raw, -1 ) === '}' )
+				? 'I\'m here to help — could you tell me a bit more about what you\'re looking for?'
+				: $raw;
+		}
+
+		if ( empty( $chips ) ) {
+			$chips = $this->fallback_chips( $context, $kind, $message );
+		}
+
 		return array(
-			'content'  => $result['content'],
-			'source'   => 'ai',
-			'metadata' => wp_json_encode( array(
+			'content'   => $reply,
+			'source'    => 'ai',
+			'chips'     => $chips,
+			'chip_kind' => $kind,
+			'metadata'  => wp_json_encode( array(
 				'intent' => $intent,
 				'tokens' => $result['input_tokens'] + $result['output_tokens'],
 			) ),
 		);
+	}
+
+	/**
+	 * Generate fallback chips from RAG context.
+	 *
+	 * Used when the AI is unavailable (budget, error, JSON parse failure) or
+	 * via REST 429 hook on the frontend. Layered priority:
+	 *   1. Page context — "More like {viewing}" / "Other {category} options"
+	 *   2. KG signals — top-rated / new-arrivals / segment-premium (one each, max two)
+	 *   3. Category browse — top 2 categories
+	 *   4. Tail — "Talk to our team" (clarify) or shipping/returns (follow_up)
+	 *
+	 * @param array  $context Context from build_rag_context().
+	 * @param string $kind    'clarify' or 'follow_up'.
+	 * @return array Array of chip label strings (max 4).
+	 */
+	private function fallback_chips( $context, $kind = 'clarify', $message = '' ) {
+		$chips = array();
+		$sig   = $context['kg_signals'] ?? array();
+		$slots = 3; // main chips; tail is appended after, capped at 4 total.
+		$pack  = $this->localize_chips( $this->detect_chat_language( $message ) );
+
+		$add = function ( $chip ) use ( &$chips, &$slots ) {
+			if ( $slots > 0 && $chip !== '' && ! in_array( $chip, $chips, true ) ) {
+				$chips[] = $chip;
+				$slots--;
+			}
+		};
+
+		// 0. Typo recovery (highest priority — if we have phonetic
+		// candidates, the customer probably mistyped and we should offer
+		// the suggestion before anything else).
+		if ( ! empty( $context['typo_candidates'] ) ) {
+			foreach ( array_slice( $context['typo_candidates'], 0, 2 ) as $tc ) {
+				$add( sprintf( $pack['did_you_mean'], $this->shorten_name( $tc['label'] ) ) );
+			}
+		}
+
+		// 1. Page-context anchor (closest to user intent).
+		if ( ! empty( $sig['viewing'] ) ) {
+			$v = $sig['viewing'];
+			if ( $v['type'] === 'product' ) {
+				$add( sprintf( $pack['more_like'], $this->shorten_name( $v['name'] ) ) );
+				if ( ! empty( $v['category'] ) ) {
+					$add( sprintf( $pack['other_options'], $v['category'] ) );
+				}
+			} elseif ( $v['type'] === 'category' ) {
+				$add( sprintf( $pack['top_rated_x'], $v['name'] ) );
+				$add( sprintf( $pack['whats_new_in'], $v['name'] ) );
+			}
+		}
+
+		// 2. KG signal-driven chips.
+		if ( ! empty( $sig['top_rated'] ) ) {
+			$add( $pack['top_rated'] );
+		}
+		if ( ! empty( $sig['new_arrivals'] ) ) {
+			$add( $pack['whats_new'] );
+		}
+		if ( ! empty( $sig['segment'] ) && in_array( $sig['segment'], array( 'vip', 'active', 'loyal' ), true ) ) {
+			$add( $pack['premium_picks'] );
+		}
+
+		// 3. Category browse fallback — fills remaining slots.
+		if ( ! empty( $context['categories'] ) ) {
+			foreach ( $context['categories'] as $cat ) {
+				if ( $slots <= 0 ) {
+					break;
+				}
+				$name = trim( preg_replace( '/\s*\(\d+\)\s*$/', '', (string) $cat ) );
+				if ( $name !== '' ) {
+					$add( sprintf( $pack['show_me'], $name ) );
+				}
+			}
+		}
+
+		// 4. Tail — always appended; total kept at 4.
+		if ( $kind === 'follow_up' ) {
+			$chips[] = $pack['shipping'];
+		} else {
+			$chips[] = $pack['talk_to_team'];
+		}
+
+		$chips = array_values( array_unique( $chips ) );
+		return array_slice( $chips, 0, 4 );
+	}
+
+	/**
+	 * Truncate a product name to fit the chip width budget.
+	 * Chips are ≤ 6 words; long product names break the layout.
+	 */
+	private function shorten_name( $name ) {
+		$words = preg_split( '/\s+/', trim( (string) $name ) );
+		if ( count( $words ) <= 3 ) {
+			return $name;
+		}
+		return implode( ' ', array_slice( $words, 0, 3 ) ) . '…';
 	}
 
 	/**
@@ -626,6 +881,16 @@ class LuwiPress_Customer_Chat {
 			}
 			if ( ! empty( $products ) ) {
 				$context['products'] = $products;
+			} else {
+				// Search returned nothing — most common cause is a typo or a
+				// cross-language transliteration ("bouziki" → "buzuq"). Try
+				// phonetic + edit-distance match against product/category
+				// names so the AI can offer "Did you mean X?" instead of
+				// listing unrelated categories.
+				$typo = $this->find_typo_candidates( $message, $kg_data );
+				if ( ! empty( $typo ) ) {
+					$context['typo_candidates'] = $typo;
+				}
 			}
 		}
 
@@ -663,7 +928,377 @@ class LuwiPress_Customer_Chat {
 			$context['orders'] = $this->get_customer_orders( $conversation->customer_id );
 		}
 
+		// KG-derived signals: new arrivals, top-rated, best-ready,
+		// out-of-stock count, customer segment, current page context.
+		// All derivations operate on $kg_data already in memory — no
+		// extra queries — so this stays cheap on every chat turn.
+		$context['kg_signals'] = $this->derive_kg_signals( $kg_data, $conversation );
+
 		return $context;
+	}
+
+	/**
+	 * Derive opportunity-aware signals from the KG snapshot.
+	 *
+	 * Returns a compact array the system prompt + fallback chip generator
+	 * can both reason over. Empty/zero values are normal — callers should
+	 * treat missing keys as "signal not actionable on this store right now".
+	 *
+	 * @param array  $kg_data      KG snapshot from get_kg_data().
+	 * @param object $conversation Conversation row (carries customer_id + page_url).
+	 * @return array Signals: new_arrivals, top_rated, best_ready, out_of_stock_count, segment, viewing.
+	 */
+	private function derive_kg_signals( $kg_data, $conversation ) {
+		$signals = array(
+			'new_arrivals'       => array(),
+			'top_rated'          => array(),
+			'best_ready'         => array(),
+			'out_of_stock_count' => 0,
+			'segment'            => null,
+			'viewing'            => null,
+		);
+
+		$products = $kg_data['nodes']['products'] ?? array();
+
+		if ( ! empty( $products ) ) {
+			// New arrivals: modified in last 30 days, sort ascending by recency.
+			$fresh = array_filter( $products, function ( $p ) {
+				return isset( $p['days_since_modified'] ) && $p['days_since_modified'] <= 30;
+			} );
+			usort( $fresh, function ( $a, $b ) {
+				return ( $a['days_since_modified'] ?? 99 ) <=> ( $b['days_since_modified'] ?? 99 );
+			} );
+			foreach ( array_slice( $fresh, 0, 3 ) as $p ) {
+				$signals['new_arrivals'][] = array(
+					'name' => $p['name'],
+					'url'  => get_permalink( $p['id'] ),
+					'days' => $p['days_since_modified'],
+				);
+			}
+
+			// Top rated: avg_rating >= 4 with >= 3 reviews (significance gate).
+			$rated = array_filter( $products, function ( $p ) {
+				$rc = $p['reviews']['count'] ?? 0;
+				$ar = $p['reviews']['avg_rating'] ?? 0;
+				return $rc >= 3 && $ar >= 4.0;
+			} );
+			usort( $rated, function ( $a, $b ) {
+				return ( $b['reviews']['avg_rating'] ?? 0 ) <=> ( $a['reviews']['avg_rating'] ?? 0 );
+			} );
+			foreach ( array_slice( $rated, 0, 3 ) as $p ) {
+				$signals['top_rated'][] = array(
+					'name'   => $p['name'],
+					'url'    => get_permalink( $p['id'] ),
+					'rating' => $p['reviews']['avg_rating'],
+					'count'  => $p['reviews']['count'],
+				);
+			}
+
+			// Best-ready: lowest opportunity_score (= fully enriched, in stock,
+			// translated, reviews present). These are the safest products to
+			// recommend — they're not missing context the AI would hallucinate.
+			$ready = array_filter( $products, function ( $p ) {
+				return ( $p['stock_status'] ?? 'instock' ) === 'instock';
+			} );
+			usort( $ready, function ( $a, $b ) {
+				return ( $a['opportunity_score'] ?? 99 ) <=> ( $b['opportunity_score'] ?? 99 );
+			} );
+			foreach ( array_slice( $ready, 0, 3 ) as $p ) {
+				$signals['best_ready'][] = array(
+					'name'  => $p['name'],
+					'url'   => get_permalink( $p['id'] ),
+					'score' => $p['opportunity_score'] ?? 0,
+				);
+			}
+
+			// Out of stock count for inventory-aware copy.
+			foreach ( $products as $p ) {
+				if ( ( $p['stock_status'] ?? 'instock' ) === 'outofstock' ) {
+					$signals['out_of_stock_count']++;
+				}
+			}
+		}
+
+		// Customer segment (CRM bridge writes this to user_meta).
+		if ( ! empty( $conversation->customer_id ) ) {
+			$segment = get_user_meta( absint( $conversation->customer_id ), '_luwipress_crm_segment', true );
+			if ( $segment ) {
+				$signals['segment'] = sanitize_key( $segment );
+			}
+		}
+
+		// Page-aware: parse page_url to detect product/category context.
+		$page_url = $conversation->page_url ?? '';
+		if ( $page_url ) {
+			$path = wp_parse_url( $page_url, PHP_URL_PATH );
+			if ( $path ) {
+				$slug = trim( basename( rtrim( $path, '/' ) ) );
+				if ( $slug !== '' && $slug !== '/' ) {
+					// Try product match first (more specific).
+					foreach ( $products as $p ) {
+						if ( ! empty( $p['slug'] ) && $p['slug'] === $slug ) {
+							$cat_name = null;
+							if ( ! empty( $p['categories'] ) && ! empty( $kg_data['nodes']['categories'] ) ) {
+								foreach ( $kg_data['nodes']['categories'] as $c ) {
+									if ( $c['id'] === $p['categories'][0] ) {
+										$cat_name = $c['name'];
+										break;
+									}
+								}
+							}
+							$signals['viewing'] = array(
+								'type'     => 'product',
+								'name'     => $p['name'],
+								'url'      => get_permalink( $p['id'] ),
+								'category' => $cat_name,
+							);
+							break;
+						}
+					}
+					// Fall back to category match.
+					if ( ! $signals['viewing'] && ! empty( $kg_data['nodes']['categories'] ) ) {
+						foreach ( $kg_data['nodes']['categories'] as $c ) {
+							if ( ! empty( $c['slug'] ) && $c['slug'] === $slug ) {
+								$signals['viewing'] = array(
+									'type' => 'category',
+									'name' => $c['name'],
+									'url'  => get_term_link( (int) $c['id'], 'product_cat' ),
+								);
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return $signals;
+	}
+
+	/**
+	 * Find typo / phonetic-near matches against KG product + category names.
+	 *
+	 * Two-stage match so the common case stays cheap:
+	 *   1. Metaphone phonetic key lookup — catches cross-language
+	 *      transliteration drift ("bouziki" / "bouzouki" / "buzuq" all
+	 *      collapse to similar consonant skeletons).
+	 *   2. Levenshtein distance on metaphone-matched candidates — rejects
+	 *      false positives where the phonetic key is too short to be
+	 *      meaningful (e.g. "saz" vs "say"), and ranks the survivors.
+	 *
+	 * Tokens are normalized with `remove_accents()` first because PHP's
+	 * native levenshtein()/metaphone() are byte-oriented and miscount
+	 * multibyte characters (Turkish ş/ü/ğ etc.).
+	 *
+	 * @param string $message Raw customer message.
+	 * @param array  $kg_data KG snapshot.
+	 * @param int    $limit   Max candidates to return.
+	 * @return array Each entry: {label, type, original, matched, distance}.
+	 */
+	private function find_typo_candidates( $message, $kg_data, $limit = 3 ) {
+		$tokens = $this->extract_normalized_tokens( $message );
+		if ( empty( $tokens ) ) {
+			return array();
+		}
+
+		// Build corpus once: phonetic-key index of all category names +
+		// product slug tokens. We use slug tokens (not full names) so
+		// multi-word products like "Professional Turkish Lavta" surface as
+		// "professional"/"turkish"/"lavta" — one of which usually matches
+		// the customer's intent word.
+		$index = $this->build_typo_corpus( $kg_data );
+		if ( empty( $index ) ) {
+			return array();
+		}
+
+		$matches = array();
+		foreach ( $tokens as $tok ) {
+			$tok_len = strlen( $tok );
+			if ( $tok_len < 4 ) {
+				continue; // 3-letter tokens (oud/saz) are too short to typo-detect safely
+			}
+
+			$tok_meta = metaphone( $tok, 4 );
+			if ( strlen( $tok_meta ) < 2 ) {
+				continue;
+			}
+
+			// Distance budget: ~33% of token length, min 2, max 4.
+			$threshold = max( 2, min( 4, (int) floor( $tok_len / 3 ) ) );
+
+			// Pull all corpus tokens whose phonetic key shares a prefix with
+			// the customer token's metaphone. Sharing the first 2 metaphone
+			// chars is usually enough to bridge English↔Arabic spellings.
+			$tok_meta_short = substr( $tok_meta, 0, 2 );
+			foreach ( $index as $cand_tok => $entries ) {
+				$cand_meta = $entries[0]['meta'];
+				if ( substr( $cand_meta, 0, 2 ) !== $tok_meta_short ) {
+					continue;
+				}
+
+				$cand_len = strlen( $cand_tok );
+				// Length sanity — drop pairs whose lengths differ wildly.
+				if ( abs( $cand_len - $tok_len ) > $threshold + 3 ) {
+					continue;
+				}
+
+				// Composite acceptance:
+				//   (a) classic Levenshtein within threshold, OR
+				//   (b) phonetic-Levenshtein ≤ 1 AND raw distance within
+				//       threshold+2. Path (b) catches near-rhymes where the
+				//       string distance is large but the consonant skeleton
+				//       is essentially the same (e.g. "kemence" ↔ "kamancheh",
+				//       lev(KMNS,KMNX)=1 but lev(kemence,kamancheh)=4).
+				$lev_str  = levenshtein( $tok, $cand_tok );
+				$lev_meta = levenshtein( $tok_meta, $cand_meta );
+
+				$accept = ( $lev_str <= $threshold )
+					|| ( $lev_meta <= 1 && $lev_str <= $threshold + 2 );
+				if ( ! $accept ) {
+					continue;
+				}
+
+				// Ranking distance: phonetic-equal pairs get a discount so
+				// "buziki" → "Buzuq" (BSK=BSK) outranks plain edit-near
+				// matches. Cap at the raw string distance so we never
+				// inflate the score above what we just measured.
+				$dist = $lev_str;
+				if ( $lev_meta === 0 ) {
+					$dist = max( 0, $dist - 1 );
+				}
+
+				foreach ( $entries as $entry ) {
+					$key = $entry['type'] . ':' . $entry['label'];
+					if ( ! isset( $matches[ $key ] ) || $matches[ $key ]['distance'] > $dist ) {
+						$matches[ $key ] = array(
+							'label'    => $entry['label'],
+							'type'     => $entry['type'],
+							'url'      => $entry['url'] ?? '',
+							'original' => $tok,
+							'matched'  => $cand_tok,
+							'distance' => $dist,
+						);
+					}
+				}
+			}
+		}
+
+		if ( empty( $matches ) ) {
+			return array();
+		}
+
+		// Sort by distance ascending, prefer category > product on ties
+		// (categories give a broader landing page; products are too specific
+		// for a "did you mean" suggestion unless the match is very tight).
+		usort( $matches, function ( $a, $b ) {
+			if ( $a['distance'] !== $b['distance'] ) {
+				return $a['distance'] - $b['distance'];
+			}
+			if ( $a['type'] === $b['type'] ) {
+				return 0;
+			}
+			return $a['type'] === 'category' ? -1 : 1;
+		} );
+
+		return array_slice( array_values( $matches ), 0, $limit );
+	}
+
+	/**
+	 * Build the per-request phonetic + token index used for typo lookup.
+	 * Cached on the instance because both products and categories iterate
+	 * the same KG snapshot.
+	 */
+	private function build_typo_corpus( $kg_data ) {
+		static $cache = null;
+		if ( $cache !== null ) {
+			return $cache;
+		}
+		$index = array();
+
+		$push = function ( $raw_token, $label, $type, $url ) use ( &$index ) {
+			$tok = $this->normalize_text( $raw_token );
+			if ( strlen( $tok ) < 4 ) {
+				return;
+			}
+			$meta = metaphone( $tok, 4 );
+			if ( strlen( $meta ) < 2 ) {
+				return;
+			}
+			if ( ! isset( $index[ $tok ] ) ) {
+				$index[ $tok ] = array();
+			}
+			$index[ $tok ][] = array(
+				'label' => $label,
+				'type'  => $type,
+				'meta'  => $meta,
+				'url'   => $url,
+			);
+		};
+
+		foreach ( $kg_data['nodes']['categories'] ?? array() as $c ) {
+			$url = get_term_link( (int) $c['id'], 'product_cat' );
+			$url = is_wp_error( $url ) ? '' : $url;
+			// Each word of the category name + its slug.
+			foreach ( preg_split( '/[\s\-,()]+/u', (string) $c['name'] ) as $word ) {
+				$push( $word, $c['name'], 'category', $url );
+			}
+			if ( ! empty( $c['slug'] ) ) {
+				foreach ( explode( '-', $c['slug'] ) as $word ) {
+					$push( $word, $c['name'], 'category', $url );
+				}
+			}
+		}
+
+		foreach ( $kg_data['nodes']['products'] ?? array() as $p ) {
+			$url = get_permalink( $p['id'] );
+			foreach ( preg_split( '/[\s\-,()]+/u', (string) $p['name'] ) as $word ) {
+				$push( $word, $p['name'], 'product', $url );
+			}
+			if ( ! empty( $p['slug'] ) ) {
+				foreach ( explode( '-', $p['slug'] ) as $word ) {
+					$push( $word, $p['name'], 'product', $url );
+				}
+			}
+		}
+
+		$cache = $index;
+		return $cache;
+	}
+
+	/**
+	 * Split a message into normalized ASCII tokens suitable for levenshtein/metaphone.
+	 */
+	private function extract_normalized_tokens( $message ) {
+		$normalized = $this->normalize_text( $message );
+		$tokens     = preg_split( '/[\s,.\/()\-?!:;"\']+/u', $normalized );
+		$out        = array();
+		$seen       = array();
+		foreach ( $tokens as $t ) {
+			if ( $t === '' || strlen( $t ) < 4 ) {
+				continue;
+			}
+			if ( isset( $seen[ $t ] ) ) {
+				continue;
+			}
+			$seen[ $t ] = true;
+			$out[]       = $t;
+		}
+		return $out;
+	}
+
+	/**
+	 * Lowercase + ASCII-fold a string so levenshtein/metaphone don't
+	 * over-count multibyte characters as edit distance.
+	 */
+	private function normalize_text( $text ) {
+		$text = mb_strtolower( (string) $text, 'UTF-8' );
+		if ( function_exists( 'remove_accents' ) ) {
+			$text = remove_accents( $text );
+		}
+		// Drop anything that isn't ASCII letter/digit/space — keeps the
+		// byte-oriented native string functions safe.
+		$text = preg_replace( '/[^a-z0-9\s\-]/i', ' ', $text );
+		return trim( preg_replace( '/\s+/', ' ', (string) $text ) );
 	}
 
 	/**
@@ -1105,18 +1740,77 @@ class LuwiPress_Customer_Chat {
 			$prompt .= "\n";
 		}
 
+		// KG SIGNALS — opportunity-aware hints the model uses to ground
+		// chips beyond raw category browse. Only emit non-empty signals so
+		// the prompt stays compact when the store has no actionable data
+		// (e.g. new store with no reviews yet).
+		$sig = $context['kg_signals'] ?? array();
+		$signal_lines = array();
+		if ( ! empty( $sig['viewing'] ) ) {
+			$v = $sig['viewing'];
+			$signal_lines[] = sprintf( '- Customer is viewing: %s "%s"%s', $v['type'], $v['name'], ! empty( $v['category'] ) ? ' (in ' . $v['category'] . ')' : '' );
+		}
+		if ( ! empty( $sig['segment'] ) ) {
+			$signal_lines[] = '- Customer segment: ' . $sig['segment'];
+		}
+		if ( ! empty( $sig['new_arrivals'] ) ) {
+			$names = array_map( function ( $p ) { return $p['name']; }, $sig['new_arrivals'] );
+			$signal_lines[] = '- New arrivals (last 30 days): ' . implode( ', ', $names );
+		}
+		if ( ! empty( $sig['top_rated'] ) ) {
+			$names = array_map( function ( $p ) { return $p['name'] . ' (' . $p['rating'] . '★)'; }, $sig['top_rated'] );
+			$signal_lines[] = '- Top rated: ' . implode( ', ', $names );
+		}
+		if ( ! empty( $sig['best_ready'] ) ) {
+			$names = array_map( function ( $p ) { return $p['name']; }, $sig['best_ready'] );
+			$signal_lines[] = '- Best-ready picks: ' . implode( ', ', $names );
+		}
+		if ( ! empty( $sig['out_of_stock_count'] ) ) {
+			$signal_lines[] = '- Out-of-stock products: ' . $sig['out_of_stock_count'];
+		}
+		if ( ! empty( $signal_lines ) ) {
+			$prompt .= "KG SIGNALS (use these to make chips smarter — pick what fits the moment):\n";
+			$prompt .= implode( "\n", $signal_lines ) . "\n\n";
+		}
+
+		// POSSIBLE TYPO MATCHES — fired only when the product search came up
+		// empty. Tell the model these are candidates the customer MIGHT have
+		// meant; the model should confirm gently rather than assume.
+		if ( ! empty( $context['typo_candidates'] ) ) {
+			$prompt .= "POSSIBLE TYPO MATCHES (customer's text didn't match any product/category exactly; these are phonetic near-matches):\n";
+			foreach ( $context['typo_candidates'] as $tc ) {
+				$prompt .= sprintf( "- \"%s\" (%s) — close to customer's word \"%s\"\n", $tc['label'], $tc['type'], $tc['original'] );
+			}
+			$prompt .= "If one looks plausible, ASK in the reply (e.g. \"Did you mean Buzuq?\") instead of listing unrelated categories. The first chip MUST be a customer-voice confirmation like \"Yes, show me {Label}\".\n\n";
+		}
+
 		$prompt .= "RULES:\n";
 		$prompt .= "- Use ONLY the product information provided above — never invent products or prices\n";
 		$prompt .= "- When mentioning products, always include their link\n";
 		$prompt .= "- NEVER reply with \"I don't have information about our products.\" If no specific product matched, say so briefly and then ALWAYS list 3–5 relevant categories from PRODUCT CATEGORIES above with a short pitch — the goal is to keep the conversation productive and route the customer to something real.\n";
 		$prompt .= "- If asked about categories or browsing, suggest relevant categories from the list with a one-liner for each\n";
 		$prompt .= "- If you truly cannot help (order issue, complaint, refund), suggest the customer speak with the team via WhatsApp (link in the widget)\n";
-		$prompt .= "- Keep responses under 150 words\n";
+		$prompt .= "- Keep the reply under 150 words\n";
 		$prompt .= "- Respond in the same language the customer uses\n";
 
 		if ( ! empty( $custom_instructions ) ) {
 			$prompt .= "\nADDITIONAL INSTRUCTIONS:\n{$custom_instructions}\n";
 		}
+
+		$prompt .= "\nOUTPUT FORMAT — return a single JSON object, NO markdown fences, NO commentary:\n";
+		$prompt .= '{ "reply": "<answer text>", "chip_kind": "clarify" | "follow_up", "chips": ["<choice 1>", "<choice 2>", "<choice 3>"] }' . "\n";
+		$prompt .= "Chip rules:\n";
+		$prompt .= "- Exactly 3 chips. Each chip ≤ 6 words. Written from the CUSTOMER'S voice (as if the customer were tapping a quick reply).\n";
+		$prompt .= "- Ground chips in KG SIGNALS when relevant. Examples:\n";
+		$prompt .= "  • If \"Customer is viewing: product X\" → one chip should reference similar items or that category (\"More like {X}\", \"Other {category} options\").\n";
+		$prompt .= "  • If \"New arrivals\" listed → one chip can be \"What's new?\" or name a fresh arrival.\n";
+		$prompt .= "  • If \"Top rated\" listed → one chip can be \"Top-rated picks\" or name a 5★ product.\n";
+		$prompt .= "  • If segment=vip/active → at most one premium chip (\"Show premium picks\"); never expose the segment label literally.\n";
+		$prompt .= "- chip_kind=\"clarify\": Use when the customer's question is broad/ambiguous (e.g. \"oud options?\", \"what do you have?\"). Chips are SPECIFIC refined requests grounded in real categories, signals, or attributes. Example for \"oud options?\" on a store with KG signals: [\"Show me Turkish ouds\", \"Top-rated ouds\", \"What's new in ouds?\"].\n";
+		$prompt .= "- chip_kind=\"follow_up\": Use after a confident specific answer. Chips are natural next questions a customer might tap. Example: [\"How long is shipping?\", \"Returns policy?\", \"Show me similar items\"].\n";
+		$prompt .= "- Chips must be in the SAME language as the reply.\n";
+		$prompt .= "- Do NOT invent products. Only use product/category names that appear in PRODUCT CATEGORIES, RELEVANT PRODUCTS, or KG SIGNALS above.\n";
+		$prompt .= "- All JSON keys and string values must use double quotes. Escape any double quotes inside strings.\n";
 
 		return $prompt;
 	}
@@ -1269,6 +1963,331 @@ class LuwiPress_Customer_Chat {
 			"SELECT COUNT(*) FROM {$wpdb->prefix}luwipress_chat_messages WHERE conversation_id = %d",
 			absint( $conversation_id )
 		) );
+	}
+
+	/**
+	 * Detect the language to localize chips to.
+	 *
+	 * Priority chain:
+	 *   1. WPML current language (`wpml_current_language` filter)
+	 *   2. Polylang current language (`pll_current_language()`)
+	 *   3. Customer message — quick script/charset heuristic so a Turkish
+	 *      customer typing on an English page still gets Turkish chips
+	 *   4. WP site locale (`get_locale()`)
+	 *   5. 'en' (canonical source)
+	 *
+	 * Returns a 2-letter ISO 639-1 code (en, tr, fr, ar, …).
+	 *
+	 * @param string $message Optional customer message for script heuristic.
+	 * @return string 2-letter lowercase language code.
+	 */
+	public function detect_chat_language( $message = '' ) {
+		// 1. WPML
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			$wpml = apply_filters( 'wpml_current_language', null );
+			if ( $wpml ) {
+				return strtolower( substr( (string) $wpml, 0, 2 ) );
+			}
+		}
+
+		// 2. Polylang
+		if ( function_exists( 'pll_current_language' ) ) {
+			$pl = pll_current_language( 'slug' );
+			if ( $pl ) {
+				return strtolower( substr( (string) $pl, 0, 2 ) );
+			}
+		}
+
+		// 3. Script heuristic on customer message — covers the case where
+		// a Turkish customer chats on the English language version of the
+		// store. We look for distinctive characters / common stop words.
+		if ( $message ) {
+			$msg = mb_strtolower( $message, 'UTF-8' );
+			if ( preg_match( '/[ıİğĞşŞçÇöÖüÜ]|\b(istiyorum|isterim|nasıl|hangi|kaç|nedir|merhaba|teşekkür)\b/u', $msg ) ) {
+				return 'tr';
+			}
+			if ( preg_match( '/[\x{0600}-\x{06FF}]/u', $msg ) ) {
+				return 'ar';
+			}
+			if ( preg_match( '/\b(bonjour|comment|merci|combien|quel|prix|livraison)\b/u', $msg ) ) {
+				return 'fr';
+			}
+			if ( preg_match( '/\b(hallo|wie|danke|wieviel|welche|preis|versand)\b/u', $msg ) ) {
+				return 'de';
+			}
+			if ( preg_match( '/\b(hola|cómo|como|gracias|cuánto|cuanto|cuál|cual|precio|envío|envio)\b/u', $msg ) ) {
+				return 'es';
+			}
+			if ( preg_match( '/\b(ciao|come|grazie|quanto|quale|prezzo|spedizione)\b/u', $msg ) ) {
+				return 'it';
+			}
+		}
+
+		// 4. Site locale
+		$locale = get_locale();
+		if ( $locale ) {
+			return strtolower( substr( $locale, 0, 2 ) );
+		}
+
+		return 'en';
+	}
+
+	/**
+	 * Get the chip vocabulary localized for the given language.
+	 *
+	 * Lookup order:
+	 *   1. `luwipress_chat_chip_strings` filter (operator/theme override).
+	 *   2. `luwipress_chat_chips_<lang>` option (cached AI translation).
+	 *   3. On miss for a non-English language with AI configured, translate
+	 *      the entire vocab in a single AI call and persist the result.
+	 *   4. Fall back to the English canonical source on any failure path.
+	 *
+	 * Persistent cache lives in wp_options — survives chat budgets / restarts
+	 * and only re-translates when explicitly cleared. Per-language packs are
+	 * tiny (~1KB) so the storage footprint stays negligible even with many
+	 * languages.
+	 *
+	 * @param string $lang 2-letter language code. Defaults to detect.
+	 * @return array Map of vocab key → localized string (same keys as CHIP_VOCAB_EN).
+	 */
+	public function localize_chips( $lang = '' ) {
+		if ( ! $lang ) {
+			$lang = $this->detect_chat_language();
+		}
+		$lang = sanitize_key( strtolower( substr( $lang, 0, 2 ) ) );
+		if ( ! $lang ) {
+			$lang = 'en';
+		}
+
+		// Operator/theme override has highest priority and short-circuits
+		// any AI translation. Override may return only a subset of keys;
+		// missing keys fall back to English so partial overrides are safe.
+		$override = apply_filters( 'luwipress_chat_chip_strings', null, $lang );
+		if ( is_array( $override ) && ! empty( $override ) ) {
+			return array_merge( self::CHIP_VOCAB_EN, array_intersect_key( $override, self::CHIP_VOCAB_EN ) );
+		}
+
+		if ( $lang === 'en' ) {
+			return self::CHIP_VOCAB_EN;
+		}
+
+		$option_key = 'luwipress_chat_chips_' . $lang;
+		$cached     = get_option( $option_key, null );
+		if ( is_array( $cached ) && ! empty( $cached ) ) {
+			// Heal partial caches in case CHIP_VOCAB_EN grew since last cache.
+			return array_merge( self::CHIP_VOCAB_EN, array_intersect_key( $cached, self::CHIP_VOCAB_EN ) );
+		}
+
+		// Cache miss — schedule async translation and return English for
+		// this page load. The customer's NEXT chat session in this language
+		// will see translated chips (cron usually fires within seconds).
+		// Sync translation here would block first-visitor page loads for
+		// up to 15s on AI latency, which is unacceptable for a global site.
+		$this->schedule_chip_pack_translation( $lang );
+
+		return self::CHIP_VOCAB_EN;
+	}
+
+	/**
+	 * Queue a background translation job for the given language. Idempotent
+	 * — if an event is already scheduled or the cache already exists, this
+	 * is a no-op. Random 1-10s offset so a freshly-installed multilingual
+	 * store doesn't fire N parallel AI calls in the same second.
+	 */
+	private function schedule_chip_pack_translation( $lang ) {
+		$lang = sanitize_key( strtolower( substr( $lang, 0, 2 ) ) );
+		if ( ! $lang || $lang === 'en' ) {
+			return;
+		}
+		if ( get_option( 'luwipress_chat_chips_' . $lang, null ) ) {
+			return;
+		}
+		if ( wp_next_scheduled( 'luwipress_chat_translate_chip_pack', array( $lang ) ) ) {
+			return;
+		}
+		wp_schedule_single_event( time() + wp_rand( 1, 10 ), 'luwipress_chat_translate_chip_pack', array( $lang ) );
+	}
+
+	/**
+	 * wp_cron handler that performs the actual translation. Runs out-of-band
+	 * so the chat asset render and first chat turn never block on AI latency.
+	 *
+	 * @param string $lang 2-letter language code from the scheduled event.
+	 */
+	public function cron_translate_chip_pack( $lang ) {
+		$lang = sanitize_key( strtolower( substr( (string) $lang, 0, 2 ) ) );
+		if ( ! $lang || $lang === 'en' ) {
+			return;
+		}
+		if ( get_option( 'luwipress_chat_chips_' . $lang, null ) ) {
+			return; // already filled by another path (e.g. manual REST trigger)
+		}
+		$translated = $this->translate_chip_pack( $lang );
+		if ( ! empty( $translated ) ) {
+			update_option( 'luwipress_chat_chips_' . $lang, $translated, false );
+			LuwiPress_Logger::log( 'Chat chip pack translated to ' . $lang, 'info' );
+		}
+	}
+
+	/**
+	 * Read every language the site currently serves (WPML > Polylang > site
+	 * locale). Used by the auto-warmer to pre-translate chip packs for all
+	 * active languages, so first visitors in any of them never see English
+	 * fallback chips.
+	 *
+	 * @return string[] Unique 2-letter codes, lowercased.
+	 */
+	public function get_active_site_languages() {
+		$langs = array();
+
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			$wpml = apply_filters( 'wpml_active_languages', null );
+			if ( is_array( $wpml ) ) {
+				foreach ( array_keys( $wpml ) as $code ) {
+					$langs[] = strtolower( substr( (string) $code, 0, 2 ) );
+				}
+			}
+		}
+
+		if ( function_exists( 'pll_languages_list' ) ) {
+			$pl = pll_languages_list();
+			if ( is_array( $pl ) ) {
+				foreach ( $pl as $slug ) {
+					$langs[] = strtolower( substr( (string) $slug, 0, 2 ) );
+				}
+			}
+		}
+
+		// Fall back to site locale so monolingual sites still get warmed.
+		$locale = get_locale();
+		if ( $locale ) {
+			$langs[] = strtolower( substr( $locale, 0, 2 ) );
+		}
+
+		return array_values( array_unique( array_filter( $langs ) ) );
+	}
+
+	/**
+	 * Idempotent warmer: queue translation for every active site language
+	 * that doesn't have a cached pack yet. Safe to call on every chat asset
+	 * render — uses a static flag + wp_next_scheduled gate to avoid spam.
+	 */
+	public function warm_chip_packs() {
+		static $checked = false;
+		if ( $checked ) {
+			return;
+		}
+		$checked = true;
+
+		foreach ( $this->get_active_site_languages() as $lang ) {
+			$this->schedule_chip_pack_translation( $lang );
+		}
+	}
+
+	/**
+	 * One-shot AI translation of the entire chip vocabulary. Called only on
+	 * the first chat session in a previously-unseen language; the result is
+	 * persisted so subsequent sessions in that language hit the option cache.
+	 *
+	 * Refuses to translate when the AI engine is unavailable / unconfigured
+	 * so the chat never blocks; English fallback is the safe degradation.
+	 *
+	 * @param string $lang 2-letter language code.
+	 * @return array|null Translated vocab keyed identically to CHIP_VOCAB_EN, or null on failure.
+	 */
+	private function translate_chip_pack( $lang ) {
+		if ( ! class_exists( 'LuwiPress_AI_Engine' ) ) {
+			return null;
+		}
+
+		$vocab_json = wp_json_encode( self::CHIP_VOCAB_EN, JSON_UNESCAPED_UNICODE );
+		if ( ! $vocab_json ) {
+			return null;
+		}
+
+		$lang_name = $this->iso_to_name( $lang );
+
+		$system = "You translate UI strings for an e-commerce chat widget into {$lang_name} ({$lang}).\n\n"
+			. "Output rules:\n"
+			. "- Return ONLY a valid JSON object — no markdown fences, no commentary.\n"
+			. "- Keep every key EXACTLY as given. Translate only the values.\n"
+			. "- Preserve every %s placeholder verbatim — runtime fills it with a product or category name.\n\n"
+			. "Quality rules:\n"
+			. "- Use ONLY native {$lang_name} vocabulary. NEVER keep English words like 'top-rated', 'premium', 'team', 'options' as anglicisms — translate them to their proper {$lang_name} equivalents.\n"
+			. "- Adjust word order so the placeholder %s sits naturally in the target-language grammar. Add prepositions/articles around %s if the target language requires them (e.g. 'Other %s options' → 'More items from %s', not 'Other %s options').\n"
+			. "- Use ONE consistent politeness register throughout: formal/polite \"you\" form (e.g. French 'vous', German 'Sie', Spanish 'usted' OR informal 'tú' — pick one and apply to ALL strings). Default to the form a reputable e-commerce site would use in {$lang_name}-speaking markets.\n"
+			. "- Match grammatical number to context: %s in chip templates is typically a CATEGORY name (plural products implied) — use plural-agreeing adjectives where applicable.\n"
+			. "- Keep each chip ≤ 6 words. System messages (msg_*) can be one short sentence.\n"
+			. "- Chip strings represent what the CUSTOMER taps as their next message (customer voice), except msg_* which are assistant-voice fallbacks.\n"
+			. "- Preserve typographic conventions (e.g. Spanish ¿…?, French space before ?/!/:, German Sie capitalisation).";
+
+		$result = LuwiPress_AI_Engine::dispatch(
+			'translation-pipeline',
+			array(
+				array( 'role' => 'system', 'content' => $system ),
+				array( 'role' => 'user',   'content' => $vocab_json ),
+			),
+			array(
+				'temperature' => 0.1,
+				'max_tokens'  => 800,
+				'timeout'     => 20,
+			)
+		);
+
+		if ( is_wp_error( $result ) || empty( $result['content'] ) ) {
+			LuwiPress_Logger::log( 'Chip pack translation failed for ' . $lang, 'warning' );
+			return null;
+		}
+
+		$parsed = LuwiPress_AI_Engine::extract_json( $result['content'] );
+		if ( ! is_array( $parsed ) ) {
+			return null;
+		}
+
+		// Validate: every key must be present and a non-empty string.
+		// Sanitise — chip strings must not contain HTML.
+		$out = array();
+		foreach ( self::CHIP_VOCAB_EN as $k => $en ) {
+			$v = $parsed[ $k ] ?? '';
+			$v = is_string( $v ) ? trim( wp_strip_all_tags( $v ) ) : '';
+			$out[ $k ] = $v !== '' ? $v : $en;
+		}
+
+		// Guard: if the model returned the English source verbatim for too
+		// many keys, treat it as a failed translation rather than poison
+		// the cache with English masquerading as the target language.
+		$identical = 0;
+		foreach ( self::CHIP_VOCAB_EN as $k => $en ) {
+			if ( $out[ $k ] === $en ) {
+				$identical++;
+			}
+		}
+		if ( $identical >= count( self::CHIP_VOCAB_EN ) - 2 ) {
+			return null;
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Map an ISO 639-1 code to its English name so the translation prompt
+	 * gets unambiguous language identification. Falls back to the code
+	 * itself for any language we don't have a friendly name for.
+	 */
+	private function iso_to_name( $iso ) {
+		static $map = array(
+			'en' => 'English',  'tr' => 'Turkish',     'fr' => 'French',
+			'de' => 'German',   'es' => 'Spanish',     'it' => 'Italian',
+			'pt' => 'Portuguese','ar' => 'Arabic',     'fa' => 'Persian',
+			'ru' => 'Russian',  'pl' => 'Polish',      'nl' => 'Dutch',
+			'sv' => 'Swedish',  'da' => 'Danish',      'no' => 'Norwegian',
+			'fi' => 'Finnish',  'el' => 'Greek',       'he' => 'Hebrew',
+			'zh' => 'Chinese',  'ja' => 'Japanese',    'ko' => 'Korean',
+			'hi' => 'Hindi',    'id' => 'Indonesian',  'th' => 'Thai',
+			'vi' => 'Vietnamese','uk' => 'Ukrainian',  'ro' => 'Romanian',
+			'cs' => 'Czech',    'hu' => 'Hungarian',   'bg' => 'Bulgarian',
+		);
+		return $map[ $iso ] ?? $iso;
 	}
 
 	/**

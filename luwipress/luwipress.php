@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.1.47
+ * Version: 3.1.52
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.1.47');
+define('LUWIPRESS_VERSION', '3.1.52');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -181,6 +181,11 @@ class LuwiPress {
         // ACP/ACS attribution bridge — server-side multi-cast for AI agent orders
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-acp-attribution.php';
 
+        // Theme Bridge — generic contract for LuwiPress-aware themes (3.1.48+).
+        // Themes register tools + theme_mod proxies via two filters; the bridge
+        // exposes them in the admin "Theme" tab, REST endpoints, and WebMCP.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-theme-bridge.php';
+
     }
     
     /**
@@ -269,6 +274,7 @@ class LuwiPress {
         LuwiPress_Customer_Chat::get_instance();
         LuwiPress_Abilities::get_instance();
         LuwiPress_ACP_Attribution::get_instance();
+        LuwiPress_Theme_Bridge::get_instance();
 
         // Elementor integration (only if Elementor is active)
         if ( LuwiPress_Elementor::is_elementor_active() || is_admin() ) {
@@ -358,6 +364,20 @@ class LuwiPress {
             array( $this, 'knowledge_graph_page' )
         );
 
+        // Theme submenu — only registered when the active theme actually
+        // surfaces the companion contract (capabilities or tools or settings).
+        // No companion theme installed = no Theme tab; keeps the menu honest.
+        if ( $this->theme_companion_present() ) {
+            add_submenu_page(
+                'luwipress',
+                __( 'Theme', 'luwipress' ),
+                __( 'Theme', 'luwipress' ),
+                'manage_options',
+                'luwipress-theme',
+                array( $this, 'theme_page' )
+            );
+        }
+
     }
     
     /**
@@ -386,6 +406,35 @@ class LuwiPress {
      */
     public function knowledge_graph_page() {
         include LUWIPRESS_PLUGIN_DIR . 'admin/knowledge-graph-page.php';
+    }
+
+    /**
+     * Theme page — renders Status/Tools/Settings tabs for the active companion theme.
+     */
+    public function theme_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/theme-page.php';
+    }
+
+    /**
+     * Whether the active theme registered itself with the LuwiPress companion
+     * contract (capabilities matrix OR tools OR settings). The Theme submenu
+     * only appears when at least one of these surfaces returns content.
+     */
+    private function theme_companion_present() {
+        $slug = get_stylesheet();
+
+        $companions = apply_filters( 'luwipress_theme_companion', array() );
+        if ( is_array( $companions ) && ! empty( $companions[ $slug ] ) ) {
+            return true;
+        }
+
+        if ( class_exists( 'LuwiPress_Theme_Bridge' ) ) {
+            $bridge = LuwiPress_Theme_Bridge::get_instance();
+            if ( ! empty( $bridge->get_tools() ) || ! empty( $bridge->get_settings() ) ) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -866,6 +915,19 @@ class LuwiPress {
             return;
         }
 
+        // Detect the page's current language and read the localized chip
+        // vocab for it. Translation itself is fire-and-forget via wp_cron
+        // so first-visitor page loads never block on AI latency — they
+        // see English fallback once, then cached language pack from the
+        // next visit forward.
+        $chat   = LuwiPress_Customer_Chat::get_instance();
+        $lang   = $chat->detect_chat_language();
+        $pack   = $chat->localize_chips( $lang );
+        // Also queue translations for every other active site language
+        // (WPML/Polylang) so a customer's first visit in FR/IT/ES doesn't
+        // wait on the AI either.
+        $chat->warm_chip_packs();
+
         $config = array(
             'rest_url'           => rest_url( 'luwipress/v1/chat/' ),
             'nonce'              => is_user_logged_in() ? wp_create_nonce( 'wp_rest' ) : '',
@@ -879,6 +941,9 @@ class LuwiPress {
             'telegram_username'  => get_option( 'luwipress_telegram_username', '' ),
             'is_logged_in'       => is_user_logged_in(),
             'customer_name'      => is_user_logged_in() ? wp_get_current_user()->display_name : '',
+            'fallback_categories' => $this->get_chat_fallback_categories(),
+            'lang'                => $lang,
+            'chip_pack'           => $pack,
         );
 
         $css      = file_get_contents( $css_file );
@@ -893,7 +958,42 @@ class LuwiPress {
         echo '<script id="luwipress-chat-config" ' . $skip_attrs . '>window.lpChat=' . wp_json_encode( $config ) . ';</script>' . "\n";
         echo '<script id="luwipress-chat-inline-js" ' . $skip_attrs . '>' . $js . '</script>' . "\n";
     }
-    
+
+    /**
+     * Top product categories for the chat widget's fallback chip set.
+     *
+     * Served from a 1h transient so the wp_head render path stays cheap;
+     * sites without WooCommerce return an empty array (chip set then degrades
+     * to "Talk to our team" + canned shipping/returns questions).
+     */
+    private function get_chat_fallback_categories() {
+        $cached = get_transient( 'luwipress_chat_fallback_cats' );
+        if ( is_array( $cached ) ) {
+            return $cached;
+        }
+
+        $names = array();
+        if ( taxonomy_exists( 'product_cat' ) ) {
+            $terms = get_terms( array(
+                'taxonomy'   => 'product_cat',
+                'hide_empty' => true,
+                'number'     => 4,
+                'orderby'    => 'count',
+                'order'      => 'DESC',
+            ) );
+            if ( ! is_wp_error( $terms ) ) {
+                foreach ( $terms as $term ) {
+                    if ( $term->name !== '' && strtolower( $term->slug ) !== 'uncategorized' ) {
+                        $names[] = $term->name;
+                    }
+                }
+            }
+        }
+
+        set_transient( 'luwipress_chat_fallback_cats', $names, HOUR_IN_SECONDS );
+        return $names;
+    }
+
     /**
      * Admin enqueue scripts
      */
@@ -943,6 +1043,37 @@ class LuwiPress {
                 'rest_base'  => esc_url_raw( rest_url( 'luwipress/v1/' ) ),
                 'rest_nonce' => wp_create_nonce( 'wp_rest' ),
             ));
+
+            // Theme page — page-specific tools UI (scan/execute/restore + settings save).
+            if ( false !== strpos( $hook, 'luwipress-theme' ) || 'luwipress_page_luwipress-theme' === $screen_id ) {
+                $tools_js_path = LUWIPRESS_PLUGIN_DIR . 'assets/js/theme-tools.js';
+                $tools_js_ver  = LUWIPRESS_VERSION . '.' . ( file_exists( $tools_js_path ) ? filemtime( $tools_js_path ) : '0' );
+                wp_enqueue_script(
+                    'luwipress-theme-tools',
+                    LUWIPRESS_PLUGIN_URL . 'assets/js/theme-tools.js',
+                    array(),
+                    $tools_js_ver,
+                    true
+                );
+                wp_localize_script( 'luwipress-theme-tools', 'luwipressThemeTools', array(
+                    'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                    'nonce'   => wp_create_nonce( 'luwipress_theme_tools' ),
+                    'i18n'    => array(
+                        'scanning'        => __( 'Scanning…', 'luwipress' ),
+                        'executing'       => __( 'Executing…', 'luwipress' ),
+                        'restoring'       => __( 'Restoring…', 'luwipress' ),
+                        'saving'          => __( 'Saving…', 'luwipress' ),
+                        'no_candidates'   => __( 'No candidates found.', 'luwipress' ),
+                        'select_to_run'   => __( 'Select rows to enable Execute.', 'luwipress' ),
+                        'confirm_destruct'=> __( 'This will mutate %d post(s). Continue?', 'luwipress' ),
+                        'confirm_wpml'    => __( 'WPML/Polylang siblings will be mutated together. Continue?', 'luwipress' ),
+                        'no_backups'      => __( 'No backups for this tool.', 'luwipress' ),
+                        'restored'        => __( 'Restored.', 'luwipress' ),
+                        'saved'           => __( 'Saved.', 'luwipress' ),
+                        'error'           => __( 'Error: ', 'luwipress' ),
+                    ),
+                ) );
+            }
 
             // Usage & Logs — page-specific live glue.
             if ( false !== strpos( $hook, 'luwipress-usage' ) ) {

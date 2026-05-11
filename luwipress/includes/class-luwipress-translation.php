@@ -84,6 +84,12 @@ class LuwiPress_Translation {
         add_action('wp_ajax_luwipress_fix_orphan_translations', [$this, 'ajax_fix_orphan_translations']);
         add_action('wp_ajax_luwipress_sync_wpml_menus', [$this, 'ajax_sync_wpml_menus']);
 
+        // Cron worker for /translation/force-retranslate when async path is used.
+        // Each (post_id, lang) tuple lands here and re-fires request_translation
+        // after clearing the elementor "already-translated" guard meta so the
+        // pipeline actually re-runs instead of skipping the post.
+        add_action( 'luwipress_force_retranslate_single', array( $this, 'cron_force_retranslate_single' ), 10, 2 );
+
         // Register chunk workers with the generic LuwiPress_Job_Queue.
         if ( class_exists( 'LuwiPress_Job_Queue' ) ) {
             LuwiPress_Job_Queue::register_type( 'taxonomy_translation', array( $this, 'jq_taxonomy_translation_worker' ) );
@@ -150,6 +156,40 @@ class LuwiPress_Translation {
             'args' => [
                 'post_type' => ['default' => 'page', 'sanitize_callback' => 'sanitize_text_field'],
                 'limit'     => ['default' => 100, 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
+        // Language drift: translation post EXISTS for the target language but its body
+        // content is still in the source language (the silent failure mode that makes
+        // /translation/missing report 100% coverage even when the body is broken).
+        // Heuristic: stop-word ratio. Returns posts whose target-lang stop-word share
+        // falls below the threshold (default 0.45).
+        register_rest_route($namespace, '/translation/language-drift', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'get_language_drift'],
+            'permission_callback' => [$this, 'check_permission'],
+            'args' => [
+                'post_type'   => ['default' => 'post', 'sanitize_callback' => 'sanitize_text_field'],
+                'languages'   => ['required' => false, 'description' => 'Comma-separated target languages. Defaults to every active non-source language.'],
+                'limit'       => ['default' => 200, 'sanitize_callback' => 'absint'],
+                'threshold'   => ['default' => 0.45, 'description' => 'Below this target-language score the post is flagged as drifted (0.0..1.0).'],
+                'min_words'   => ['default' => 30, 'sanitize_callback' => 'absint', 'description' => 'Skip posts whose body has fewer words than this — too little signal to score.'],
+            ],
+        ]);
+
+        // Force-retranslate: bypass /translation/missing-all gating. Caller supplies an
+        // explicit post_ids whitelist (typically from /translation/language-drift) plus
+        // the target languages to overwrite. Each (post, lang) tuple is dispatched via
+        // request_translation, which already updates in-place via create_wpml_translation
+        // when a translation already exists.
+        register_rest_route($namespace, '/translation/force-retranslate', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'force_retranslate'],
+            'permission_callback' => [$this, 'check_permission'],
+            'args' => [
+                'post_ids'  => ['required' => true, 'description' => 'Array or comma-separated source post IDs (default-language).'],
+                'languages' => ['required' => true, 'description' => 'Array or comma-separated target language codes.'],
+                'async'     => ['default' => true, 'description' => 'Queue via wp_cron for batches > 5 (post*lang) work units. Set false to run inline.'],
             ],
         ]);
 
@@ -655,6 +695,28 @@ class LuwiPress_Translation {
 
         // Elementor pages: ALWAYS use cron background job (never sync â€” avoids timeout)
         $is_elementor_page = class_exists( 'LuwiPress_Elementor' ) && LuwiPress_Elementor::is_elementor_page( $product_id );
+
+        // Ghost-Elementor guard: posts with substantial post_content but only nominal
+        // _elementor_data widgets (e.g. blog posts migrated from Hello Elementor or
+        // with kit hero overlays) are rendered by the theme via post_content, NOT
+        // Elementor. Routing them through the Elementor chunked translator only
+        // rewrites the kit overlay strings and leaves post_content English.
+        // Detect & force the standard path so the actual body gets translated.
+        if ( $is_elementor_page ) {
+            $body_strip   = wp_strip_all_tags( (string) $source_post_obj->post_content );
+            $has_real_body = mb_strlen( trim( $body_strip ) ) > 200;
+            $edata = get_post_meta( $product_id, '_elementor_data', true );
+            $widget_count = is_string( $edata ) ? substr_count( $edata, '"widgetType"' ) : 0;
+            $elementor_nominal = $widget_count > 0 && $widget_count < 5;
+            if ( $has_real_body && $elementor_nominal ) {
+                LuwiPress_Logger::log(
+                    'Ghost-Elementor detected on #' . $product_id . ' (post_content has ' . mb_strlen( $body_strip ) . ' chars, _elementor_data has only ' . $widget_count . ' widgets) — forcing standard translation path so post_content gets rewritten.',
+                    'info',
+                    array( 'post_id' => $product_id, 'widgets' => $widget_count, 'body_chars' => mb_strlen( $body_strip ) )
+                );
+                $is_elementor_page = false;
+            }
+        }
 
         if ( $is_elementor_page ) {
             foreach ( $target_languages as $lang ) {
@@ -4203,5 +4265,426 @@ class LuwiPress_Translation {
         }
 
         return array( 'sent' => $sent, 'saved' => $saved, 'errors' => $errors );
+    }
+
+    /**
+     * Stop-word signatures used by the language-drift heuristic.
+     * Each list is the ~50 most-frequent function words (articles, prepositions,
+     * conjunctions, pronouns, common verbs) — words that are extremely improbable
+     * to leak across languages. We deliberately exclude proper nouns, brand names,
+     * and tech vocabulary that survives translation untouched.
+     *
+     * Word boundaries are matched as `\b<word>\b` (lowercase, unicode-aware) so
+     * "the" doesn't false-match "thesaurus".
+     */
+    private static function get_stop_word_signatures() {
+        return array(
+            'en'    => array( 'the','and','for','with','that','this','from','have','are','was','were','will','would','could','should','about','their','there','which','what','when','where','your','our','its','into','than','then','also','just','some','any','all','more','most','other','these','those','being','been','only','very','such','through','between','because','while','after','before','during','over','under','same','each','many','much','use','used','using','like','still','well','make','made','can','may','must','not','but','out','off','one','two','three','first','second','last','new' ),
+            'es'    => array( 'el','la','los','las','un','una','unos','unas','de','del','y','o','en','con','por','para','que','se','su','sus','le','les','lo','este','esta','estos','estas','ese','esa','eso','esos','esas','aquel','como','cuando','donde','muy','más','pero','sin','sobre','entre','también','solo','sólo','desde','hasta','hacia','porque','mientras','después','antes','durante','siempre','nunca','todo','todos','toda','todas','otro','otra','otros','otras','mismo','misma','tan','tanto','poco','mucho','algunos','algunas','no','sí','ya','aún','hay','ser','está','están','sido','siendo','fue','era','eran','tiene','tienen','tenía','puede','pueden','debe','deben','hace','hacen','dijo','dice','así' ),
+            'it'    => array( 'il','lo','la','i','gli','le','un','uno','una','di','del','dello','della','dei','degli','delle','e','ed','o','ma','che','non','con','per','tra','fra','su','in','da','al','alla','ai','agli','alle','dal','dalla','dai','sul','sulla','sui','questo','questa','questi','queste','quello','quella','quelli','quelle','suo','sua','suoi','sue','loro','come','quando','dove','molto','più','anche','solo','ancora','ogni','tutto','tutti','tutta','tutte','altro','altri','altra','altre','stesso','stessa','così','sempre','mai','poi','già','dopo','prima','durante','perché','mentre','essere','è','sono','era','erano','stato','stata','stati','state','avere','ha','hanno','aveva','fare','sì','no' ),
+            'fr'    => array( 'le','la','les','un','une','des','du','de','et','ou','que','qui','quoi','dont','où','dans','sur','sous','avec','sans','pour','par','vers','entre','chez','contre','depuis','pendant','avant','après','ce','cet','cette','ces','mon','ma','mes','ton','ta','tes','son','sa','ses','notre','votre','leur','leurs','plus','moins','très','aussi','aussi','encore','toujours','jamais','déjà','tout','tous','toute','toutes','autre','autres','même','mêmes','aux','car','mais','donc','alors','quand','comment','pourquoi','parce','si','non','oui','être','est','sont','était','étaient','été','avoir','ai','as','avons','avez','ont','avait','faire','fait','fais' ),
+            'de'    => array( 'der','die','das','den','dem','des','ein','eine','einen','einem','einer','und','oder','aber','denn','sondern','dass','wenn','weil','obwohl','während','bevor','nachdem','seit','bis','von','vom','aus','mit','bei','nach','zu','zum','zur','für','um','ohne','gegen','durch','über','unter','vor','hinter','neben','zwischen','ist','sind','war','waren','sein','wird','werden','wurde','wurden','hat','haben','hatte','hatten','kann','können','muss','müssen','soll','sollen','will','wollen','mag','mögen','dies','diese','dieser','dieses','jene','jener','jenes','noch','schon','auch','nur','sehr','mehr','nicht','kein','keine','eigen','selbst' ),
+            'tr'    => array( 've','veya','ile','için','ama','fakat','ancak','çünkü','eğer','ki','de','da','ya','bir','bu','şu','o','bunu','şunu','onu','bunlar','şunlar','onlar','her','bazı','tüm','birçok','az','çok','daha','en','gibi','kadar','sonra','önce','arasında','üzerinde','altında','yanında','içinde','dışında','olarak','olmak','olan','oldu','olur','olacak','var','yok','değil','mi','mı','mu','mü','ise','iken','nasıl','ne','neden','niye','niçin','hangi','kim','nerede','nereye','ne zaman','şimdi','sonra','önce','şöyle','böyle','öyle' ),
+            'nl'    => array( 'de','het','een','en','of','maar','want','dat','die','dit','deze','dat','dat','wat','welk','welke','in','op','aan','met','voor','door','om','tot','van','uit','bij','naar','over','onder','tussen','tijdens','sinds','tot','zonder','tegen','is','zijn','was','waren','heeft','hebben','had','hadden','wordt','worden','werd','werden','kan','kunnen','moet','moeten','zal','zullen','wil','willen','niet','geen','wel','ook','nog','al','meer','minder','veel','weinig','altijd','nooit','soms','vaak','heel','erg','zeer','elke','elk','andere','ander','zelf','toch' ),
+            'pt-pt' => array( 'o','a','os','as','um','uma','uns','umas','de','do','da','dos','das','e','ou','que','para','por','com','sem','em','no','na','nos','nas','este','esta','estes','estas','esse','essa','esses','essas','aquele','aquela','aqueles','aquelas','seu','sua','seus','suas','meu','minha','meus','minhas','teu','tua','teus','tuas','nosso','nossa','nossos','nossas','vosso','vossa','vossos','vossas','muito','mais','menos','também','já','ainda','sempre','nunca','assim','como','quando','onde','porque','mas','se','não','sim','é','são','foi','eram','sido','estar','está','estão','estava','ter','tem','têm','tinha','fazer','faz','fez' ),
+            'ru'    => array( 'и','в','не','на','я','быть','он','с','что','а','по','это','она','этот','к','но','они','мы','как','из','у','который','то','за','свой','что','весь','год','ты','когда','вы','такой','же','уже','для','до','же','можно','от','очень','все','если','время','лет','есть','со','о','еще','один','чтобы','без','здесь','бы','без','между','через','под','над','при','этот','эта','эти' ),
+            'ar'    => array( 'في','من','إلى','على','عن','مع','بين','أن','إن','لا','ما','هذا','هذه','ذلك','تلك','هؤلاء','أولئك','الذي','التي','الذين','اللاتي','كان','يكون','هو','هي','هم','نحن','أنت','أنتم','كل','بعض','أي','حيث','عند','بعد','قبل','أيضا','كذلك','لكن','أو','ثم','حتى','كي','لكي','إذا','لو','قد','لقد','لم','لن','ليس','ليست','هناك','هنا','بل','إلا','غير' ),
+        );
+    }
+
+    /**
+     * Score a body of text against an expected target language.
+     *
+     * Returns a float in [0..1] where 1.0 = pure target-language and 0.0 = pure
+     * source-language (or unknown). Below ~0.45 the body has more source-language
+     * stop words than target — treat as drifted.
+     *
+     * @param string $text         Body content (HTML stripped before scoring).
+     * @param string $target_lang  Expected language code (es, it, fr, ...).
+     * @param string $source_lang  Source/default language code (typically en).
+     * @return array { float score, int target_hits, int source_hits, int word_count }
+     */
+    public static function score_text_language( $text, $target_lang, $source_lang = 'en' ) {
+        $clean = wp_strip_all_tags( (string) $text );
+        $clean = preg_replace( '/[\x{00A0}\s]+/u', ' ', $clean );
+        $clean = function_exists( 'mb_strtolower' ) ? mb_strtolower( $clean, 'UTF-8' ) : strtolower( $clean );
+
+        // Tokenise on non-letter boundaries (Unicode-aware).
+        $tokens = preg_split( '/[^\p{L}\p{N}\-]+/u', $clean, -1, PREG_SPLIT_NO_EMPTY );
+        $word_count = is_array( $tokens ) ? count( $tokens ) : 0;
+        if ( $word_count === 0 ) {
+            return array( 'score' => 1.0, 'target_hits' => 0, 'source_hits' => 0, 'word_count' => 0 );
+        }
+
+        $signatures = self::get_stop_word_signatures();
+        $target_set = isset( $signatures[ $target_lang ] ) ? array_flip( $signatures[ $target_lang ] ) : array();
+        $source_set = isset( $signatures[ $source_lang ] ) ? array_flip( $signatures[ $source_lang ] ) : array();
+
+        $target_hits = 0;
+        $source_hits = 0;
+        foreach ( $tokens as $tok ) {
+            if ( isset( $target_set[ $tok ] ) ) { $target_hits++; }
+            if ( isset( $source_set[ $tok ] ) ) { $source_hits++; }
+        }
+
+        $denom = $target_hits + $source_hits;
+        // No stop words from either side → can't score (likely lists / numbers / proper-noun heavy).
+        // Returning 1.0 (clean) here biases toward false negatives, which is correct: don't queue
+        // an AI rewrite based on insufficient evidence.
+        $score = ( $denom > 0 ) ? ( $target_hits / $denom ) : 1.0;
+
+        return array(
+            'score'       => round( $score, 3 ),
+            'target_hits' => $target_hits,
+            'source_hits' => $source_hits,
+            'word_count'  => $word_count,
+        );
+    }
+
+    /**
+     * GET /translation/language-drift — Translated posts whose body is still in
+     * the source language. Walks every translation post for the requested types
+     * and languages, scores each body, returns those below the threshold.
+     */
+    public function get_language_drift( $request ) {
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            return new WP_Error( 'no_wpml', 'WPML is required for language-drift detection.', array( 'status' => 400 ) );
+        }
+        global $wpdb;
+
+        $post_type    = sanitize_text_field( $request->get_param( 'post_type' ) ?: 'post' );
+        $limit        = min( max( 1, absint( $request->get_param( 'limit' ) ) ), 1000 );
+        $threshold    = (float) $request->get_param( 'threshold' );
+        if ( $threshold <= 0 || $threshold >= 1 ) { $threshold = 0.45; }
+        $min_words    = max( 5, absint( $request->get_param( 'min_words' ) ) );
+        $default_lang = self::get_default_language();
+        $element_type = 'post_' . $post_type;
+
+        $languages = $request->get_param( 'languages' );
+        if ( is_string( $languages ) ) {
+            $languages = array_map( 'trim', explode( ',', $languages ) );
+        }
+        $languages = array_values( array_filter( array_map( 'sanitize_text_field', (array) $languages ) ) );
+        if ( empty( $languages ) ) {
+            $detector  = LuwiPress_Plugin_Detector::get_instance();
+            $detected  = $detector->detect_translation();
+            $languages = array_values( array_diff( (array) ( $detected['active_languages'] ?? array() ), array( $default_lang ) ) );
+        }
+        if ( empty( $languages ) ) {
+            return new WP_Error( 'no_languages', 'No target languages provided and none detected.', array( 'status' => 400 ) );
+        }
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.element_id AS translation_id,
+                    t.language_code,
+                    t.trid,
+                    src_t.element_id AS source_id,
+                    src_p.post_title  AS source_title,
+                    p.post_title      AS translation_title,
+                    p.post_modified_gmt AS translation_modified
+             FROM {$wpdb->prefix}icl_translations t
+             JOIN {$wpdb->posts} p
+               ON p.ID = t.element_id AND p.post_status = 'publish'
+             JOIN {$wpdb->prefix}icl_translations src_t
+               ON src_t.trid = t.trid
+              AND src_t.element_type = t.element_type
+              AND src_t.source_language_code IS NULL
+             JOIN {$wpdb->posts} src_p
+               ON src_p.ID = src_t.element_id AND src_p.post_status = 'publish'
+             WHERE t.element_type = %s
+               AND t.source_language_code IS NOT NULL
+               AND t.language_code IN ('" . implode( "','", array_map( static function( $l ) { return (string) esc_sql( $l ); }, $languages ) ) . "')
+             ORDER BY p.post_modified_gmt DESC
+             LIMIT %d",
+            $element_type, $limit * count( $languages )
+        ) );
+
+        $items     = array();
+        $skipped   = array( 'low_signal' => 0, 'clean' => 0 );
+        $by_lang   = array_fill_keys( $languages, 0 );
+
+        foreach ( $rows as $row ) {
+            $tid        = absint( $row->translation_id );
+            $lang       = (string) $row->language_code;
+            $tpost      = get_post( $tid );
+            if ( ! $tpost ) { continue; }
+
+            // Pull the actual body. Elementor pages need the rendered text from
+            // _elementor_data, not post_content (which is often empty).
+            $body = (string) $tpost->post_content;
+            if ( class_exists( 'LuwiPress_Elementor' ) && LuwiPress_Elementor::is_elementor_page( $tid ) ) {
+                $elementor_text = self::extract_elementor_text( $tid );
+                if ( strlen( $elementor_text ) > strlen( $body ) ) {
+                    $body = $elementor_text;
+                }
+            }
+
+            $score = self::score_text_language( $body, $lang, $default_lang );
+
+            if ( $score['word_count'] < $min_words ) {
+                $skipped['low_signal']++;
+                continue;
+            }
+            if ( $score['score'] >= $threshold ) {
+                $skipped['clean']++;
+                continue;
+            }
+
+            $by_lang[ $lang ] = ( $by_lang[ $lang ] ?? 0 ) + 1;
+            $items[] = array(
+                'source_id'        => absint( $row->source_id ),
+                'source_title'     => (string) $row->source_title,
+                'translation_id'   => $tid,
+                'translation_title'=> (string) $row->translation_title,
+                'language'         => $lang,
+                'score'            => $score['score'],
+                'target_hits'      => $score['target_hits'],
+                'source_hits'      => $score['source_hits'],
+                'word_count'       => $score['word_count'],
+                'edit_url'         => admin_url( 'post.php?post=' . $tid . '&action=edit' ),
+                'permalink'        => get_permalink( $tid ),
+            );
+
+            if ( count( $items ) >= $limit ) { break; }
+        }
+
+        return rest_ensure_response( array(
+            'post_type'      => $post_type,
+            'languages'      => $languages,
+            'threshold'      => $threshold,
+            'min_words'      => $min_words,
+            'count'          => count( $items ),
+            'count_per_lang' => $by_lang,
+            'skipped'        => $skipped,
+            'items'          => $items,
+        ) );
+    }
+
+    /**
+     * Extract human-readable text from an Elementor page's _elementor_data.
+     * Walks the JSON tree and concatenates the editor / heading / text settings.
+     * Used by the language-drift detector — post_content is often empty for
+     * Elementor pages so the bare post_content body would always score 1.0.
+     */
+    public static function extract_elementor_text( $post_id ) {
+        $data = get_post_meta( $post_id, '_elementor_data', true );
+        if ( empty( $data ) ) { return ''; }
+        if ( is_string( $data ) ) {
+            $decoded = json_decode( $data, true );
+            $data = is_array( $decoded ) ? $decoded : array();
+        }
+        if ( ! is_array( $data ) ) { return ''; }
+
+        $bag = array();
+        $walk = function ( $node ) use ( &$walk, &$bag ) {
+            if ( ! is_array( $node ) ) { return; }
+            if ( isset( $node['settings'] ) && is_array( $node['settings'] ) ) {
+                foreach ( array( 'title', 'heading', 'text', 'editor', 'description', 'content', 'caption', 'tab_title', 'item_title', 'item_description' ) as $k ) {
+                    if ( isset( $node['settings'][ $k ] ) && is_string( $node['settings'][ $k ] ) ) {
+                        $bag[] = $node['settings'][ $k ];
+                    }
+                }
+                if ( isset( $node['settings']['tabs'] ) && is_array( $node['settings']['tabs'] ) ) {
+                    foreach ( $node['settings']['tabs'] as $tab ) {
+                        if ( is_array( $tab ) ) {
+                            foreach ( array( 'tab_title', 'tab_content', 'item_title', 'item_description' ) as $k ) {
+                                if ( isset( $tab[ $k ] ) && is_string( $tab[ $k ] ) ) {
+                                    $bag[] = $tab[ $k ];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if ( isset( $node['elements'] ) && is_array( $node['elements'] ) ) {
+                foreach ( $node['elements'] as $child ) { $walk( $child ); }
+            }
+        };
+        foreach ( $data as $top ) { $walk( $top ); }
+        return implode( ' ', $bag );
+    }
+
+    /**
+     * POST /translation/force-retranslate — Bypass /translation/missing-all gating.
+     * Caller supplies an explicit post_ids whitelist (typically from /translation/language-drift)
+     * plus the target languages to overwrite. Each (post, lang) tuple is dispatched
+     * via request_translation, which already updates in-place via create_wpml_translation
+     * when a translation already exists.
+     *
+     * The post_ids argument MUST be source-language post IDs. If the caller has
+     * translation IDs (e.g. from language-drift's `translation_id` field), the
+     * handler resolves them to their default-language source via WPML trid lookup.
+     */
+    public function force_retranslate( $request ) {
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            return new WP_Error( 'no_wpml', 'WPML is required.', array( 'status' => 400 ) );
+        }
+
+        $post_ids = $request->get_param( 'post_ids' );
+        if ( is_string( $post_ids ) ) {
+            $post_ids = array_map( 'trim', explode( ',', $post_ids ) );
+        }
+        $post_ids = array_values( array_filter( array_map( 'absint', (array) $post_ids ) ) );
+
+        $languages = $request->get_param( 'languages' );
+        if ( is_string( $languages ) ) {
+            $languages = array_map( 'trim', explode( ',', $languages ) );
+        }
+        $languages = array_values( array_filter( array_map( 'sanitize_text_field', (array) $languages ) ) );
+
+        if ( empty( $post_ids ) ) {
+            return new WP_Error( 'missing_ids', 'post_ids is required (array or comma-separated).', array( 'status' => 400 ) );
+        }
+        if ( empty( $languages ) ) {
+            return new WP_Error( 'missing_languages', 'languages is required (array or comma-separated).', array( 'status' => 400 ) );
+        }
+
+        $default_lang = self::get_default_language();
+        $async        = (bool) $request->get_param( 'async' );
+
+        // Resolve every passed ID to its DEFAULT-language source. If the caller passed
+        // a translation_id (the broken ES copy), walk WPML's trid back to the EN source.
+        $resolved = array();
+        foreach ( $post_ids as $pid ) {
+            $post = get_post( $pid );
+            if ( ! $post ) { continue; }
+            $lang_code = self::get_post_wpml_language( $pid );
+            if ( $lang_code === $default_lang ) {
+                $resolved[ $pid ] = $pid;
+                continue;
+            }
+            // Translation post → resolve back to source via trid.
+            $element_type = 'post_' . $post->post_type;
+            $trid = apply_filters( 'wpml_element_trid', null, $pid, $element_type );
+            if ( ! $trid ) { continue; }
+            $translations = apply_filters( 'wpml_get_element_translations', null, $trid, $element_type );
+            if ( is_array( $translations ) && isset( $translations[ $default_lang ]->element_id ) ) {
+                $resolved[ (int) $translations[ $default_lang ]->element_id ] = (int) $translations[ $default_lang ]->element_id;
+            }
+        }
+        $resolved = array_values( $resolved );
+
+        if ( empty( $resolved ) ) {
+            return new WP_Error( 'no_resolvable_sources', 'None of the passed post_ids could be resolved to a default-language source.', array( 'status' => 400 ) );
+        }
+
+        $work_units = count( $resolved ) * count( $languages );
+        $async_threshold = 5;
+        $use_async = ( $work_units > $async_threshold ) && $async && function_exists( 'wp_schedule_single_event' );
+
+        $dispatched = 0;
+        $errors     = array();
+
+        if ( $use_async ) {
+            // Schedule per (post, lang) pair on wp_cron. The handler hooks into the
+            // 'luwipress_force_retranslate_single' event registered in __construct.
+            foreach ( $resolved as $sid ) {
+                foreach ( $languages as $lang ) {
+                    update_post_meta( $sid, '_luwipress_force_retranslate_' . $lang, current_time( 'mysql' ) );
+                    wp_schedule_single_event( time() + $dispatched, 'luwipress_force_retranslate_single', array( $sid, $lang ) );
+                    $dispatched++;
+                }
+            }
+            spawn_cron();
+        } else {
+            // Inline path for small batches. Clear the guard meta on every target
+            // translation post first — otherwise the elementor pipeline short-circuits
+            // and re-uses the broken English copy.
+            foreach ( $resolved as $sid ) {
+                self::clear_retranslate_guards( $sid, $languages );
+                $sub = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
+                $sub->set_param( 'post_id', $sid );
+                $sub->set_param( 'target_languages', $languages );
+                $result = $this->request_translation( $sub );
+                if ( is_wp_error( $result ) ) {
+                    $errors[] = '#' . $sid . ': ' . $result->get_error_message();
+                } else {
+                    $dispatched += count( $languages );
+                }
+            }
+        }
+
+        LuwiPress_Logger::log(
+            sprintf( 'Force-retranslate dispatched: %d work units across %d source posts × %d languages (async=%s)',
+                $dispatched, count( $resolved ), count( $languages ), $use_async ? 'yes' : 'no' ),
+            'info',
+            array( 'post_ids' => $resolved, 'languages' => $languages )
+        );
+
+        return rest_ensure_response( array(
+            'status'       => $use_async ? 'queued' : 'completed',
+            'mode'         => $use_async ? 'async' : 'inline',
+            'sources'      => count( $resolved ),
+            'languages'    => $languages,
+            'work_units'   => $work_units,
+            'dispatched'   => $dispatched,
+            'errors'       => $errors,
+        ) );
+    }
+
+    /**
+     * Clear the "already-translated" guard meta on every target-language copy
+     * of $source_id. The Elementor translation pipeline checks this meta and
+     * short-circuits when it's set — leaving stale English content untouched.
+     * Force-retranslate calls this BEFORE re-dispatching translation so the
+     * pipeline actually does the work.
+     *
+     * @param int   $source_id  Default-language post ID.
+     * @param array $languages  Target language codes whose translation copies should be cleared.
+     */
+    public static function clear_retranslate_guards( $source_id, array $languages ) {
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) { return; }
+        $post = get_post( $source_id );
+        if ( ! $post ) { return; }
+        $element_type = 'post_' . $post->post_type;
+        $trid = apply_filters( 'wpml_element_trid', null, $source_id, $element_type );
+        if ( ! $trid ) { return; }
+        $translations = apply_filters( 'wpml_get_element_translations', null, $trid, $element_type );
+        if ( ! is_array( $translations ) ) { return; }
+        foreach ( $languages as $lang ) {
+            if ( isset( $translations[ $lang ]->element_id ) ) {
+                $tid = (int) $translations[ $lang ]->element_id;
+                delete_post_meta( $tid, '_luwipress_elementor_translated' );
+                delete_post_meta( $tid, '_luwipress_elementor_chunked' );
+                delete_post_meta( $tid, '_luwipress_translation_' . $lang . '_status' );
+            }
+        }
+    }
+
+    /**
+     * Cron handler for force-retranslate. Fires per (post_id, lang) pair scheduled
+     * by force_retranslate() when the work batch was big enough to push to wp_cron.
+     */
+    public function cron_force_retranslate_single( $source_id, $language ) {
+        $source_id = absint( $source_id );
+        $language  = sanitize_text_field( $language );
+        if ( ! $source_id || ! $language ) { return; }
+
+        self::clear_retranslate_guards( $source_id, array( $language ) );
+
+        $sub = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
+        $sub->set_param( 'post_id', $source_id );
+        $sub->set_param( 'target_languages', array( $language ) );
+        $result = $this->request_translation( $sub );
+
+        if ( is_wp_error( $result ) ) {
+            LuwiPress_Logger::log(
+                'Force-retranslate cron FAILED: #' . $source_id . ' (' . strtoupper( $language ) . ') — ' . $result->get_error_message(),
+                'error',
+                array( 'source_id' => $source_id, 'language' => $language )
+            );
+            update_post_meta( $source_id, '_luwipress_force_retranslate_' . $language . '_error', $result->get_error_message() );
+            return;
+        }
+
+        delete_post_meta( $source_id, '_luwipress_force_retranslate_' . $language );
+        delete_post_meta( $source_id, '_luwipress_force_retranslate_' . $language . '_error' );
+        update_post_meta( $source_id, '_luwipress_force_retranslate_' . $language . '_completed', current_time( 'mysql' ) );
+
+        LuwiPress_Logger::log(
+            'Force-retranslate cron OK: #' . $source_id . ' (' . strtoupper( $language ) . ')',
+            'info',
+            array( 'source_id' => $source_id, 'language' => $language )
+        );
     }
 }

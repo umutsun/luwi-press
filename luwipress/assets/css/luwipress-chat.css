@@ -14,42 +14,53 @@
 .lp-ico { font-style: normal; font-size: inherit; line-height: 1; display: inline-block; }
 .lp-chat-widget.lp-chat-left { right: auto; left: 20px; }
 
-/* Toggle — minimal pill with gradient + lift */
+/* Toggle — icon-only circular launcher with low-frequency pulse.
+ * Sized at 46×46 (down from 56×56 in 3.1.53 — operator UI feedback:
+ * a touch smaller reads more refined and stops competing with the
+ * PDP sticky bar for visual weight). */
 .lp-chat-toggle {
-    height: 44px;
-    padding: 0 18px;
-    border-radius: 22px;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border-radius: 50%;
     background: linear-gradient(135deg, var(--lp-primary) 0%, color-mix(in srgb, var(--lp-primary) 88%, #000) 100%);
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 7px;
+    gap: 0;
     box-shadow: 0 4px 14px color-mix(in srgb, var(--lp-primary) 30%, transparent), 0 1px 3px rgba(0,0,0,.08);
     transition: transform .2s cubic-bezier(.4,0,.2,1), box-shadow .2s ease;
     position: relative;
     color: var(--lp-text);
     font-family: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: .01em;
+    font-size: 0;
+    line-height: 0;
+    letter-spacing: 0;
+    animation: lp-chat-pulse 3.6s ease-in-out infinite;
 }
 .lp-chat-toggle:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 24px color-mix(in srgb, var(--lp-primary) 40%, transparent), 0 2px 6px rgba(0,0,0,.1);
+    animation-play-state: paused;
 }
 .lp-chat-toggle::before {
     content: '';
     display: inline-block;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/%3E%3C/svg%3E");
     background-size: contain;
     background-repeat: no-repeat;
 }
-.lp-chat-toggle::after {
-    content: 'Chat';
+@keyframes lp-chat-pulse {
+    0%   { box-shadow: 0 4px 14px color-mix(in srgb, var(--lp-primary) 30%, transparent), 0 1px 3px rgba(0,0,0,.08), 0 0 0 0 color-mix(in srgb, var(--lp-primary) 55%, transparent); }
+    60%  { box-shadow: 0 4px 14px color-mix(in srgb, var(--lp-primary) 30%, transparent), 0 1px 3px rgba(0,0,0,.08), 0 0 0 14px color-mix(in srgb, var(--lp-primary) 0%, transparent); }
+    100% { box-shadow: 0 4px 14px color-mix(in srgb, var(--lp-primary) 30%, transparent), 0 1px 3px rgba(0,0,0,.08), 0 0 0 0 color-mix(in srgb, var(--lp-primary) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .lp-chat-toggle { animation: none; }
 }
 
 /* Window — slightly wider, more generous radius, softer shadow.
@@ -355,6 +366,56 @@
 .lp-chat-wa-btn { background: #25d366; color: #fff; }
 .lp-chat-tg-btn { background: #0088cc; color: #fff; }
 
+/* Quick-reply chips (clarify + follow-up).
+   Sits below the latest assistant bubble. The whole block is removed
+   when the customer commits a new message — chips are ephemeral. */
+.lp-chat-chips {
+    align-self: flex-start;
+    max-width: 100%;
+    margin: 2px 0 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    animation: lp-msg-in .22s cubic-bezier(.4,0,.2,1);
+}
+.lp-chat-chips-label {
+    font-size: 11px;
+    color: #6b7280;
+    letter-spacing: .02em;
+    padding: 0 4px;
+}
+.lp-chat-chips-clarify .lp-chat-chips-label { color: color-mix(in srgb, var(--lp-primary) 75%, #555); font-weight: 500; }
+.lp-chat-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.lp-chat-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 12px;
+    border-radius: 18px;
+    border: 1px solid color-mix(in srgb, var(--lp-primary) 35%, transparent);
+    background: #fff;
+    color: var(--lp-primary);
+    font-family: inherit;
+    font-size: 12.5px;
+    line-height: 1.2;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s, transform .12s;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    max-width: 100%;
+    white-space: normal;
+    text-align: left;
+}
+.lp-chat-chip:hover {
+    background: color-mix(in srgb, var(--lp-primary) 10%, #fff);
+    border-color: color-mix(in srgb, var(--lp-primary) 60%, transparent);
+    transform: translateY(-1px);
+}
+.lp-chat-chip:active { transform: translateY(0); }
+
 /* Inline escalation */
 .lp-chat-inline-escalate {
     display: inline-block;
@@ -374,8 +435,8 @@
 @media (max-width: 600px) {
     .lp-chat-widget { bottom: 14px; right: 14px; }
     .lp-chat-widget.lp-chat-left { left: 14px; }
-    .lp-chat-toggle { height: 36px; padding: 0 12px; font-size: 12px; }
-    .lp-chat-toggle::before { width: 14px; height: 14px; min-width: 14px; min-height: 14px; background-size: 14px 14px; }
+    .lp-chat-toggle { width: 48px; height: 48px; padding: 0; font-size: 0; }
+    .lp-chat-toggle::before { width: 22px; height: 22px; min-width: 22px; min-height: 22px; background-size: 22px 22px; }
     .lp-chat-window {
         position: fixed;
         top: 0; bottom: 0; right: 0; left: 0;

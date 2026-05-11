@@ -85,6 +85,33 @@ class LuwiPress_KG_Opportunities {
 			$candidates[] = $c;
 		}
 
+		/**
+		 * Allow the Theme Bridge (3.1.48+) and other companions to inject
+		 * candidates derived from sources outside the core opportunity engine.
+		 *
+		 * Each entry MUST follow the same shape as a built-in candidate
+		 * (id/type/title/body/impact/effort_min/roi/tier/why) so the queue
+		 * can rank them uniformly. Companions that don't satisfy that shape
+		 * are dropped silently to keep the response stable.
+		 *
+		 * @since 3.1.48
+		 * @param array $candidates Existing core candidates.
+		 */
+		$external = apply_filters( 'luwipress_kg_action_queue_external_candidates', array() );
+		if ( is_array( $external ) ) {
+			foreach ( $external as $c ) {
+				if ( empty( $c['id'] ) || empty( $c['type'] ) ) {
+					continue;
+				}
+				// Default missing numeric fields so usort/state filtering doesn't warn.
+				$c['impact']     = isset( $c['impact'] ) ? (float) $c['impact'] : 30;
+				$c['effort_min'] = isset( $c['effort_min'] ) ? max( 1, (int) $c['effort_min'] ) : 30;
+				$c['roi']        = isset( $c['roi'] ) ? (float) $c['roi'] : ( $c['impact'] / max( 1, $c['effort_min'] ) );
+				$c['tier']       = $c['tier'] ?? 'medium';
+				$candidates[] = $c;
+			}
+		}
+
 		// Filter out hidden states + sort by ROI desc.
 		$state = $this->get_state();
 		$now   = time();

@@ -16,8 +16,10 @@
         criticalCss:
             '#lp-chat-widget{position:fixed;bottom:20px;right:20px;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}' +
             '#lp-chat-widget.lp-chat-left{right:auto;left:20px}' +
-            '#lp-chat-widget .lp-chat-toggle{display:inline-flex;align-items:center;justify-content:center;height:44px;min-width:44px;padding:0 14px;border:0;border-radius:24px;cursor:pointer;background:var(--lp-primary,#6366f1);color:var(--lp-text,#fff);font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.18);gap:8px}' +
-            '#lp-chat-widget .lp-chat-toggle::before{content:"";display:inline-block;width:18px;height:18px;background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23ffffff\'%3E%3Cpath d=\'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z\'/%3E%3C/svg%3E");background-size:contain;background-repeat:no-repeat;background-position:center}' +
+            '#lp-chat-widget .lp-chat-toggle{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;padding:0;border:0;border-radius:50%;cursor:pointer;background:var(--lp-primary,#6366f1);color:var(--lp-text,#fff);font-size:0;line-height:0;box-shadow:0 6px 20px rgba(0,0,0,.18);animation:lp-chat-pulse 3.6s ease-in-out infinite}' +
+            '#lp-chat-widget .lp-chat-toggle::before{content:"";display:inline-block;width:24px;height:24px;background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23ffffff\'%3E%3Cpath d=\'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z\'/%3E%3C/svg%3E");background-size:contain;background-repeat:no-repeat;background-position:center}' +
+            '@keyframes lp-chat-pulse{0%{box-shadow:0 6px 20px rgba(0,0,0,.18),0 0 0 0 rgba(99,102,241,.55)}60%{box-shadow:0 6px 20px rgba(0,0,0,.18),0 0 0 14px rgba(99,102,241,0)}100%{box-shadow:0 6px 20px rgba(0,0,0,.18),0 0 0 0 rgba(99,102,241,0)}}' +
+            '@media (prefers-reduced-motion: reduce){#lp-chat-widget .lp-chat-toggle{animation:none}}' +
             '#lp-chat-widget:not(.lp-chat-closed) .lp-chat-toggle{display:none}' +
             '#lp-chat-widget.lp-chat-closed .lp-chat-window{display:none}',
 
@@ -171,15 +173,22 @@
             }
         },
 
-        sendMessage: async function() {
+        sendMessage: async function(overrideText) {
             var input = document.getElementById('lp-chat-input');
-            var message = input.value.trim();
+            var message = (typeof overrideText === 'string' && overrideText)
+                ? overrideText
+                : input.value.trim();
             if (!message || this.sending) return;
 
             this.sending = true;
             input.value = '';
             input.disabled = true;
             document.getElementById('lp-chat-send').disabled = true;
+
+            // Active chips always belong to the LAST assistant turn; remove
+            // them when the customer commits a new message so stale choices
+            // don't pile up alongside fresh context.
+            this.clearChips();
 
             this.renderMessage('customer', message);
             this.showTyping();
@@ -203,7 +212,8 @@
                 this.hideTyping();
 
                 if (res.status === 429) {
-                    this.renderMessage('assistant', 'You\'re sending messages too quickly. Please wait a moment.');
+                    this.renderMessage('assistant', this.chipText('msg_rate_limit'));
+                    this.renderChips(this.getFallbackChips('clarify'), 'clarify');
                     return;
                 }
 
@@ -213,17 +223,135 @@
                     this.renderMessage('assistant', data.response);
                 }
 
+                if (data.chips && data.chips.length) {
+                    this.renderChips(data.chips, data.chip_kind || 'follow_up');
+                }
+
                 if (data.suggest_escalation) {
                     this.showEscalationSuggestion();
                 }
             } catch (err) {
                 this.hideTyping();
-                this.renderMessage('assistant', 'Sorry, something went wrong. Please try again.');
+                this.renderMessage('assistant', this.chipText('msg_error'));
+                this.renderChips(this.getFallbackChips('clarify'), 'clarify');
             } finally {
                 this.sending = false;
                 input.disabled = false;
                 input.focus();
             }
+        },
+
+        /**
+         * Resolve a vocab key against the server-supplied chip pack. Falls
+         * back to English defaults so the chat never renders an empty
+         * pill, even if the pack failed to load. Supports %s substitution
+         * for one positional argument.
+         */
+        chipText: function(key, arg) {
+            var pack = (window.lpChat && lpChat.chip_pack) ? lpChat.chip_pack : {};
+            var fallback = {
+                shipping: 'How long is shipping?',
+                returns: 'What about returns?',
+                talk_to_team: 'Talk to our team',
+                premium_picks: 'Show premium picks',
+                top_rated: 'Best picks',
+                whats_new: "What's new?",
+                did_you_mean: 'Did you mean %s?',
+                show_me: 'Show me %s',
+                more_like: 'Show similar to %s',
+                other_options: 'More from %s',
+                top_rated_x: 'Best %s',
+                whats_new_in: "What's new in %s?",
+                yes_show_me: 'Yes, show me %s',
+                clarify_label: 'Pick one to clarify:',
+                followup_label: 'You can also ask:',
+                msg_rate_limit: "You're sending messages too quickly. Please wait a moment.",
+                msg_error: 'Sorry, something went wrong. Please try again.',
+                msg_connecting: 'Connecting you with our team. A new window will open shortly.'
+            };
+            var tmpl = pack[key] || fallback[key] || '';
+            if (typeof arg === 'string') {
+                tmpl = tmpl.replace('%s', arg);
+            }
+            return tmpl;
+        },
+
+        /**
+         * Render a row of quick-reply pills below the latest assistant
+         * message. `kind` is "clarify" or "follow_up" and only affects the
+         * surrounding label so the customer understands what tapping does.
+         */
+        renderChips: function(chips, kind) {
+            if (!Array.isArray(chips) || !chips.length) return;
+            this.clearChips();
+            var body = document.getElementById('lp-chat-body');
+            var wrap = document.createElement('div');
+            wrap.className = 'lp-chat-chips lp-chat-chips-' + (kind === 'clarify' ? 'clarify' : 'followup');
+            wrap.id = 'lp-chat-chips';
+
+            var label = document.createElement('div');
+            label.className = 'lp-chat-chips-label';
+            label.textContent = this.chipText(kind === 'clarify' ? 'clarify_label' : 'followup_label');
+            wrap.appendChild(label);
+
+            var row = document.createElement('div');
+            row.className = 'lp-chat-chips-row';
+
+            // Key-based escalation detection — works in every language
+            // because we compare against the localized pack value, not a
+            // regex on English text.
+            var escapeChipText = this.chipText('talk_to_team');
+
+            var self = this;
+            chips.forEach(function(text) {
+                if (typeof text !== 'string' || !text.trim()) return;
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'lp-chat-chip';
+                btn.textContent = text.trim();
+                btn.addEventListener('click', function() {
+                    if (self.sending) return;
+                    if (text.trim() === escapeChipText) {
+                        self.clearChips();
+                        self.escalateToAgent();
+                        return;
+                    }
+                    self.sendMessage(text);
+                });
+                row.appendChild(btn);
+            });
+
+            wrap.appendChild(row);
+            body.appendChild(wrap);
+            body.scrollTop = body.scrollHeight;
+        },
+
+        clearChips: function() {
+            var existing = document.getElementById('lp-chat-chips');
+            if (existing) existing.remove();
+        },
+
+        getFallbackChips: function(kind) {
+            var chips = [];
+            var cats = (window.lpChat && Array.isArray(lpChat.fallback_categories))
+                ? lpChat.fallback_categories
+                : [];
+            var self = this;
+            cats.slice(0, 3).forEach(function(name) {
+                if (name) chips.push(self.chipText('show_me', name));
+            });
+            if (kind === 'follow_up') {
+                chips.push(this.chipText('shipping'));
+                chips.push(this.chipText('returns'));
+            } else {
+                chips.push(this.chipText('talk_to_team'));
+            }
+            // Dedupe and cap
+            var seen = {}, out = [];
+            chips.forEach(function(c) {
+                if (c && !seen[c]) { seen[c] = 1; out.push(c); }
+            });
+            return out.slice(0, 4);
         },
 
         renderMessage: function(role, content) {
@@ -298,7 +426,7 @@
                 body: JSON.stringify({ session_id: this.sessionId, channel: channel === 'both' ? 'whatsapp' : channel })
             }).catch(function() {});
 
-            this.renderMessage('assistant', 'Connecting you with our team. A new window will open shortly.');
+            this.renderMessage('assistant', this.chipText('msg_connecting'));
         },
 
         showChannelChoice: function(greeting) {

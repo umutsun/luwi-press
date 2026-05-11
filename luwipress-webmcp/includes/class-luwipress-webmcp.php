@@ -1155,12 +1155,19 @@ class LuwiPress_WebMCP {
                 'openWorldHint'    => false,
             ),
         ), function ( $args ) {
-            return $this->proxy_rest_post( 'LuwiPress_API', 'handle_set_seo_meta', array(
-                'post_id'       => intval( $args['post_id'] ),
-                'title'         => $args['meta_title'] ?? '',
-                'description'   => $args['meta_description'] ?? '',
-                'focus_keyword' => $args['focus_keyword'] ?? '',
-            ) );
+            // Partial-update semantics: only forward fields the caller actually sent.
+            // Coercing missing args to '' caused the handler to clear existing meta on the target post (1.0.13 bug).
+            $payload = array( 'post_id' => intval( $args['post_id'] ) );
+            if ( array_key_exists( 'meta_title', $args ) ) {
+                $payload['title'] = $args['meta_title'];
+            }
+            if ( array_key_exists( 'meta_description', $args ) ) {
+                $payload['description'] = $args['meta_description'];
+            }
+            if ( array_key_exists( 'focus_keyword', $args ) ) {
+                $payload['focus_keyword'] = $args['focus_keyword'];
+            }
+            return $this->proxy_rest_post( 'LuwiPress_API', 'handle_set_seo_meta', $payload );
         } );
     }
 
@@ -1409,6 +1416,80 @@ class LuwiPress_WebMCP {
             $request->set_param( 'post_type', $args['post_type'] ?? 'product' );
             $request->set_param( 'limit', $args['limit'] ?? 50 );
             $data = $trans->batch_translate_missing( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        // Detect translated posts whose body is still in the source language —
+        // the silent failure mode that makes existence-based coverage report
+        // 100% even when blogs are broken English. Returns scored items, the
+        // operator (or AI agent) feeds the source IDs back into
+        // translation_force_retranslate to fix.
+        $this->register_tool( 'translation_language_drift', array(
+            'description' => 'Detect translated posts whose body content is still in the source language (existence-based coverage lies — the post exists but never got translated). Scores each body via stop-word ratio; returns posts below the threshold. Pair with translation_force_retranslate to fix.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_type' => array( 'type' => 'string', 'description' => 'Post type to scan (default: post). Common values: post, page, product.' ),
+                    'languages' => array( 'type' => 'string', 'description' => 'Comma-separated target language codes. Defaults to every active non-source language.' ),
+                    'limit'     => array( 'type' => 'integer', 'description' => 'Max items to return (default 200, max 1000).' ),
+                    'threshold' => array( 'type' => 'number', 'description' => 'Below this target-language score (0..1) the post is flagged as drifted. Default 0.45.' ),
+                    'min_words' => array( 'type' => 'integer', 'description' => 'Skip posts whose body has fewer words than this (default 30).' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Detect Translation Language Drift',
+                'readOnlyHint'    => true,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $trans   = LuwiPress_Translation::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/translation/language-drift' );
+            if ( ! empty( $args['post_type'] ) ) { $request->set_param( 'post_type', sanitize_text_field( $args['post_type'] ) ); }
+            if ( ! empty( $args['languages'] ) ) { $request->set_param( 'languages', sanitize_text_field( $args['languages'] ) ); }
+            if ( isset( $args['limit'] ) )       { $request->set_param( 'limit', (int) $args['limit'] ); }
+            if ( isset( $args['threshold'] ) )   { $request->set_param( 'threshold', (float) $args['threshold'] ); }
+            if ( isset( $args['min_words'] ) )   { $request->set_param( 'min_words', (int) $args['min_words'] ); }
+            $data = $trans->get_language_drift( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_code(), 'message' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        // Force-retranslate: clears the elementor "already-translated" guard
+        // meta on every target translation post and re-runs the AI pipeline.
+        // Bypasses /translation/missing-all gating — pass an explicit list of
+        // source IDs (default-language post IDs from translation_language_drift).
+        $this->register_tool( 'translation_force_retranslate', array(
+            'description' => 'Force-retranslate posts that already have a translation post (overwrites). Clears the Elementor "already-translated" guard meta and re-fires the AI pipeline. Pass source-language post IDs (typically from translation_language_drift). Async wp_cron path is automatic when work units > 5.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_ids'  => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Source-language post IDs to retranslate (required).' ),
+                    'languages' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Target language codes to overwrite (required).' ),
+                    'async'     => array( 'type' => 'boolean', 'description' => 'Queue via wp_cron when batch is large (default true).' ),
+                ),
+                'required' => array( 'post_ids', 'languages' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Force-Retranslate Posts (Drift Sweep)',
+                'readOnlyHint'    => false,
+                'destructiveHint' => true,  // Overwrites translation post bodies
+                'idempotentHint'  => false,
+                'openWorldHint'   => true,  // Triggers AI pipeline + external API calls
+            ),
+        ), function ( $args ) {
+            $trans   = LuwiPress_Translation::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/force-retranslate' );
+            $request->set_param( 'post_ids', $args['post_ids'] ?? array() );
+            $request->set_param( 'languages', $args['languages'] ?? array() );
+            if ( isset( $args['async'] ) ) { $request->set_param( 'async', (bool) $args['async'] ); }
+            $data = $trans->force_retranslate( $request );
+            if ( is_wp_error( $data ) ) {
+                return array( 'error' => $data->get_error_code(), 'message' => $data->get_error_message() );
+            }
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
 
@@ -3272,7 +3353,7 @@ class LuwiPress_WebMCP {
             $update['post_content'] = wp_kses_post( $args['content'] );
         }
         if ( isset( $args['excerpt'] ) ) {
-            $update['post_excerpt'] = sanitize_text_field( $args['excerpt'] );
+            $update['post_excerpt'] = wp_kses_post( $args['excerpt'] );
         }
         if ( isset( $args['status'] ) ) {
             $update['post_status'] = sanitize_text_field( $args['status'] );
@@ -5040,6 +5121,172 @@ class LuwiPress_WebMCP {
                     'today_total' => $today_spend,
                 ),
             );
+        } );
+
+        // ────────── Theme Tools framework (1.0.12 — paired with core 3.1.48) ──────────
+        // Bridge contract: themes register maintenance tools via the
+        // `luwipress_theme_tools` filter. These four MCP tools surface that
+        // registry over MCP so AI agents can drive the same scan/execute/
+        // restore flow operators see in the LuwiPress -> Theme admin tab.
+
+        $this->register_tool( 'theme_tools_list', array(
+            'description' => 'List every maintenance tool the active theme has registered with the LuwiPress Theme Bridge. Each tool exposes scan / execute / restore primitives. Tools are filtered by active theme — switching themes changes the registry.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'List Theme Tools', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Theme_Bridge' ) ) {
+                throw new Exception( 'Theme Bridge unavailable — requires LuwiPress 3.1.48+.' );
+            }
+            $bridge = LuwiPress_Theme_Bridge::get_instance();
+            $tools  = array();
+            foreach ( $bridge->get_tools() as $t ) {
+                $tools[] = array(
+                    'id'          => $t['id'],
+                    'label'       => $t['label'],
+                    'description' => $t['description'],
+                    'category'    => $t['category'],
+                    'capability'  => $t['capability'],
+                    'wpml_aware'  => (bool) $t['wpml_aware'],
+                    'destructive' => (bool) $t['destructive'],
+                    'actions'     => array_keys( $t['callbacks'] ),
+                );
+            }
+            return array(
+                'theme' => $bridge->active_theme_slug(),
+                'tools' => $tools,
+                'count' => count( $tools ),
+            );
+        } );
+
+        $this->register_tool( 'theme_tool_run', array(
+            'description' => 'Run a registered theme tool. Use action="scan" to discover candidates (read-only); action="execute" to mutate (only for tools whose `destructive` flag is true). Execute auto-expands WPML/Polylang siblings when the tool is `wpml_aware:true`. Returns the tool\'s native shape: candidates list (scan) or mutated count + backup_id (execute).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'tool_id'  => array( 'type' => 'string', 'description' => 'Tool id from theme_tools_list (e.g. "elementor_shell_cleanup", "kit_css_health", "slug_conflict_audit").' ),
+                    'action'   => array( 'type' => 'string', 'enum' => array( 'scan', 'execute' ), 'description' => 'scan = read-only discovery; execute = mutate (must be supported by the tool).' ),
+                    'post_ids' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Required for execute. Source post IDs; siblings auto-expand for WPML-aware tools.' ),
+                    'args'     => array( 'type' => 'object', 'description' => 'Tool-specific arguments (limit, post_types, etc).' ),
+                ),
+                'required' => array( 'tool_id', 'action' ),
+            ),
+            'annotations' => array( 'title' => 'Run Theme Tool', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Theme_Bridge' ) ) {
+                throw new Exception( 'Theme Bridge unavailable — requires LuwiPress 3.1.48+.' );
+            }
+            $tool_id = sanitize_key( $args['tool_id'] ?? '' );
+            $action  = sanitize_key( $args['action'] ?? 'scan' );
+            $payload = isset( $args['args'] ) && is_array( $args['args'] ) ? $args['args'] : array();
+            if ( ! empty( $args['post_ids'] ) && is_array( $args['post_ids'] ) ) {
+                $payload['post_ids'] = array_map( 'intval', $args['post_ids'] );
+            }
+            $bridge = LuwiPress_Theme_Bridge::get_instance();
+            $res    = $bridge->run_tool( $tool_id, $action, $payload );
+            if ( is_wp_error( $res ) ) {
+                throw new Exception( $res->get_error_message() );
+            }
+            return $res;
+        } );
+
+        $this->register_tool( 'theme_tool_restore', array(
+            'description' => 'Restore from a backup taken by a previous theme_tool_run execute. Replays the captured pre-mutation payload. Backups are pruned to the last 20 per site; older entries are not retrievable.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'tool_id'   => array( 'type' => 'string', 'description' => 'Tool id (must match the tool that originally produced the backup).' ),
+                    'backup_id' => array( 'type' => 'string', 'description' => 'UUID returned by theme_tool_run (or by theme_tool_backups).' ),
+                ),
+                'required' => array( 'tool_id', 'backup_id' ),
+            ),
+            'annotations' => array( 'title' => 'Restore Theme Tool Backup', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Theme_Bridge' ) ) {
+                throw new Exception( 'Theme Bridge unavailable — requires LuwiPress 3.1.48+.' );
+            }
+            $tool_id   = sanitize_key( $args['tool_id'] ?? '' );
+            $backup_id = sanitize_text_field( $args['backup_id'] ?? '' );
+            $bridge    = LuwiPress_Theme_Bridge::get_instance();
+            $res       = $bridge->run_tool( $tool_id, 'restore', array( 'backup_id' => $backup_id ) );
+            if ( is_wp_error( $res ) ) {
+                throw new Exception( $res->get_error_message() );
+            }
+            return $res;
+        } );
+
+        $this->register_tool( 'theme_tool_backups', array(
+            'description' => 'List backups for a theme tool (or all tools when tool_id is omitted). Each entry includes the backup id, timestamp, and the post IDs that were affected. Use the id with theme_tool_restore.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'tool_id' => array( 'type' => 'string', 'description' => 'Optional — filter to a single tool.' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'List Theme Tool Backups', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Theme_Bridge' ) ) {
+                throw new Exception( 'Theme Bridge unavailable — requires LuwiPress 3.1.48+.' );
+            }
+            $tool_id = isset( $args['tool_id'] ) && $args['tool_id'] !== '' ? sanitize_key( $args['tool_id'] ) : null;
+            $bridge  = LuwiPress_Theme_Bridge::get_instance();
+            return array(
+                'theme'   => $bridge->active_theme_slug(),
+                'tool_id' => $tool_id,
+                'backups' => $bridge->get_backups( $tool_id ),
+            );
+        } );
+
+        $this->register_tool( 'theme_settings_get', array(
+            'description' => 'Read every theme_mod proxy registered via the LuwiPress Theme Bridge. Returns id, theme_mod key, label, type, default, current value, and the group it belongs to.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Get Bridged Theme Settings', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Theme_Bridge' ) ) {
+                throw new Exception( 'Theme Bridge unavailable — requires LuwiPress 3.1.48+.' );
+            }
+            $bridge = LuwiPress_Theme_Bridge::get_instance();
+            $out    = array();
+            foreach ( $bridge->get_settings() as $s ) {
+                $out[] = array(
+                    'id'        => $s['id'],
+                    'theme_mod' => $s['theme_mod'],
+                    'label'     => $s['label'],
+                    'type'      => $s['type'],
+                    'group'     => $s['group'],
+                    'default'   => $s['default'],
+                    'value'     => get_theme_mod( $s['theme_mod'], $s['default'] ),
+                );
+            }
+            return array( 'theme' => $bridge->active_theme_slug(), 'settings' => $out, 'count' => count( $out ) );
+        } );
+
+        $this->register_tool( 'theme_settings_set', array(
+            'description' => 'Update one bridged theme setting by id (NOT the raw theme_mod key — use theme_customizer_set for that). The bridge validates type, clamps numbers to min/max, and rejects unknown ids. Returns the saved value so the caller can verify.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'id'    => array( 'type' => 'string', 'description' => 'Setting id from theme_settings_get (e.g. "loader_enabled", "mega_columns").' ),
+                    'value' => array( 'description' => 'New value. Type-coerced per the setting definition.' ),
+                ),
+                'required' => array( 'id', 'value' ),
+            ),
+            'annotations' => array( 'title' => 'Set Bridged Theme Setting', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Theme_Bridge' ) ) {
+                throw new Exception( 'Theme Bridge unavailable — requires LuwiPress 3.1.48+.' );
+            }
+            $bridge = LuwiPress_Theme_Bridge::get_instance();
+            $res    = $bridge->save_setting( sanitize_key( $args['id'] ?? '' ), $args['value'] ?? '' );
+            if ( is_wp_error( $res ) ) {
+                throw new Exception( $res->get_error_message() );
+            }
+            return $res;
         } );
     }
 

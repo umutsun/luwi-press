@@ -14,14 +14,40 @@ if ( ! current_user_can( 'manage_options' ) ) {
 }
 
 $current_user = wp_get_current_user();
+$logo_url     = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' : '';
+$ai_provider  = get_option( 'luwipress_ai_provider', 'openai' );
+$ai_model     = get_option( 'luwipress_ai_model', 'gpt-4o-mini' );
+$provider_lbl = array( 'openai' => 'OpenAI', 'anthropic' => 'Anthropic', 'google' => 'Google AI', 'openai_compatible' => 'OpenAI-Compatible' );
+$ai_label     = ( $provider_lbl[ $ai_provider ] ?? ucfirst( $ai_provider ) ) . ' · ' . $ai_model;
 ?>
 
-<div class="wrap luwipress-claw-wrap">
-	<h1 class="luwipress-title">
-		<span class="dashicons dashicons-superhero-alt"></span>
-		Open Claw
-		<span class="luwipress-version">AI Assistant</span>
-	</h1>
+<div class="wrap luwipress-admin luwipress-dashboard luwipress-claw-wrap">
+
+	<!-- ═══ HEADER ═══ -->
+	<div class="lp-header">
+		<div class="lp-header-left">
+			<h1 class="lp-title">
+				<?php if ( $logo_url ) : ?>
+					<img class="lp-logo" width="28" height="28" src="<?php echo esc_url( $logo_url ); ?>" alt="LuwiPress" />
+				<?php else : ?>
+					<span class="dashicons dashicons-superhero-alt" style="font-size:24px;width:24px;height:24px;color:var(--lp-primary);"></span>
+				<?php endif; ?>
+				<?php esc_html_e( 'Open Claw', 'luwipress' ); ?>
+			</h1>
+			<p class="lp-subtitle"><?php esc_html_e( 'AI assistant for managing WordPress and WooCommerce — admin-only conversations.', 'luwipress' ); ?></p>
+		</div>
+		<div class="lp-header-actions">
+			<span class="lp-pill pill-success" title="<?php esc_attr_e( 'AI provider currently configured', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-admin-generic"></span> <?php echo esc_html( $ai_label ); ?>
+			</span>
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress' ) ); ?>"
+			   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
+			   title="<?php esc_attr_e( 'Back to LuwiPress Dashboard', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-admin-home"></span>
+				<span class="screen-reader-text"><?php esc_html_e( 'Dashboard', 'luwipress' ); ?></span>
+			</a>
+		</div>
+	</div>
 
 	<div class="claw-layout">
 		<!-- Chat Panel -->
@@ -122,7 +148,7 @@ $current_user = wp_get_current_user();
 				<h4><span class="dashicons dashicons-admin-site-alt3"></span> Runs in</h4>
 				<div class="claw-channels-list">
 					<div class="claw-channel-item">
-						<span class="dashicons dashicons-laptop" style="color:#6366f1;"></span>
+						<span class="dashicons dashicons-laptop" style="color:var(--lp-primary);"></span>
 						<span>Admin Panel</span>
 						<span class="claw-channel-status claw-status-active">Active</span>
 					</div>

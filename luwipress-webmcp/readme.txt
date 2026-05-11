@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.11
+Stable tag: 1.0.14
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,24 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.14 — content_update_post + seo_write_meta bug fixes =
+* **FIX (`content_update_post`)**: `post_excerpt` now uses `wp_kses_post()` instead of `sanitize_text_field()`. Excerpts written through the tool no longer have HTML tags (e.g. `<ul>`, `<li>`, `<strong>`) stripped. Discovered during 2026-05-11 Tapadum migration when WC product excerpts with bullet-list formatting collapsed into flat paragraphs on the target site.
+* **FIX (`seo_write_meta`)**: Partial-update semantics now respected — only the Rank Math meta fields explicitly passed in the call are forwarded to the handler. Previously, missing args were coerced to `''` which caused the handler to clear existing values on the target post (e.g. a caller that sent only `meta_title` + `meta_description` ended up wiping `focus_keyword`). Same migration session surfaced this.
+* **NOTE**: No schema or surface changes; both fixes are internal to the MCP tool wrappers. Existing callers that explicitly send all three SEO fields are unaffected.
+
+= 1.0.13 — Translation language drift detection + force-retranslate MCP tools =
+* **NEW (`translation_language_drift`)**: Detect translated posts whose body content is still in the source language — the silent failure mode that makes existence-based coverage report 100% even when blogs are broken English. Read-only scan; returns flagged posts with target-language score. Pairs with core 3.1.49+.
+* **NEW (`translation_force_retranslate`)**: Bypass missing-only gating. Pass an explicit list of source-language post IDs + target languages to overwrite. Clears the Elementor "already-translated" guard meta and re-fires the AI pipeline. Async wp_cron path automatic for batches > 5 work units.
+
+= 1.0.12 — Theme Tools framework MCP surface =
+* **NEW (`theme_tools_list`)**: List every maintenance tool the active companion theme has registered with the LuwiPress Theme Bridge (paired with core 3.1.48+). Returns tool id, label, category, capability, wpml-aware flag, destructive flag, available actions.
+* **NEW (`theme_tool_run`)**: Run a registered tool with action="scan" (read-only) or "execute" (mutating). Auto-expands WPML/Polylang siblings on execute when the tool is `wpml_aware:true`. Returns the tool's native output: candidates list (scan) or mutated count + backup_id (execute).
+* **NEW (`theme_tool_restore`)**: Restore from a backup taken by a previous theme_tool_run execute. Replays the captured pre-mutation payload. Backups pruned to the last 20 per site.
+* **NEW (`theme_tool_backups`)**: List backups for a tool (or all tools when tool_id omitted). Each entry has id, timestamp, post IDs.
+* **NEW (`theme_settings_get`)**: Read every theme_mod proxy registered via the Theme Bridge — id, theme_mod key, label, type, default, current value, group.
+* **NEW (`theme_settings_set`)**: Update a bridged theme setting by id (NOT the raw theme_mod key — use theme_customizer_set for that). Bridge validates type, clamps numeric ranges, rejects unknown ids.
+
 
 = 1.0.5 — JSON-RPC 2.0 strict mode + clean UTF-8 in product search =
 * FIX: **`search_products` no longer mangles non-ASCII text.** Spanish, French, Italian and Turkish characters in product titles, descriptions and category names used to come through as `coraz�n` / `m�sica` / `�frica` because the tool wasn't decoding HTML entities or normalising the encoding before handing the payload to the MCP transport. Output is now run through `html_entity_decode` with UTF-8, so LLMs receive clean readable text.

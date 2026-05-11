@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.47
+Stable tag: 3.1.52
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,39 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.52 — Chat session bootstrap no longer consumes rate-limit budget =
+* **FIX (Customer Chat rate limit)**: `check_chat_permission` was incrementing the per-IP hourly counter on every endpoint hit, including the `GET /chat/session/{id}` bootstrap that fires on every page load. A normal browsing session blew through the default 30/hour cap within a dozen page views, returning HTTP 429 for the chat widget sitewide. Restrict the increment to POST/PUT/DELETE (actual writes — messages and escalation). GET bootstraps now pass freely.
+
+= 3.1.51 — Customer chat widget icon-only launcher + soft pulse =
+* **CHANGE (Customer Chat launcher)**: The floating chat launcher is now a 56×56 circular icon button (48×48 on mobile) instead of a pill with a "Chat" label. The text label was overlapping storefront content on narrow viewports and read as a hard CTA where a discreet launcher fits better. Icon-only matches modern e-commerce chat patterns (Intercom/Crisp/HubSpot) and recovers ~80px of safe-area on mobile product pages.
+* **CHANGE (Customer Chat pulse)**: New low-frequency 3.6s `lp-chat-pulse` keyframe halo on the closed-state launcher to invite engagement without distracting from page content. Respects `prefers-reduced-motion` — users with motion sensitivity disabled see a static button. Pulse pauses on hover.
+* **CHANGE (Critical CSS)**: The inline critical CSS injected by `luwipress-chat.js` (the optimizer-resistant fallback for the launcher) was kept in sync with the stylesheet so optimizer plugins that defer the main CSS still render the new circular shape immediately.
+
+= 3.1.50 — Ghost-Elementor translation routing fix + Theme admin stat-card layout =
+* **FIX (Ghost-Elementor translation routing)**: posts whose `post_content` carries the actual editorial body but whose `_elementor_data` meta only holds nominal kit-overlay widgets (legacy Hello Elementor migration residue, hero-only Elementor decorations, etc.) were being routed through the Elementor chunked translator. That pipeline only rewrites Elementor widget fields, leaving the `post_content` body untouched — so translated posts kept their source-language paragraphs even after a successful "translation completed" cron event. New ghost-Elementor guard in `request_translation()` detects the pattern (≥200 chars stripped post_content + < 5 widget instances in `_elementor_data`) and forces the standard translation path so the body actually gets rewritten. Pairs with the 3.1.49 drift detector — drift sweeps now produce visible content changes.
+* **FIX (Theme admin Status tab stat-cards layout)**: 7 stat cards were wrapping the last (Kit CSS Headroom) onto a second row on standard 1366-1500px admin content widths because `.luwipress-stats-row` minmax was 200px (default). Scoped override on `.luwipress-theme-page .luwipress-stats-row` drops min to 145px + tightens card padding so all 7 fit on one row down to ~1100px content width. Auto-fit gracefully wraps below.
+
+= 3.1.49 — Translation Language Drift sweep + admin design system unification =
+* **NEW (`/translation/language-drift`)**: Detects translated posts whose body content is still in the source language — the silent failure mode that makes existence-based coverage report 100% even when blogs are broken English. Scores each body via 10-language stop-word ratio (EN/ES/IT/FR/DE/TR/NL/PT/RU/AR); flags posts whose target-language score falls below 0.45. Walks Elementor `_elementor_data` widgets so Elementor pages get scored on actual content, not the empty `post_content`.
+* **NEW (`/translation/force-retranslate`)**: Bypass `/translation/missing-all` gating with an explicit `post_ids` whitelist + `languages` array. Resolves translation IDs back to default-language source via WPML trid lookup; clears the Elementor "already-translated" guard meta (`_luwipress_elementor_translated`) so the AI pipeline actually re-runs instead of skipping the post. Async wp_cron path kicks in automatically when work units > 5.
+* **NEW (cron handler `luwipress_force_retranslate_single`)**: Per (post_id, lang) worker fired by force-retranslate. Logs success/error per dispatch and updates progress meta.
+* **NEW (Translation Manager admin panel)**: New "Translation Quality Audit" red-accent card surfaces drifted posts grouped by source, with per-language score chips (link to live translated URL, score percentage on hover) + per-row "Re-translate" button + sweep-all toolbar. Async dispatch keeps the dashboard responsive.
+* **NEW (Theme `theme-page.php` redesign)**: Refactored to match LuwiPress design system — `lp-header` + `luwipress-stat-card` semantic accent borders + `lp-pill` badges + `--lp-*` tokens throughout. All hardcoded hex removed; dark-mode-ready.
+* **NEW (Marketplaces companion redesign)**: Full design-system pass on `marketplace-settings-page.php` — hero stat row (live channels / configured / untouched / adapters), `lp-pill` semantic status badges (Live/Ready/Off), `--lp-*` tokens replacing all hex. Brand identity dot colors (Amazon orange, eBay red, Trendyol orange) preserved on purpose.
+* **NEW (Open Claw companion redesign)**: `lp-header` chrome on the chat page with provider+model pill, dashboard back-link.
+* **CHANGE (Settings page)**: All inline hex codes (8 instances: budget bar, language fallback, success ticks) swapped to `--lp-*` design tokens.
+* **NEW (heuristic `LuwiPress_Translation::score_text_language`)**: Public static method that scores any text body against an expected target language. Stop-word signatures cover the 10 most-shipped translation languages. Used by drift detection but exposed for any downstream module.
+* **NEW (helper `LuwiPress_Translation::clear_retranslate_guards`)**: Public static. Walks WPML translations of a source post, deletes `_luwipress_elementor_translated` + `_luwipress_elementor_chunked` + per-lang status meta on each target so the AI pipeline can re-run cleanly.
+
+= 3.1.48 — Theme Tools framework (Theme Bridge primitive) =
+* **NEW (`LuwiPress_Theme_Bridge`)**: Singleton primitive that lets companion themes register maintenance tools and theme_mod proxies via two filters (`luwipress_theme_tools` + `luwipress_theme_settings`). Tools expose scan/execute/restore callbacks; the bridge handles capability gates, nonces, WPML/Polylang sibling expansion (trid auto-expand), and a 20-entry backup ring buffer in `wp_options.luwipress_theme_tool_backups`. Active companion themes get a new `LuwiPress → Theme` admin tab (Status / Tools / Settings) auto-rendered from the registered tools.
+* **NEW (REST `/luwipress/v1/theme/*`)**: 7 endpoints — `GET tools`, `POST tools/scan`, `POST tools/run`, `POST tools/restore`, `GET tools/backups`, `GET|POST settings`, `GET status`. All token-or-admin gated.
+* **NEW (Admin AJAX endpoints)**: `luwipress_theme_tools_{scan,run,restore,backups}` + `luwipress_theme_settings_{save,reset}` for the in-dashboard UX.
+* **NEW (KG Action Queue integration)**: `luwipress_kg_action_queue_external_candidates` filter so the bridge can inject theme-tool findings as Action Queue candidates alongside core enrichment/SEO opportunities. Severity-graded ROI rubric (canonical/hreflang/redirect-chains at high tier; orphan landings + empty archives at low). Cached 1h; busts on `luwipress_theme_tool_executed` action.
+* **NEW (Hero stat-bar + Reset-to-defaults)**: Status tab shows 7-card snapshot (theme/companion/tools/findings/untranslated/backups/kit-css headroom). Settings tab gains per-group reset button. Cached 5min.
+* **NEW (assets/js/theme-tools.js)**: Vanilla JS (no jQuery dep) — scan/execute/restore + run-all-audits sequential runner + per-group reset.
+* **CHANGE**: Admin `LuwiPress` menu auto-adds the Theme submenu only when the active theme registers via the companion contract. Hidden otherwise — keeps the menu honest.
 
 = 3.1.47 — KG Autopilot (Track D.3) =
 * **NEW (`LuwiPress_KG_Autopilot`)**: Third layer of the KG middleware backbone. Reads candidates from `LuwiPress_KG_Opportunities` (Track D.2), filters by `min_confidence`, enforces per-workflow daily caps, and dispatches AI workflows asynchronously via `wp_schedule_single_event`. Default OFF; first run after enable defaults to dry-run (logs `would_dispatch` only, no real workflow fires) so the operator validates before flipping to live.

@@ -284,7 +284,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					</div>
 				<?php else : ?>
 					<div class="luwipress-info-box" style="border-left:3px solid var(--lp-success,#16a34a);">
-						<span class="dashicons dashicons-yes-alt" style="color:#16a34a"></span>
+						<span class="dashicons dashicons-yes-alt" style="color:var(--lp-success);"></span>
 						<strong><?php esc_html_e( 'WebMCP companion plugin is active.', 'luwipress' ); ?></strong>
 						<?php if ( defined( 'LUWIPRESS_WEBMCP_VERSION' ) ) : ?>
 							<?php printf( esc_html__( 'Version %s.', 'luwipress' ), esc_html( LUWIPRESS_WEBMCP_VERSION ) ); ?>
@@ -785,10 +785,10 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 								$pct = min( 100, round( ( $today_cost / $daily_token_limit ) * 100 ) );
 							?>
 							<div style="margin-top:8px;">
-								<div style="display:inline-block;width:200px;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;vertical-align:middle;">
-									<div style="height:100%;width:<?php echo $pct; ?>%;background:<?php echo $pct >= 90 ? '#dc2626' : ( $pct >= 70 ? '#f59e0b' : '#16a34a' ); ?>;"></div>
+								<div style="display:inline-block;width:200px;height:6px;background:var(--lp-border);border-radius:3px;overflow:hidden;vertical-align:middle;">
+									<div style="height:100%;width:<?php echo (int) $pct; ?>%;background:<?php echo $pct >= 90 ? 'var(--lp-error,#dc2626)' : ( $pct >= 70 ? 'var(--lp-warning)' : 'var(--lp-success)' ); ?>;"></div>
 								</div>
-								<span style="font-size:12px;color:#6b7280;margin-left:8px;">
+								<span style="font-size:12px;color:var(--lp-text-secondary);margin-left:8px;">
 									$<?php echo number_format( $today_cost, 4 ); ?> / $<?php echo number_format( $daily_token_limit, 2 ); ?> today
 								</span>
 							</div>
@@ -813,12 +813,12 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		<div class="luwipress-tab-content <?php echo 'ai' === $active_tab ? 'tab-active' : ''; ?>" id="tab-ai">
 			<?php if ( 'luwipress-native' === $seo_plugin ) : ?>
 			<div class="luwipress-info-box">
-				<span class="dashicons dashicons-yes-alt" style="color:#16a34a"></span>
+				<span class="dashicons dashicons-yes-alt" style="color:var(--lp-success);"></span>
 				<?php esc_html_e( 'LuwiPress is handling SEO directly — no third-party SEO plugin detected. AI-generated titles and meta descriptions are stored in LuwiPress meta keys and output in the site <head> automatically.', 'luwipress' ); ?>
 			</div>
 			<?php elseif ( 'none' !== $seo_plugin ) : ?>
 			<div class="luwipress-info-box">
-				<span class="dashicons dashicons-yes-alt" style="color:#16a34a"></span>
+				<span class="dashicons dashicons-yes-alt" style="color:var(--lp-success);"></span>
 				<?php printf(
 					esc_html__( 'SEO plugin detected: %s — AI-generated meta will be saved to its fields automatically.', 'luwipress' ),
 					'<strong>' . esc_html( ucwords( str_replace( '-', ' ', $seo_plugin ) ) ) . '</strong>'
@@ -918,8 +918,8 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 									</p>
 								<?php endif; ?>
 								<?php if ( $saved_lang_missing ) : ?>
-									<p class="description" style="color:#b45309;">
-										<span class="dashicons dashicons-warning" style="color:#b45309;"></span>
+									<p class="description" style="color:var(--lp-warning);">
+										<span class="dashicons dashicons-warning" style="color:var(--lp-warning);"></span>
 										<?php
 										/* translators: %s: currently-saved language code */
 										printf(
@@ -1116,7 +1116,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 								<?php endforeach; ?>
 								<p class="description"><?php printf( esc_html__( 'Auto-detected from %s. Add or remove languages in your translation plugin settings.', 'luwipress' ), esc_html( ucwords( $t_env['plugin'] ) ) ); ?></p>
 							<?php else : ?>
-								<span style="color:#6b7280;"><?php esc_html_e( 'No translation plugin detected. Install WPML or Polylang to enable multilingual support.', 'luwipress' ); ?></span>
+								<span style="color:var(--lp-text-secondary);"><?php esc_html_e( 'No translation plugin detected. Install WPML or Polylang to enable multilingual support.', 'luwipress' ); ?></span>
 							<?php endif; ?>
 						</td>
 					</tr>

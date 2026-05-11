@@ -7,6 +7,11 @@
  * companion split. All option keys preserved (still `luwipress_*`) so any
  * credentials saved before the split keep working without migration.
  *
+ * Design language: matches the LuwiPress Dashboard — `lp-header` + `lp-pill`
+ * semantic badges + `--lp-*` design tokens. The per-marketplace dot keeps the
+ * brand identity colour (Amazon orange, eBay red, etc.) on purpose since
+ * recognisability matters; everything else routes through the token system.
+ *
  * @package LuwiPress_Marketplace_Sync
  * @since   1.0.0
  */
@@ -61,52 +66,96 @@ function luwipress_marketplace_render_settings_page() {
     $mp_cfg['walmart']['client_id']     = get_option( 'luwipress_walmart_client_id', '' );
     $mp_cfg['walmart']['client_secret'] = get_option( 'luwipress_walmart_client_secret', '' );
 
-    ?>
-    <div class="wrap luwipress-settings">
-        <h1><?php esc_html_e( 'LuwiPress Marketplaces', 'luwipress-marketplace-sync' ); ?></h1>
+    $logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' : '';
 
-        <p class="description" style="max-width:780px;line-height:1.6;">
-            <?php esc_html_e( 'Connect your WooCommerce catalog to multi-channel marketplaces. Credentials saved here are used by the LuwiPress Marketplace REST endpoints (/wp-json/luwipress/v1/marketplace/*) and the publishing pipeline.', 'luwipress-marketplace-sync' ); ?>
-        </p>
+    // Aggregate counters for the hero stat row so the operator sees coverage at a glance.
+    $count_live = 0;
+    $count_ready = 0;
+    foreach ( $mp_slugs as $sl ) {
+        $en = ! empty( $mp_cfg[ $sl ]['enabled'] );
+        $any_key = false;
+        foreach ( array_keys( $mp_cfg[ $sl ] ) as $k ) {
+            if ( $k === 'enabled' ) { continue; }
+            if ( ! empty( $mp_cfg[ $sl ][ $k ] ) ) { $any_key = true; break; }
+        }
+        if ( $en && $any_key ) { $count_live++; }
+        elseif ( $any_key )    { $count_ready++; }
+    }
+    ?>
+    <div class="wrap luwipress-admin luwipress-dashboard luwipress-marketplaces-page">
+
+        <!-- ═══ HEADER ═══ -->
+        <div class="lp-header">
+            <div class="lp-header-left">
+                <h1 class="lp-title">
+                    <?php if ( $logo_url ) : ?>
+                        <img class="lp-logo" width="28" height="28" src="<?php echo esc_url( $logo_url ); ?>" alt="LuwiPress" />
+                    <?php endif; ?>
+                    <?php esc_html_e( 'Marketplaces', 'luwipress-marketplace-sync' ); ?>
+                </h1>
+                <p class="lp-subtitle"><?php esc_html_e( 'Multi-channel publishing — connect your WooCommerce catalog to Amazon, eBay, Trendyol and more.', 'luwipress-marketplace-sync' ); ?></p>
+            </div>
+            <div class="lp-header-actions">
+                <span class="lp-pill <?php echo $count_live > 0 ? 'pill-success' : 'pill-neutral'; ?>" title="<?php esc_attr_e( 'Marketplaces with credentials AND enabled flag', 'luwipress-marketplace-sync' ); ?>">
+                    <?php
+                    /* translators: %d: number of live marketplaces */
+                    printf( esc_html__( '%d live', 'luwipress-marketplace-sync' ), (int) $count_live );
+                    ?>
+                </span>
+                <a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress' ) ); ?>"
+                   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
+                   title="<?php esc_attr_e( 'Back to LuwiPress Dashboard', 'luwipress-marketplace-sync' ); ?>">
+                    <span class="dashicons dashicons-admin-home"></span>
+                    <span class="screen-reader-text"><?php esc_html_e( 'Dashboard', 'luwipress-marketplace-sync' ); ?></span>
+                </a>
+            </div>
+        </div>
+
+        <!-- ═══ STAT ROW ═══ -->
+        <div class="luwipress-stats-row">
+            <div class="luwipress-stat-card <?php echo $count_live > 0 ? 'stat-success' : ''; ?>">
+                <div class="stat-icon"><span class="dashicons dashicons-yes-alt"></span></div>
+                <div class="stat-content">
+                    <span class="stat-number"><?php echo (int) $count_live; ?></span>
+                    <span class="stat-label"><?php esc_html_e( 'Live channels', 'luwipress-marketplace-sync' ); ?></span>
+                </div>
+            </div>
+            <div class="luwipress-stat-card <?php echo $count_ready > 0 ? 'stat-translation' : ''; ?>">
+                <div class="stat-icon"><span class="dashicons dashicons-clock"></span></div>
+                <div class="stat-content">
+                    <span class="stat-number"><?php echo (int) $count_ready; ?></span>
+                    <span class="stat-label"><?php esc_html_e( 'Configured but disabled', 'luwipress-marketplace-sync' ); ?></span>
+                </div>
+            </div>
+            <div class="luwipress-stat-card">
+                <div class="stat-icon"><span class="dashicons dashicons-cart"></span></div>
+                <div class="stat-content">
+                    <span class="stat-number"><?php echo (int) ( count( $mp_slugs ) - $count_live - $count_ready ); ?></span>
+                    <span class="stat-label"><?php esc_html_e( 'Untouched marketplaces', 'luwipress-marketplace-sync' ); ?></span>
+                </div>
+            </div>
+            <div class="luwipress-stat-card">
+                <div class="stat-icon"><span class="dashicons dashicons-rest-api"></span></div>
+                <div class="stat-content">
+                    <span class="stat-number"><?php echo (int) count( $mp_slugs ); ?></span>
+                    <span class="stat-label"><?php esc_html_e( 'Adapters available', 'luwipress-marketplace-sync' ); ?></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ INTRO CARD ═══ -->
+        <div class="luwipress-card luwipress-card--info">
+            <p class="description" style="margin:0;line-height:1.6;">
+                <?php esc_html_e( 'Credentials saved here drive the LuwiPress Marketplace REST endpoints (/wp-json/luwipress/v1/marketplace/*) and the publishing pipeline. Search to filter the catalog; click a card to expand its credential fields.', 'luwipress-marketplace-sync' ); ?>
+            </p>
+        </div>
 
         <form method="post" class="luwipress-settings-form">
             <?php wp_nonce_field( 'luwipress_marketplace_nonce' ); ?>
 
-            <style>
-                .lp-mp-search{position:relative;margin-bottom:16px;max-width:480px}
-                .lp-mp-search input{width:100%;padding:10px 14px 10px 38px;border:1px solid #d0d5dd;border-radius:8px;font-size:14px;background:#fff;outline:none}
-                .lp-mp-search input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.12)}
-                .lp-mp-search .dashicons{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:16px}
-                .lp-mp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-                .lp-mp-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;transition:border-color .15s ease,box-shadow .15s ease}
-                .lp-mp-card:hover{border-color:#93c5fd;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-                .lp-mp-card.lp-mp-connected{border-color:#16a34a}
-                .lp-mp-card[hidden]{display:none}
-                .lp-mp-head{display:flex;align-items:center;padding:12px 16px;gap:12px;cursor:pointer;user-select:none}
-                .lp-mp-dot{width:10px;height:10px;border-radius:9999px;flex-shrink:0}
-                .lp-mp-label{font-weight:600;font-size:14px;color:#1f2937;flex:1}
-                .lp-mp-status{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:2px 8px;border-radius:9999px}
-                .lp-mp-status.on{background:#dcfce7;color:#16a34a}
-                .lp-mp-status.cfg{background:#dbeafe;color:#2563eb}
-                .lp-mp-status.off{background:#f3f4f6;color:#6b7280}
-                .lp-mp-chevron{color:#9ca3af;transition:transform .15s ease;font-size:16px}
-                .lp-mp-card.open .lp-mp-chevron{transform:rotate(180deg)}
-                .lp-mp-fields{display:none;padding:0 16px 16px;border-top:1px solid #f3f4f6}
-                .lp-mp-card.open .lp-mp-fields{display:block}
-                .lp-mp-field{display:flex;align-items:center;gap:8px;margin-top:12px}
-                .lp-mp-field label{min-width:100px;font-size:13px;color:#6b7280;font-weight:500}
-                .lp-mp-field input[type="text"],.lp-mp-field input[type="password"],.lp-mp-field select{flex:1;padding:7px 10px;border:1px solid #d0d5dd;border-radius:6px;font-size:13px;background:#fff;outline:none;max-width:280px}
-                .lp-mp-field input:focus,.lp-mp-field select:focus{border-color:#3b82f6}
-                .lp-mp-field input[type="number"]{width:80px;flex:unset}
-                .lp-mp-field .lp-mp-ok{color:#16a34a;font-size:14px;flex-shrink:0}
-                .lp-mp-enable{margin-top:12px;display:flex;align-items:center;gap:8px}
-                .lp-mp-enable label{font-size:13px;color:#1f2937;font-weight:500;cursor:pointer}
-                .lp-mp-empty{text-align:center;padding:48px;color:#9ca3af;font-size:14px;display:none}
-            </style>
-
             <div class="lp-mp-search">
                 <span class="dashicons dashicons-search"></span>
-                <input type="text" id="lp-mp-filter" placeholder="<?php esc_attr_e( 'Search marketplaces...', 'luwipress-marketplace-sync' ); ?>" autocomplete="off" />
+                <input type="text" id="lp-mp-filter" placeholder="<?php esc_attr_e( 'Search marketplaces…', 'luwipress-marketplace-sync' ); ?>" autocomplete="off" />
             </div>
 
             <div class="lp-mp-grid" id="lp-mp-grid">
@@ -164,16 +213,16 @@ function luwipress_marketplace_render_settings_page() {
                 $state_class = ( $enabled && $has_key ) ? 'lp-mp-connected' : '';
                 $state_class .= $enabled ? ' open' : '';
             ?>
-                <div class="lp-mp-card <?php echo esc_attr( trim( $state_class ) ); ?>" data-mp="<?php echo esc_attr( $slug ); ?>" data-name="<?php echo esc_attr( strtolower( $label ) ); ?>">
+                <div class="lp-mp-card luwipress-card <?php echo esc_attr( trim( $state_class ) ); ?>" data-mp="<?php echo esc_attr( $slug ); ?>" data-name="<?php echo esc_attr( strtolower( $label ) ); ?>">
                     <div class="lp-mp-head" onclick="this.parentElement.classList.toggle('open')">
                         <span class="lp-mp-dot" style="background:<?php echo esc_attr( $color ); ?>"></span>
                         <span class="lp-mp-label"><?php echo esc_html( $label ); ?></span>
                         <?php if ( $enabled && $has_key ) : ?>
-                            <span class="lp-mp-status on"><?php esc_html_e( 'Live', 'luwipress-marketplace-sync' ); ?></span>
+                            <span class="lp-pill pill-success"><?php esc_html_e( 'Live', 'luwipress-marketplace-sync' ); ?></span>
                         <?php elseif ( $has_key ) : ?>
-                            <span class="lp-mp-status cfg"><?php esc_html_e( 'Ready', 'luwipress-marketplace-sync' ); ?></span>
+                            <span class="lp-pill pill-info"><?php esc_html_e( 'Ready', 'luwipress-marketplace-sync' ); ?></span>
                         <?php else : ?>
-                            <span class="lp-mp-status off"><?php esc_html_e( 'Off', 'luwipress-marketplace-sync' ); ?></span>
+                            <span class="lp-pill pill-neutral"><?php esc_html_e( 'Off', 'luwipress-marketplace-sync' ); ?></span>
                         <?php endif; ?>
                         <span class="lp-mp-chevron dashicons dashicons-arrow-down-alt2"></span>
                     </div>
@@ -210,32 +259,131 @@ function luwipress_marketplace_render_settings_page() {
 
             <div class="lp-mp-empty" id="lp-mp-empty"><?php esc_html_e( 'No marketplaces match your search.', 'luwipress-marketplace-sync' ); ?></div>
 
-            <script>
-            (function(){
-                var input = document.getElementById('lp-mp-filter');
-                var grid  = document.getElementById('lp-mp-grid');
-                var empty = document.getElementById('lp-mp-empty');
-                if (!input || !grid) return;
-
-                input.addEventListener('input', function(){
-                    var q = this.value.toLowerCase().trim();
-                    var cards = grid.querySelectorAll('.lp-mp-card');
-                    var visible = 0;
-                    cards.forEach(function(c){
-                        var match = !q || c.getAttribute('data-name').indexOf(q) !== -1 || c.getAttribute('data-mp').indexOf(q) !== -1;
-                        c.hidden = !match;
-                        if (match) visible++;
-                    });
-                    empty.style.display = visible === 0 ? 'block' : 'none';
-                });
-            })();
-            </script>
-
             <p class="submit">
-                <input type="submit" name="luwipress_marketplace_save" class="button-primary" value="<?php esc_attr_e( 'Save Marketplace Settings', 'luwipress-marketplace-sync' ); ?>" />
+                <button type="submit" name="luwipress_marketplace_save" class="button button-primary button-hero">
+                    <span class="dashicons dashicons-saved"></span>
+                    <?php esc_html_e( 'Save Marketplace Settings', 'luwipress-marketplace-sync' ); ?>
+                </button>
             </p>
         </form>
     </div>
+
+    <style>
+        /* Marketplace cards — chrome built on top of .luwipress-card from admin.css */
+        .luwipress-marketplaces-page .lp-subtitle { margin: 4px 0 0; color: var(--lp-text-secondary); font-size: 13px; }
+        .luwipress-marketplaces-page .lp-mp-search { position: relative; margin: 18px 0 14px; max-width: 480px; }
+        .luwipress-marketplaces-page .lp-mp-search input {
+            width: 100%; padding: 10px 14px 10px 38px;
+            border: 1px solid var(--lp-border); border-radius: var(--radius-md, 8px);
+            font-size: 14px; background: var(--lp-surface); outline: none;
+            color: var(--lp-text); transition: border-color .15s ease, box-shadow .15s ease;
+        }
+        .luwipress-marketplaces-page .lp-mp-search input:focus {
+            border-color: var(--lp-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+        }
+        .luwipress-marketplaces-page .lp-mp-search .dashicons {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            color: var(--lp-text-secondary); font-size: 16px;
+        }
+        .luwipress-marketplaces-page .lp-mp-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 12px;
+        }
+        .luwipress-marketplaces-page .lp-mp-card {
+            margin: 0; padding: 0; overflow: hidden;
+            transition: border-color .15s ease, box-shadow .15s ease;
+        }
+        .luwipress-marketplaces-page .lp-mp-card:hover { border-color: var(--lp-primary-light, #818cf8); }
+        .luwipress-marketplaces-page .lp-mp-card.lp-mp-connected { border-left: 3px solid var(--lp-success); }
+        .luwipress-marketplaces-page .lp-mp-card[hidden] { display: none; }
+        .luwipress-marketplaces-page .lp-mp-head {
+            display: flex; align-items: center; padding: 14px 16px; gap: 12px;
+            cursor: pointer; user-select: none;
+        }
+        .luwipress-marketplaces-page .lp-mp-head:hover { background: var(--lp-surface-secondary, #f9fafb); }
+        .luwipress-marketplaces-page .lp-mp-dot {
+            width: 12px; height: 12px; border-radius: 9999px; flex-shrink: 0;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+        }
+        .luwipress-marketplaces-page .lp-mp-label {
+            font-weight: 600; font-size: 14px; color: var(--lp-text); flex: 1;
+        }
+        .luwipress-marketplaces-page .lp-mp-chevron {
+            color: var(--lp-text-secondary); transition: transform .15s ease; font-size: 16px;
+        }
+        .luwipress-marketplaces-page .lp-mp-card.open .lp-mp-chevron { transform: rotate(180deg); }
+        .luwipress-marketplaces-page .lp-mp-fields {
+            display: none; padding: 0 16px 16px;
+            border-top: 1px solid var(--lp-border-light);
+        }
+        .luwipress-marketplaces-page .lp-mp-card.open .lp-mp-fields { display: block; }
+        .luwipress-marketplaces-page .lp-mp-field {
+            display: flex; align-items: center; gap: 8px; margin-top: 12px;
+        }
+        .luwipress-marketplaces-page .lp-mp-field label {
+            min-width: 110px; font-size: 13px; color: var(--lp-text-secondary); font-weight: 500;
+        }
+        .luwipress-marketplaces-page .lp-mp-field input[type="text"],
+        .luwipress-marketplaces-page .lp-mp-field input[type="password"],
+        .luwipress-marketplaces-page .lp-mp-field select {
+            flex: 1; padding: 7px 10px;
+            border: 1px solid var(--lp-border); border-radius: 6px;
+            font-size: 13px; background: var(--lp-surface); outline: none;
+            color: var(--lp-text); max-width: 280px;
+        }
+        .luwipress-marketplaces-page .lp-mp-field input:focus,
+        .luwipress-marketplaces-page .lp-mp-field select:focus {
+            border-color: var(--lp-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+        .luwipress-marketplaces-page .lp-mp-field input[type="number"] { width: 90px; flex: unset; }
+        .luwipress-marketplaces-page .lp-mp-field .lp-mp-ok {
+            color: var(--lp-success); font-size: 14px; flex-shrink: 0;
+        }
+        .luwipress-marketplaces-page .lp-mp-enable {
+            margin-top: 14px; display: flex; align-items: center; gap: 8px;
+        }
+        .luwipress-marketplaces-page .lp-mp-enable label {
+            font-size: 13px; color: var(--lp-text); font-weight: 500; cursor: pointer;
+        }
+        .luwipress-marketplaces-page .lp-mp-empty {
+            text-align: center; padding: 48px;
+            color: var(--lp-text-secondary); font-size: 14px; display: none;
+        }
+        .luwipress-marketplaces-page .submit { margin-top: 22px; }
+        .luwipress-marketplaces-page .submit .button-hero .dashicons {
+            font-size: 18px; width: 18px; height: 18px;
+            vertical-align: middle; margin-right: 6px;
+        }
+        /* pill-info patch — mirror admin.css helper */
+        .luwipress-marketplaces-page .lp-pill.pill-info {
+            background: var(--lp-primary-50); color: var(--lp-primary-dark);
+            border: 1px solid var(--lp-primary-100);
+        }
+    </style>
+
+    <script>
+    (function(){
+        var input = document.getElementById('lp-mp-filter');
+        var grid  = document.getElementById('lp-mp-grid');
+        var empty = document.getElementById('lp-mp-empty');
+        if (!input || !grid) return;
+
+        input.addEventListener('input', function(){
+            var q = this.value.toLowerCase().trim();
+            var cards = grid.querySelectorAll('.lp-mp-card');
+            var visible = 0;
+            cards.forEach(function(c){
+                var match = !q || c.getAttribute('data-name').indexOf(q) !== -1 || c.getAttribute('data-mp').indexOf(q) !== -1;
+                c.hidden = !match;
+                if (match) visible++;
+            });
+            empty.style.display = visible === 0 ? 'block' : 'none';
+        });
+    })();
+    </script>
     <?php
 }
 
