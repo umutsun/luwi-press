@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.14
+Stable tag: 1.0.15
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,12 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.15 — Taxonomy term meta tools =
+* **NEW (`taxonomy_meta_get`)**: Read term meta on any registered taxonomy term (e.g. Rank Math SEO meta on `product_cat` archives, `post_tag`, or `pa_*` attribute taxonomies). Parallels `meta_get` for posts. Returns all public meta when `key` is omitted; returns a single value when `key` is set.
+* **NEW (`taxonomy_meta_set`)**: Write a term meta value via `update_term_meta()`. Keys containing `description` or `_desc` go through `wp_kses_post`; everything else through `sanitize_text_field`. WPML: each language variant of a term has its own `term_id` — call once per language with the appropriate ID.
+* **NEW (`taxonomy_meta_delete`)**: Delete a term meta key. Symmetric to `meta_delete` for posts.
+* **USE CASE**: Batch Rank Math title / description / focus_keyword across category archives (TASK-K-002: 52 product_cat archives across 4 languages × 13 categories — previously required WP Admin manual entry, now scriptable).
 
 = 1.0.14 — content_update_post + seo_write_meta bug fixes =
 * **FIX (`content_update_post`)**: `post_excerpt` now uses `wp_kses_post()` instead of `sanitize_text_field()`. Excerpts written through the tool no longer have HTML tags (e.g. `<ul>`, `<li>`, `<strong>`) stripped. Discovered during 2026-05-11 Tapadum migration when WC product excerpts with bullet-list formatting collapsed into flat paragraphs on the target site.

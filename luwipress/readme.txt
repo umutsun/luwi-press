@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.52
+Stable tag: 3.1.53
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.53 — FAQPage JSON-LD double-emit fix =
+* **FIX (AEO schema)**: Product pages were emitting the FAQPage JSON-LD `<script>` block twice — once in `<head>` (the canonical AEO module emitter) and again before `</body>` (a legacy footer-hooked duplicate in the content tab module). Google saw two identical FAQPage records per product, which counts as a schema redundancy warning in Rich Results Test. Removed the wp_footer p20 duplicate; `LuwiPress_AEO::output_aeo_schema` on wp_head p5 remains the single canonical emitter. FAQ tab UI (`woocommerce_product_tabs` filter) is unaffected — only the schema script was duplicated.
 
 = 3.1.52 — Chat session bootstrap no longer consumes rate-limit budget =
 * **FIX (Customer Chat rate limit)**: `check_chat_permission` was incrementing the per-IP hourly counter on every endpoint hit, including the `GET /chat/session/{id}` bootstrap that fires on every page load. A normal browsing session blew through the default 30/hour cap within a dozen page views, returning HTTP 429 for the chat widget sitewide. Restrict the increment to POST/PUT/DELETE (actual writes — messages and escalation). GET bootstraps now pass freely.

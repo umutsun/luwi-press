@@ -5508,6 +5508,133 @@ class LuwiPress_WebMCP {
             $result = delete_post_meta( $post_id, $key );
             return array( 'post_id' => $post_id, 'key' => $key, 'deleted' => $result );
         } );
+
+        // ─── TAXONOMY TERM META ─────────────────────────────────────────
+        // Parallel to meta_get / meta_set / meta_delete but target term meta
+        // via update_term_meta(). Use case: Rank Math title/description on
+        // product_cat / post_tag / pa_* attribute taxonomies. WPML term
+        // translations are separate term_id rows — caller passes the term_id
+        // for the language they want (use taxonomy_get_terms with lang= to
+        // enumerate the per-language IDs).
+
+        $this->register_tool( 'taxonomy_meta_get', array(
+            'description' => 'Get term meta for a taxonomy term (e.g. Rank Math meta on a product_cat). WPML: pass the term_id of the specific language variant.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'taxonomy' => array( 'type' => 'string', 'description' => 'Taxonomy slug (e.g. product_cat, post_tag, pa_color) — required for validation' ),
+                    'term_id'  => array( 'type' => 'integer', 'description' => 'Term ID (required)' ),
+                    'key'      => array( 'type' => 'string', 'description' => 'Specific meta key (omit for all public term meta)' ),
+                ),
+                'required' => array( 'taxonomy', 'term_id' ),
+            ),
+            'annotations' => array( 'title' => 'Get Term Meta', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $taxonomy = sanitize_key( $args['taxonomy'] );
+            $term_id  = intval( $args['term_id'] );
+            if ( ! taxonomy_exists( $taxonomy ) ) {
+                throw new Exception( 'Taxonomy not registered: ' . $taxonomy );
+            }
+            $term = get_term( $term_id, $taxonomy );
+            if ( ! $term || is_wp_error( $term ) ) {
+                throw new Exception( 'Term not found in taxonomy ' . $taxonomy );
+            }
+            if ( ! empty( $args['key'] ) ) {
+                $key   = sanitize_text_field( $args['key'] );
+                $value = get_term_meta( $term_id, $key, true );
+                return array(
+                    'taxonomy' => $taxonomy,
+                    'term_id'  => $term_id,
+                    'slug'     => $term->slug,
+                    'key'      => $key,
+                    'value'    => $value,
+                );
+            }
+            $all_meta = get_term_meta( $term_id );
+            $filtered = array();
+            foreach ( $all_meta as $key => $values ) {
+                if ( substr( $key, 0, 1 ) !== '_' ) {
+                    $filtered[ $key ] = count( $values ) === 1 ? $values[0] : $values;
+                }
+            }
+            return array(
+                'taxonomy' => $taxonomy,
+                'term_id'  => $term_id,
+                'slug'     => $term->slug,
+                'meta'     => $filtered,
+            );
+        } );
+
+        $this->register_tool( 'taxonomy_meta_set', array(
+            'description' => 'Set term meta for a taxonomy term. Use case: Rank Math title/description/focus_keyword on product_cat. WPML: each language variant is a separate term_id — call once per language.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'taxonomy' => array( 'type' => 'string', 'description' => 'Taxonomy slug (required)' ),
+                    'term_id'  => array( 'type' => 'integer', 'description' => 'Term ID (required)' ),
+                    'key'      => array( 'type' => 'string', 'description' => 'Meta key (required)' ),
+                    'value'    => array( 'type' => 'string', 'description' => 'Meta value (required)' ),
+                ),
+                'required' => array( 'taxonomy', 'term_id', 'key', 'value' ),
+            ),
+            'annotations' => array( 'title' => 'Set Term Meta', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $taxonomy = sanitize_key( $args['taxonomy'] );
+            $term_id  = intval( $args['term_id'] );
+            if ( ! taxonomy_exists( $taxonomy ) ) {
+                throw new Exception( 'Taxonomy not registered: ' . $taxonomy );
+            }
+            $term = get_term( $term_id, $taxonomy );
+            if ( ! $term || is_wp_error( $term ) ) {
+                throw new Exception( 'Term not found in taxonomy ' . $taxonomy );
+            }
+            $key   = sanitize_text_field( $args['key'] );
+            // Rank Math keys accept HTML in description; use wp_kses_post for description-shaped keys,
+            // sanitize_text_field for title/keyword.
+            $is_desc = ( false !== strpos( $key, 'description' ) || false !== strpos( $key, '_desc' ) );
+            $value   = $is_desc ? wp_kses_post( $args['value'] ) : sanitize_text_field( $args['value'] );
+            $updated = update_term_meta( $term_id, $key, $value );
+            return array(
+                'taxonomy' => $taxonomy,
+                'term_id'  => $term_id,
+                'slug'     => $term->slug,
+                'key'      => $key,
+                'updated'  => (bool) $updated,
+            );
+        } );
+
+        $this->register_tool( 'taxonomy_meta_delete', array(
+            'description' => 'Delete a term meta key from a taxonomy term. WPML: each language variant is a separate term_id.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'taxonomy' => array( 'type' => 'string', 'description' => 'Taxonomy slug (required)' ),
+                    'term_id'  => array( 'type' => 'integer', 'description' => 'Term ID (required)' ),
+                    'key'      => array( 'type' => 'string', 'description' => 'Meta key to delete (required)' ),
+                ),
+                'required' => array( 'taxonomy', 'term_id', 'key' ),
+            ),
+            'annotations' => array( 'title' => 'Delete Term Meta', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $taxonomy = sanitize_key( $args['taxonomy'] );
+            $term_id  = intval( $args['term_id'] );
+            if ( ! taxonomy_exists( $taxonomy ) ) {
+                throw new Exception( 'Taxonomy not registered: ' . $taxonomy );
+            }
+            $term = get_term( $term_id, $taxonomy );
+            if ( ! $term || is_wp_error( $term ) ) {
+                throw new Exception( 'Term not found in taxonomy ' . $taxonomy );
+            }
+            $key    = sanitize_text_field( $args['key'] );
+            $result = delete_term_meta( $term_id, $key );
+            return array(
+                'taxonomy' => $taxonomy,
+                'term_id'  => $term_id,
+                'slug'     => $term->slug,
+                'key'      => $key,
+                'deleted'  => (bool) $result,
+            );
+        } );
     }
 
     /* ═══════════════════════════════════════════════════════════════════

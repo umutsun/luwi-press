@@ -991,10 +991,10 @@ class LuwiPress_AI_Content {
         // clean: gallery LEFT (sticky), tabs RIGHT (Description / Additional
         // Information / FAQ / Reviews), related FULL WIDTH below.
         add_filter('woocommerce_product_tabs', array(__CLASS__, 'register_faq_tab'));
-        // Schema (JSON-LD FAQPage) still needs to fire in <head> regardless
-        // of tab activation — keep it on wp_footer so the schema lands even
-        // when the user never clicks the FAQ tab.
-        add_action('wp_footer', array(__CLASS__, 'output_faq_schema'), 20);
+        // FAQPage JSON-LD is emitted by LuwiPress_AEO::output_aeo_schema on
+        // wp_head p5 — single canonical emitter. (Was duplicated here on
+        // wp_footer p20 → caused 2 FAQPage <script> blocks per product page,
+        // see audit 2026-05-16 finding G.)
     }
 
     /**
