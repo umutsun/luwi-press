@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.15
+Stable tag: 1.0.16
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,12 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.16 — Translation Sync Audit MCP tools =
+* **NEW (`translation_sync_audit`)**: Unified cross-language sync audit. Detects drift / outdated / structural_gap / schema_parity findings under one call. Read-only.
+* **NEW (`translation_sync_fix`)**: Execute the appropriate fix action for one or more finding_ids returned by audit. Server re-resolves the finding server-side (does not trust client fix_args) and routes to force-retranslate / sync-structure / copy-schema as appropriate. Async by default.
+* **NEW (`translation_sync_settings`, `translation_sync_settings_set`)**: Read/write the drift threshold, hourly sweep toggle, and autofix toggle for the new wp_cron sweep.
+* **REQUIRES**: LuwiPress core 3.1.54+ (the `LuwiPress_Translation_Sync` orchestrator class).
 
 = 1.0.15 — Taxonomy term meta tools =
 * **NEW (`taxonomy_meta_get`)**: Read term meta on any registered taxonomy term (e.g. Rank Math SEO meta on `product_cat` archives, `post_tag`, or `pa_*` attribute taxonomies). Parallels `meta_get` for posts. Returns all public meta when `key` is omitted; returns a single value when `key` is set.

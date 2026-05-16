@@ -158,9 +158,31 @@ class LuwiPress_AEO {
 
     /**
      * Dispatch AEO generation via the local AI Engine.
+     *
+     * 3.1.55: Auto-detect WPML/Polylang post language and forward as
+     * `target_language` to the prompt builder. Previous behavior fell back to
+     * `luwipress_target_language` option (typically "English") which caused
+     * FAQ generation on translated post_ids (FR/IT/ES siblings) to produce
+     * English content — see audit 2026-05-16 finding A/schema_parity.
      */
     private function dispatch_aeo_generation( $product, $options = array() ) {
         $product_id = $product->get_id();
+
+        // Auto-derive target_language from the post's actual language unless
+        // the caller explicitly overrode it. This is the single fix for
+        // translated-post FAQ generation outputting English.
+        if ( empty( $options['target_language'] ) && class_exists( 'LuwiPress_Translation' ) ) {
+            $post_lang = LuwiPress_Translation::get_post_wpml_language( $product_id );
+            if ( $post_lang ) {
+                $lang_names = array(
+                    'en' => 'English', 'fr' => 'French', 'it' => 'Italian',
+                    'es' => 'Spanish', 'de' => 'German', 'pt' => 'Portuguese',
+                    'tr' => 'Turkish', 'ar' => 'Arabic', 'ja' => 'Japanese',
+                    'zh' => 'Chinese', 'nl' => 'Dutch', 'ru' => 'Russian',
+                );
+                $options['target_language'] = $lang_names[ $post_lang ] ?? $post_lang;
+            }
+        }
 
         $context = array(
             'name'        => $product->get_name(),

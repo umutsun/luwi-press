@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.53
+Stable tag: 3.1.55
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,19 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.55 — AEO target_language auto-detection from WPML/Polylang post language =
+* **FIX (`LuwiPress_AEO::dispatch_aeo_generation`)**: AEO FAQ/HowTo generation now auto-detects the target post's WPML/Polylang language and forwards it to the prompt builder as `target_language`. Previous behavior fell back to the `luwipress_target_language` option (typically "English") which caused FAQ generation on translated post_ids (FR/IT/ES siblings) to produce English content even though the post itself was in another language. Discovered during 2026-05-16 audit when `aeo_generate_faq` was run on 24 translated products and produced English Q&A across the board. Operators can still pass an explicit `target_language` in options to override.
+* Map of supported language codes: en/fr/it/es/de/pt/tr/ar/ja/zh/nl/ru — extend `$lang_names` if more are needed.
+
+= 3.1.54 — Translation Sync Audit — cross-language gap detector + auto-fix orchestrator =
+* **NEW (`LuwiPress_Translation_Sync` module)**: Unified orchestrator for four cross-language sync issues — language drift (target body still in source language), outdated translations (source edited after translating), structural gaps (translation missing sections source has), and schema parity (FAQ/HowTo/Speakable on source but not on translation). Each gap surfaces as a uniform "finding" with severity, gap_summary, and a ready-to-execute fix_action.
+* **NEW (`GET /translation/sync-audit`)**: Run one or all detect-routines. Returns ranked findings with `finding_id` strings. Caps to `limit` (default 200, max 500).
+* **NEW (`POST /translation/sync-fix`)**: Dispatch fixes for an array of finding_ids. Server re-resolves the finding (does not trust client-provided fix_args) and routes to force-retranslate / sync-structure / copy-schema as appropriate. Async by default.
+* **NEW (`GET/POST /translation/sync-settings`)**: Drift threshold (0..1, default 0.45), hourly sweep toggle, autofix toggle, next sweep time, last audit summary.
+* **NEW (KG Action Queue integration)**: Sync gaps surface as KG candidates via the `luwipress_kg_action_queue_external_candidates` filter — operators see "5 drift in FR" / "12 structural gaps in IT" alongside core enrichment opportunities. Uses 1h cached last-audit to avoid re-scanning on every dashboard load.
+* **NEW (hourly wp_cron sweep)**: Opt-in via setting. Runs audit, optionally auto-fixes high-severity findings (capped at 20/tick), logs a summary to the activity log.
+* **NEW (Admin UI)**: "Translation Sync Audit" collapsible panel on Translation Manager. Shows last-audit summary pills, threshold/sweep controls, "Run audit now" button, per-finding Fix buttons. Drops in cleanly alongside existing Quality Audit + Outdated panels.
 
 = 3.1.53 — FAQPage JSON-LD double-emit fix =
 * **FIX (AEO schema)**: Product pages were emitting the FAQPage JSON-LD `<script>` block twice — once in `<head>` (the canonical AEO module emitter) and again before `</body>` (a legacy footer-hooked duplicate in the content tab module). Google saw two identical FAQPage records per product, which counts as a schema redundancy warning in Rich Results Test. Removed the wp_footer p20 duplicate; `LuwiPress_AEO::output_aeo_schema` on wp_head p5 remains the single canonical emitter. FAQ tab UI (`woocommerce_product_tabs` filter) is unaffected — only the schema script was duplicated.

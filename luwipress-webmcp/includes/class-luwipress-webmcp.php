@@ -1493,6 +1493,130 @@ class LuwiPress_WebMCP {
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
 
+        // ─── TRANSLATION SYNC AUDIT (3.1.54+ orchestrator) ───
+        // Unified surface that orchestrates drift + outdated + structural_gap +
+        // schema_parity detection under a single REST endpoint, and a single
+        // fix dispatcher.
+
+        $this->register_tool( 'translation_sync_audit', array(
+            'description' => 'Unified cross-language sync audit. Detects drift (target body in source language), outdated (source edited after translating), structural_gap (translation missing sections source has), and schema_parity (FAQ/HowTo only on some languages). Returns ranked findings with finding_id strings ready for translation_sync_fix. type="all" runs all four routines.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'type'      => array( 'type' => 'string', 'enum' => array( 'all', 'drift', 'outdated', 'structural_gap', 'schema_parity' ), 'description' => 'Detect type. Default: all.' ),
+                    'post_type' => array( 'type' => 'string', 'description' => 'Post type to scan (default product).' ),
+                    'languages' => array( 'type' => 'string', 'description' => 'Comma-separated target languages. Default: all active non-source.' ),
+                    'limit'     => array( 'type' => 'integer', 'description' => 'Max findings (default 200, capped 500).' ),
+                    'threshold' => array( 'type' => 'number', 'description' => 'Drift threshold 0..1. Overrides stored setting for this call.' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Translation Sync Audit',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Translation_Sync' ) ) {
+                return array( 'error' => 'unavailable', 'message' => 'LuwiPress_Translation_Sync requires core 3.1.54+.' );
+            }
+            $sync = LuwiPress_Translation_Sync::get_instance();
+            $req  = new WP_REST_Request( 'GET', '/luwipress/v1/translation/sync-audit' );
+            foreach ( array( 'type', 'post_type', 'languages', 'limit', 'threshold' ) as $k ) {
+                if ( isset( $args[ $k ] ) ) {
+                    $req->set_param( $k, $args[ $k ] );
+                }
+            }
+            $resp = $sync->rest_audit( $req );
+            return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'translation_sync_fix', array(
+            'description' => 'Execute the fix action for one or more finding_ids returned by translation_sync_audit. Server re-resolves the finding (does not trust client-provided fix_args) and routes to force-retranslate / sync-structure / copy-schema as appropriate. Async by default — fixes that require AI fire via wp_cron.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'finding_ids' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Array of finding_id strings (required).' ),
+                    'async'       => array( 'type' => 'boolean', 'description' => 'Queue via wp_cron (true, default) or run inline (false).' ),
+                ),
+                'required' => array( 'finding_ids' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Translation Sync Fix',
+                'readOnlyHint'    => false,
+                'destructiveHint' => true,
+                'idempotentHint'  => false,
+                'openWorldHint'   => true,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Translation_Sync' ) ) {
+                return array( 'error' => 'unavailable', 'message' => 'LuwiPress_Translation_Sync requires core 3.1.54+.' );
+            }
+            $sync = LuwiPress_Translation_Sync::get_instance();
+            $req  = new WP_REST_Request( 'POST', '/luwipress/v1/translation/sync-fix' );
+            $req->set_param( 'finding_ids', $args['finding_ids'] ?? array() );
+            $req->set_param( 'async', isset( $args['async'] ) ? (bool) $args['async'] : true );
+            $resp = $sync->rest_fix( $req );
+            if ( is_wp_error( $resp ) ) {
+                return array( 'error' => $resp->get_error_code(), 'message' => $resp->get_error_message() );
+            }
+            return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'translation_sync_settings', array(
+            'description' => 'Get cross-language sync configuration: drift threshold, hourly sweep toggle, autofix toggle, next sweep time, last audit summary.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array(
+                'title'           => 'Translation Sync Settings (Read)',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Translation_Sync' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $sync = LuwiPress_Translation_Sync::get_instance();
+            $req  = new WP_REST_Request( 'GET', '/luwipress/v1/translation/sync-settings' );
+            $resp = $sync->rest_settings_get( $req );
+            return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'translation_sync_settings_set', array(
+            'description' => 'Update cross-language sync configuration. drift_threshold is 0..1 (default 0.45 = flag posts whose target-lang stop-word share is below 45%). sweep_enabled turns on hourly wp_cron audit. sweep_autofix lets the sweep auto-dispatch high-severity findings (caps at 20/sweep).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'drift_threshold' => array( 'type' => 'number', 'description' => '0.0..1.0, lower = stricter detection.' ),
+                    'sweep_enabled'   => array( 'type' => 'boolean', 'description' => 'Schedule hourly audit sweep (default off).' ),
+                    'sweep_autofix'   => array( 'type' => 'boolean', 'description' => 'Auto-fix high-severity findings during sweep (default off).' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Translation Sync Settings (Write)',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Translation_Sync' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $sync = LuwiPress_Translation_Sync::get_instance();
+            $req  = new WP_REST_Request( 'POST', '/luwipress/v1/translation/sync-settings' );
+            foreach ( array( 'drift_threshold', 'sweep_enabled', 'sweep_autofix' ) as $k ) {
+                if ( array_key_exists( $k, $args ) ) {
+                    $req->set_param( $k, $args[ $k ] );
+                }
+            }
+            $resp = $sync->rest_settings_set( $req );
+            return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
+        } );
+
         $this->register_tool( 'translation_fix_elementor', array(
             'description' => 'Repair WPML/Polylang translated posts whose Elementor data was dropped or mis-copied. Re-links translation copies to their source Elementor data so structural changes propagate. Pass "all" to fix every translated post, or a comma-separated list of post IDs.',
             'inputSchema' => array(

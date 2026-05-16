@@ -972,6 +972,183 @@ if ( $is_wpml ) {
 	<?php endif; ?>
 
 	<!-- ═══ MAINTENANCE — minimal collapsed by default ═══ -->
+	<!-- TRANSLATION SYNC AUDIT (3.1.54) -->
+	<?php if ( $is_wpml ) :
+		$sync_settings_resp = LuwiPress_Translation_Sync::get_instance()->rest_settings_get( new WP_REST_Request( 'GET', '/luwipress/v1/translation/sync-settings' ) );
+		$sync_settings      = $sync_settings_resp instanceof WP_REST_Response ? $sync_settings_resp->get_data() : array();
+		$last_audit         = $sync_settings['last_audit'] ?? null;
+	?>
+	<details class="tm-sync-audit" id="luwipress-sync-audit">
+		<summary class="tm-sync-summary">
+			<span class="dashicons dashicons-admin-site-alt2"></span>
+			<span class="tm-sync-summary-label"><?php esc_html_e( 'Translation Sync Audit', 'luwipress' ); ?></span>
+			<span class="tm-sync-summary-hint">
+				<?php if ( $last_audit && ! empty( $last_audit['findings_total'] ) ) :
+					$by_type = $last_audit['findings_by_type'] ?? array();
+				?>
+					<span class="tm-sync-pill tm-sync-pill-total"><?php echo (int) $last_audit['findings_total']; ?> <?php esc_html_e( 'findings', 'luwipress' ); ?></span>
+					<?php foreach ( array( 'drift' => 'Drift', 'outdated' => 'Outdated', 'structural_gap' => 'Structure', 'schema_parity' => 'Schema' ) as $tkey => $tlabel ) :
+						$cnt = isset( $by_type[ $tkey ] ) ? (int) $by_type[ $tkey ] : 0;
+						if ( $cnt <= 0 ) continue; ?>
+						<span class="tm-sync-pill tm-sync-pill-<?php echo esc_attr( $tkey ); ?>"><?php echo esc_html( $tlabel ); ?>: <?php echo $cnt; ?></span>
+					<?php endforeach; ?>
+				<?php else : ?>
+					<span class="tm-sync-pill tm-sync-pill-idle"><?php esc_html_e( 'Click to run audit', 'luwipress' ); ?></span>
+				<?php endif; ?>
+			</span>
+		</summary>
+		<div class="tm-sync-body">
+			<p class="tm-sync-intro">
+				<?php esc_html_e( 'Detects four kinds of cross-language sync issues across your products: language drift (target body still in source language), outdated translations (source edited after translating), structural gaps (translation missing sections the source has), and schema parity (FAQ/HowTo only on some languages).', 'luwipress' ); ?>
+			</p>
+			<div class="tm-sync-controls">
+				<label class="tm-sync-control">
+					<span><?php esc_html_e( 'Drift threshold', 'luwipress' ); ?></span>
+					<input type="number" id="luwipress-sync-threshold" min="0" max="1" step="0.05" value="<?php echo esc_attr( $sync_settings['drift_threshold'] ?? 0.45 ); ?>" />
+				</label>
+				<label class="tm-sync-control">
+					<input type="checkbox" id="luwipress-sync-sweep-enabled" <?php checked( ! empty( $sync_settings['sweep_enabled'] ) ); ?> />
+					<span><?php esc_html_e( 'Hourly auto-sweep', 'luwipress' ); ?></span>
+				</label>
+				<label class="tm-sync-control">
+					<input type="checkbox" id="luwipress-sync-sweep-autofix" <?php checked( ! empty( $sync_settings['sweep_autofix'] ) ); ?> />
+					<span><?php esc_html_e( 'Auto-fix high-severity', 'luwipress' ); ?></span>
+				</label>
+				<button type="button" id="luwipress-sync-save-settings" class="tm-btn tm-btn-secondary"><?php esc_html_e( 'Save settings', 'luwipress' ); ?></button>
+				<button type="button" id="luwipress-sync-run-audit" class="tm-btn tm-btn-primary">
+					<span class="dashicons dashicons-search"></span> <?php esc_html_e( 'Run audit now', 'luwipress' ); ?>
+				</button>
+			</div>
+			<div class="tm-sync-status" id="luwipress-sync-status" aria-live="polite"></div>
+			<div class="tm-sync-findings" id="luwipress-sync-findings"></div>
+		</div>
+	</details>
+	<style>
+		.tm-sync-audit { margin: 16px 0; border: 1px solid var(--lp-border, #e5e7eb); border-left: 4px solid var(--lp-primary, #6366f1); border-radius: 8px; background: #fff; }
+		.tm-sync-summary { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; user-select: none; list-style: none; outline: none; }
+		.tm-sync-summary::-webkit-details-marker { display: none; }
+		.tm-sync-summary:hover { background: var(--lp-gray-50, #f9fafb); }
+		.tm-sync-summary .dashicons { color: var(--lp-primary, #6366f1); }
+		.tm-sync-summary-label { font-weight: 600; color: var(--lp-text, #111827); }
+		.tm-sync-summary-hint { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+		.tm-sync-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--lp-gray-100, #f3f4f6); color: var(--lp-text-muted, #6b7280); }
+		.tm-sync-pill-total { background: var(--lp-primary, #6366f1); color: #fff; }
+		.tm-sync-pill-drift { background: #fee2e2; color: #b91c1c; }
+		.tm-sync-pill-outdated { background: #fef3c7; color: #92400e; }
+		.tm-sync-pill-structural_gap { background: #fed7aa; color: #9a3412; }
+		.tm-sync-pill-schema_parity { background: #ddd6fe; color: #5b21b6; }
+		.tm-sync-pill-idle { background: var(--lp-gray-100, #f3f4f6); color: var(--lp-text-muted, #6b7280); }
+		.tm-sync-audit[open] .tm-sync-summary { border-bottom: 1px solid var(--lp-border, #e5e7eb); }
+		.tm-sync-body { padding: 16px; }
+		.tm-sync-intro { color: var(--lp-text-muted, #6b7280); font-size: 13px; margin: 0 0 12px 0; }
+		.tm-sync-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+		.tm-sync-control { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--lp-text, #111827); }
+		.tm-sync-control input[type="number"] { width: 70px; }
+		.tm-sync-status { padding: 8px 0; font-size: 13px; color: var(--lp-text-muted, #6b7280); }
+		.tm-sync-findings { display: grid; gap: 8px; }
+		.tm-sync-finding { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; padding: 10px 12px; border: 1px solid var(--lp-border, #e5e7eb); border-radius: 6px; align-items: center; }
+		.tm-sync-finding.tm-sync-sev-high { border-left: 4px solid #dc2626; background: #fef2f2; }
+		.tm-sync-finding.tm-sync-sev-medium { border-left: 4px solid #f59e0b; background: #fffbeb; }
+		.tm-sync-finding.tm-sync-sev-low { border-left: 4px solid #6b7280; }
+		.tm-sync-finding-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+		.tm-sync-finding-badge.tm-sync-type-drift { background: #fee2e2; color: #b91c1c; }
+		.tm-sync-finding-badge.tm-sync-type-outdated { background: #fef3c7; color: #92400e; }
+		.tm-sync-finding-badge.tm-sync-type-structural_gap { background: #fed7aa; color: #9a3412; }
+		.tm-sync-finding-badge.tm-sync-type-schema_parity { background: #ddd6fe; color: #5b21b6; }
+		.tm-sync-finding-title { font-weight: 600; color: var(--lp-text, #111827); }
+		.tm-sync-finding-summary { font-size: 12px; color: var(--lp-text-muted, #6b7280); }
+		.tm-sync-finding-actions { display: flex; gap: 6px; }
+		.tm-sync-fix-btn { font-size: 12px; padding: 6px 10px; }
+		.tm-sync-finding.tm-sync-done { opacity: 0.6; }
+	</style>
+	<script>
+	(function() {
+		var nonce = '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>';
+		var restUrl = '<?php echo esc_url_raw( rest_url( 'luwipress/v1/' ) ); ?>';
+		var statusEl = document.getElementById('luwipress-sync-status');
+		var findingsEl = document.getElementById('luwipress-sync-findings');
+
+		function setStatus(msg) { if (statusEl) statusEl.textContent = msg || ''; }
+
+		function escapeHtml(s) { return String(s||'').replace(/[&<>"]/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+		function renderFindings(findings) {
+			findingsEl.innerHTML = '';
+			if (!findings || !findings.length) {
+				findingsEl.innerHTML = '<div class="tm-sync-status" style="text-align:center;padding:20px;">No sync issues detected.</div>';
+				return;
+			}
+			findings.forEach(function(f) {
+				var row = document.createElement('div');
+				row.className = 'tm-sync-finding tm-sync-sev-' + f.severity;
+				row.dataset.findingId = f.finding_id;
+				row.innerHTML =
+					'<span class="tm-sync-finding-badge tm-sync-type-' + f.type + '">' + f.type.replace('_',' ') + '</span>' +
+					'<div>' +
+						'<div class="tm-sync-finding-title">' + escapeHtml(f.title || ('#' + f.source_id)) + ' &middot; ' + (f.lang||'').toUpperCase() + '</div>' +
+						'<div class="tm-sync-finding-summary">' + escapeHtml(f.gap_summary || '') + '</div>' +
+					'</div>' +
+					'<div class="tm-sync-finding-actions">' +
+						'<button type="button" class="tm-btn tm-btn-secondary tm-sync-fix-btn" data-finding-id="' + escapeHtml(f.finding_id) + '">' +
+							'<span class="dashicons dashicons-admin-tools" style="font-size:14px;width:14px;height:14px;"></span> Fix' +
+						'</button>' +
+					'</div>';
+				findingsEl.appendChild(row);
+			});
+		}
+
+		document.getElementById('luwipress-sync-run-audit').addEventListener('click', function() {
+			setStatus('Running audit...');
+			var thr = document.getElementById('luwipress-sync-threshold').value;
+			fetch(restUrl + 'translation/sync-audit?type=all&post_type=product&limit=100&threshold=' + encodeURIComponent(thr), {
+				headers: { 'X-WP-Nonce': nonce }
+			}).then(function(r){ return r.json(); }).then(function(d) {
+				setStatus('Audit complete: ' + (d.count || 0) + ' findings.');
+				renderFindings(d.findings || []);
+			}).catch(function(e) {
+				setStatus('Error: ' + e.message);
+			});
+		});
+
+		findingsEl.addEventListener('click', function(e) {
+			var btn = e.target.closest('.tm-sync-fix-btn');
+			if (!btn) return;
+			var fid = btn.dataset.findingId;
+			var row = btn.closest('.tm-sync-finding');
+			btn.disabled = true;
+			btn.innerHTML = 'Fixing...';
+			fetch(restUrl + 'translation/sync-fix', {
+				method: 'POST',
+				headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
+				body: JSON.stringify({ finding_ids: [fid], async: true })
+			}).then(function(r){ return r.json(); }).then(function(d) {
+				row.classList.add('tm-sync-done');
+				btn.innerHTML = 'Queued';
+			}).catch(function(e) {
+				btn.disabled = false;
+				btn.innerHTML = 'Retry';
+				setStatus('Error: ' + e.message);
+			});
+		});
+
+		document.getElementById('luwipress-sync-save-settings').addEventListener('click', function() {
+			var body = {
+				drift_threshold: parseFloat(document.getElementById('luwipress-sync-threshold').value),
+				sweep_enabled:   document.getElementById('luwipress-sync-sweep-enabled').checked,
+				sweep_autofix:   document.getElementById('luwipress-sync-sweep-autofix').checked
+			};
+			fetch(restUrl + 'translation/sync-settings', {
+				method: 'POST',
+				headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			}).then(function(r){ return r.json(); }).then(function(d) {
+				setStatus('Settings saved.');
+			});
+		});
+	})();
+	</script>
+	<?php endif; ?>
+
 	<details class="tm-maint-collapsed">
 		<summary class="tm-maint-summary">
 			<span class="dashicons dashicons-admin-tools"></span>
