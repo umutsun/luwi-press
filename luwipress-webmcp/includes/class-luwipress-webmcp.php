@@ -1617,6 +1617,137 @@ class LuwiPress_WebMCP {
             return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
         } );
 
+        // ─── Slug Resolver (3.1.56+) ──────────────────────────────────
+        // Core engine that 301-redirects legacy `/<slug>/` page URLs to
+        // their matching `/product-category/<slug>/` archive. Migrated
+        // from `luwipress-gold` theme to core so every theme inherits
+        // the same behaviour. Five MCP tools below mirror the REST surface.
+
+        $this->register_tool( 'slug_resolver_diag', array(
+            'description' => 'Diagnostic runtime snapshot of the slug-collision resolver: toggle state, hook attachment, map size, WPML/Polylang detect, last build, sample slug probes (returns what each slug would redirect to if hit). Use for cross-customer migration troubleshooting WITHOUT needing server-side log access.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'probe' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Optional list of slugs to probe (default: percussions, duduk, ney, winds, persian-kamancheh).' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Slug Resolver Diagnostic',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Slug_Resolver' ) ) {
+                return array( 'error' => 'unavailable', 'message' => 'LuwiPress_Slug_Resolver requires core 3.1.56+.' );
+            }
+            $r   = LuwiPress_Slug_Resolver::get_instance();
+            $req = new WP_REST_Request( 'GET', '/luwipress/v1/slug-resolver/diag' );
+            if ( isset( $args['probe'] ) ) {
+                $req->set_param( 'probe', $args['probe'] );
+            }
+            $resp = $r->rest_diag( $req );
+            return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'slug_resolver_map', array(
+            'description' => 'Return the full slug→target redirect map (auto-discovered + operator overrides, composed). Useful for auditing what every page slug currently resolves to before flipping the toggle on.',
+            'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+            'annotations' => array(
+                'title'           => 'Slug Resolver Map',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Slug_Resolver' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $r   = LuwiPress_Slug_Resolver::get_instance();
+            $req = new WP_REST_Request( 'GET', '/luwipress/v1/slug-resolver/map' );
+            $resp = $r->rest_map( $req );
+            return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'slug_resolver_force_rebuild', array(
+            'description' => 'Bust the discovery transient and re-run all six passes. Use after editing the page tree or product_cat hierarchy if you don\'t want to wait for the 1-hour TTL.',
+            'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+            'annotations' => array(
+                'title'           => 'Slug Resolver Force Rebuild',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Slug_Resolver' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $r   = LuwiPress_Slug_Resolver::get_instance();
+            $req = new WP_REST_Request( 'POST', '/luwipress/v1/slug-resolver/rebuild' );
+            $resp = $r->rest_rebuild( $req );
+            return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'slug_resolver_override_set', array(
+            'description' => 'Set or remove an explicit operator override for a slug. Target may be: integer term_id (redirect to that term\'s archive), URL string (redirect to URL), true (auto-target /product-category/<slug>/), false (suppress auto redirect), null (remove the override). Overrides win over auto-discovery.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'slug'   => array( 'type' => 'string', 'description' => 'Page slug (no leading slash).' ),
+                    'target' => array( 'description' => 'Redirect target — int term_id, URL string, true (auto), false (suppress), or null (remove).' ),
+                ),
+                'required' => array( 'slug' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Slug Resolver Override',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Slug_Resolver' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $r   = LuwiPress_Slug_Resolver::get_instance();
+            $req = new WP_REST_Request( 'POST', '/luwipress/v1/slug-resolver/override' );
+            $req->set_param( 'slug',   $args['slug']   ?? '' );
+            $req->set_param( 'target', $args['target'] ?? null );
+            $resp = $r->rest_override( $req );
+            if ( is_wp_error( $resp ) ) {
+                return array( 'error' => $resp->get_error_code(), 'message' => $resp->get_error_message() );
+            }
+            return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'slug_resolver_settings_set', array(
+            'description' => 'Enable or disable the slug-collision resolver site-wide. When disabled, the map is still built on demand but no redirects fire.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'enabled' => array( 'type' => 'boolean', 'description' => 'true = enable redirects, false = disable.' ),
+                ),
+                'required' => array( 'enabled' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Slug Resolver Settings (Write)',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Slug_Resolver' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $r   = LuwiPress_Slug_Resolver::get_instance();
+            $req = new WP_REST_Request( 'POST', '/luwipress/v1/slug-resolver/settings' );
+            $req->set_body_params( array( 'enabled' => ! empty( $args['enabled'] ) ) );
+            $resp = $r->rest_settings_set( $req );
+            return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
+        } );
+
         $this->register_tool( 'translation_fix_elementor', array(
             'description' => 'Repair WPML/Polylang translated posts whose Elementor data was dropped or mis-copied. Re-links translation copies to their source Elementor data so structural changes propagate. Pass "all" to fix every translated post, or a comma-separated list of post IDs.',
             'inputSchema' => array(

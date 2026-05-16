@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.1.55
+ * Version: 3.1.58
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.1.55');
+define('LUWIPRESS_VERSION', '3.1.58');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -187,6 +187,14 @@ class LuwiPress {
         // exposes them in the admin "Theme" tab, REST endpoints, and WebMCP.
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-theme-bridge.php';
 
+        // Slug Collision Resolver — generic page↔product_cat redirect engine
+        // promoted from theme-tier to core in 3.1.58 so every LuwiPress site
+        // (any theme) inherits the same migration-friendly rescue behaviour.
+        // Six-pass discovery (exact / WPML cross / fuzzy / Levenshtein /
+        // menu-parent inheritance / empty-term ancestor fallback) + REST
+        // diagnostic surface for cross-customer troubleshooting.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-slug-resolver.php';
+
     }
     
     /**
@@ -277,6 +285,7 @@ class LuwiPress {
         LuwiPress_Abilities::get_instance();
         LuwiPress_ACP_Attribution::get_instance();
         LuwiPress_Theme_Bridge::get_instance();
+        LuwiPress_Slug_Resolver::get_instance();
 
         // Elementor integration (only if Elementor is active)
         if ( LuwiPress_Elementor::is_elementor_active() || is_admin() ) {
