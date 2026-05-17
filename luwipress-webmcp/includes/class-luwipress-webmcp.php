@@ -1748,6 +1748,246 @@ class LuwiPress_WebMCP {
             return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
         } );
 
+        // Redirect-loop audit: scrapes every link out of one or more WP nav
+        // menus, GETs each with redirects disabled, follows the chain up to
+        // `max_hops`, surfaces non-200 endpoints, redirect chains > 1 hop,
+        // and any `X-LWP-SR:` trace headers. This is the same sweep a
+        // pre-DNS-swap audit script would otherwise have to re-implement
+        // per customer — folding it into MCP means it ships with every
+        // LuwiPress site and any future migration gets a one-shot
+        // "is my redirect map clean?" check.
+        $this->register_tool( 'slug_resolver_redirect_audit', array(
+            'description' => 'Sweep every link out of one or more navigation menus (or arbitrary URLs), follow redirects up to max_hops, report 404s, redirect chains > 1 hop, and decode any X-LWP-SR trace headers. Use before a DNS swap or after editing the slug-resolver map to catch loops/dead-ends. Returns a per-URL trail with hop count, status codes, final URL, and SR-trace tokens.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'menu_ids' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Menu IDs to extract URLs from. Omit to sweep every nav menu on the site.' ),
+                    'urls'     => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Explicit URLs to probe (in addition to menu_ids). Useful for one-off slug checks.' ),
+                    'max_hops' => array( 'type' => 'integer', 'description' => 'Max redirect hops per URL before giving up (default 5).' ),
+                    'cache_bust' => array( 'type' => 'boolean', 'description' => 'Append a random ?lwp_audit=… query to bypass page cache (default true).' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Slug Resolver Redirect Audit',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => true,
+            ),
+        ), function ( $args ) {
+            $max_hops   = isset( $args['max_hops'] ) ? max( 1, min( 10, (int) $args['max_hops'] ) ) : 5;
+            $cache_bust = isset( $args['cache_bust'] ) ? (bool) $args['cache_bust'] : true;
+
+            // Gather URLs.
+            $urls = array();
+            if ( ! empty( $args['urls'] ) && is_array( $args['urls'] ) ) {
+                foreach ( $args['urls'] as $u ) {
+                    $u = (string) $u;
+                    if ( $u !== '' ) $urls[ $u ] = true;
+                }
+            }
+            $menu_ids = array();
+            if ( isset( $args['menu_ids'] ) && is_array( $args['menu_ids'] ) ) {
+                foreach ( $args['menu_ids'] as $mid ) {
+                    $mid = (int) $mid; if ( $mid > 0 ) $menu_ids[] = $mid;
+                }
+            } else {
+                // Default: every nav menu on the site.
+                $menus = wp_get_nav_menus();
+                if ( is_array( $menus ) ) {
+                    foreach ( $menus as $m ) $menu_ids[] = (int) $m->term_id;
+                }
+            }
+            foreach ( $menu_ids as $mid ) {
+                $items = wp_get_nav_menu_items( $mid );
+                if ( ! is_array( $items ) ) continue;
+                foreach ( $items as $it ) {
+                    $u = isset( $it->url ) ? (string) $it->url : '';
+                    if ( $u === '' || $u === '#' ) continue;
+                    $host = (string) wp_parse_url( $u, PHP_URL_HOST );
+                    if ( $host !== '' && $host !== (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) continue;
+                    $u = strtok( $u, '#' );
+                    $urls[ $u ] = true;
+                }
+            }
+            $urls = array_keys( $urls );
+            sort( $urls );
+
+            $results = array();
+            $stats = array(
+                'total'        => count( $urls ),
+                'end_200'      => 0,
+                'end_404'      => 0,
+                'end_other'    => 0,
+                'chains_gt_1'  => 0,
+                'loops_5plus'  => 0,
+                'with_sr'      => 0,
+            );
+
+            foreach ( $urls as $start ) {
+                $trail = array();
+                $cur   = $start;
+                $hops  = 0;
+                $saw_sr = false;
+                while ( $hops < $max_hops ) {
+                    $probe_url = $cur;
+                    if ( $cache_bust ) {
+                        $sep = ( strpos( $probe_url, '?' ) === false ) ? '?' : '&';
+                        $probe_url .= $sep . 'lwp_audit=' . wp_generate_uuid4();
+                    }
+                    $resp = wp_remote_get( $probe_url, array(
+                        'redirection' => 0,
+                        'timeout'     => 15,
+                        'sslverify'   => false,
+                        'headers'     => array( 'Cache-Control' => 'no-cache' ),
+                    ) );
+                    if ( is_wp_error( $resp ) ) {
+                        $trail[] = array( 'code' => -1, 'url' => $cur, 'sr' => $resp->get_error_message() );
+                        break;
+                    }
+                    $code = (int) wp_remote_retrieve_response_code( $resp );
+                    $sr_arr = wp_remote_retrieve_header( $resp, 'x-lwp-sr' );
+                    if ( $sr_arr ) $saw_sr = true;
+                    $sr_str = is_array( $sr_arr ) ? implode( ', ', $sr_arr ) : (string) $sr_arr;
+                    $trail[] = array( 'code' => $code, 'url' => $cur, 'sr' => $sr_str );
+                    if ( in_array( $code, array( 301, 302, 307, 308 ), true ) ) {
+                        $loc = wp_remote_retrieve_header( $resp, 'location' );
+                        if ( is_array( $loc ) ) $loc = $loc[0] ?? '';
+                        if ( ! $loc ) break;
+                        $cur = (string) $loc;
+                        $hops++;
+                        continue;
+                    }
+                    break;
+                }
+                $last_code = ! empty( $trail ) ? (int) end( $trail )['code'] : 0;
+                if ( $last_code === 200 ) $stats['end_200']++;
+                elseif ( $last_code === 404 ) $stats['end_404']++;
+                else $stats['end_other']++;
+                if ( count( $trail ) > 2 ) $stats['chains_gt_1']++;
+                if ( count( $trail ) >= $max_hops ) $stats['loops_5plus']++;
+                if ( $saw_sr ) $stats['with_sr']++;
+                $results[] = array(
+                    'start'      => $start,
+                    'final_url'  => ! empty( $trail ) ? (string) end( $trail )['url'] : '',
+                    'final_code' => $last_code,
+                    'hops'       => count( $trail ) - 1,
+                    'looped'     => count( $trail ) >= $max_hops,
+                    'trail'      => $trail,
+                );
+            }
+
+            // Issues bucket — anything operator should look at.
+            $issues = array();
+            foreach ( $results as $r ) {
+                $reason = '';
+                if ( $r['looped'] )                    $reason = 'redirect_loop';
+                elseif ( $r['final_code'] === 404 )    $reason = '404';
+                elseif ( $r['final_code'] >= 500 )     $reason = 'server_error';
+                elseif ( $r['final_code'] === 0 || $r['final_code'] === -1 ) $reason = 'transport_error';
+                elseif ( $r['hops'] > 1 )              $reason = 'multi_hop_chain';
+                if ( $reason ) $issues[] = array_merge( array( 'reason' => $reason ), $r );
+            }
+
+            return array(
+                'menu_ids'  => $menu_ids,
+                'max_hops'  => $max_hops,
+                'cache_bust'=> $cache_bust,
+                'stats'     => $stats,
+                'issues'    => $issues,
+                'results'   => $results,
+            );
+        } );
+
+        // WPML/Polylang term-translation lookup. Last session we needed
+        // this to find the ES sibling of the EN Black Sea Kemenche term;
+        // the existing `translation_taxonomy` tool only triggers AI
+        // translation, it doesn't READ the WPML term-translation map.
+        // Read-only sibling discovery without admin UI dance.
+        $this->register_tool( 'wpml_term_translation_get', array(
+            'description' => 'Return the WPML or Polylang sibling translations of a single term across every active language. For each language returns: code, term_id (or null if missing), slug, name, edit_url. Useful when you need to know "what is the ES/IT/FR equivalent of term 99" without diving into wp_admin.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'term_id'  => array( 'type' => 'integer', 'description' => 'Source term ID (required).' ),
+                    'taxonomy' => array( 'type' => 'string', 'description' => 'Taxonomy (default: product_cat).' ),
+                ),
+                'required' => array( 'term_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'WPML Term Translation Lookup',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $term_id  = (int) ( $args['term_id'] ?? 0 );
+            $taxonomy = isset( $args['taxonomy'] ) ? (string) $args['taxonomy'] : 'product_cat';
+            if ( $term_id <= 0 ) {
+                return array( 'error' => 'invalid_term_id' );
+            }
+            $term = get_term( $term_id, $taxonomy );
+            if ( ! ( $term instanceof WP_Term ) ) {
+                return array( 'error' => 'term_not_found', 'term_id' => $term_id, 'taxonomy' => $taxonomy );
+            }
+
+            $lang_codes = array();
+            $engine = 'none';
+            if ( function_exists( 'icl_get_languages' ) ) {
+                $list = icl_get_languages( 'skip_missing=0' );
+                if ( is_array( $list ) ) {
+                    $engine = 'wpml';
+                    $lang_codes = array_keys( $list );
+                }
+            } elseif ( function_exists( 'pll_languages_list' ) ) {
+                $list = pll_languages_list();
+                if ( is_array( $list ) ) {
+                    $engine = 'polylang';
+                    $lang_codes = array_map( 'strval', $list );
+                }
+            }
+
+            $translations = array();
+            foreach ( $lang_codes as $code ) {
+                $tid = $term_id;
+                if ( $engine === 'wpml' && function_exists( 'icl_object_id' ) ) {
+                    $resolved = icl_object_id( $term_id, $taxonomy, false, $code );
+                    $tid = $resolved ? (int) $resolved : 0;
+                } elseif ( $engine === 'polylang' && function_exists( 'pll_get_term' ) ) {
+                    $resolved = pll_get_term( $term_id, $code );
+                    $tid = $resolved ? (int) $resolved : 0;
+                }
+                $entry = array(
+                    'lang'    => $code,
+                    'term_id' => $tid ?: null,
+                    'slug'    => null,
+                    'name'    => null,
+                    'count'   => null,
+                    'link'    => null,
+                );
+                if ( $tid > 0 ) {
+                    $t = get_term( $tid, $taxonomy );
+                    if ( $t instanceof WP_Term ) {
+                        $entry['slug']  = $t->slug;
+                        $entry['name']  = $t->name;
+                        $entry['count'] = (int) $t->count;
+                        $link = get_term_link( $t );
+                        $entry['link']  = is_wp_error( $link ) ? null : (string) $link;
+                    }
+                }
+                $translations[] = $entry;
+            }
+            return array(
+                'engine'       => $engine,
+                'source'       => array(
+                    'term_id'  => (int) $term->term_id,
+                    'slug'     => $term->slug,
+                    'name'     => $term->name,
+                    'taxonomy' => $taxonomy,
+                ),
+                'translations' => $translations,
+            );
+        } );
+
         $this->register_tool( 'translation_fix_elementor', array(
             'description' => 'Repair WPML/Polylang translated posts whose Elementor data was dropped or mis-copied. Re-links translation copies to their source Elementor data so structural changes propagate. Pass "all" to fix every translated post, or a comma-separated list of post IDs.',
             'inputSchema' => array(
@@ -5628,7 +5868,7 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'menu_add_item', array(
-            'description' => 'Add an item to a navigation menu (page, post, custom URL, category)',
+            'description' => 'Add an item to a navigation menu (page, post, custom URL, category). On WPML sites pass `lang` so the newly created nav_menu_item post is attached to the right language context — without it, WPML strips the term-attachment and the item appears as an orphan in the wp_posts table without being visible in the target menu.',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
@@ -5638,33 +5878,91 @@ class LuwiPress_WebMCP {
                     'object_id' => array( 'type' => 'integer', 'description' => 'Post/page/category ID for content items' ),
                     'object'    => array( 'type' => 'string', 'description' => 'Object type: page, post, category, custom' ),
                     'parent'    => array( 'type' => 'integer', 'description' => 'Parent menu item ID for submenus' ),
+                    'lang'      => array( 'type' => 'string', 'description' => 'WPML/Polylang language code (en/fr/it/es/...). Required on multilingual sites — sets the global language context before insertion so WPML attaches the new nav_menu_item to the correct language.' ),
                 ),
                 'required' => array( 'menu_id', 'title' ),
             ),
             'annotations' => array( 'title' => 'Add Menu Item', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
         ), function ( $args ) {
             $menu_id = intval( $args['menu_id'] );
-            $item_data = array(
-                'menu-item-title'  => sanitize_text_field( $args['title'] ),
-                'menu-item-status' => 'publish',
-            );
-            if ( ! empty( $args['url'] ) ) {
-                $item_data['menu-item-url']  = esc_url_raw( $args['url'] );
-                $item_data['menu-item-type'] = 'custom';
-            } elseif ( ! empty( $args['object_id'] ) ) {
-                $item_data['menu-item-object-id'] = absint( $args['object_id'] );
-                $obj = sanitize_text_field( $args['object'] ?? 'page' );
-                $item_data['menu-item-object'] = $obj;
-                $item_data['menu-item-type'] = in_array( $obj, array( 'category', 'post_tag', 'product_cat' ), true ) ? 'taxonomy' : 'post_type';
+            $lang    = isset( $args['lang'] ) ? sanitize_key( (string) $args['lang'] ) : '';
+
+            // Set WPML/Polylang language context BEFORE the menu item is
+            // created, otherwise the nav_menu_item post lands in the
+            // default language and is silently disowned by the term-
+            // attachment hooks WPML runs at wp_update_nav_menu_item.
+            // Documented in feedback_menu_add_item_wpml_orphan.md after a
+            // bare insertion in the previous session created 5 orphans.
+            $restore_lang = null;
+            if ( $lang !== '' ) {
+                if ( defined( 'ICL_LANGUAGE_CODE' ) ) {
+                    $restore_lang = ICL_LANGUAGE_CODE;
+                }
+                if ( function_exists( 'do_action' ) ) {
+                    do_action( 'wpml_switch_language', $lang );
+                }
             }
-            if ( ! empty( $args['parent'] ) ) {
-                $item_data['menu-item-parent-id'] = absint( $args['parent'] );
+
+            try {
+                $item_data = array(
+                    'menu-item-title'  => sanitize_text_field( $args['title'] ),
+                    'menu-item-status' => 'publish',
+                );
+                if ( ! empty( $args['url'] ) ) {
+                    $item_data['menu-item-url']  = esc_url_raw( $args['url'] );
+                    $item_data['menu-item-type'] = 'custom';
+                } elseif ( ! empty( $args['object_id'] ) ) {
+                    $item_data['menu-item-object-id'] = absint( $args['object_id'] );
+                    $obj = sanitize_text_field( $args['object'] ?? 'page' );
+                    $item_data['menu-item-object'] = $obj;
+                    $item_data['menu-item-type'] = in_array( $obj, array( 'category', 'post_tag', 'product_cat' ), true ) ? 'taxonomy' : 'post_type';
+                }
+                if ( ! empty( $args['parent'] ) ) {
+                    $item_data['menu-item-parent-id'] = absint( $args['parent'] );
+                }
+                $item_id = wp_update_nav_menu_item( $menu_id, 0, $item_data );
+                if ( is_wp_error( $item_id ) ) {
+                    throw new Exception( $item_id->get_error_message() );
+                }
+
+                // Force WPML to record the language assignment for the new
+                // nav_menu_item post (in case the language switch above
+                // didn't propagate to wpml-translations on insert).
+                if ( $lang !== '' && function_exists( 'do_action' ) ) {
+                    do_action( 'wpml_set_element_language_details', array(
+                        'element_id'           => (int) $item_id,
+                        'element_type'         => 'post_nav_menu_item',
+                        'language_code'        => $lang,
+                        'source_language_code' => null,
+                    ) );
+                }
+
+                // Verify the item is actually attached to the target menu
+                // term (the bug pattern we're guarding against).
+                $attached = false;
+                $items = wp_get_nav_menu_items( $menu_id );
+                if ( is_array( $items ) ) {
+                    foreach ( $items as $it ) {
+                        if ( (int) $it->ID === (int) $item_id ) { $attached = true; break; }
+                    }
+                }
+                $result = array(
+                    'item_id'  => (int) $item_id,
+                    'menu_id'  => $menu_id,
+                    'title'    => $args['title'],
+                    'lang'     => $lang ?: null,
+                    'attached' => $attached,
+                );
+                if ( ! $attached ) {
+                    $result['warning'] = 'item_inserted_but_not_attached_to_menu';
+                    $result['hint']    = 'On WPML sites pass `lang` matching the target menu\'s language, or add manually via wp-admin where the language context is set correctly.';
+                }
+                return $result;
+            } finally {
+                if ( $restore_lang !== null && function_exists( 'do_action' ) ) {
+                    do_action( 'wpml_switch_language', $restore_lang );
+                }
             }
-            $item_id = wp_update_nav_menu_item( $menu_id, 0, $item_data );
-            if ( is_wp_error( $item_id ) ) {
-                throw new Exception( $item_id->get_error_message() );
-            }
-            return array( 'item_id' => $item_id, 'menu_id' => $menu_id, 'title' => $args['title'] );
         } );
 
         $this->register_tool( 'menu_remove_item', array(

@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.55
+Stable tag: 3.1.59
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,14 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.1.59 — Slug resolver: skip when path is already a product_cat archive + loop-guard query-string fix =
+* **FIX (`LuwiPress_Slug_Resolver::maybe_redirect`)**: The 3.1.58 nested-leaf-fallback was firing on URLs that were already `product_cat` archives — e.g. `/product-category/accessories/` had leaf `accessories`, which was in the map and resolved back to the same URL. The loop-guard at the end didn't catch it because `home_url($req)` retained any cache-buster query string while `$target` did not, so the equality check missed. Result: every `/product-category/...` URL (and the WPML-translated equivalents `categorie-produit`, `categoria-prodotto`, `categoria-producto`) entered a 5-hop redirect chain until the browser gave up. Now the resolver short-circuits with `skip-prodcat-base` trace as soon as it sees the path begins with a known product_cat base.
+* **NEW helper `get_product_cat_bases()`**: introspects `wc_get_permalink_structure()` for the default base, then probes a sample populated term in every WPML/Polylang language to discover translated bases automatically. Cached in transient `luwipress_slug_resolver_prodcat_bases_v1`, busted by the same hooks as the map. Extendable via `apply_filters('luwipress_slug_resolver_prodcat_bases', $bases)`.
+* **FIX loop guard**: now compares URL PATHS only (strips query strings via `wp_parse_url($x, PHP_URL_PATH)`) so cache-buster params (`?cb=…`, `?_ga=…`, marketplace UTM tags) can't unmask the guard.
+* **Diagnostic**: new trace header value `X-LWP-SR: skip-prodcat-base:<seg>` appears whenever the resolver bails out for this reason.
+
+= 3.1.58 — Slug resolver: nested-leaf-fallback for legacy blog URLs =
 
 = 3.1.55 — AEO target_language auto-detection from WPML/Polylang post language =
 * **FIX (`LuwiPress_AEO::dispatch_aeo_generation`)**: AEO FAQ/HowTo generation now auto-detects the target post's WPML/Polylang language and forwards it to the prompt builder as `target_language`. Previous behavior fell back to the `luwipress_target_language` option (typically "English") which caused FAQ generation on translated post_ids (FR/IT/ES siblings) to produce English content even though the post itself was in another language. Discovered during 2026-05-16 audit when `aeo_generate_faq` was run on 24 translated products and produced English Q&A across the board. Operators can still pass an explicit `target_language` in options to override.

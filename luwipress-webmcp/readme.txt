@@ -58,6 +58,19 @@ Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress
 
 == Changelog ==
 
+= 1.0.18 — Redirect audit + WPML term-translation lookup + WPML-aware menu_add_item =
+* **NEW (`slug_resolver_redirect_audit`)**: One-shot redirect-chain sweeper. Scrapes every link out of one or more nav menus (or arbitrary URLs), follows redirects up to `max_hops` with redirects disabled at each step, decodes any `X-LWP-SR:` trace headers, and surfaces issues: redirect_loop / 404 / multi_hop_chain / server_error / transport_error. Replaces hand-rolled audit scripts per migration. Use before any DNS swap or after editing the slug-resolver map.
+* **NEW (`wpml_term_translation_get`)**: Read-only WPML/Polylang sibling-term discovery. Returns every language's `term_id` + slug + name + count + archive link for the source term. Closes the "what is the ES equivalent of EN term 99" loop without admin UI.
+* **FIX (`menu_add_item`)**: Now accepts a `lang` arg and sets WPML language context (`wpml_switch_language` → insert → `wpml_set_element_language_details`) so the new nav_menu_item is attached to the right language. Previous behaviour created an orphan post that wasn't visible in the target menu. Result also includes an `attached` boolean — if false the response includes a `hint` pointing the operator at the cause.
+
+= 1.0.17 — Slug Resolver MCP tools (5 tools) =
+* **NEW (`slug_resolver_diag`)**: Runtime diagnostic snapshot (toggle, hook attachment, map size, WPML/Polylang detect, sample slug probes). Use for cross-customer migration troubleshooting without server log access.
+* **NEW (`slug_resolver_map`)**: Full slug→target redirect map (auto + overrides + composed) for audit before flipping enable.
+* **NEW (`slug_resolver_force_rebuild`)**: Bust transient + re-run six discovery passes.
+* **NEW (`slug_resolver_override_set`)**: Explicit operator override — slug → term_id | URL | true | false | null.
+* **NEW (`slug_resolver_settings_set`)**: Site-wide enable/disable toggle.
+* **REQUIRES**: LuwiPress core 3.1.56+.
+
 = 1.0.16 — Translation Sync Audit MCP tools =
 * **NEW (`translation_sync_audit`)**: Unified cross-language sync audit. Detects drift / outdated / structural_gap / schema_parity findings under one call. Read-only.
 * **NEW (`translation_sync_fix`)**: Execute the appropriate fix action for one or more finding_ids returned by audit. Server re-resolves the finding server-side (does not trust client fix_args) and routes to force-retranslate / sync-structure / copy-schema as appropriate. Async by default.

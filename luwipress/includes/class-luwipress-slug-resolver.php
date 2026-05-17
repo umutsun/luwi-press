@@ -73,6 +73,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class LuwiPress_Slug_Resolver {
 
 	const TRANSIENT_KEY      = 'luwipress_slug_resolver_map_v1';
+	const TRANSIENT_BASES    = 'luwipress_slug_resolver_prodcat_bases_v1';
 	const OPTION_ENABLED     = 'luwipress_slug_resolver_enabled';
 	const OPTION_LAST_BUILD  = 'luwipress_slug_resolver_last_build';
 	const OPTION_OVERRIDES   = 'luwipress_slug_resolver_overrides';
@@ -236,6 +237,103 @@ class LuwiPress_Slug_Resolver {
 			$term_id = (int) $term->parent;
 		}
 		return 0;
+	}
+
+	/**
+	 * Collect the URL path-segment(s) that mark a product_cat archive on
+	 * this site. Without this list the nested-leaf-fallback can fire on a
+	 * URL that is ALREADY a product_cat archive — the leaf segment matches
+	 * the map, the resolved target is the same URL, infinite redirect loop.
+	 * Affects every locale because WPML translates the category base
+	 * (`product-category` / `categorie-produit` / `categoria-prodotto` /
+	 * `categoria-producto`). Cache for an hour, bust with the same hooks
+	 * as the discovery map. Operators can extend via
+	 * `luwipress_slug_resolver_prodcat_bases` filter.
+	 *
+	 * @since 3.1.59
+	 * @return string[] Lowercase first-segment values.
+	 */
+	public function get_product_cat_bases() {
+		$cached = get_transient( self::TRANSIENT_BASES );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+		$bases = array();
+
+		// Default WC base from permalink structure.
+		if ( function_exists( 'wc_get_permalink_structure' ) ) {
+			$struct = wc_get_permalink_structure();
+			if ( ! empty( $struct['category_base'] ) ) {
+				$bases[] = (string) $struct['category_base'];
+			}
+		}
+
+		// Probe a sample populated term in every active WPML/Polylang
+		// language to discover translated category bases.
+		$sample = get_terms( array(
+			'taxonomy'   => 'product_cat',
+			'hide_empty' => true,
+			'number'     => 1,
+			'fields'     => 'all',
+		) );
+		if ( ! is_wp_error( $sample ) && ! empty( $sample ) ) {
+			$sample_id = (int) $sample[0]->term_id;
+
+			$lang_codes = array();
+			if ( function_exists( 'icl_get_languages' ) ) {
+				$list = icl_get_languages( 'skip_missing=0' );
+				if ( is_array( $list ) ) {
+					$lang_codes = array_keys( $list );
+				}
+			} elseif ( function_exists( 'pll_languages_list' ) ) {
+				$list = pll_languages_list();
+				if ( is_array( $list ) ) {
+					$lang_codes = array_map( 'strval', $list );
+				}
+			}
+
+			foreach ( $lang_codes as $code ) {
+				$translated_id = $sample_id;
+				if ( function_exists( 'icl_object_id' ) ) {
+					$tid = icl_object_id( $sample_id, 'product_cat', true, $code );
+					if ( $tid ) {
+						$translated_id = (int) $tid;
+					}
+				} elseif ( function_exists( 'pll_get_term' ) ) {
+					$tid = pll_get_term( $sample_id, $code );
+					if ( $tid ) {
+						$translated_id = (int) $tid;
+					}
+				}
+				$link = get_term_link( $translated_id, 'product_cat' );
+				if ( is_wp_error( $link ) || ! $link ) {
+					continue;
+				}
+				$p = (string) wp_parse_url( $link, PHP_URL_PATH );
+				$segs = array_values( array_filter( explode( '/', $p ) ) );
+				if ( ! empty( $segs ) && in_array( $segs[0], $lang_codes, true ) ) {
+					array_shift( $segs );
+				}
+				if ( ! empty( $segs ) ) {
+					$bases[] = (string) $segs[0];
+				}
+			}
+		}
+
+		$bases = array_values( array_unique( array_filter( array_map( 'strtolower', $bases ) ) ) );
+		/**
+		 * Filter the list of URL first-segments that mark a product_cat
+		 * archive. Used to short-circuit the resolver for any URL that is
+		 * already on the canonical archive — prevents the nested-leaf
+		 * loop on translated category bases.
+		 *
+		 * @since 3.1.59
+		 * @param string[] $bases
+		 */
+		$bases = (array) apply_filters( 'luwipress_slug_resolver_prodcat_bases', $bases );
+		$bases = array_values( array_unique( array_filter( array_map( 'strval', $bases ) ) ) );
+		set_transient( self::TRANSIENT_BASES, $bases, HOUR_IN_SECONDS );
+		return $bases;
 	}
 
 	/**
@@ -623,6 +721,22 @@ class LuwiPress_Slug_Resolver {
 			}
 		}
 
+		// Skip when the URL is already a product_cat archive. Without this
+		// guard the nested-leaf-fallback (below) would treat e.g.
+		// `product-category/accessories` as a multi-segment path, find
+		// `accessories` in the map, target `/product-category/accessories/`
+		// — the exact URL we're already on — and bounce the visitor through
+		// a 5-hop redirect chain until the browser gives up. WPML translates
+		// the base, so we check all known variants per language.
+		$prodcat_bases = $this->get_product_cat_bases();
+		if ( ! empty( $prodcat_bases ) ) {
+			$first_seg = strtok( $path, '/' );
+			if ( $first_seg !== false && in_array( strtolower( (string) $first_seg ), $prodcat_bases, true ) ) {
+				$this->trace_header( 'skip-prodcat-base', (string) $first_seg );
+				return;
+			}
+		}
+
 		if ( ! array_key_exists( $path, $redirects ) ) {
 			// Nested-path leaf-segment fallback. Common case: blog
 			// permalink `/blog/<slug>/` where the post has been deleted
@@ -677,9 +791,16 @@ class LuwiPress_Slug_Resolver {
 		}
 		$this->trace_header( 'target', $target );
 
-		// Loop guard.
-		$current = home_url( $req );
-		if ( untrailingslashit( $current ) === untrailingslashit( $target ) ) { $this->trace_header('loop-guard'); return; }
+		// Loop guard. Compare PATHS only — `$req` carries query strings
+		// (cache-busters, analytics params) that the resolved `$target`
+		// never has, so a naive string compare misses and the visitor
+		// enters a redirect chain bounded only by the browser hop limit.
+		$current_path = (string) wp_parse_url( home_url( $req ), PHP_URL_PATH );
+		$target_path  = (string) wp_parse_url( $target, PHP_URL_PATH );
+		if ( untrailingslashit( $current_path ) === untrailingslashit( $target_path ) ) {
+			$this->trace_header( 'loop-guard' );
+			return;
+		}
 
 		$this->trace_header( 'will-redirect' );
 		wp_safe_redirect( esc_url_raw( $target ), 301 );
@@ -688,6 +809,7 @@ class LuwiPress_Slug_Resolver {
 
 	public function bust_cache() {
 		delete_transient( self::TRANSIENT_KEY );
+		delete_transient( self::TRANSIENT_BASES );
 	}
 
 	// -------------------- REST API --------------------
