@@ -4302,22 +4302,85 @@ class LuwiPress_WebMCP {
             ),
             'annotations' => array( 'title' => 'Update Term', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
         ), function ( $args ) {
+            global $wpdb;
             $term_id  = absint( $args['term_id'] );
             $taxonomy = sanitize_text_field( $args['taxonomy'] );
             if ( ! taxonomy_exists( $taxonomy ) ) {
                 throw new Exception( "Taxonomy '{$taxonomy}' does not exist" );
             }
+            $term = get_term( $term_id, $taxonomy );
+            if ( ! $term || is_wp_error( $term ) ) {
+                throw new Exception( "Term {$term_id} not found in taxonomy '{$taxonomy}'" );
+            }
+
+            $has_name   = isset( $args['name'] );
+            $has_slug   = isset( $args['slug'] );
+            $has_parent = isset( $args['parent'] );
+            $has_desc   = isset( $args['description'] );
+
+            // wp_update_term() always re-runs wp_unique_term_slug() — which is not
+            // WPML-language-aware. On translation terms this falsely flags the
+            // sibling-language slug as a collision. For description-only updates
+            // we bypass the whole pipeline with a direct term_taxonomy write.
+            if ( $has_desc && ! $has_name && ! $has_slug && ! $has_parent ) {
+                $updated = $wpdb->update(
+                    $wpdb->term_taxonomy,
+                    array( 'description' => sanitize_textarea_field( $args['description'] ) ),
+                    array( 'term_taxonomy_id' => (int) $term->term_taxonomy_id ),
+                    array( '%s' ),
+                    array( '%d' )
+                );
+                if ( false === $updated ) {
+                    throw new Exception( 'Direct description update failed: ' . $wpdb->last_error );
+                }
+                clean_term_cache( $term_id, $taxonomy );
+                do_action( 'edited_term', $term_id, $term->term_taxonomy_id, $taxonomy );
+                do_action( "edited_{$taxonomy}", $term_id, $term->term_taxonomy_id );
+                return array(
+                    'term_id'  => $term_id,
+                    'taxonomy' => $taxonomy,
+                    'updated'  => true,
+                    'method'   => 'direct_description_write',
+                );
+            }
+
+            // Full update path: name/slug/parent involved. Set WPML language
+            // context to the term's own language so wp_unique_term_slug scopes
+            // its uniqueness check to siblings in the same language.
+            $restore_lang = null;
+            global $sitepress;
+            if ( is_object( $sitepress ) && method_exists( $sitepress, 'switch_lang' ) ) {
+                $term_lang = apply_filters( 'wpml_element_language_code', null, array(
+                    'element_id'   => $term_id,
+                    'element_type' => $taxonomy,
+                ) );
+                if ( ! empty( $term_lang ) ) {
+                    $restore_lang = apply_filters( 'wpml_current_language', null );
+                    $sitepress->switch_lang( $term_lang );
+                }
+            }
+
             $term_args = array();
-            if ( isset( $args['name'] ) ) $term_args['name'] = sanitize_text_field( $args['name'] );
-            if ( isset( $args['slug'] ) ) $term_args['slug'] = sanitize_title( $args['slug'] );
-            if ( isset( $args['parent'] ) ) $term_args['parent'] = absint( $args['parent'] );
-            if ( isset( $args['description'] ) ) $term_args['description'] = sanitize_textarea_field( $args['description'] );
+            if ( $has_name )   $term_args['name']        = sanitize_text_field( $args['name'] );
+            if ( $has_slug )   $term_args['slug']        = sanitize_title( $args['slug'] );
+            if ( $has_parent ) $term_args['parent']      = absint( $args['parent'] );
+            if ( $has_desc )   $term_args['description'] = sanitize_textarea_field( $args['description'] );
 
             $result = wp_update_term( $term_id, $taxonomy, $term_args );
+
+            if ( $restore_lang !== null && is_object( $sitepress ) ) {
+                $sitepress->switch_lang( $restore_lang );
+            }
+
             if ( is_wp_error( $result ) ) {
                 throw new Exception( $result->get_error_message() );
             }
-            return array( 'term_id' => $term_id, 'taxonomy' => $taxonomy, 'updated' => true );
+            return array(
+                'term_id'  => $term_id,
+                'taxonomy' => $taxonomy,
+                'updated'  => true,
+                'method'   => 'wp_update_term',
+            );
         } );
 
         $this->register_tool( 'taxonomy_delete_term', array(

@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.16
+Stable tag: 1.0.19
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.19 — taxonomy_update_term WPML translation-term fix (Vendor-BUG-004) =
+* **FIX (`taxonomy_update_term`)**: WPML translation terms could not be updated — even a description-only call returned `The slug "<x>" is already in use by another term`. Root cause: `wp_update_term()` always re-runs `wp_unique_term_slug()`, which is not WPML-language-aware and falsely flags the sibling-language slug as a collision. Fix is two-layer: (a) description-only updates now bypass `wp_update_term` entirely via direct `$wpdb->update()` on `wp_term_taxonomy` + `clean_term_cache()` + `edited_term` action (the common SEO-description sweep path); (b) full updates (name/slug/parent) set WPML language context via `$sitepress->switch_lang($term_lang)` before `wp_update_term()` and restore the previous language after, so the slug-uniqueness check scopes to the term's own language siblings. Response now includes a `method` field (`direct_description_write` | `wp_update_term`). Reported by Tapadum Hub session 102 during the Clay Darbuka category SEO pilot — closes the 156 translation-term description backlog blocker.
 
 = 1.0.18 — Redirect audit + WPML term-translation lookup + WPML-aware menu_add_item =
 * **NEW (`slug_resolver_redirect_audit`)**: One-shot redirect-chain sweeper. Scrapes every link out of one or more nav menus (or arbitrary URLs), follows redirects up to `max_hops` with redirects disabled at each step, decodes any `X-LWP-SR:` trace headers, and surfaces issues: redirect_loop / 404 / multi_hop_chain / server_error / transport_error. Replaces hand-rolled audit scripts per migration. Use before any DNS swap or after editing the slug-resolver map.
