@@ -201,20 +201,18 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 			<p class="description"><?php esc_html_e( 'Click Generate and a Cookie Policy WP page is created (or updated) automatically with a plain-language paragraph customized to the third-party tags detected on this site. Edit the text below and click "Save edits" to push your tweaks to the page.', 'luwipress' ); ?></p>
 			<div class="lp-cta-row" style="margin: 12px 0 18px;">
 				<button id="lwp-cc-gen-btn" type="button" class="lp-cta lp-cta--primary">
-					<!-- Sparkles glyph — universally read as "AI generate" -->
-					<svg class="lp-cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-						<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
+					<!-- Minimal 4-point sparkle — "AI generate" without the visual noise -->
+					<svg class="lp-cta-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+						<path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2zM19 14l.75 2.25L22 17l-2.25.75L19 20l-.75-2.25L16 17l2.25-.75L19 14z"/>
 					</svg>
-					<?php esc_html_e( 'Generate & save policy', 'luwipress' ); ?>
+					<?php esc_html_e( 'Generate & save', 'luwipress' ); ?>
 				</button>
 				<button id="lwp-cc-policy-save" type="button" class="lp-cta lp-cta--secondary">
-					<!-- Cloud-up glyph — "push my edits to the page" -->
-					<svg class="lp-cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-						<path d="M16 16l-4-4-4 4"/>
-						<path d="M12 12v9"/>
-						<path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+					<!-- Simple arrow-up — "push edits up to the page" -->
+					<svg class="lp-cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M12 19V5M5 12l7-7 7 7"/>
 					</svg>
-					<?php esc_html_e( 'Save edits to page', 'luwipress' ); ?>
+					<?php esc_html_e( 'Save edits', 'luwipress' ); ?>
 				</button>
 				<span id="lwp-cc-gen-status" class="lp-cta-status"></span>
 			</div>
