@@ -34,31 +34,99 @@ function animateCounter(el, target, suffix) {
 }
 
 // ── Fetch Knowledge Graph ──
-function fetchGraph(cb, forceFresh) {
-	var loading = document.getElementById('kg-loading');
-	loading.style.display = 'flex';
+// Progressive (two-phase) load: phase A is the light sections that drive
+// the graph + most stat cards (renders in ~5-15s on Tapadum-class stores);
+// phase B is the heavy sections (design_audit / order_analytics /
+// opportunities) that backfill the slow stat cards asynchronously. Cold
+// path on a 1000+ post store used to be ~110-130s before this split; with
+// the split phase A returns first and the user sees an interactive page
+// while phase B continues in the background.
+var KG_PHASE_A_SECTIONS = 'products,categories,translation,store,posts,pages,plugins,taxonomy,crm';
+var KG_PHASE_B_SECTIONS = 'design_audit,order_analytics,opportunities';
+var KG_ALL_SECTIONS     = KG_PHASE_A_SECTIONS + ',' + KG_PHASE_B_SECTIONS;
 
+function fetchGraphSections(sections, forceFresh, cb) {
 	var headers = { 'X-WP-Nonce': CONFIG.nonce };
 	if (CONFIG.apiToken) {
 		headers['Authorization'] = 'Bearer ' + CONFIG.apiToken;
 	}
-
-	// Cache is reliably invalidated on post/meta changes via `maybe_invalidate_on_meta`.
-	// Only bypass when the user explicitly clicks Refresh or just fired an action.
 	var freshParam = forceFresh ? '&fresh=1' : '';
-
-	fetch(CONFIG.apiUrl + '?sections=products,categories,translation,store,opportunities,design_audit,posts,pages,plugins,order_analytics,taxonomy,crm' + freshParam, {
+	fetch(CONFIG.apiUrl + '?sections=' + sections + freshParam, {
 		headers: headers,
 		credentials: 'same-origin'
 	})
 	.then(function(r) { return r.json(); })
-	.then(function(data) {
-		loading.style.display = 'none';
-		cb(null, data);
-	})
-	.catch(function(err) {
-		loading.style.display = 'none';
-		cb(err);
+	.then(function(data) { cb(null, data); })
+	.catch(function(err)  { cb(err);        });
+}
+
+// Back-compat wrapper — fires a single all-sections request. Used by the
+// post-mutation refresh paths (kgRefreshAndReopen and similar) where the
+// caller wants one merged response synchronously.
+function fetchGraph(cb, forceFresh) {
+	var loading = document.getElementById('kg-loading');
+	if (loading) loading.style.display = 'flex';
+	fetchGraphSections(KG_ALL_SECTIONS, forceFresh, function(err, data) {
+		if (loading) loading.style.display = 'none';
+		cb(err, data);
+	});
+}
+
+// Two-phase entry: onPhaseA fires when the light data lands (graph render
+// becomes possible), onPhaseB fires when the heavy data follows. Either
+// callback can be invoked with (err) on failure of its own phase; phase A
+// failure means we never fire phase B (no point).
+function fetchGraphProgressive(onPhaseA, onPhaseB, forceFresh) {
+	var loading = document.getElementById('kg-loading');
+	if (loading) loading.style.display = 'flex';
+
+	fetchGraphSections(KG_PHASE_A_SECTIONS, forceFresh, function(err, dataA) {
+		if (loading) loading.style.display = 'none';
+		if (err || !dataA) { onPhaseA(err || new Error('phase_a_failed')); return; }
+		onPhaseA(null, dataA);
+
+		// Phase B runs detached — no global loader, the heavy stat cards
+		// keep their skeleton class until B lands. If B fails the cards
+		// stay at 0 / N/A and the user can Shift+Refresh to retry.
+		fetchGraphSections(KG_PHASE_B_SECTIONS, forceFresh, function(err2, dataB) {
+			if (onPhaseB) onPhaseB(err2, dataB);
+		});
+	});
+}
+
+// Merge phase B response into the existing _kgData object in place.
+// Phase B contributes: opportunities (top-level), nodes.design_audit,
+// nodes.order_analytics, and an extended summary. Other top-level keys
+// from phase A are preserved.
+function mergePhaseBInto(target, sourceB) {
+	if (!target || !sourceB) return;
+	if (sourceB.opportunities) target.opportunities = sourceB.opportunities;
+	if (sourceB.summary) {
+		target.summary = Object.assign({}, target.summary || {}, sourceB.summary);
+	}
+	if (sourceB.nodes) {
+		target.nodes = Object.assign({}, target.nodes || {}, sourceB.nodes);
+	}
+	if (sourceB.meta) {
+		target.meta = target.meta || {};
+		target.meta.phase_b_execution_ms = sourceB.meta.execution_time_ms;
+		target.meta.phase_b_from_cache   = sourceB.meta.from_cache;
+	}
+}
+
+// Toggle the skeleton class on the three heavy stat cards. Called with
+// `true` before phase A returns (cards are already skeleton-classed in
+// the PHP markup at first render, but we re-apply on refresh) and `false`
+// after phase B lands.
+function markHeavyCardsSkeleton(on) {
+	['kg-stat-design', 'kg-stat-revenue', 'kg-stat-opportunities'].forEach(function (id) {
+		var card = document.getElementById(id);
+		if (!card) return;
+		if (on) {
+			card.classList.add('kg-stat-skeleton');
+		} else {
+			card.classList.remove('kg-stat-skeleton');
+		}
 	});
 }
 
@@ -1560,7 +1628,13 @@ function escHtml(s) {
 }
 
 // ── Update Stats ──
-function updateStats(data) {
+// `phase` (optional) is 'a' or 'b' for progressive loads, or undefined for
+// the legacy single-shot path. When phase === 'a', the three heavy stat
+// cards (kg-stat-design / kg-stat-revenue / kg-stat-opportunities) keep
+// their skeleton class — their backing data (design_audit / order_analytics
+// / opportunities sections) hasn't arrived yet. Phase B caller drops the
+// skeleton via markHeavyCardsSkeleton(false) before re-invoking updateStats.
+function updateStats(data, phase) {
 	var summary = data.summary || {};
 	var designAudit = (data.nodes && data.nodes.design_audit) ? data.nodes.design_audit : {};
 	var designSummary = designAudit.summary || {};
@@ -1610,12 +1684,22 @@ function updateStats(data) {
 	renderActionQueue(data);
 	renderAchievements(stats, summary, data);
 
+	// During phase A of a progressive load, the heavy cards must keep their
+	// skeleton state — design_health / revenue_30d / opportunity_score_total
+	// haven't been fetched yet. Phase B clears them via markHeavyCardsSkeleton(false).
+	var heavyCardIds = (phase === 'a') ? ['kg-stat-design', 'kg-stat-revenue', 'kg-stat-opportunities'] : [];
 	document.querySelectorAll('.kg-stat').forEach(function(el) {
+		if (heavyCardIds.indexOf(el.id) !== -1) return; // leave skeleton on
 		el.classList.remove('kg-stat-skeleton');
 		el.classList.add('kg-stat-loaded');
 	});
 
+	// In phase A of progressive load, skip writing values for heavy metrics —
+	// their backing data hasn't arrived yet so anything computed from it would
+	// be 0 (misleading "design 0%" / "revenue €0" / "opportunities 0").
+	var heavyKeys = (phase === 'a') ? ['design_health', 'revenue_30d', 'opportunity_score_total'] : [];
 	Object.keys(stats).forEach(function(key) {
+		if (heavyKeys.indexOf(key) !== -1) return;
 		var el = document.querySelector('[data-counter="' + key + '"]');
 		if (!el) return;
 		// N/A rendering — null means "this metric doesn't apply" (e.g. design_health without Elementor)
@@ -2256,22 +2340,43 @@ var _kgData = null; // Store for click handlers
 
 function init(forceFresh) {
 	loadD3(function() {
-		fetchGraph(function(err, data) {
-			if (err || !data) {
-				document.getElementById('kg-loading').innerHTML = '<p style="color:var(--lp-error);">Failed to load knowledge graph. Check connection settings.</p>';
-				return;
-			}
-			_kgData = data;
-			updateStats(data);
-			buildGraph(data);
-			bindDesignHealthClick(data);
-			bindPluginHealthClick(data);
-			bindRevenueClick(data);
-			bindTaxonomyClick(data);
-			bindMediaClick(data);
-			updateCacheBadge(data);
-			updatePresetCounts(data);
-		}, !!forceFresh);
+		// Keep the heavy cards skeleton-classed until phase B lands —
+		// PHP markup already starts them that way, but on a Refresh tap
+		// (post-load reset) we re-apply explicitly.
+		markHeavyCardsSkeleton(true);
+
+		fetchGraphProgressive(
+			function onPhaseA(err, data) {
+				if (err || !data) {
+					document.getElementById('kg-loading').innerHTML = '<p style="color:var(--lp-error);">Failed to load knowledge graph. Check connection settings.</p>';
+					return;
+				}
+				_kgData = data;
+				updateStats(data, 'a');
+				buildGraph(data);
+				bindDesignHealthClick(data);
+				bindPluginHealthClick(data);
+				bindRevenueClick(data);
+				bindTaxonomyClick(data);
+				bindMediaClick(data);
+				updateCacheBadge(data);
+				updatePresetCounts(data);
+			},
+			function onPhaseB(err, dataB) {
+				// Drop skeleton even on failure — operator should see the
+				// final state (Refresh can retry). On success, merge + redraw
+				// the heavy metrics; the graph itself doesn't need to rebuild.
+				markHeavyCardsSkeleton(false);
+				if (err || !dataB) return;
+				mergePhaseBInto(_kgData, dataB);
+				updateStats(_kgData, 'b');
+				bindDesignHealthClick(_kgData);
+				bindRevenueClick(_kgData);
+				// Cache badge already showed phase A timing; append phase B for diagnostics.
+				updateCacheBadge(_kgData);
+			},
+			!!forceFresh
+		);
 	});
 }
 
@@ -2396,15 +2501,28 @@ function updateCacheBadge(data) {
 	var badge = document.getElementById('kg-cache-badge');
 	if (!badge) return;
 	badge.hidden = false;
-	if (meta.from_cache) {
+
+	// Phase A timing (always present once the page has any data).
+	var aMs = Math.round(meta.execution_time_ms || 0);
+	// Phase B timing — present only after the heavy-section background load
+	// resolves (progressive load, knowledge-graph.js).
+	var bMs = meta.phase_b_execution_ms ? Math.round(meta.phase_b_execution_ms) : null;
+	var bCached = !!meta.phase_b_from_cache;
+
+	if (meta.from_cache && (bMs === null || bCached)) {
 		badge.textContent = 'cached';
 		badge.className = 'kg-cache-badge kg-cache-hit';
-		badge.title = 'Served from cache. Click Refresh to force reload.';
-	} else {
-		badge.textContent = 'fresh (' + Math.round(meta.execution_time_ms || 0) + 'ms)';
-		badge.className = 'kg-cache-badge kg-cache-miss';
-		badge.title = 'Computed on the server just now.';
+		badge.title = 'Served from cache. Click Refresh to force reload (Shift+Refresh = fresh rebuild).';
+		return;
 	}
+
+	var text = 'fresh (' + aMs + 'ms';
+	if (bMs !== null) text += ' + ' + bMs + 'ms bg';
+	text += ')';
+	badge.textContent = text;
+	badge.className   = 'kg-cache-badge kg-cache-miss';
+	badge.title       = 'Computed on the server. Phase A: graph + light stats. ' +
+		(bMs !== null ? 'Phase B (heavy stats): ' + bMs + 'ms.' : 'Phase B (heavy stats) still loading…');
 }
 
 function showTaxonomyHeatmap(taxonomies) {
