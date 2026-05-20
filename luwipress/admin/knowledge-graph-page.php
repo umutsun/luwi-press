@@ -185,13 +185,16 @@ if ( ! current_user_can( 'manage_options' ) ) {
 	<!-- Action Queue — "Next 3 wins" suggestions. Sits BELOW the graph so the
 	     operator explores the store first, then hits the recommended actions.
 	     Ranked by impact ÷ effort. -->
-	<div class="kg-action-queue" id="kg-action-queue" hidden>
-		<div class="kg-action-queue-header">
+	<details class="kg-action-queue kg-action-queue--mini" id="kg-action-queue" hidden>
+		<summary class="kg-action-queue-summary">
+			<span class="kg-action-queue-icon" aria-hidden="true">✨</span>
 			<span class="kg-action-queue-title"><?php esc_html_e( 'Next wins', 'luwipress' ); ?></span>
-			<span class="kg-action-queue-sub"><?php esc_html_e( 'Ranked by impact ÷ effort — tackle from top', 'luwipress' ); ?></span>
-		</div>
+			<span class="kg-action-queue-count" id="kg-action-queue-count">—</span>
+			<span class="kg-action-queue-sub"><?php esc_html_e( 'Ranked by impact ÷ effort', 'luwipress' ); ?></span>
+			<span class="kg-action-queue-chevron" aria-hidden="true">▾</span>
+		</summary>
 		<div class="kg-action-queue-list" id="kg-action-queue-list"></div>
-	</div>
+	</details>
 
 	<!-- Autopilot — minimal collapsible. Native <details> for toggle (no JS).
 	     Default: collapsed, summary line shows live state. Operator opens to tune. -->
@@ -252,13 +255,15 @@ if ( ! current_user_can( 'manage_options' ) ) {
 
 	<!-- Activity Feed — last N operator actions (enrichment, translation, AEO).
 	     Polls /logs every 30s while visible to surface background job completions. -->
-	<div class="kg-activity kg-activity--mini" id="kg-activity" hidden>
-		<div class="kg-activity-header">
+	<details class="kg-activity kg-activity--mini" id="kg-activity" hidden>
+		<summary class="kg-activity-summary">
+			<span class="kg-activity-icon" aria-hidden="true">🕒</span>
 			<span class="kg-activity-title"><?php esc_html_e( 'Recent activity', 'luwipress' ); ?></span>
 			<span class="kg-activity-sub" id="kg-activity-sub">—</span>
-		</div>
+			<span class="kg-activity-chevron" aria-hidden="true">▾</span>
+		</summary>
 		<div class="kg-activity-list" id="kg-activity-list"></div>
-	</div>
+	</details>
 
 	<!-- Detail Panel (slides in on node click) -->
 	<div class="kg-detail-panel" id="kg-detail-panel">

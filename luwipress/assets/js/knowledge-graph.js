@@ -1868,7 +1868,7 @@ function renderActivityFeed(logs) {
 
 	if (!logs || logs.length === 0) {
 		list.innerHTML = '<div class="kg-activity-empty">No recent activity. Fire an enrichment or translation above and watch it land here.</div>';
-		if (sub) sub.textContent = '';
+		if (sub) sub.textContent = '0 entries';
 		wrap.hidden = false;
 		return;
 	}
@@ -1876,7 +1876,7 @@ function renderActivityFeed(logs) {
 	// Subtle "new activity" hint when the count grows between polls.
 	if (_kgActivityLastCount >= 0 && logs.length > _kgActivityLastCount) {
 		var delta = logs.length - _kgActivityLastCount;
-		if (sub) sub.textContent = '+' + delta + ' new';
+		if (sub) sub.textContent = logs.length + ' entries · +' + delta + ' new';
 		setTimeout(function(){ if (sub) sub.textContent = logs.length + ' entries'; }, 2500);
 	} else {
 		if (sub) sub.textContent = logs.length + ' entries';
@@ -2227,11 +2227,14 @@ function renderActionQueue(data) {
 	candidates = candidates.slice(0, 3);
 
 	// Render
+	var countEl = document.getElementById('kg-action-queue-count');
 	if (candidates.length === 0) {
 		list.innerHTML = '<div class="kg-aq-empty">No pressing wins right now — your store is in excellent shape. 🎉</div>';
+		if (countEl) countEl.textContent = '0';
 		wrap.hidden = false;
 		return;
 	}
+	if (countEl) countEl.textContent = candidates.length + (candidates.length === 1 ? ' win' : ' wins');
 
 	var html = '';
 	candidates.forEach(function(c, i) {

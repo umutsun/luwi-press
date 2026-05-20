@@ -1951,6 +1951,101 @@ details.kg-autopilot--mini .kg-autopilot-log-empty {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* ── Collapsible Action Queue (Next wins) ──────────────────────────
+   Mirrors the Autopilot pattern. Default closed; the summary line tells
+   the operator the wins count without forcing them to scroll/expand. */
+details.kg-action-queue--mini {
+    background: #fff;
+    border: 1px solid var(--lp-border, #e8e2d3);
+    border-radius: 12px;
+    margin: 14px 0;
+    padding: 0;
+}
+details.kg-action-queue--mini > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    user-select: none;
+}
+details.kg-action-queue--mini > summary::-webkit-details-marker { display: none; }
+details.kg-action-queue--mini .kg-action-queue-icon { font-size: 14px; }
+details.kg-action-queue--mini .kg-action-queue-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--lp-text, #1b1c1c);
+}
+details.kg-action-queue--mini .kg-action-queue-count {
+    font-family: ui-monospace, 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--lp-primary, #735c00);
+    background: rgba(115, 92, 0, .08);
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+details.kg-action-queue--mini .kg-action-queue-sub {
+    flex: 1 1 auto;
+    color: var(--lp-text-secondary, #7f7663);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+details.kg-action-queue--mini .kg-action-queue-chevron {
+    color: var(--lp-text-secondary, #7f7663);
+    font-size: 14px;
+    transition: transform .15s ease;
+}
+details.kg-action-queue--mini[open] .kg-action-queue-chevron { transform: rotate(180deg); }
+details.kg-action-queue--mini .kg-action-queue-list {
+    padding: 4px 14px 14px;
+    border-top: 1px solid var(--lp-border-light, #f0ebe0);
+}
+
+/* Same pattern for the Recent Activity feed. */
+details.kg-activity--mini {
+    background: #fff;
+    border: 1px solid var(--lp-border, #e8e2d3);
+    border-radius: 12px;
+    margin: 14px 0;
+    padding: 0;
+}
+details.kg-activity--mini > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 18px;
+    user-select: none;
+}
+details.kg-activity--mini > summary::-webkit-details-marker { display: none; }
+details.kg-activity--mini .kg-activity-icon { font-size: 14px; }
+details.kg-activity--mini .kg-activity-summary .kg-activity-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--lp-text, #1b1c1c);
+}
+details.kg-activity--mini .kg-activity-summary .kg-activity-sub {
+    flex: 1 1 auto;
+    color: var(--lp-text-secondary, #7f7663);
+    font-size: 11px;
+    font-family: ui-monospace, monospace;
+}
+details.kg-activity--mini .kg-activity-chevron {
+    color: var(--lp-text-secondary, #7f7663);
+    font-size: 14px;
+    transition: transform .15s ease;
+}
+details.kg-activity--mini[open] .kg-activity-chevron { transform: rotate(180deg); }
+details.kg-activity--mini .kg-activity-list {
+    max-height: 320px;
+    overflow-y: auto;
+    border-top: 1px solid var(--lp-border-light, #f0ebe0);
+}
+
 .kg-activity--mini .kg-activity-empty {
     padding: 14px;
     border: 1px dashed var(--lp-border-light, #f0ebe0);
