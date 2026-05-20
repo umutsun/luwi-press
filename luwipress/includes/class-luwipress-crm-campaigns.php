@@ -466,25 +466,33 @@ class LuwiPress_CRM_Campaigns {
 	 * Returns array of { id, email, first_name, last_name }.
 	 */
 	private function find_recipients( $segment, $limit ) {
+		// Default `fields` (omitted) returns WP_User objects — PHPStan knows
+		// WP_User::ID is defined; the `fields=array(...)` partial-stdClass
+		// shape it can't type-check. Hydration cost is negligible at 200
+		// recipients max.
 		$users = get_users( array(
 			'meta_key'   => 'luwipress_crm_segment',
 			'meta_value' => $segment,
 			'number'     => $limit,
-			'fields'     => array( 'ID', 'user_email' ),
 			'orderby'    => 'ID',
 			'order'      => 'ASC',
 		) );
 
 		$out = array();
 		foreach ( $users as $u ) {
-			$first = get_user_meta( $u->ID, 'first_name', true );
-			$last  = get_user_meta( $u->ID, 'last_name', true );
-			if ( empty( $u->user_email ) ) {
+			if ( ! ( $u instanceof WP_User ) ) {
 				continue;
 			}
+			$user_id = (int) $u->ID;
+			$email   = (string) $u->user_email;
+			if ( '' === $email ) {
+				continue;
+			}
+			$first = get_user_meta( $user_id, 'first_name', true );
+			$last  = get_user_meta( $user_id, 'last_name', true );
 			$out[] = array(
-				'id'         => (int) $u->ID,
-				'email'      => (string) $u->user_email,
+				'id'         => $user_id,
+				'email'      => $email,
 				'first_name' => (string) $first,
 				'last_name'  => (string) $last,
 			);
@@ -570,7 +578,11 @@ class LuwiPress_CRM_Campaigns {
 			);
 		}
 
-		$raw  = is_array( $response ) ? ( $response['content'] ?? '' ) : (string) $response;
+		// AI_Engine::dispatch() returns `array|WP_Error`. WP_Error was filtered
+		// above, so $response is guaranteed an array here — read .content
+		// directly without a redundant is_array() ternary (PHPStan flagged the
+		// else branch as unreachable).
+		$raw  = (string) ( $response['content'] ?? '' );
 		$json = $this->extract_json( $raw );
 
 		if ( ! is_array( $json ) ) {
