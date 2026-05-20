@@ -78,6 +78,9 @@ class LuwiPress_KG_Opportunities {
 	public function build_candidates( $limit = 6 ) {
 		$candidates = array();
 
+		foreach ( $this->build_missing_schema_candidates() as $c ) {
+			$candidates[] = $c;
+		}
 		foreach ( $this->build_regressed_candidates() as $c ) {
 			$candidates[] = $c;
 		}
@@ -171,6 +174,63 @@ class LuwiPress_KG_Opportunities {
 		}
 		$tier_map = array( 'high' => 80, 'medium' => 60, 'low' => 40 );
 		return $tier_map[ $c['tier'] ?? 'medium' ] ?? 50;
+	}
+
+	/* ───────────────────────────────────────────────────────────────── *
+	 * Candidate type 0 — MISSING_SCHEMA                                  *
+	 * ───────────────────────────────────────────────────────────────── */
+
+	private function build_missing_schema_candidates() {
+		global $wpdb;
+
+		$join_wpml  = '';
+		$where_wpml = '';
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			$join_wpml  = " LEFT JOIN {$wpdb->prefix}icl_translations t ON p.ID = t.element_id AND t.element_type = 'post_product' ";
+			$where_wpml = " AND (t.source_language_code IS NULL OR t.element_id IS NULL) ";
+		}
+
+		$sql = "SELECT p.ID, p.post_title
+			   FROM {$wpdb->posts} p
+			   LEFT JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = '_luwipress_schema'
+			   {$join_wpml}
+			   WHERE p.post_type = 'product'
+			     AND p.post_status = 'publish'
+			     AND (pm.meta_value IS NULL OR pm.meta_value = '')
+			     {$where_wpml}
+			   ORDER BY p.post_date DESC
+			   LIMIT 20";
+
+		$rows = $wpdb->get_results( $sql, ARRAY_A );
+		if ( empty( $rows ) ) {
+			return array();
+		}
+
+		$out = array();
+		foreach ( $rows as $row ) {
+			$pid    = (int) $row['ID'];
+			$impact = 100;
+			$effort = 2; // Enrichment via AI is fast
+
+			$out[]  = array(
+				'id'          => 'missing_schema:product:' . $pid,
+				'type'        => 'missing_schema',
+				'title'       => sprintf( __( '"%1$s" — missing Product Schema', 'luwipress' ), $row['post_title'] ),
+				'body'        => __( 'This product is missing JSON-LD structured data. Generating it helps search engines display rich snippets (price, availability, rating) and improves click-through rates.', 'luwipress' ),
+				'impact'      => $impact,
+				'effort_min'  => $effort,
+				'roi'         => round( $impact / $effort, 2 ),
+				'tier'        => 'high',
+				'entity_type' => 'product',
+				'entity_id'   => $pid,
+				'workflow'    => 'enrich',
+				'why'         => array(
+					'primary_signal'     => 'missing _luwipress_schema meta',
+					'supporting_signals' => array( 'Product is published but lacks AI-generated structured data.' ),
+				),
+			);
+		}
+		return $out;
 	}
 
 	/* ───────────────────────────────────────────────────────────────── *

@@ -21,9 +21,20 @@ class LuwiPress_Provider_Google implements LuwiPress_AI_Provider {
 
 	/**
 	 * Constructor.
+	 *
+	 * Resolves the API key through LuwiPress_Connectors (WP 7.0 native
+	 * Connectors first, legacy `luwipress_google_api_key` option fallback).
+	 * Note: WP 7.0 Connectors has been observed to reject some Gemini keys
+	 * with "It was not possible to connect to the provider using this key" —
+	 * when that happens, leaving the key in the legacy LuwiPress option
+	 * also works because Connectors returns empty and we fall back.
 	 */
 	public function __construct() {
-		$this->api_key = get_option( 'luwipress_google_api_key', '' );
+		if ( class_exists( 'LuwiPress_Connectors' ) ) {
+			$this->api_key = LuwiPress_Connectors::get_api_key( 'google' );
+		} else {
+			$this->api_key = get_option( 'luwipress_google_api_key', '' );
+		}
 	}
 
 	/**

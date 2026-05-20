@@ -1,9 +1,13 @@
 <?php
 /**
- * LuwiPress Open Claw — AI Assistant Admin Page
+ * LuwiPress Agentic — Admin Page
+ *
+ * Uniform chat surface + sidebar with backend runtime picker. Backend is
+ * pluggable: Open Claw (oc.luwi.dev) and Hermes (hermes.luwi.dev) ship by
+ * default; users can point either at a self-hosted endpoint.
  *
  * @package LuwiPress
- * @since 1.2.0
+ * @since 1.1.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -15,10 +19,12 @@ if ( ! current_user_can( 'manage_options' ) ) {
 
 $current_user = wp_get_current_user();
 $logo_url     = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' : '';
-$ai_provider  = get_option( 'luwipress_ai_provider', 'openai' );
-$ai_model     = get_option( 'luwipress_ai_model', 'gpt-4o-mini' );
-$provider_lbl = array( 'openai' => 'OpenAI', 'anthropic' => 'Anthropic', 'google' => 'Google AI', 'openai_compatible' => 'OpenAI-Compatible' );
-$ai_label     = ( $provider_lbl[ $ai_provider ] ?? ucfirst( $ai_provider ) ) . ' · ' . $ai_model;
+
+$agent_host     = class_exists( 'LuwiPress_Agent_Host' ) ? LuwiPress_Agent_Host::get_instance() : null;
+$active_adapter = $agent_host ? $agent_host->get_active_adapter() : null;
+$active_label   = $active_adapter ? $active_adapter->get_label() : __( 'Open Claw', 'luwipress-agentic' );
+$is_configured  = $active_adapter ? $active_adapter->is_configured() : false;
+$settings_url   = admin_url( 'admin.php?page=luwipress-settings&tab=agentic' );
 ?>
 
 <div class="wrap luwipress-admin luwipress-dashboard luwipress-claw-wrap">
@@ -32,19 +38,28 @@ $ai_label     = ( $provider_lbl[ $ai_provider ] ?? ucfirst( $ai_provider ) ) . '
 				<?php else : ?>
 					<span class="dashicons dashicons-superhero-alt" style="font-size:24px;width:24px;height:24px;color:var(--lp-primary);"></span>
 				<?php endif; ?>
-				<?php esc_html_e( 'Open Claw', 'luwipress' ); ?>
+				<?php esc_html_e( 'Agentic', 'luwipress' ); ?>
 			</h1>
-			<p class="lp-subtitle"><?php esc_html_e( 'AI assistant for managing WordPress and WooCommerce — admin-only conversations.', 'luwipress' ); ?></p>
+			<p class="lp-subtitle"><?php esc_html_e( 'Uniform admin chat surface. Pluggable agent backend — Open Claw, Hermes, or your own endpoint.', 'luwipress' ); ?></p>
 		</div>
 		<div class="lp-header-actions">
-			<span class="lp-pill pill-success" title="<?php esc_attr_e( 'AI provider currently configured', 'luwipress' ); ?>">
-				<span class="dashicons dashicons-admin-generic"></span> <?php echo esc_html( $ai_label ); ?>
+			<span class="lp-pill <?php echo $is_configured ? 'pill-success' : 'pill-warning'; ?>" id="agentic-active-pill" title="<?php esc_attr_e( 'Active agent backend', 'luwipress-agentic' ); ?>">
+				<span class="dashicons dashicons-superhero-alt"></span> <?php echo esc_html( $active_label ); ?>
+				<?php if ( ! $is_configured ) : ?>
+					— <?php esc_html_e( 'token needed', 'luwipress-agentic' ); ?>
+				<?php endif; ?>
 			</span>
+			<a href="<?php echo esc_url( $settings_url ); ?>"
+			   class="lp-pill lp-pill--action pill-neutral"
+			   title="<?php esc_attr_e( 'Configure backend runtime', 'luwipress-agentic' ); ?>">
+				<span class="dashicons dashicons-admin-generic"></span>
+				<?php esc_html_e( 'Settings', 'luwipress-agentic' ); ?>
+			</a>
 			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress' ) ); ?>"
 			   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
-			   title="<?php esc_attr_e( 'Back to LuwiPress Dashboard', 'luwipress' ); ?>">
+			   title="<?php esc_attr_e( 'Back to LuwiPress Dashboard', 'luwipress-agentic' ); ?>">
 				<span class="dashicons dashicons-admin-home"></span>
-				<span class="screen-reader-text"><?php esc_html_e( 'Dashboard', 'luwipress' ); ?></span>
+				<span class="screen-reader-text"><?php esc_html_e( 'Dashboard', 'luwipress-agentic' ); ?></span>
 			</a>
 		</div>
 	</div>
@@ -55,8 +70,8 @@ $ai_label     = ( $provider_lbl[ $ai_provider ] ?? ucfirst( $ai_provider ) ) . '
 			<div class="claw-chat-header">
 				<div class="claw-header-left">
 					<span class="claw-status-dot"></span>
-					<strong>Open Claw</strong>
-					<span class="claw-model-label">AI-powered WP/WC assistant</span>
+					<strong><?php esc_html_e( 'Agentic', 'luwipress-agentic' ); ?></strong>
+					<span class="claw-model-label" id="agentic-active-label"><?php echo esc_html( $active_label ); ?></span>
 				</div>
 				<div class="claw-header-actions">
 					<button type="button" id="claw-new-chat" class="button button-small" title="New conversation">
@@ -71,7 +86,7 @@ $ai_label     = ( $provider_lbl[ $ai_provider ] ?? ucfirst( $ai_provider ) ) . '
 						<span class="dashicons dashicons-superhero-alt"></span>
 					</div>
 					<h3>Welcome, <?php echo esc_html( $current_user->display_name ); ?>!</h3>
-					<p>I'm Open Claw, your AI assistant for managing WordPress and WooCommerce. Ask me anything about your store.</p>
+					<p>I'm your LuwiPress Agentic assistant. Ask me anything about your store — the request will route to whichever backend you've picked on the right.</p>
 					<div class="claw-suggestions">
 						<button type="button" class="claw-suggestion" data-message="How many products have thin content?">
 							<span class="dashicons dashicons-editor-paste-text"></span> Thin content report
@@ -97,7 +112,7 @@ $ai_label     = ( $provider_lbl[ $ai_provider ] ?? ucfirst( $ai_provider ) ) . '
 
 			<div class="claw-input-area">
 				<div class="claw-input-wrapper">
-					<textarea id="claw-input" placeholder="Ask Open Claw anything about your store..." rows="1"></textarea>
+					<textarea id="claw-input" placeholder="Ask the active agent anything about your store..." rows="1"></textarea>
 					<button type="button" id="claw-send" class="claw-send-btn" disabled>
 						<span class="dashicons dashicons-arrow-up-alt"></span>
 					</button>
@@ -110,6 +125,32 @@ $ai_label     = ( $provider_lbl[ $ai_provider ] ?? ucfirst( $ai_provider ) ) . '
 
 		<!-- Sidebar -->
 		<div class="claw-sidebar">
+
+			<div class="claw-sidebar-section">
+				<h4><span class="dashicons dashicons-superhero-alt"></span> <?php esc_html_e( 'Backend', 'luwipress-agentic' ); ?></h4>
+				<p class="description" style="margin-top:0;font-size:12px;">
+					<?php
+					if ( $is_configured ) {
+						printf(
+							/* translators: %s: active backend label */
+							esc_html__( 'Active: %s — chat goes to this runtime.', 'luwipress-agentic' ),
+							'<strong>' . esc_html( $active_label ) . '</strong>'
+						);
+					} else {
+						printf(
+							/* translators: %s: active backend label */
+							esc_html__( '%s is selected but has no token yet. Add one in Agentic Settings.', 'luwipress-agentic' ),
+							'<strong>' . esc_html( $active_label ) . '</strong>'
+						);
+					}
+					?>
+				</p>
+				<a href="<?php echo esc_url( $settings_url ); ?>" class="button button-small" style="margin-top:6px;">
+					<span class="dashicons dashicons-admin-generic" style="vertical-align:text-bottom;"></span>
+					<?php esc_html_e( 'Configure backends', 'luwipress-agentic' ); ?>
+				</a>
+			</div>
+
 			<div class="claw-sidebar-section">
 				<h4><span class="dashicons dashicons-info-outline"></span> Quick Actions</h4>
 				<div class="claw-quick-actions">
@@ -144,18 +185,6 @@ $ai_label     = ( $provider_lbl[ $ai_provider ] ?? ucfirst( $ai_provider ) ) . '
 				</ul>
 			</div>
 
-			<div class="claw-sidebar-section">
-				<h4><span class="dashicons dashicons-admin-site-alt3"></span> Runs in</h4>
-				<div class="claw-channels-list">
-					<div class="claw-channel-item">
-						<span class="dashicons dashicons-laptop" style="color:var(--lp-primary);"></span>
-						<span>Admin Panel</span>
-						<span class="claw-channel-status claw-status-active">Active</span>
-					</div>
-				</div>
-				<p class="description" style="margin-top:8px;font-size:11px;">Open Claw is admin-only. For front-end customer conversations use the Customer Chat widget.</p>
-			</div>
-
 			<div class="claw-sidebar-section claw-conversation-info" id="claw-conversation-info" style="display:none;">
 				<h4><span class="dashicons dashicons-admin-comments"></span> Conversation</h4>
 				<div class="claw-conv-meta">
@@ -166,3 +195,4 @@ $ai_label     = ( $provider_lbl[ $ai_provider ] ?? ucfirst( $ai_provider ) ) . '
 		</div>
 	</div>
 </div>
+

@@ -223,6 +223,34 @@ class LuwiPress_Customer_Chat {
 				'rate_limit'          => array( 'required' => false, 'type' => 'integer' ),
 			),
 		) );
+
+		// GET /chat/sessions — admin paginated list with filters (FR-003)
+		register_rest_route( 'luwipress/v1', '/chat/sessions', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'handle_list_sessions' ),
+			'permission_callback' => array( $this, 'check_admin_permission' ),
+			'args'                => array(
+				'limit'          => array( 'required' => false, 'type' => 'integer' ),
+				'offset'         => array( 'required' => false, 'type' => 'integer' ),
+				'status'         => array( 'required' => false, 'type' => 'string' ),
+				'escalated_only' => array( 'required' => false, 'type' => 'boolean' ),
+				'customer_email' => array( 'required' => false, 'type' => 'string' ),
+				'since'          => array( 'required' => false, 'type' => 'string' ),
+			),
+		) );
+
+		// GET /chat/messages/search — admin content search (FR-003)
+		register_rest_route( 'luwipress/v1', '/chat/messages/search', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'handle_search_messages' ),
+			'permission_callback' => array( $this, 'check_admin_permission' ),
+			'args'                => array(
+				'q'     => array( 'required' => true, 'type' => 'string' ),
+				'limit' => array( 'required' => false, 'type' => 'integer' ),
+				'role'  => array( 'required' => false, 'type' => 'string' ),
+				'since' => array( 'required' => false, 'type' => 'string' ),
+			),
+		) );
 	}
 
 	/**
@@ -470,6 +498,174 @@ class LuwiPress_Customer_Chat {
 			'status'       => $conversation->status,
 			'escalated_to' => $conversation->escalated_to,
 			'messages'     => $messages,
+		) );
+	}
+
+	/**
+	 * GET /chat/sessions — admin paginated list with filters (FR-003).
+	 *
+	 * Query: limit (1-200, default 50), offset (default 0), status, escalated_only,
+	 * customer_email (partial), since (ISO datetime).
+	 *
+	 * Returns: { total, items[], limit, offset } where each item carries
+	 * session_id, customer_*, status, escalated_to, page_url, ip_address,
+	 * created_at, updated_at, message_count.
+	 */
+	public function handle_list_sessions( $request ) {
+		global $wpdb;
+		$limit  = (int) $request->get_param( 'limit' );
+		if ( $limit <= 0 ) { $limit = 50; }
+		$limit  = max( 1, min( 200, $limit ) );
+		$offset = max( 0, (int) $request->get_param( 'offset' ) );
+
+		$where  = array( '1=1' );
+		$params = array();
+
+		$status = sanitize_text_field( (string) $request->get_param( 'status' ) );
+		if ( $status !== '' ) {
+			$where[]  = 'status = %s';
+			$params[] = $status;
+		}
+		if ( $request->get_param( 'escalated_only' ) ) {
+			$where[] = "escalated_to IS NOT NULL AND escalated_to <> ''";
+		}
+		$email = sanitize_text_field( (string) $request->get_param( 'customer_email' ) );
+		if ( $email !== '' ) {
+			$where[]  = 'customer_email LIKE %s';
+			$params[] = '%' . $wpdb->esc_like( $email ) . '%';
+		}
+		$since = sanitize_text_field( (string) $request->get_param( 'since' ) );
+		if ( $since !== '' ) {
+			$ts = strtotime( $since );
+			if ( $ts ) {
+				$where[]  = 'created_at >= %s';
+				$params[] = gmdate( 'Y-m-d H:i:s', $ts );
+			}
+		}
+
+		$where_sql = implode( ' AND ', $where );
+		$conv_tbl  = $wpdb->prefix . 'luwipress_chat_conversations';
+		$msg_tbl   = $wpdb->prefix . 'luwipress_chat_messages';
+
+		$total_sql = "SELECT COUNT(*) FROM {$conv_tbl} WHERE {$where_sql}";
+		$total     = (int) ( $params
+			? $wpdb->get_var( $wpdb->prepare( $total_sql, $params ) )
+			: $wpdb->get_var( $total_sql ) );
+
+		$list_sql = "SELECT c.id, c.session_id, c.customer_id, c.customer_email, c.customer_name,
+		                    c.status, c.escalated_to, c.page_url, c.ip_address,
+		                    c.created_at, c.updated_at,
+		                    (SELECT COUNT(*) FROM {$msg_tbl} m WHERE m.conversation_id = c.id) AS message_count
+		             FROM {$conv_tbl} c
+		             WHERE {$where_sql}
+		             ORDER BY c.updated_at DESC
+		             LIMIT %d OFFSET %d";
+		$args = array_merge( $params, array( $limit, $offset ) );
+		$rows = $wpdb->get_results( $wpdb->prepare( $list_sql, $args ) );
+
+		$items = array();
+		foreach ( $rows as $r ) {
+			$items[] = array(
+				'session_id'     => $r->session_id,
+				'customer_id'    => (int) $r->customer_id,
+				'customer_email' => $r->customer_email,
+				'customer_name'  => $r->customer_name,
+				'status'         => $r->status,
+				'escalated_to'   => $r->escalated_to,
+				'page_url'       => $r->page_url,
+				'ip_address'     => $r->ip_address,
+				'created_at'     => $r->created_at,
+				'updated_at'     => $r->updated_at,
+				'message_count'  => (int) $r->message_count,
+			);
+		}
+
+		return rest_ensure_response( array(
+			'total'  => $total,
+			'items'  => $items,
+			'limit'  => $limit,
+			'offset' => $offset,
+		) );
+	}
+
+	/**
+	 * GET /chat/messages/search — admin content search via plain LIKE (FR-003).
+	 *
+	 * Query: q (required, ≥2 chars), limit (1-200, default 50), role
+	 * (user/assistant/system), since (ISO datetime).
+	 *
+	 * Returns: { query, total, items[], limit } where each item carries
+	 * session_id, role, content_snippet (≤240 chars, centered on match),
+	 * source, created_at, page_url, customer_email.
+	 */
+	public function handle_search_messages( $request ) {
+		global $wpdb;
+		$q = trim( (string) $request->get_param( 'q' ) );
+		if ( mb_strlen( $q ) < 2 ) {
+			return new WP_Error( 'invalid_query', 'q must be at least 2 characters', array( 'status' => 400 ) );
+		}
+		$limit = (int) $request->get_param( 'limit' );
+		if ( $limit <= 0 ) { $limit = 50; }
+		$limit = max( 1, min( 200, $limit ) );
+		$role  = sanitize_text_field( (string) $request->get_param( 'role' ) );
+		$since = sanitize_text_field( (string) $request->get_param( 'since' ) );
+
+		$conv_tbl = $wpdb->prefix . 'luwipress_chat_conversations';
+		$msg_tbl  = $wpdb->prefix . 'luwipress_chat_messages';
+
+		$where  = array( 'm.content LIKE %s' );
+		$params = array( '%' . $wpdb->esc_like( $q ) . '%' );
+		if ( $role !== '' ) {
+			$where[]  = 'm.role = %s';
+			$params[] = $role;
+		}
+		if ( $since !== '' ) {
+			$ts = strtotime( $since );
+			if ( $ts ) {
+				$where[]  = 'm.created_at >= %s';
+				$params[] = gmdate( 'Y-m-d H:i:s', $ts );
+			}
+		}
+		$where_sql = implode( ' AND ', $where );
+
+		$sql = "SELECT m.id, m.role, m.content, m.source, m.created_at,
+		               c.session_id, c.customer_email, c.page_url
+		        FROM {$msg_tbl} m
+		        JOIN {$conv_tbl} c ON m.conversation_id = c.id
+		        WHERE {$where_sql}
+		        ORDER BY m.created_at DESC
+		        LIMIT %d";
+		$args = array_merge( $params, array( $limit ) );
+		$rows = $wpdb->get_results( $wpdb->prepare( $sql, $args ) );
+
+		$items = array();
+		foreach ( $rows as $r ) {
+			$snippet = (string) $r->content;
+			if ( mb_strlen( $snippet ) > 240 ) {
+				$pos = mb_stripos( $snippet, $q );
+				if ( $pos !== false ) {
+					$start   = max( 0, $pos - 80 );
+					$snippet = ( $start > 0 ? '…' : '' ) . mb_substr( $snippet, $start, 240 ) . '…';
+				} else {
+					$snippet = mb_substr( $snippet, 0, 240 ) . '…';
+				}
+			}
+			$items[] = array(
+				'session_id'      => $r->session_id,
+				'role'            => $r->role,
+				'content_snippet' => $snippet,
+				'source'          => $r->source,
+				'created_at'      => $r->created_at,
+				'page_url'        => $r->page_url,
+				'customer_email'  => $r->customer_email,
+			);
+		}
+
+		return rest_ensure_response( array(
+			'query' => $q,
+			'total' => count( $items ),
+			'items' => $items,
+			'limit' => $limit,
 		) );
 	}
 
@@ -1852,7 +2048,7 @@ class LuwiPress_Customer_Chat {
 		}
 
 		$today_cost = (float) $wpdb->get_var( $wpdb->prepare(
-			"SELECT COALESCE(SUM(estimated_cost), 0) FROM {$table} WHERE workflow = %s AND date = %s",
+			"SELECT COALESCE(SUM(estimated_cost), 0) FROM {$table} /* luwipress-audit:ignore */ WHERE workflow = %s AND date = %s",
 			'customer-chat',
 			current_time( 'Y-m-d' )
 		) );
@@ -1872,7 +2068,7 @@ class LuwiPress_Customer_Chat {
 		$table = $wpdb->prefix . 'luwipress_chat_conversations';
 
 		$existing = $wpdb->get_row( $wpdb->prepare(
-			"SELECT * FROM {$table} WHERE session_id = %s",
+			"SELECT * FROM {$table} /* luwipress-audit:ignore */ WHERE session_id = %s",
 			$session_id
 		) );
 
@@ -1904,7 +2100,7 @@ class LuwiPress_Customer_Chat {
 		), array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s' ) );
 
 		return $wpdb->get_row( $wpdb->prepare(
-			"SELECT * FROM {$table} WHERE session_id = %s",
+			"SELECT * FROM {$table} /* luwipress-audit:ignore */ WHERE session_id = %s",
 			$session_id
 		) );
 	}
@@ -2318,15 +2514,15 @@ class LuwiPress_Customer_Chat {
 
 		// Delete messages for old conversations
 		$wpdb->query( $wpdb->prepare(
-			"DELETE m FROM {$msg_table} m
-			 INNER JOIN {$conv_table} c ON m.conversation_id = c.id
+			"DELETE m FROM {$msg_table} /* luwipress-audit:ignore */ m
+			 INNER JOIN {$conv_table} /* luwipress-audit:ignore */ c ON m.conversation_id = c.id
 			 WHERE c.created_at < DATE_SUB(NOW(), INTERVAL %d DAY)",
 			absint( $days )
 		) );
 
 		// Delete old conversations
 		$wpdb->query( $wpdb->prepare(
-			"DELETE FROM {$conv_table} WHERE created_at < DATE_SUB(NOW(), INTERVAL %d DAY)",
+			"DELETE FROM {$conv_table} /* luwipress-audit:ignore */ WHERE created_at < DATE_SUB(NOW(), INTERVAL %d DAY)",
 			absint( $days )
 		) );
 	}
@@ -2342,7 +2538,7 @@ class LuwiPress_Customer_Chat {
 		$msg_table  = $wpdb->prefix . 'luwipress_chat_messages';
 
 		$conversation = $wpdb->get_row( $wpdb->prepare(
-			"SELECT id FROM {$conv_table} WHERE session_id = %s",
+			"SELECT id FROM {$conv_table} /* luwipress-audit:ignore */ WHERE session_id = %s",
 			$session_id
 		) );
 

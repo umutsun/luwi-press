@@ -123,4 +123,15 @@ class LuwiPress_Marketplace_Etsy implements LuwiPress_Marketplace_Adapter {
 
 		return $body ?: array();
 	}
+
+	public function get_brand_color() {
+		return '#f1641e';
+	}
+
+	public function get_settings_schema() {
+		return array(
+			array( 'id' => 'luwipress_etsy_api_key', 'label' => 'API Key', 'type' => 'password', 'default' => '' ),
+			array( 'id' => 'luwipress_etsy_shop_id', 'label' => 'Shop ID', 'type' => 'text', 'default' => '' ),
+		);
+	}
 }

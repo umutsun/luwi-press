@@ -235,10 +235,14 @@ class LuwiPress_Theme_Bridge {
 			return new WP_Error( 'invalid_action', 'Action must be scan, execute, or restore.', array( 'status' => 400 ) );
 		}
 
-		// Capability gate — both REST token and admin paths still need the user
-		// to have the tool's required capability.
+		// Capability gate. Admin-cookie callers go through current_user_can();
+		// MCP/token callers are admin-equivalent (token holders are operators by
+		// definition — same trust level as a logged-in admin) and bypass the cap
+		// check because check_token() does NOT call wp_set_current_user(), so
+		// current_user_can() would otherwise return false for valid token requests
+		// and lock every theme tool behind a 403 (Vendor-FR-008, 2026-05-21).
 		$cap = $tool['capability'];
-		if ( $cap && ! current_user_can( $cap ) ) {
+		if ( $cap && ! current_user_can( $cap ) && ! ( class_exists( 'LuwiPress_Permission' ) && LuwiPress_Permission::is_token_authenticated() ) ) {
 			return new WP_Error( 'forbidden', sprintf( 'Capability "%s" required.', $cap ), array( 'status' => 403 ) );
 		}
 

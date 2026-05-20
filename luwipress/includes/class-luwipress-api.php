@@ -168,6 +168,29 @@ class LuwiPress_API {
                 ),
             ),
         ) );
+
+        // WordPress 7.0 Connectors migration — preview which legacy API keys
+        // can be moved into native WP Connectors (no writes happen here).
+        register_rest_route( 'luwipress/v1', '/connectors/migrate-preview', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'handle_connectors_migrate_preview' ),
+            'permission_callback' => array( $this, 'check_admin_permission' ),
+        ) );
+
+        // WordPress 7.0 Connectors migration — execute. Requires explicit
+        // per-provider confirmation flags from the admin modal.
+        register_rest_route( 'luwipress/v1', '/connectors/migrate-execute', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'handle_connectors_migrate_execute' ),
+            'permission_callback' => array( $this, 'check_admin_permission' ),
+            'args'                => array(
+                'providers' => array(
+                    'required'    => true,
+                    'type'        => 'array',
+                    'description' => 'Whitelist of provider slugs to migrate. Allowed: openai, anthropic, google.',
+                ),
+            ),
+        ) );
     }
     
     private function get_webhook_args() {
@@ -824,6 +847,168 @@ class LuwiPress_API {
         $limit = min( 100, max( 1, $limit ) );
 
         return rest_ensure_response( LuwiPress_Token_Tracker::get_recent_calls( $limit ) );
+    }
+
+    /**
+     * GET /connectors/migrate-preview
+     *
+     * Shows what would happen if the operator migrates legacy LuwiPress API
+     * keys into WordPress 7.0 native Connectors. No writes. Used by the admin
+     * UI's confirmation modal so the user sees exactly which keys move where
+     * before approving.
+     */
+    public function handle_connectors_migrate_preview( $request ) {
+        if ( ! class_exists( 'LuwiPress_Connectors' ) ) {
+            return new WP_Error( 'not_available', 'Connectors bridge not loaded', array( 'status' => 500 ) );
+        }
+
+        $active = LuwiPress_Connectors::is_active();
+        $state  = LuwiPress_Connectors::list_active_connectors();
+
+        $rows = array();
+        foreach ( $state as $provider => $info ) {
+            $action = 'skip';
+            if ( $info['has_legacy'] && ! $info['in_connectors'] ) {
+                $action = 'migrate';
+            } elseif ( $info['has_legacy'] && $info['in_connectors'] ) {
+                // Connectors already has a key — never overwrite silently.
+                $action = 'keep_connectors';
+            } elseif ( ! $info['has_legacy'] && $info['in_connectors'] ) {
+                $action = 'already_native';
+            }
+
+            $rows[] = array(
+                'provider'      => $provider,
+                'has_legacy'    => $info['has_legacy'],
+                'in_connectors' => $info['in_connectors'],
+                'action'        => $action,
+            );
+        }
+
+        return rest_ensure_response( array(
+            'wp7_connectors_active' => $active,
+            'rows'                  => $rows,
+        ) );
+    }
+
+    /**
+     * POST /connectors/migrate-execute { providers: ['openai', 'anthropic', ...] }
+     *
+     * For each whitelisted provider:
+     *   1. Calls LuwiPress_Connectors::write_native_key() to push the legacy
+     *      key into native WP Connectors.
+     *   2. On success, deletes the legacy luwipress_{provider}_api_key option
+     *      and logs an audit record.
+     *   3. On failure, leaves the legacy option intact and reports the error
+     *      back in the per-provider result.
+     *
+     * Returns a per-provider report. Partial success is normal — caller
+     * inspects `results[*].status` to render OK/warning/error in the modal.
+     */
+    public function handle_connectors_migrate_execute( $request ) {
+        if ( ! class_exists( 'LuwiPress_Connectors' ) ) {
+            return new WP_Error( 'not_available', 'Connectors bridge not loaded', array( 'status' => 500 ) );
+        }
+
+        if ( ! LuwiPress_Connectors::is_active() ) {
+            return new WP_Error(
+                'connectors_inactive',
+                'WordPress 7.0 Connectors is not active — migration unavailable.',
+                array( 'status' => 409 )
+            );
+        }
+
+        $requested = $request->get_param( 'providers' );
+        if ( ! is_array( $requested ) || empty( $requested ) ) {
+            return new WP_Error(
+                'invalid_input',
+                'Provide a non-empty `providers` array (allowed: openai, anthropic, google).',
+                array( 'status' => 400 )
+            );
+        }
+
+        $allowed = LuwiPress_Connectors::native_providers();
+        $results = array();
+
+        foreach ( $requested as $provider ) {
+            $provider = sanitize_key( $provider );
+
+            if ( ! in_array( $provider, $allowed, true ) ) {
+                $results[ $provider ] = array(
+                    'status'  => 'error',
+                    'message' => 'Unsupported provider (not in WP Connectors scope).',
+                );
+                continue;
+            }
+
+            $option_name = LuwiPress_Connectors::legacy_option_name( $provider );
+            $legacy_key  = (string) get_option( $option_name, '' );
+            $alias_hit   = '';
+            if ( '' === $legacy_key ) {
+                // Walk historical aliases (Google: luwipress_google_api_key).
+                foreach ( LuwiPress_Connectors::legacy_option_name_aliases( $provider ) as $alias ) {
+                    $alt = (string) get_option( $alias, '' );
+                    if ( '' !== $alt ) {
+                        $legacy_key = $alt;
+                        $alias_hit  = $alias;
+                        break;
+                    }
+                }
+            }
+
+            if ( '' === $legacy_key ) {
+                $results[ $provider ] = array(
+                    'status'  => 'skipped',
+                    'message' => 'No legacy key stored — nothing to migrate.',
+                );
+                continue;
+            }
+
+            $write = LuwiPress_Connectors::write_native_key( $provider, $legacy_key );
+
+            if ( is_wp_error( $write ) ) {
+                $results[ $provider ] = array(
+                    'status'  => 'error',
+                    'message' => $write->get_error_message(),
+                );
+                if ( class_exists( 'LuwiPress_Logger' ) ) {
+                    LuwiPress_Logger::log(
+                        sprintf( 'Connectors migration failed for %s: %s', $provider, $write->get_error_message() ),
+                        'warning',
+                        array( 'provider' => $provider )
+                    );
+                }
+                continue;
+            }
+
+            delete_option( $option_name );
+            // Also wipe any historical alias names (e.g. Google's old
+            // luwipress_google_api_key) so the UI badge clears completely.
+            foreach ( LuwiPress_Connectors::legacy_option_name_aliases( $provider ) as $alias ) {
+                delete_option( $alias );
+            }
+
+            $results[ $provider ] = array(
+                'status'    => 'migrated',
+                'message'   => 'Moved to WordPress Connectors and removed from LuwiPress options.',
+                'alias_hit' => $alias_hit,
+            );
+
+            if ( class_exists( 'LuwiPress_Logger' ) ) {
+                LuwiPress_Logger::log(
+                    sprintf( 'Connectors migration succeeded for %s', $provider ),
+                    'info',
+                    array( 'provider' => $provider )
+                );
+            }
+        }
+
+        LuwiPress_Connectors::flush_cache();
+
+        return rest_ensure_response( array(
+            'results' => $results,
+            'state'   => LuwiPress_Connectors::list_active_connectors(),
+        ) );
     }
 
     /**

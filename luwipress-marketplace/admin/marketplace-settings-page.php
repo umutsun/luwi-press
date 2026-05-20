@@ -34,49 +34,57 @@ function luwipress_marketplace_render_settings_page() {
             wp_die( 'Invalid nonce.' );
         }
         luwipress_marketplace_save_settings();
-        echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Marketplace settings saved.', 'luwipress-marketplace-sync' ) . '</p></div>';
+        echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Marketplace settings saved.', 'luwipress-marketplace' ) . '</p></div>';
     }
 
-    // Load current values (option keys are unchanged from the pre-split layout).
-    $mp_slugs = array( 'amazon', 'ebay', 'trendyol', 'alibaba', 'hepsiburada', 'n11', 'etsy', 'walmart' );
-    $mp_cfg   = array();
-    foreach ( $mp_slugs as $_s ) {
-        $mp_cfg[ $_s ]['enabled'] = get_option( 'luwipress_marketplace_' . $_s . '_enabled', 0 );
+    if ( isset( $_POST['luwipress_marketplace_add_custom'] ) ) {
+        if ( ! check_admin_referer( 'luwipress_marketplace_nonce' ) ) {
+            wp_die( 'Invalid nonce.' );
+        }
+        $custom_name = sanitize_text_field( wp_unslash( $_POST['custom_mp_name'] ?? '' ) );
+        $custom_color = sanitize_text_field( wp_unslash( $_POST['custom_mp_color'] ?? '#6366f1' ) );
+        if ( ! empty( $custom_name ) ) {
+            $custom_markets = get_option( 'luwipress_custom_marketplaces', array() );
+            $custom_id = 'custom_' . strtolower( wp_generate_password( 6, false, false ) );
+            $custom_markets[ $custom_id ] = array(
+                'name' => $custom_name,
+                'color' => $custom_color,
+            );
+            update_option( 'luwipress_custom_marketplaces', $custom_markets );
+            wp_safe_redirect( add_query_arg( array( 'page' => 'luwipress-marketplaces', 'added' => '1' ), admin_url( 'admin.php' ) ) );
+            exit;
+        }
     }
-    $mp_cfg['amazon']['api_key']      = get_option( 'luwipress_amazon_api_key', '' );
-    $mp_cfg['amazon']['seller_id']    = get_option( 'luwipress_amazon_seller_id', '' );
-    $mp_cfg['amazon']['region']       = get_option( 'luwipress_amazon_region', 'na' );
-    $mp_cfg['ebay']['api_key']        = get_option( 'luwipress_ebay_api_key', '' );
-    $mp_cfg['ebay']['environment']    = get_option( 'luwipress_ebay_environment', 'sandbox' );
-    $mp_cfg['ebay']['marketplace']    = get_option( 'luwipress_ebay_marketplace_id', 'EBAY_US' );
-    $mp_cfg['trendyol']['api_key']    = get_option( 'luwipress_trendyol_api_key', '' );
-    $mp_cfg['trendyol']['api_secret'] = get_option( 'luwipress_trendyol_api_secret', '' );
-    $mp_cfg['trendyol']['seller_id']  = get_option( 'luwipress_trendyol_seller_id', '' );
-    $mp_cfg['trendyol']['cargo']      = get_option( 'luwipress_trendyol_cargo_company_id', 10 );
-    $mp_cfg['hepsiburada']['api_key']     = get_option( 'luwipress_hepsiburada_api_key', '' );
-    $mp_cfg['hepsiburada']['api_secret']  = get_option( 'luwipress_hepsiburada_api_secret', '' );
-    $mp_cfg['hepsiburada']['merchant_id'] = get_option( 'luwipress_hepsiburada_merchant_id', '' );
-    $mp_cfg['n11']['api_key']    = get_option( 'luwipress_n11_api_key', '' );
-    $mp_cfg['n11']['api_secret'] = get_option( 'luwipress_n11_api_secret', '' );
-    $mp_cfg['alibaba']['app_key']      = get_option( 'luwipress_alibaba_app_key', '' );
-    $mp_cfg['alibaba']['app_secret']   = get_option( 'luwipress_alibaba_app_secret', '' );
-    $mp_cfg['alibaba']['access_token'] = get_option( 'luwipress_alibaba_access_token', '' );
-    $mp_cfg['etsy']['api_key'] = get_option( 'luwipress_etsy_api_key', '' );
-    $mp_cfg['etsy']['shop_id'] = get_option( 'luwipress_etsy_shop_id', '' );
-    $mp_cfg['walmart']['client_id']     = get_option( 'luwipress_walmart_client_id', '' );
-    $mp_cfg['walmart']['client_secret'] = get_option( 'luwipress_walmart_client_secret', '' );
+
+    if ( isset( $_GET['added'] ) && '1' === $_GET['added'] ) {
+        echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Custom marketplace added.', 'luwipress-marketplace' ) . '</p></div>';
+    }
+
+    // Load current values dynamically from adapters
+    $adapters = LuwiPress_Marketplace::get_instance()->get_all_adapters();
+    $mp_cfg   = array();
+    
+    foreach ( $adapters as $slug => $adapter ) {
+        $mp_cfg[ $slug ]['enabled'] = get_option( 'luwipress_marketplace_' . $slug . '_enabled', 0 );
+        $schema = $adapter->get_settings_schema();
+        foreach ( $schema as $field ) {
+            $mp_cfg[ $slug ][ $field['id'] ] = get_option( $field['id'], $field['default'] ?? '' );
+        }
+    }
 
     $logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' : '';
 
-    // Aggregate counters for the hero stat row so the operator sees coverage at a glance.
+    // Aggregate counters for the hero stat row
     $count_live = 0;
     $count_ready = 0;
-    foreach ( $mp_slugs as $sl ) {
-        $en = ! empty( $mp_cfg[ $sl ]['enabled'] );
+    foreach ( $adapters as $slug => $adapter ) {
+        $en = ! empty( $mp_cfg[ $slug ]['enabled'] );
         $any_key = false;
-        foreach ( array_keys( $mp_cfg[ $sl ] ) as $k ) {
-            if ( $k === 'enabled' ) { continue; }
-            if ( ! empty( $mp_cfg[ $sl ][ $k ] ) ) { $any_key = true; break; }
+        foreach ( $adapter->get_settings_schema() as $field ) {
+            if ( in_array( $field['type'], array( 'password', 'text' ), true ) && ! empty( $mp_cfg[ $slug ][ $field['id'] ] ) ) {
+                $any_key = true;
+                break;
+            }
         }
         if ( $en && $any_key ) { $count_live++; }
         elseif ( $any_key )    { $count_ready++; }
@@ -130,14 +138,14 @@ function luwipress_marketplace_render_settings_page() {
             <div class="luwipress-stat-card">
                 <div class="stat-icon"><span class="dashicons dashicons-cart"></span></div>
                 <div class="stat-content">
-                    <span class="stat-number"><?php echo (int) ( count( $mp_slugs ) - $count_live - $count_ready ); ?></span>
+                    <span class="stat-number"><?php echo (int) ( count( $adapters ) - $count_live - $count_ready ); ?></span>
                     <span class="stat-label"><?php esc_html_e( 'Untouched marketplaces', 'luwipress-marketplace-sync' ); ?></span>
                 </div>
             </div>
             <div class="luwipress-stat-card">
                 <div class="stat-icon"><span class="dashicons dashicons-rest-api"></span></div>
                 <div class="stat-content">
-                    <span class="stat-number"><?php echo (int) count( $mp_slugs ); ?></span>
+                    <span class="stat-number"><?php echo (int) count( $adapters ); ?></span>
                     <span class="stat-label"><?php esc_html_e( 'Adapters available', 'luwipress-marketplace-sync' ); ?></span>
                 </div>
             </div>
@@ -160,55 +168,17 @@ function luwipress_marketplace_render_settings_page() {
 
             <div class="lp-mp-grid" id="lp-mp-grid">
             <?php
-            $mp_defs = array(
-                'amazon'      => array( 'Amazon',      '#ff9900', array(
-                    array( 'luwipress_amazon_api_key',   'API Key',   'password', $mp_cfg['amazon']['api_key'] ),
-                    array( 'luwipress_amazon_seller_id', 'Seller ID', 'text',     $mp_cfg['amazon']['seller_id'] ),
-                    array( 'luwipress_amazon_region',    'Region',    'select',   $mp_cfg['amazon']['region'], array( 'na' => 'NA', 'eu' => 'EU', 'fe' => 'FE' ) ),
-                )),
-                'ebay'        => array( 'eBay',        '#e53238', array(
-                    array( 'luwipress_ebay_api_key',        'OAuth Token', 'password', $mp_cfg['ebay']['api_key'] ),
-                    array( 'luwipress_ebay_environment',    'Environment', 'select',   $mp_cfg['ebay']['environment'], array( 'sandbox' => 'Sandbox', 'production' => 'Production' ) ),
-                    array( 'luwipress_ebay_marketplace_id', 'Market',      'select',   $mp_cfg['ebay']['marketplace'], array( 'EBAY_US' => 'US', 'EBAY_GB' => 'UK', 'EBAY_DE' => 'DE', 'EBAY_FR' => 'FR', 'EBAY_IT' => 'IT', 'EBAY_ES' => 'ES', 'EBAY_AU' => 'AU' ) ),
-                )),
-                'trendyol'    => array( 'Trendyol',    '#f27a1a', array(
-                    array( 'luwipress_trendyol_api_key',    'API Key',    'password', $mp_cfg['trendyol']['api_key'] ),
-                    array( 'luwipress_trendyol_api_secret', 'API Secret', 'password', $mp_cfg['trendyol']['api_secret'] ),
-                    array( 'luwipress_trendyol_seller_id',  'Seller ID',  'text',     $mp_cfg['trendyol']['seller_id'] ),
-                    array( 'luwipress_trendyol_cargo_company_id', 'Cargo ID', 'number', $mp_cfg['trendyol']['cargo'] ),
-                )),
-                'hepsiburada' => array( 'Hepsiburada', '#ff6000', array(
-                    array( 'luwipress_hepsiburada_api_key',     'API Key',     'password', $mp_cfg['hepsiburada']['api_key'] ),
-                    array( 'luwipress_hepsiburada_api_secret',  'API Secret',  'password', $mp_cfg['hepsiburada']['api_secret'] ),
-                    array( 'luwipress_hepsiburada_merchant_id', 'Merchant ID', 'text',     $mp_cfg['hepsiburada']['merchant_id'] ),
-                )),
-                'n11'         => array( 'N11',         '#1a237e', array(
-                    array( 'luwipress_n11_api_key',    'API Key',    'password', $mp_cfg['n11']['api_key'] ),
-                    array( 'luwipress_n11_api_secret', 'API Secret', 'password', $mp_cfg['n11']['api_secret'] ),
-                )),
-                'alibaba'     => array( 'Alibaba',     '#ff6a00', array(
-                    array( 'luwipress_alibaba_app_key',      'App Key',      'text',     $mp_cfg['alibaba']['app_key'] ),
-                    array( 'luwipress_alibaba_app_secret',   'App Secret',   'password', $mp_cfg['alibaba']['app_secret'] ),
-                    array( 'luwipress_alibaba_access_token', 'Access Token', 'password', $mp_cfg['alibaba']['access_token'] ),
-                )),
-                'etsy'        => array( 'Etsy',        '#f1641e', array(
-                    array( 'luwipress_etsy_api_key', 'API Key', 'password', $mp_cfg['etsy']['api_key'] ),
-                    array( 'luwipress_etsy_shop_id', 'Shop ID', 'text',     $mp_cfg['etsy']['shop_id'] ),
-                )),
-                'walmart'     => array( 'Walmart',     '#0071dc', array(
-                    array( 'luwipress_walmart_client_id',     'Client ID',     'text',     $mp_cfg['walmart']['client_id'] ),
-                    array( 'luwipress_walmart_client_secret', 'Client Secret', 'password', $mp_cfg['walmart']['client_secret'] ),
-                )),
-            );
-
-            foreach ( $mp_defs as $slug => $mp ) :
-                $label   = $mp[0];
-                $color   = $mp[1];
-                $fields  = $mp[2];
+            foreach ( $adapters as $slug => $adapter ) :
+                $label   = $adapter->get_label();
+                $color   = $adapter->get_brand_color();
+                $schema  = $adapter->get_settings_schema();
                 $enabled = ! empty( $mp_cfg[ $slug ]['enabled'] );
                 $has_key = false;
-                foreach ( $fields as $f ) {
-                    if ( in_array( $f[2], array( 'password', 'text' ), true ) && ! empty( $f[3] ) ) { $has_key = true; break; }
+                foreach ( $schema as $field ) {
+                    if ( in_array( $field['type'], array( 'password', 'text' ), true ) && ! empty( $mp_cfg[ $slug ][ $field['id'] ] ) ) {
+                        $has_key = true; 
+                        break;
+                    }
                 }
                 $state_class = ( $enabled && $has_key ) ? 'lp-mp-connected' : '';
                 $state_class .= $enabled ? ' open' : '';
@@ -231,8 +201,9 @@ function luwipress_marketplace_render_settings_page() {
                             <input type="checkbox" id="lp_en_<?php echo esc_attr( $slug ); ?>" name="luwipress_marketplace_<?php echo esc_attr( $slug ); ?>_enabled" value="1" <?php checked( $enabled ); ?> />
                             <label for="lp_en_<?php echo esc_attr( $slug ); ?>"><?php printf( esc_html__( 'Enable %s', 'luwipress-marketplace-sync' ), esc_html( $label ) ); ?></label>
                         </div>
-                        <?php foreach ( $fields as $f ) :
-                            $fn = $f[0]; $fl = $f[1]; $ft = $f[2]; $fv = $f[3]; $fo = $f[4] ?? array();
+                        <?php foreach ( $schema as $field ) :
+                            $fn = $field['id']; $fl = $field['label']; $ft = $field['type']; 
+                            $fv = $mp_cfg[ $slug ][ $fn ]; $fo = $field['options'] ?? array();
                         ?>
                         <div class="lp-mp-field">
                             <label for="<?php echo esc_attr( $fn ); ?>"><?php echo esc_html( $fl ); ?></label>
@@ -257,7 +228,26 @@ function luwipress_marketplace_render_settings_page() {
             <?php endforeach; ?>
             </div>
 
-            <div class="lp-mp-empty" id="lp-mp-empty"><?php esc_html_e( 'No marketplaces match your search.', 'luwipress-marketplace-sync' ); ?></div>
+            <div class="lp-mp-empty" id="lp-mp-empty"><?php esc_html_e( 'No marketplaces match your search.', 'luwipress-marketplace' ); ?></div>
+
+            <!-- Custom Marketplace Form -->
+            <div class="luwipress-card luwipress-card--custom" style="margin-top: 24px;">
+                <h3 style="margin-top:0; font-size:15px;"><?php esc_html_e( 'Add Custom Integration', 'luwipress-marketplace' ); ?></h3>
+                <p class="description" style="margin-bottom:12px;"><?php esc_html_e( 'Define a custom webhook or REST API endpoint to sync your products.', 'luwipress-marketplace' ); ?></p>
+                <div style="display:flex; gap:12px; align-items:flex-end;">
+                    <div>
+                        <label for="custom_mp_name" style="display:block; font-size:13px; font-weight:500; margin-bottom:4px;"><?php esc_html_e( 'Marketplace Name', 'luwipress-marketplace' ); ?></label>
+                        <input type="text" id="custom_mp_name" name="custom_mp_name" placeholder="e.g. My Local Shop" style="width:200px; padding:7px 10px; border:1px solid var(--lp-border); border-radius:6px;" />
+                    </div>
+                    <div>
+                        <label for="custom_mp_color" style="display:block; font-size:13px; font-weight:500; margin-bottom:4px;"><?php esc_html_e( 'Brand Color', 'luwipress-marketplace' ); ?></label>
+                        <input type="color" id="custom_mp_color" name="custom_mp_color" value="#6366f1" style="height:35px; border:1px solid var(--lp-border); border-radius:6px; background:#fff; cursor:pointer;" />
+                    </div>
+                    <div>
+                        <button type="submit" name="luwipress_marketplace_add_custom" class="button button-secondary"><?php esc_html_e( 'Add Integration', 'luwipress-marketplace' ); ?></button>
+                    </div>
+                </div>
+            </div>
 
             <p class="submit">
                 <button type="submit" name="luwipress_marketplace_save" class="button button-primary button-hero">
@@ -388,33 +378,26 @@ function luwipress_marketplace_render_settings_page() {
 }
 
 /**
- * Persist marketplace settings (option keys mirror the pre-split layout —
- * any credentials saved by core 3.1.43 or earlier are read directly).
+ * Persist marketplace settings dynamically.
  */
 function luwipress_marketplace_save_settings() {
-    $mp_keys = array(
-        'amazon_api_key', 'amazon_seller_id', 'amazon_region',
-        'ebay_api_key', 'ebay_environment', 'ebay_marketplace_id',
-        'trendyol_api_key', 'trendyol_api_secret', 'trendyol_seller_id', 'trendyol_cargo_company_id',
-        'alibaba_app_key', 'alibaba_app_secret', 'alibaba_access_token',
-        'hepsiburada_api_key', 'hepsiburada_api_secret', 'hepsiburada_merchant_id',
-        'n11_api_key', 'n11_api_secret',
-        'etsy_api_key', 'etsy_shop_id',
-        'walmart_client_id', 'walmart_client_secret',
-    );
-    foreach ( $mp_keys as $k ) {
-        $opt = 'luwipress_' . $k;
-        if ( ! isset( $_POST[ $opt ] ) ) {
-            continue;
+    $adapters = LuwiPress_Marketplace::get_instance()->get_all_adapters();
+    
+    foreach ( $adapters as $slug => $adapter ) {
+        $enabled_key = 'luwipress_marketplace_' . $slug . '_enabled';
+        update_option( $enabled_key, isset( $_POST[ $enabled_key ] ) ? 1 : 0 );
+        
+        $schema = $adapter->get_settings_schema();
+        foreach ( $schema as $field ) {
+            $opt = $field['id'];
+            if ( ! isset( $_POST[ $opt ] ) ) {
+                continue;
+            }
+            if ( 'number' === $field['type'] ) {
+                update_option( $opt, absint( wp_unslash( $_POST[ $opt ] ) ) );
+            } else {
+                update_option( $opt, sanitize_text_field( wp_unslash( $_POST[ $opt ] ) ) );
+            }
         }
-        if ( $k === 'trendyol_cargo_company_id' ) {
-            update_option( $opt, absint( wp_unslash( $_POST[ $opt ] ) ) );
-        } else {
-            update_option( $opt, sanitize_text_field( wp_unslash( $_POST[ $opt ] ) ) );
-        }
-    }
-    $mp_slugs = array( 'amazon', 'ebay', 'trendyol', 'alibaba', 'hepsiburada', 'n11', 'etsy', 'walmart' );
-    foreach ( $mp_slugs as $slug ) {
-        update_option( 'luwipress_marketplace_' . $slug . '_enabled', isset( $_POST[ 'luwipress_marketplace_' . $slug . '_enabled' ] ) ? 1 : 0 );
     }
 }

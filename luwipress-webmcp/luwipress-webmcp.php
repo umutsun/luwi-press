@@ -3,14 +3,14 @@
  * Plugin Name: LuwiPress WebMCP
  * Plugin URI: https://luwi.dev/luwipress-webmcp
  * Description: Model Context Protocol (MCP) server for LuwiPress — exposes 140+ REST tools to AI agents (Claude Code, OpenAI, custom clients) via Streamable HTTP transport. Requires the core LuwiPress plugin.
- * Version: 1.0.19
+ * Version: 1.0.26
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: luwipress-webmcp
  * Requires at least: 5.6
- * Tested up to: 6.9
+ * Tested up to: 7.0
  * Requires PHP: 7.4
  * Requires Plugins: luwipress
  */
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'LUWIPRESS_WEBMCP_VERSION', '1.0.19' );
+define( 'LUWIPRESS_WEBMCP_VERSION', '1.0.26' );
 define( 'LUWIPRESS_WEBMCP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LUWIPRESS_WEBMCP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'LUWIPRESS_WEBMCP_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );

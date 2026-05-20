@@ -64,10 +64,18 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 		wp_clear_scheduled_hook( 'luwipress_auto_enrich_thin_cron' );
 	}
 
-	// AI API Keys
-	update_option( 'luwipress_openai_api_key', sanitize_text_field( $_POST['luwipress_openai_api_key'] ?? '' ) );
-	update_option( 'luwipress_anthropic_api_key', sanitize_text_field( $_POST['luwipress_anthropic_api_key'] ?? '' ) );
-	update_option( 'luwipress_google_ai_api_key', sanitize_text_field( $_POST['luwipress_google_ai_api_key'] ?? '' ) );
+	// AI API Keys — guard with isset() so the WP 7.0 Connectors-managed view
+	// (where these inputs aren't rendered at all) doesn't wipe stored keys on
+	// every Settings save. Absent POST field = leave existing option untouched.
+	if ( isset( $_POST['luwipress_openai_api_key'] ) ) {
+		update_option( 'luwipress_openai_api_key', sanitize_text_field( wp_unslash( $_POST['luwipress_openai_api_key'] ) ) );
+	}
+	if ( isset( $_POST['luwipress_anthropic_api_key'] ) ) {
+		update_option( 'luwipress_anthropic_api_key', sanitize_text_field( wp_unslash( $_POST['luwipress_anthropic_api_key'] ) ) );
+	}
+	if ( isset( $_POST['luwipress_google_ai_api_key'] ) ) {
+		update_option( 'luwipress_google_ai_api_key', sanitize_text_field( wp_unslash( $_POST['luwipress_google_ai_api_key'] ) ) );
+	}
 	update_option( 'luwipress_ai_provider', sanitize_text_field( $_POST['luwipress_ai_provider'] ?? 'openai' ) );
 	update_option( 'luwipress_ai_model', sanitize_text_field( $_POST['luwipress_ai_model'] ?? 'gpt-4o-mini' ) );
 
@@ -223,6 +231,21 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		<a href="?page=luwipress-settings&tab=security" class="nav-tab <?php echo 'security' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-shield-alt"></span> <?php esc_html_e( 'Security', 'luwipress' ); ?>
 		</a>
+		<a href="?page=luwipress-settings&tab=bot" class="nav-tab <?php echo 'bot' === $active_tab ? 'nav-tab-active' : ''; ?>">
+			<span class="dashicons dashicons-shield"></span> <?php esc_html_e( 'Bot', 'luwipress' ); ?>
+		</a>
+		<?php
+		/**
+		 * Companion plugins can hook this action to register their own tab nav
+		 * links inside the LuwiPress Settings page. Each hook should echo an
+		 * `<a class="nav-tab">` element. The current active tab is passed in
+		 * so the hook can apply `nav-tab-active`.
+		 *
+		 * @param string $active_tab Currently selected tab id.
+		 * @since 3.2.4
+		 */
+		do_action( 'luwipress_settings_render_tab_nav', $active_tab );
+		?>
 	</nav>
 
 	<form method="post" class="luwipress-settings-form">
@@ -280,7 +303,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					<div class="luwipress-info-box" style="border-left:3px solid var(--lp-warning,#f59e0b);">
 						<span class="dashicons dashicons-info-outline"></span>
 						<strong><?php esc_html_e( 'WebMCP companion plugin is not installed.', 'luwipress' ); ?></strong><br>
-						<?php esc_html_e( 'AI-agent integration (Claude Code, OpenAI, custom MCP clients) requires the separate "LuwiPress WebMCP" plugin. Core LuwiPress exposes REST only; MCP tooling lives in the companion.', 'luwipress' ); ?>
+						<?php esc_html_e( 'AI-agent integration requires the separate "LuwiPress WebMCP" plugin. Core LuwiPress exposes REST only; MCP tooling lives in the companion.', 'luwipress' ); ?>
 					</div>
 				<?php else : ?>
 					<div class="luwipress-info-box" style="border-left:3px solid var(--lp-success,#16a34a);">
@@ -428,11 +451,93 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		<!-- AI API KEYS -->
 		<div class="luwipress-tab-content <?php echo 'api-keys' === $active_tab ? 'tab-active' : ''; ?>" id="tab-api-keys">
 			<?php
+			// WordPress 7.0 Connectors detection — when active, API keys live
+			// in the native WP Connectors UI. We keep the model picker + budget
+			// + per-workflow override (LuwiPress-specific moats) but hide the
+			// key inputs and offer a one-click migration of any legacy keys.
+			$wp7_connectors_active = class_exists( 'LuwiPress_Connectors' ) && LuwiPress_Connectors::is_active();
+			$wp7_state             = $wp7_connectors_active ? LuwiPress_Connectors::list_active_connectors() : array();
+			$wp7_has_legacy_keys   = false;
+			if ( $wp7_connectors_active ) {
+				foreach ( $wp7_state as $row ) {
+					if ( ! empty( $row['has_legacy'] ) && empty( $row['in_connectors'] ) ) {
+						$wp7_has_legacy_keys = true;
+						break;
+					}
+				}
+			}
+			?>
+
+			<?php if ( $wp7_connectors_active ) : ?>
+				<div class="luwipress-card lp-wp7-banner" data-wp7-banner>
+					<div class="lp-wp7-banner-head">
+						<span class="dashicons dashicons-info-outline"></span>
+						<strong><?php esc_html_e( 'WordPress 7.0 Connectors detected', 'luwipress' ); ?></strong>
+					</div>
+					<p class="description">
+						<?php
+						echo wp_kses(
+							sprintf(
+								/* translators: %s: link to Settings → Connectors */
+								__( 'API keys are now managed centrally under %s. LuwiPress reads keys from Connectors first, falling back to its own settings only when a provider is not configured natively. Model selection, per-workflow routing, and budget enforcement remain here.', 'luwipress' ),
+								'<a href="' . esc_url( admin_url( 'options-general.php' ) ) . '"><strong>' . esc_html__( 'Settings → Connectors', 'luwipress' ) . '</strong></a>'
+							),
+							array( 'a' => array( 'href' => array() ), 'strong' => array() )
+						);
+						?>
+					</p>
+
+					<div class="lp-wp7-pills" role="list">
+						<?php
+						$labels = array(
+							'openai'    => 'OpenAI',
+							'anthropic' => 'Anthropic',
+							'google'    => 'Google',
+						);
+						foreach ( $labels as $provider => $label ) :
+							$row    = isset( $wp7_state[ $provider ] ) ? $wp7_state[ $provider ] : array();
+							$source = isset( $row['source'] ) ? $row['source'] : 'none';
+							$pill   = 'pill-neutral';
+							$icon   = 'dashicons-marker';
+							$state_label = __( 'Not configured', 'luwipress' );
+							if ( 'connectors' === $source ) {
+								$pill        = 'pill-success';
+								$icon        = 'dashicons-yes-alt';
+								$state_label = __( 'Connectors', 'luwipress' );
+							} elseif ( 'legacy' === $source ) {
+								$pill        = 'pill-warning';
+								$icon        = 'dashicons-warning';
+								$state_label = __( 'Legacy (LuwiPress)', 'luwipress' );
+							}
+							?>
+							<span class="lp-pill <?php echo esc_attr( $pill ); ?>" role="listitem" data-provider-pill="<?php echo esc_attr( $provider ); ?>">
+								<span class="dashicons <?php echo esc_attr( $icon ); ?>"></span>
+								<strong><?php echo esc_html( $label ); ?></strong>
+								<span class="lp-pill-state"><?php echo esc_html( $state_label ); ?></span>
+							</span>
+						<?php endforeach; ?>
+					</div>
+
+					<?php if ( $wp7_has_legacy_keys ) : ?>
+						<div class="lp-wp7-actions">
+							<button type="button" class="button button-primary" id="luwipress-wp7-migrate-open" data-rest-url="<?php echo esc_attr( get_rest_url( null, 'luwipress/v1/connectors/migrate-preview' ) ); ?>">
+								<span class="dashicons dashicons-migrate"></span>
+								<?php esc_html_e( 'Move legacy keys into Connectors…', 'luwipress' ); ?>
+							</button>
+							<span class="description" style="margin-left:8px;">
+								<?php esc_html_e( 'A confirmation modal lists exactly which keys will move before any change is made.', 'luwipress' ); ?>
+							</span>
+						</div>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
+
+			<?php
 			// Provider config map — drives the unified provider card.
 			// Each provider owns its model catalog so users never pick a model from a vendor they haven't selected.
 			$providers = array(
 				'anthropic' => array(
-					'label'       => 'Claude',
+					'label'       => 'Anthropic',
 					'vendor'      => 'Anthropic',
 					'desc'        => __( 'Best for nuanced product descriptions and multilingual content.', 'luwipress' ),
 					'key_field'   => 'luwipress_anthropic_api_key',
@@ -525,7 +630,8 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				// JS syncs it whenever the provider pill or model radio changes, so the user never
 				// has to pick a model from a vendor they didn't select.
 				$submit_model = $ai_model;
-				if ( isset( $providers[ $active_provider ]['models'] ) && ! empty( $providers[ $active_provider ]['models'] ) && ! array_key_exists( $ai_model, $providers[ $active_provider ]['models'] ) ) {
+				$active_models = $providers[ $active_provider ]['models'];
+				if ( ! empty( $active_models ) && ! array_key_exists( $ai_model, $active_models ) ) {
 					$submit_model = $providers[ $active_provider ]['default_model'];
 				}
 				?>
@@ -558,32 +664,69 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 							</div>
 						<?php endif; ?>
 
-						<div class="lp-field">
-							<label for="<?php echo esc_attr( $p['key_field'] ); ?>">
-								<?php
-								/* translators: %s: provider vendor name (Anthropic, OpenAI, etc.) */
-								echo esc_html( sprintf( __( '%s API Key', 'luwipress' ), $p['vendor'] ) );
-								?>
-								<?php if ( ! empty( $p['key_value'] ) ) : ?>
-									<span class="lp-field-saved"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Saved', 'luwipress' ); ?></span>
-								<?php endif; ?>
-							</label>
-							<div class="lp-field-input-row">
-								<input type="password" id="<?php echo esc_attr( $p['key_field'] ); ?>" name="<?php echo esc_attr( $p['key_field'] ); ?>"
-								       value="<?php echo esc_attr( $p['key_value'] ); ?>" class="regular-text" autocomplete="off"
-								       placeholder="<?php echo esc_attr( $p['placeholder'] ); ?>" />
-								<button type="button" class="button button-small luwipress-toggle-password" data-target="<?php echo esc_attr( $p['key_field'] ); ?>" aria-label="<?php esc_attr_e( 'Show/hide key', 'luwipress' ); ?>">
-									<span class="dashicons dashicons-visibility"></span>
-								</button>
-							</div>
-							<?php if ( ! empty( $p['help_url'] ) ) : ?>
+						<?php
+						// WP 7.0 Connectors managed-mode: hide native-scope key input
+						// (OpenAI/Anthropic/Google) when Connectors layer is active.
+						// OpenAI-Compatible (DeepSeek/Kimi/Groq/Together/self-hosted)
+						// always shows its own key input — out of Connectors scope.
+						$native_scope        = in_array( $key, array( 'openai', 'anthropic', 'google' ), true );
+						$hide_legacy_key_row = $wp7_connectors_active && $native_scope;
+						?>
+						<?php if ( $hide_legacy_key_row ) : ?>
+							<div class="lp-field lp-field-wp7-managed">
+								<label>
+									<?php
+									/* translators: %s: provider vendor name (Anthropic, OpenAI, etc.) */
+									echo esc_html( sprintf( __( '%s API Key', 'luwipress' ), $p['vendor'] ) );
+									?>
+								</label>
+								<div class="lp-wp7-managed-row" data-provider-row="<?php echo esc_attr( $key ); ?>">
+									<?php
+									$row    = isset( $wp7_state[ $key ] ) ? $wp7_state[ $key ] : array();
+									$source = isset( $row['source'] ) ? $row['source'] : 'none';
+									if ( 'connectors' === $source ) {
+										echo '<span class="lp-pill pill-success"><span class="dashicons dashicons-yes-alt"></span> ' . esc_html__( 'Managed by WordPress Connectors', 'luwipress' ) . '</span>';
+									} elseif ( 'legacy' === $source ) {
+										echo '<span class="lp-pill pill-warning"><span class="dashicons dashicons-warning"></span> ' . esc_html__( 'Stored in legacy LuwiPress option — migrate to Connectors above', 'luwipress' ) . '</span>';
+									} else {
+										echo '<span class="lp-pill pill-neutral"><span class="dashicons dashicons-marker"></span> ' . esc_html__( 'Not configured', 'luwipress' ) . '</span>';
+									}
+									?>
+								</div>
 								<p class="description">
-									<a href="<?php echo esc_url( $p['help_url'] ); ?>" target="_blank" rel="noopener">
-										<?php esc_html_e( 'Get your API key →', 'luwipress' ); ?>
+									<a href="<?php echo esc_url( admin_url( 'options-general.php' ) ); ?>">
+										<?php esc_html_e( 'Open Settings → Connectors to manage this key →', 'luwipress' ); ?>
 									</a>
 								</p>
-							<?php endif; ?>
-						</div>
+							</div>
+						<?php else : ?>
+							<div class="lp-field">
+								<label for="<?php echo esc_attr( $p['key_field'] ); ?>">
+									<?php
+									/* translators: %s: provider vendor name (Anthropic, OpenAI, etc.) */
+									echo esc_html( sprintf( __( '%s API Key', 'luwipress' ), $p['vendor'] ) );
+									?>
+									<?php if ( ! empty( $p['key_value'] ) ) : ?>
+										<span class="lp-field-saved"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Saved', 'luwipress' ); ?></span>
+									<?php endif; ?>
+								</label>
+								<div class="lp-field-input-row">
+									<input type="password" id="<?php echo esc_attr( $p['key_field'] ); ?>" name="<?php echo esc_attr( $p['key_field'] ); ?>"
+									       value="<?php echo esc_attr( $p['key_value'] ); ?>" class="regular-text" autocomplete="off"
+									       placeholder="<?php echo esc_attr( $p['placeholder'] ); ?>" />
+									<button type="button" class="button button-small luwipress-toggle-password" data-target="<?php echo esc_attr( $p['key_field'] ); ?>" aria-label="<?php esc_attr_e( 'Show/hide key', 'luwipress' ); ?>">
+										<span class="dashicons dashicons-visibility"></span>
+									</button>
+								</div>
+								<?php if ( ! empty( $p['help_url'] ) ) : ?>
+									<p class="description">
+										<a href="<?php echo esc_url( $p['help_url'] ); ?>" target="_blank" rel="noopener">
+											<?php esc_html_e( 'Get your API key →', 'luwipress' ); ?>
+										</a>
+									</p>
+								<?php endif; ?>
+							</div>
+						<?php endif; ?>
 
 						<?php if ( ! empty( $p['models'] ) ) : ?>
 						<?php
@@ -1445,8 +1588,242 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			</div>
 		</div>
 
+		<?php
+		// ============================ BOT TAB (Account Cleaner + Shield) ============================
+		// Uses its own REST endpoints — fields below carry no `name=` so they do NOT
+		// participate in the main form POST. Independent JS handler at the bottom.
+		$bot_cleaner_ready = class_exists( 'LuwiPress_Bot_Account_Cleaner' );
+		$bot_shield_ready  = class_exists( 'LuwiPress_Bot_Shield' );
+		$bot_rest_nonce    = '';
+		$bot_rest_acct     = '';
+		$bot_rest_sh       = '';
+		if ( $bot_cleaner_ready && $bot_shield_ready ) :
+			$bot_acct_s     = LuwiPress_Bot_Account_Cleaner::get_instance()->get_settings();
+			$bot_sh_s       = LuwiPress_Bot_Shield::get_instance()->get_settings();
+			$bot_sh_stats   = LuwiPress_Bot_Shield::get_instance()->get_stats();
+			$bot_rest_nonce = wp_create_nonce( 'wp_rest' );
+			$bot_rest_acct  = esc_url_raw( rest_url( 'luwipress/v1/bot-accounts/' ) );
+			$bot_rest_sh    = esc_url_raw( rest_url( 'luwipress/v1/bot-shield/' ) );
+		?>
+		<div class="luwipress-tab-content <?php echo 'bot' === $active_tab ? 'tab-active' : ''; ?>" id="tab-bot">
+			<div class="luwipress-card">
+				<h2><span class="dashicons dashicons-admin-users" style="vertical-align:middle;"></span> <?php esc_html_e( 'Account detection', 'luwipress' ); ?></h2>
+				<p class="description">
+					<?php esc_html_e( 'Score-based fake-user detection. Lower threshold = more aggressive flagging.', 'luwipress' ); ?>
+				</p>
+				<table class="form-table">
+					<tr>
+						<th><label for="lwp-threshold"><?php esc_html_e( 'Score threshold', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="number" id="lwp-threshold" min="0" max="100" value="<?php echo (int) $bot_acct_s['threshold']; ?>" />
+							<p class="description"><?php esc_html_e( 'Accounts with score ≥ this value are flagged. Range 0–100.', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="lwp-min-age"><?php esc_html_e( 'Minimum age (days)', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="number" id="lwp-min-age" min="0" max="3650" value="<?php echo (int) $bot_acct_s['min_age_days']; ?>" />
+							<p class="description"><?php esc_html_e( 'Accounts younger than this get a grace period before zero-activity penalties apply.', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="lwp-batch"><?php esc_html_e( 'Scan batch size', 'luwipress' ); ?></label></th>
+						<td>
+							<input type="number" id="lwp-batch" min="50" max="5000" value="<?php echo (int) $bot_acct_s['scan_batch_size']; ?>" />
+						</td>
+					</tr>
+				</table>
+				<p>
+					<button type="button" id="lwp-bot-acct-save" class="button button-primary"><?php esc_html_e( 'Save account settings', 'luwipress' ); ?></button>
+					<span id="lwp-bot-acct-status" style="margin-left:12px; color:var(--lp-text-muted);"></span>
+				</p>
+			</div>
+
+			<div class="luwipress-card">
+				<h2><span class="dashicons dashicons-shield" style="vertical-align:middle;"></span> <?php esc_html_e( 'Shield rules', 'luwipress' ); ?></h2>
+				<table class="form-table">
+					<tr>
+						<th><?php esc_html_e( 'Enable shield', 'luwipress' ); ?></th>
+						<td><label><input type="checkbox" id="bs-enabled" <?php checked( $bot_sh_s['enabled'] ); ?> /> <?php esc_html_e( 'Activate edge filter on every front-end request.', 'luwipress' ); ?></label></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Block scraper user-agents', 'luwipress' ); ?></th>
+						<td><label><input type="checkbox" id="bs-ua" <?php checked( $bot_sh_s['block_ua_scrapers'] ); ?> /> <?php esc_html_e( 'Deny requests matching the UA blocklist below.', 'luwipress' ); ?></label></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Rate limit', 'luwipress' ); ?></th>
+						<td>
+							<label><input type="checkbox" id="bs-rl" <?php checked( $bot_sh_s['rate_limit_enabled'] ); ?> /> <?php esc_html_e( 'Throttle login + xmlrpc + REST users.', 'luwipress' ); ?></label><br>
+							<label style="margin-top:8px; display:inline-block;">
+								<?php esc_html_e( 'Threshold:', 'luwipress' ); ?>
+								<input type="number" id="bs-rl-thresh" value="<?php echo (int) $bot_sh_s['rate_limit_threshold']; ?>" min="1" max="10000" style="width:90px;" />
+								<?php esc_html_e( 'requests in', 'luwipress' ); ?>
+								<input type="number" id="bs-rl-window" value="<?php echo (int) $bot_sh_s['rate_limit_window']; ?>" min="1" max="3600" style="width:90px;" />
+								<?php esc_html_e( 'seconds', 'luwipress' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Block duration', 'luwipress' ); ?></th>
+						<td><input type="number" id="bs-ttl" value="<?php echo (int) $bot_sh_s['block_ttl_minutes']; ?>" min="1" max="43200" style="width:120px;" /> <?php esc_html_e( 'minutes', 'luwipress' ); ?></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'REST user enumeration', 'luwipress' ); ?></th>
+						<td><label><input type="checkbox" id="bs-enum" <?php checked( $bot_sh_s['block_user_enumeration'] ); ?> /> <?php esc_html_e( 'Block /wp-json/wp/v2/users and ?author=N for anonymous callers.', 'luwipress' ); ?></label></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'XML-RPC', 'luwipress' ); ?></th>
+						<td><label><input type="checkbox" id="bs-xmlrpc" <?php checked( $bot_sh_s['disable_xmlrpc'] ); ?> /> <?php esc_html_e( 'Fully disable XML-RPC + pingback multicall.', 'luwipress' ); ?></label></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Honeypot trap', 'luwipress' ); ?></th>
+						<td><label><input type="checkbox" id="bs-honey" <?php checked( $bot_sh_s['honeypot_enabled'] ); ?> /> <?php esc_html_e( 'Auto-ban any IP that probes common vulnerability paths (24h).', 'luwipress' ); ?></label></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Verify search engines', 'luwipress' ); ?></th>
+						<td><label><input type="checkbox" id="bs-verify-se" <?php checked( $bot_sh_s['verify_search_engines'] ); ?> /> <?php esc_html_e( 'Reverse-DNS verify Googlebot / Bingbot (defeats UA spoofing).', 'luwipress' ); ?></label></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'UA blocklist', 'luwipress' ); ?></th>
+						<td><textarea id="bs-ua-list" rows="6" class="large-text code"><?php echo esc_textarea( implode( "\n", (array) $bot_sh_s['ua_blocklist'] ) ); ?></textarea><p class="description"><?php esc_html_e( 'One UA substring per line.', 'luwipress' ); ?></p></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Sensitive paths', 'luwipress' ); ?></th>
+						<td><textarea id="bs-sensitive" rows="4" class="large-text code"><?php echo esc_textarea( implode( "\n", (array) $bot_sh_s['sensitive_paths'] ) ); ?></textarea></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Honeypot paths', 'luwipress' ); ?></th>
+						<td><textarea id="bs-honey-paths" rows="4" class="large-text code"><?php echo esc_textarea( implode( "\n", (array) $bot_sh_s['honeypot_paths'] ) ); ?></textarea></td>
+					</tr>
+				</table>
+				<p>
+					<button type="button" id="bs-save" class="button button-primary"><?php esc_html_e( 'Save shield settings', 'luwipress' ); ?></button>
+					<span id="bs-status" style="margin-left:12px; color:var(--lp-text-muted);"></span>
+				</p>
+			</div>
+
+			<div class="luwipress-card">
+				<h2><?php esc_html_e( 'Allowlist', 'luwipress' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Entries here bypass every shield check. Add your office IP or a trusted partner UA.', 'luwipress' ); ?></p>
+				<div style="display:flex; gap:8px; align-items:center;">
+					<select id="bs-allow-type"><option value="ip">IP</option><option value="ua">UA</option></select>
+					<input id="bs-allow-value" type="text" placeholder="<?php esc_attr_e( 'value', 'luwipress' ); ?>" />
+					<button type="button" id="bs-allow-add" class="button"><?php esc_html_e( 'Add', 'luwipress' ); ?></button>
+				</div>
+				<div style="margin-top:12px;">
+					<strong>IPs:</strong>
+					<?php foreach ( (array) $bot_sh_stats['allowlist']['ips'] as $ip ) : ?>
+						<span class="lp-pill pill-success" style="margin:2px;"><?php echo esc_html( $ip ); ?> <a href="#" data-allow-remove data-type="ip" data-value="<?php echo esc_attr( $ip ); ?>" style="margin-left:6px; text-decoration:none;">×</a></span>
+					<?php endforeach; ?>
+					<br><strong style="margin-top:8px; display:inline-block;">UAs:</strong>
+					<?php foreach ( (array) $bot_sh_stats['allowlist']['uas'] as $ua ) : ?>
+						<span class="lp-pill pill-success" style="margin:2px;"><?php echo esc_html( $ua ); ?> <a href="#" data-allow-remove data-type="ua" data-value="<?php echo esc_attr( $ua ); ?>" style="margin-left:6px; text-decoration:none;">×</a></span>
+					<?php endforeach; ?>
+				</div>
+			</div>
+
+			<div class="luwipress-card">
+				<h2><?php esc_html_e( 'Safety invariants', 'luwipress' ); ?></h2>
+				<ul style="list-style:disc; padding-left:24px;">
+					<li><?php esc_html_e( 'Administrators, editors, shop managers, authors, and contributors are NEVER scored.', 'luwipress' ); ?></li>
+					<li><?php esc_html_e( 'Any user with at least one WooCommerce order is automatically excluded.', 'luwipress' ); ?></li>
+					<li><?php esc_html_e( 'Whitelisted users are hidden from scans permanently until removed.', 'luwipress' ); ?></li>
+					<li><?php esc_html_e( 'Deleted accounts have their content reassigned to user ID 1.', 'luwipress' ); ?></li>
+					<li><?php esc_html_e( 'Shield never blocks RFC1918 (LAN) IPs or logged-in administrators.', 'luwipress' ); ?></li>
+				</ul>
+			</div>
+		</div>
+		<?php endif; /* bot tab guard */ ?>
+
+		<?php
+		/**
+		 * Companion plugins can hook this to inject their own tab content. The
+		 * hooked function should echo a wrapper like:
+		 *   <div class="luwipress-tab-content <?php echo 'foo' === $active_tab ? 'tab-active' : ''; ?>" id="tab-foo">…</div>
+		 * Inputs inside should NOT carry `name=` (they are not part of the main
+		 * settings POST — companions must persist via their own AJAX/REST flow
+		 * with `type="button"` save controls, same pattern the Bot tab uses).
+		 *
+		 * @param string $active_tab Currently selected tab id.
+		 * @since 3.2.4
+		 */
+		do_action( 'luwipress_settings_render_tab_content', $active_tab );
+		?>
+
 		<p class="submit">
 			<input type="submit" name="luwipress_save_settings" class="button-primary" value="<?php esc_attr_e( 'Save Settings', 'luwipress' ); ?>" />
 		</p>
 	</form>
+
+	<?php if ( $bot_cleaner_ready && $bot_shield_ready ) : ?>
+	<script>
+	(function () {
+		var REST_ACCT = <?php echo wp_json_encode( $bot_rest_acct ); ?>;
+		var REST_SH   = <?php echo wp_json_encode( $bot_rest_sh ); ?>;
+		var NONCE     = <?php echo wp_json_encode( $bot_rest_nonce ); ?>;
+
+		function api(root, path, opts) {
+			opts = opts || {};
+			opts.headers = Object.assign({ 'Content-Type': 'application/json', 'X-WP-Nonce': NONCE }, opts.headers || {});
+			opts.credentials = 'same-origin';
+			return fetch(root + path, opts).then(function (r) {
+				return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+			});
+		}
+
+		var acctBtn = document.getElementById('lwp-bot-acct-save');
+		if (acctBtn) acctBtn.addEventListener('click', function () {
+			var status = document.getElementById('lwp-bot-acct-status');
+			var payload = {
+				threshold:       parseInt(document.getElementById('lwp-threshold').value, 10),
+				min_age_days:    parseInt(document.getElementById('lwp-min-age').value, 10),
+				scan_batch_size: parseInt(document.getElementById('lwp-batch').value, 10)
+			};
+			status.textContent = '<?php echo esc_js( __( 'Saving…', 'luwipress' ) ); ?>';
+			api(REST_ACCT, 'settings', { method: 'POST', body: JSON.stringify(payload) }).then(function (r) {
+				status.textContent = r.ok ? '<?php echo esc_js( __( 'Saved.', 'luwipress' ) ); ?>' : '<?php echo esc_js( __( 'Save failed.', 'luwipress' ) ); ?>';
+			});
+		});
+
+		var shBtn = document.getElementById('bs-save');
+		if (shBtn) shBtn.addEventListener('click', function () {
+			var p = {
+				enabled:                document.getElementById('bs-enabled').checked,
+				block_ua_scrapers:      document.getElementById('bs-ua').checked,
+				rate_limit_enabled:     document.getElementById('bs-rl').checked,
+				rate_limit_threshold:   parseInt(document.getElementById('bs-rl-thresh').value, 10),
+				rate_limit_window:      parseInt(document.getElementById('bs-rl-window').value, 10),
+				block_ttl_minutes:      parseInt(document.getElementById('bs-ttl').value, 10),
+				block_user_enumeration: document.getElementById('bs-enum').checked,
+				disable_xmlrpc:         document.getElementById('bs-xmlrpc').checked,
+				honeypot_enabled:       document.getElementById('bs-honey').checked,
+				verify_search_engines:  document.getElementById('bs-verify-se').checked,
+				ua_blocklist:    document.getElementById('bs-ua-list').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean),
+				sensitive_paths: document.getElementById('bs-sensitive').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean),
+				honeypot_paths:  document.getElementById('bs-honey-paths').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean)
+			};
+			document.getElementById('bs-status').textContent = '<?php echo esc_js( __( 'Saving…', 'luwipress' ) ); ?>';
+			api(REST_SH, 'settings', { method: 'POST', body: JSON.stringify(p) }).then(function (r) {
+				document.getElementById('bs-status').textContent = r.ok ? '<?php echo esc_js( __( 'Saved.', 'luwipress' ) ); ?>' : '<?php echo esc_js( __( 'Save failed.', 'luwipress' ) ); ?>';
+			});
+		});
+
+		var allowAdd = document.getElementById('bs-allow-add');
+		if (allowAdd) allowAdd.addEventListener('click', function () {
+			var t = document.getElementById('bs-allow-type').value;
+			var v = document.getElementById('bs-allow-value').value;
+			if (!v) return;
+			api(REST_SH, 'allowlist', { method: 'POST', body: JSON.stringify({ type: t, value: v, action: 'add' }) }).then(function () { location.reload(); });
+		});
+
+		document.addEventListener('click', function (e) {
+			if (e.target && e.target.getAttribute && e.target.getAttribute('data-allow-remove') !== null) {
+				e.preventDefault();
+				var t = e.target.getAttribute('data-type'); var v = e.target.getAttribute('data-value');
+				api(REST_SH, 'allowlist', { method: 'POST', body: JSON.stringify({ type: t, value: v, action: 'remove' }) }).then(function () { location.reload(); });
+			}
+		});
+	})();
+	</script>
+	<?php endif; ?>
 </div>

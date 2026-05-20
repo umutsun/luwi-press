@@ -2085,6 +2085,162 @@
             });
         }
 
+        // ========================================
+        // WordPress 7.0 Connectors — Legacy Key Migration Modal
+        // ========================================
+        // Lives on Settings → AI API Keys tab. The button only renders when:
+        //   (a) WP 7.0 Connectors layer is detected, AND
+        //   (b) LuwiPress has at least one legacy API key in its own options.
+        // Flow: button click → GET /connectors/migrate-preview → modal lists
+        // exactly which keys move where → user confirms → POST migrate-execute
+        // → per-provider success/error rendered inline.
+        $(document).on('click', '#luwipress-wp7-migrate-open', function(e) {
+            e.preventDefault();
+            var $btn = $(this);
+            var previewUrl = $btn.attr('data-rest-url');
+
+            $btn.prop('disabled', true).find('.dashicons').addClass('lp-spin');
+
+            $.ajax({
+                url: previewUrl,
+                method: 'GET',
+                headers: { 'X-WP-Nonce': luwipress.nonce_rest },
+                success: function(data) {
+                    renderWp7MigrateModal(data);
+                },
+                error: function(xhr) {
+                    alert('Failed to load migration preview: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : xhr.status));
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).find('.dashicons').removeClass('lp-spin');
+                }
+            });
+        });
+
+        function renderWp7MigrateModal(data) {
+            var rows = (data && data.rows) || [];
+            var migratable = rows.filter(function(r) { return r.action === 'migrate'; });
+
+            var rowsHtml = '';
+            rows.forEach(function(r) {
+                var label = ({
+                    openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google'
+                })[r.provider] || r.provider;
+
+                var statusHtml, action;
+                switch (r.action) {
+                    case 'migrate':
+                        statusHtml = '<span class="lp-pill pill-warning">' +
+                            '<span class="dashicons dashicons-migrate"></span> Will move to Connectors</span>';
+                        action = '<input type="checkbox" class="lp-wp7-migrate-check" value="' + r.provider + '" checked> Include';
+                        break;
+                    case 'keep_connectors':
+                        statusHtml = '<span class="lp-pill pill-success">' +
+                            '<span class="dashicons dashicons-yes-alt"></span> Already in Connectors</span>';
+                        action = '<em style="color:#6b7280;">No change (legacy key skipped to protect Connectors copy)</em>';
+                        break;
+                    case 'already_native':
+                        statusHtml = '<span class="lp-pill pill-success">' +
+                            '<span class="dashicons dashicons-yes-alt"></span> In Connectors</span>';
+                        action = '<em style="color:#6b7280;">No legacy key to migrate</em>';
+                        break;
+                    default:
+                        statusHtml = '<span class="lp-pill pill-neutral">' +
+                            '<span class="dashicons dashicons-marker"></span> Not configured</span>';
+                        action = '<em style="color:#6b7280;">Nothing to do</em>';
+                }
+
+                rowsHtml +=
+                    '<tr>' +
+                        '<td><strong>' + label + '</strong></td>' +
+                        '<td>' + statusHtml + '</td>' +
+                        '<td>' + action + '</td>' +
+                    '</tr>';
+            });
+
+            var disabled = migratable.length === 0 ? 'disabled' : '';
+
+            var html =
+                '<div id="luwipress-wp7-migrate-modal" class="luwipress-modal">' +
+                    '<div class="luwipress-modal-content" style="max-width:680px;">' +
+                        '<div class="luwipress-modal-header">' +
+                            '<h3><span class="dashicons dashicons-migrate"></span> Move keys to WordPress Connectors</h3>' +
+                            '<button type="button" class="luwipress-modal-close" aria-label="Close">&times;</button>' +
+                        '</div>' +
+                        '<div style="padding:20px;">' +
+                            '<p>Each ticked provider below will be registered in <strong>Settings → Connectors</strong> and removed from LuwiPress\'s own options.</p>' +
+                            '<table class="widefat striped lp-wp7-migrate-table">' +
+                                '<thead><tr><th>Provider</th><th>Status</th><th>Action</th></tr></thead>' +
+                                '<tbody>' + rowsHtml + '</tbody>' +
+                            '</table>' +
+                            '<div id="luwipress-wp7-migrate-result" style="margin-top:14px;"></div>' +
+                            '<div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">' +
+                                '<button type="button" class="button luwipress-modal-close">Cancel</button>' +
+                                '<button type="button" class="button button-primary" id="luwipress-wp7-migrate-confirm" ' + disabled + '>' +
+                                    '<span class="dashicons dashicons-yes"></span> Confirm migration' +
+                                '</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+
+            $('#luwipress-wp7-migrate-modal').remove();
+            $('body').append(html);
+        }
+
+        // Close handlers — scoped to this modal so we don't conflict with other modals.
+        $(document).on('click', '#luwipress-wp7-migrate-modal .luwipress-modal-close, #luwipress-wp7-migrate-modal', function(e) {
+            if (e.target === this || $(e.target).hasClass('luwipress-modal-close') || $(e.target).closest('.luwipress-modal-close').length) {
+                $('#luwipress-wp7-migrate-modal').remove();
+            }
+        });
+
+        $(document).on('click', '#luwipress-wp7-migrate-confirm', function(e) {
+            e.preventDefault();
+            var $btn = $(this);
+            var selected = $('.lp-wp7-migrate-check:checked').map(function() { return this.value; }).get();
+            if (selected.length === 0) { return; }
+
+            $btn.prop('disabled', true).html('<span class="dashicons dashicons-update lp-spin"></span> Migrating…');
+
+            $.ajax({
+                url: luwipress.rest_base + 'connectors/migrate-execute',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-WP-Nonce': luwipress.nonce_rest },
+                data: JSON.stringify({ providers: selected }),
+                success: function(data) {
+                    var results = (data && data.results) || {};
+                    var html = '<div class="luwipress-info-box" style="margin-top:8px;">';
+                    Object.keys(results).forEach(function(provider) {
+                        var r = results[provider];
+                        var icon = r.status === 'migrated' ? 'yes-alt' :
+                                   r.status === 'skipped'  ? 'marker'  :
+                                   r.status === 'error'    ? 'warning' : 'info';
+                        var color = r.status === 'migrated' ? 'pill-success' :
+                                    r.status === 'skipped'  ? 'pill-neutral' :
+                                    r.status === 'error'    ? 'pill-warning' : 'pill-neutral';
+                        html += '<div style="margin-bottom:6px;">' +
+                            '<span class="lp-pill ' + color + '"><span class="dashicons dashicons-' + icon + '"></span> <strong>' + provider + '</strong>: ' + r.status + '</span> ' +
+                            '<span style="color:#6b7280;">' + (r.message || '') + '</span>' +
+                            '</div>';
+                    });
+                    html += '<p style="margin-top:10px;"><a href="" onclick="location.reload();return false;">Reload settings to see updated state →</a></p>';
+                    html += '</div>';
+                    $('#luwipress-wp7-migrate-result').html(html);
+                    $btn.hide();
+                },
+                error: function(xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : ('HTTP ' + xhr.status);
+                    $('#luwipress-wp7-migrate-result').html(
+                        '<div class="luwipress-info-box" style="border-left-color:#dc2626;">' +
+                        '<strong>Migration failed:</strong> ' + msg + '</div>'
+                    );
+                    $btn.prop('disabled', false).html('<span class="dashicons dashicons-yes"></span> Confirm migration');
+                }
+            });
+        });
+
     });
 
 })(jQuery);

@@ -347,9 +347,9 @@ class LuwiPress_Marketplace {
 	 *
 	 * @return LuwiPress_Marketplace_Adapter[]
 	 */
-	private function get_all_adapters() {
+	public function get_all_adapters() {
 		if ( empty( $this->adapters ) ) {
-			$this->adapters = array(
+			$default_adapters = array(
 				'amazon'      => new LuwiPress_Marketplace_Amazon(),
 				'ebay'        => new LuwiPress_Marketplace_Ebay(),
 				'trendyol'    => new LuwiPress_Marketplace_Trendyol(),
@@ -359,6 +359,33 @@ class LuwiPress_Marketplace {
 				'etsy'        => new LuwiPress_Marketplace_Etsy(),
 				'walmart'     => new LuwiPress_Marketplace_Walmart(),
 			);
+
+			$custom_markets = get_option( 'luwipress_custom_marketplaces', array() );
+			if ( is_array( $custom_markets ) ) {
+				foreach ( $custom_markets as $custom_id => $custom_data ) {
+					$default_adapters[ $custom_id ] = new LuwiPress_Marketplace_Custom(
+						$custom_id,
+						$custom_data['name'] ?? 'Custom',
+						$custom_data['color'] ?? '#6366f1'
+					);
+				}
+			}
+
+			/**
+			 * Filter the registered marketplace adapters.
+			 *
+			 * Allows third-party plugins to register their own marketplace adapters.
+			 *
+			 * @param array $default_adapters Array of adapter objects, keyed by marketplace slug.
+			 */
+			$filtered_adapters = apply_filters( 'luwipress_marketplace_adapters', $default_adapters );
+
+			// Validate that filtered adapters implement the correct interface
+			foreach ( $filtered_adapters as $slug => $adapter ) {
+				if ( $adapter instanceof LuwiPress_Marketplace_Adapter ) {
+					$this->adapters[ $slug ] = $adapter;
+				}
+			}
 		}
 		return $this->adapters;
 	}
@@ -369,7 +396,7 @@ class LuwiPress_Marketplace {
 	 * @param string $name Marketplace slug.
 	 * @return LuwiPress_Marketplace_Adapter|null
 	 */
-	private function get_adapter( $name ) {
+	public function get_adapter( $name ) {
 		$adapters = $this->get_all_adapters();
 		return $adapters[ $name ] ?? null;
 	}

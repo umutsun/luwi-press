@@ -35,6 +35,17 @@ if ( $enabled && class_exists( 'LuwiPress_WebMCP' ) ) {
 	$catalog    = $webmcp->get_tool_catalog();
 }
 
+// WordPress 7.0 detection — Abilities API + official MCP Adapter (Automattic).
+// We surface both surfaces to the operator: LuwiPress's own MCP endpoint stays
+// for headless / agentic clients, while WP 7.0's Abilities API exposes the
+// same toolset to WP-native consumers (Claude Code, Cursor, etc.).
+$wp7_abilities_available = function_exists( 'wp_register_ability' ) || function_exists( 'wp_get_abilities' );
+$wp7_mcp_adapter_active  = class_exists( 'WP_MCP_Adapter' )
+	|| class_exists( 'Automattic\\MCP_Adapter' )
+	|| function_exists( 'wp_mcp_adapter_get_abilities' )
+	|| is_plugin_active( 'mcp-adapter/mcp-adapter.php' );
+$wp7_abilities_mirrored  = $wp7_abilities_available && class_exists( 'LuwiPress_Abilities' );
+
 $category_labels = array(
 	'system'      => array( 'System & Monitoring', 'dashicons-dashboard', '#16a34a' ),
 	'site'        => array( 'Site Configuration', 'dashicons-admin-site', '#2563eb' ),
@@ -73,6 +84,47 @@ $category_labels = array(
 			<span class="mcp-status-text"><?php echo $enabled ? esc_html__( 'Active', 'luwipress' ) : esc_html__( 'Disabled', 'luwipress' ); ?></span>
 		</div>
 	</div>
+
+	<?php if ( $wp7_abilities_available || $wp7_mcp_adapter_active ) : ?>
+		<div class="lpress-card" style="border-left:4px solid var(--lp-primary,#4f46e5);">
+			<h2>
+				<span class="dashicons dashicons-info-outline" style="color:var(--lp-primary,#4f46e5);"></span>
+				<?php esc_html_e( 'WordPress 7.0 Abilities API detected', 'luwipress' ); ?>
+			</h2>
+			<p>
+				<?php
+				if ( $wp7_abilities_mirrored ) {
+					echo esc_html__( 'LuwiPress tools are mirrored into the native Abilities API alongside this MCP server. WP-native AI clients (Claude Code, Cursor, the official MCP Adapter plugin) discover them automatically — your headless WebMCP endpoint remains available for direct HTTP integrations.', 'luwipress' );
+				} else {
+					echo esc_html__( 'WordPress 7.0 native Abilities API is available but LuwiPress core has not loaded its bridge yet. Please ensure the LuwiPress core plugin is active.', 'luwipress' );
+				}
+				?>
+			</p>
+			<ul style="margin:8px 0 0 18px;">
+				<li>
+					<strong><?php esc_html_e( 'WP 7.0 Native MCP', 'luwipress' ); ?>:</strong>
+					<?php
+					if ( $wp7_mcp_adapter_active ) {
+						echo '<span class="lp-pill pill-success" style="margin-left:6px;"><span class="dashicons dashicons-yes-alt"></span> ' . esc_html__( 'Automattic MCP Adapter active', 'luwipress' ) . '</span>';
+					} else {
+						echo '<span class="lp-pill pill-warning" style="margin-left:6px;"><span class="dashicons dashicons-warning"></span> ' . esc_html__( 'MCP Adapter plugin not installed', 'luwipress' ) . '</span>';
+					}
+					?>
+				</li>
+				<li>
+					<strong><?php esc_html_e( 'LuwiPress WebMCP (this server)', 'luwipress' ); ?>:</strong>
+					<?php if ( $enabled ) : ?>
+						<span class="lp-pill pill-success" style="margin-left:6px;"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Active — headless/advanced surface', 'luwipress' ); ?></span>
+					<?php else : ?>
+						<span class="lp-pill pill-neutral" style="margin-left:6px;"><span class="dashicons dashicons-marker"></span> <?php esc_html_e( 'Disabled', 'luwipress' ); ?></span>
+					<?php endif; ?>
+				</li>
+			</ul>
+			<p class="description" style="margin-top:8px;">
+				<?php esc_html_e( 'Dual-registry pattern: pick whichever surface your client supports. Both expose the same tool catalog.', 'luwipress' ); ?>
+			</p>
+		</div>
+	<?php endif; ?>
 
 	<!-- Stats -->
 	<div class="mcp-stats">

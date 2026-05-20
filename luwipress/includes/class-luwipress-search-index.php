@@ -66,8 +66,47 @@ class LuwiPress_Search_Index {
 		add_action( 'delete_post', array( $this, 'remove_product' ) );
 		add_action( 'woocommerce_update_product', array( $this, 'index_product' ), 20 );
 
+		// Auto-index on post/page changes when operator has opted those types
+		// into the index (IMP-002). save_post fires for every post type so we
+		// gate inside index_product by checking the indexable-types list.
+		foreach ( $this->get_indexable_post_types() as $pt ) {
+			if ( 'product' === $pt ) {
+				continue; // already wired via save_post_product
+			}
+			add_action( 'save_post_' . $pt, array( $this, 'index_product' ), 20 );
+		}
+
 		// WPML: index translation when saved
 		add_action( 'icl_make_duplicate', array( $this, 'index_product_wpml' ), 20, 4 );
+	}
+
+	/**
+	 * Post types the BM25 index should ingest. Default ['product'] preserves
+	 * legacy behaviour; operators opt post/page in via the option or filter.
+	 * IMP-002: extending the chat RAG layer beyond catalogue to blog/page
+	 * content (e.g. "how to tune a ney") works once the operator extends
+	 * this list and runs reindex_all().
+	 *
+	 * @return string[]
+	 */
+	public function get_indexable_post_types() {
+		$option = get_option( 'luwipress_search_index_post_types', array( 'product' ) );
+		if ( ! is_array( $option ) || empty( $option ) ) {
+			$option = array( 'product' );
+		}
+		$option = array_values( array_unique( array_map( 'sanitize_key', $option ) ) );
+		/**
+		 * Filter the post types the BM25 search index ingests.
+		 * Theme companions can add custom types (e.g. 'lesson', 'event').
+		 *
+		 * @since 3.2.10
+		 * @param string[] $post_types Default ['product'].
+		 */
+		$post_types = apply_filters( 'luwipress_search_index_post_types', $option );
+		if ( ! is_array( $post_types ) || empty( $post_types ) ) {
+			$post_types = array( 'product' );
+		}
+		return array_values( array_unique( array_map( 'sanitize_key', $post_types ) ) );
 	}
 
 	// ─── DATABASE ──────────────────────────────────────────────────
@@ -141,9 +180,14 @@ class LuwiPress_Search_Index {
 	 */
 	public function index_product( $post_id ) {
 		$post = get_post( $post_id );
-		if ( ! $post || 'product' !== $post->post_type || 'publish' !== $post->post_status ) {
+		if ( ! $post || 'publish' !== $post->post_status ) {
 			return;
 		}
+		$indexable = $this->get_indexable_post_types();
+		if ( ! in_array( $post->post_type, $indexable, true ) ) {
+			return;
+		}
+		$is_product = ( 'product' === $post->post_type );
 
 		global $wpdb;
 		$table = $wpdb->prefix . 'luwipress_search_index';
@@ -165,26 +209,30 @@ class LuwiPress_Search_Index {
 			$fields['excerpt'] = $post->post_excerpt;
 		}
 
-		// SKU
-		$sku = get_post_meta( $post_id, '_sku', true );
-		if ( ! empty( $sku ) ) {
-			$fields['sku'] = $sku;
+		// SKU (product only)
+		if ( $is_product ) {
+			$sku = get_post_meta( $post_id, '_sku', true );
+			if ( ! empty( $sku ) ) {
+				$fields['sku'] = $sku;
+			}
 		}
 
-		// Categories
-		$cats = get_the_terms( $post_id, 'product_cat' );
+		// Categories — product_cat for products, category for post/page (when assigned)
+		$cat_taxonomy = $is_product ? 'product_cat' : 'category';
+		$cats = get_the_terms( $post_id, $cat_taxonomy );
 		if ( $cats && ! is_wp_error( $cats ) ) {
 			$fields['category'] = implode( ' ', wp_list_pluck( $cats, 'name' ) );
 		}
 
-		// Tags
-		$tags = get_the_terms( $post_id, 'product_tag' );
+		// Tags — product_tag for products, post_tag for post/page
+		$tag_taxonomy = $is_product ? 'product_tag' : 'post_tag';
+		$tags = get_the_terms( $post_id, $tag_taxonomy );
 		if ( $tags && ! is_wp_error( $tags ) ) {
 			$fields['tag'] = implode( ' ', wp_list_pluck( $tags, 'name' ) );
 		}
 
-		// Product attributes (pa_color, pa_size, etc.)
-		if ( function_exists( 'wc_get_product' ) ) {
+		// Product attributes (pa_color, pa_size, etc.) — product only
+		if ( $is_product && function_exists( 'wc_get_product' ) ) {
 			$product = wc_get_product( $post_id );
 			if ( $product ) {
 				$attrs = $product->get_attributes();
@@ -304,12 +352,17 @@ class LuwiPress_Search_Index {
 		// Clear entire index
 		$wpdb->query( "TRUNCATE TABLE {$table}" );
 
-		// Get all published products (including WPML translations)
-		$products = $wpdb->get_col(
+		// Get all published rows across every configured indexable post type
+		// (default ['product']; operators opt post/page in via option/filter
+		// — IMP-002). Cap at 5000 to keep one reindex bounded.
+		$post_types = $this->get_indexable_post_types();
+		$ph         = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
+		$products   = $wpdb->get_col( $wpdb->prepare(
 			"SELECT ID FROM {$wpdb->posts}
-			 WHERE post_type = 'product' AND post_status = 'publish'
-			 ORDER BY ID ASC LIMIT 5000"
-		);
+			 WHERE post_type IN ({$ph}) AND post_status = 'publish'
+			 ORDER BY ID ASC LIMIT 5000",
+			$post_types
+		) );
 
 		$count = 0;
 		foreach ( $products as $post_id ) {
@@ -319,7 +372,7 @@ class LuwiPress_Search_Index {
 
 		$this->update_corpus_stats();
 
-		LuwiPress_Logger::log( "BM25 reindex complete: {$count} products indexed", 'info' );
+		LuwiPress_Logger::log( "BM25 reindex complete: {$count} rows indexed across [" . implode( ', ', $post_types ) . ']', 'info' );
 
 		return $count;
 	}
@@ -440,27 +493,37 @@ class LuwiPress_Search_Index {
 			return array();
 		}
 
-		// Enrich results with product data
+		// Enrich results with post data. Products get price + stock; posts
+		// and pages get a content snippet instead (price_text empty).
+		$indexable = $this->get_indexable_post_types();
 		$results = array();
 		foreach ( $top_ids as $pid ) {
 			$post = get_post( $pid );
-			if ( ! $post || 'product' !== $post->post_type ) {
+			if ( ! $post || ! in_array( $post->post_type, $indexable, true ) || 'publish' !== $post->post_status ) {
 				continue;
 			}
+			$is_product = ( 'product' === $post->post_type );
 
-			$price = get_post_meta( $pid, '_price', true );
-			$stock = get_post_meta( $pid, '_stock_status', true );
+			$price = $is_product ? get_post_meta( $pid, '_price', true ) : '';
+			$stock = $is_product ? get_post_meta( $pid, '_stock_status', true ) : '';
 
 			// Format price using wc_price so currency symbol + locale-correct
 			// thousands/decimal separators are applied; strip the resulting HTML
 			// so MCP clients (LLMs) get clean text instead of `&euro;` entities.
-			if ( '' !== $price && function_exists( 'wc_price' ) ) {
-				$price_text = html_entity_decode( wp_strip_all_tags( wc_price( $price ) ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			// Non-products get an empty string — chat callers reading `price`
+			// can treat empty as "this is an article/page, not a product".
+			if ( $is_product ) {
+				if ( '' !== $price && function_exists( 'wc_price' ) ) {
+					$price_text = html_entity_decode( wp_strip_all_tags( wc_price( $price ) ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				} else {
+					$price_text = $price !== '' ? (string) $price : 'N/A';
+				}
 			} else {
-				$price_text = $price !== '' ? (string) $price : 'N/A';
+				$price_text = '';
 			}
 
-			$cats = get_the_terms( $pid, 'product_cat' );
+			$cat_taxonomy_lookup = $is_product ? 'product_cat' : 'category';
+			$cats = get_the_terms( $pid, $cat_taxonomy_lookup );
 			$cat_names = array();
 			if ( $cats && ! is_wp_error( $cats ) ) {
 				$cat_names = array_map(
@@ -476,10 +539,11 @@ class LuwiPress_Search_Index {
 
 			$results[] = array(
 				'id'          => $pid,
+				'post_type'   => $post->post_type,
 				'name'        => html_entity_decode( $post->post_title, ENT_QUOTES | ENT_HTML5, 'UTF-8' ),
 				'price'       => $price_text,
-				'stock'       => $stock ?: 'instock',
-				'sku'         => get_post_meta( $pid, '_sku', true ) ?: '',
+				'stock'       => $is_product ? ( $stock ?: 'instock' ) : '',
+				'sku'         => $is_product ? ( get_post_meta( $pid, '_sku', true ) ?: '' ) : '',
 				'categories'  => $cat_names,
 				'description' => $description,
 				'reviews'     => array(

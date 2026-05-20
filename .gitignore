@@ -30,6 +30,8 @@ exec*.json
 
 # Editor/tool scratch
 .kilo/
+tmpclaude-*
+.phpunit.result.cache
 
 # Per-client working files (Tapadum Kit CSS backups, JSON dumps, scripts)
 temp/

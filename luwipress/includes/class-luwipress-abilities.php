@@ -95,6 +95,22 @@ class LuwiPress_Abilities {
             return;
         }
 
+        /**
+         * Filter the WebMCP tool registry before it is mirrored into the WP 7.0
+         * Abilities API. Operators or third-party plugins can return a subset
+         * to limit which tools are exposed via Abilities while still keeping
+         * them available through the legacy WebMCP HTTP endpoint. Default is
+         * the full registry — keep parity with WebMCP.
+         *
+         * @since 3.3.0
+         *
+         * @param array $registry tool_name → ['schema' => …, 'handler' => callable]
+         */
+        $registry = apply_filters( 'luwipress_abilities_for_wp7', $registry );
+        if ( ! is_array( $registry ) ) {
+            return;
+        }
+
         foreach ( $registry as $tool_name => $tool ) {
             // Bound try/catch per tool: one bad schema must not abort
             // the whole mirror — we want the other 150 abilities live
@@ -140,9 +156,10 @@ class LuwiPress_Abilities {
 
         $description  = isset( $schema['description'] ) ? (string) $schema['description'] : $tool_name;
         $title        = isset( $schema['annotations']['title'] ) ? (string) $schema['annotations']['title'] : $tool_name;
-        $is_readonly  = ! empty( $schema['annotations']['readOnlyHint'] );
+        $is_readonly    = ! empty( $schema['annotations']['readOnlyHint'] );
         $is_destructive = ! empty( $schema['annotations']['destructiveHint'] );
         $is_idempotent  = ! empty( $schema['annotations']['idempotentHint'] );
+        $is_openworld   = ! empty( $schema['annotations']['openWorldHint'] );
 
         $args = array(
             'label'               => $title,
@@ -156,9 +173,17 @@ class LuwiPress_Abilities {
             },
             'meta' => array(
                 'annotations' => array(
+                    // Short-form names (LuwiPress convention, pre-3.3.0).
                     'readonly'    => $is_readonly,
                     'destructive' => $is_destructive,
                     'idempotent'  => $is_idempotent,
+                    'open_world'  => $is_openworld,
+                    // WP 7.0 / MCP 2025-03-26 spec spellings — emit both so
+                    // consumers using the canonical names also see the hints.
+                    'readOnlyHint'    => $is_readonly,
+                    'destructiveHint' => $is_destructive,
+                    'idempotentHint'  => $is_idempotent,
+                    'openWorldHint'   => $is_openworld,
                 ),
                 // Default-private. Operator can flip to true via the
                 // `wp_register_ability_args` filter or per-tool option.

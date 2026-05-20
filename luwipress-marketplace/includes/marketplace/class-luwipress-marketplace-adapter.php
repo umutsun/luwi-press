@@ -83,4 +83,22 @@ interface LuwiPress_Marketplace_Adapter {
 	 * @return array|WP_Error
 	 */
 	public function get_categories( $query = '' );
+
+	/**
+	 * Get the brand color for UI display.
+	 *
+	 * @return string Hex color (e.g., '#ff9900').
+	 */
+	public function get_brand_color();
+
+	/**
+	 * Get the settings schema for this marketplace.
+	 *
+	 * Returns an array of field definitions. Each field should be an array with keys:
+	 * id (string), label (string), type (string: text, password, select, number),
+	 * default (mixed), options (array, for select fields).
+	 *
+	 * @return array
+	 */
+	public function get_settings_schema();
 }

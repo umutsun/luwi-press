@@ -1169,6 +1169,61 @@ class LuwiPress_WebMCP {
             }
             return $this->proxy_rest_post( 'LuwiPress_API', 'handle_set_seo_meta', $payload );
         } );
+
+        // ─── seo_meta_bulk (1.0.24+) ──────────────────────────────────
+        // Bulk wrapper over POST /seo/meta-bulk. Powers the CSV reverse
+        // flow (export → edit offline → re-upload) and any pre-launch
+        // sweep that needs to write SEO meta on dozens of posts in one
+        // call. Cap: 500 rows/request (enforced server-side). Missing
+        // per-row fields leave existing values untouched.
+        $this->register_tool( 'seo_meta_bulk', array(
+            'description' => 'Bulk-write SEO meta (title, description, focus keyword) to up to 500 posts in a single call. Each row is { post_id, title?, description?, focus_keyword? }; missing fields leave existing values untouched. Returns { applied, skipped, error_rows, total }. Use this for CSV round-trip workflows and pre-launch category sweeps; for one-off writes use seo_write_meta.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'rows' => array(
+                        'type'        => 'array',
+                        'description' => 'Up to 500 rows, each: { post_id (required), title?, description?, focus_keyword? }.',
+                        'items'       => array(
+                            'type'       => 'object',
+                            'properties' => array(
+                                'post_id'       => array( 'type' => 'integer', 'description' => 'Post/product ID (required per row).' ),
+                                'title'         => array( 'type' => 'string', 'description' => 'SEO meta title.' ),
+                                'description'   => array( 'type' => 'string', 'description' => 'SEO meta description.' ),
+                                'focus_keyword' => array( 'type' => 'string', 'description' => 'Focus keyword.' ),
+                            ),
+                            'required' => array( 'post_id' ),
+                        ),
+                    ),
+                ),
+                'required' => array( 'rows' ),
+            ),
+            'annotations' => array(
+                'title'            => 'Bulk Write SEO Meta',
+                'readOnlyHint'     => false,
+                'idempotentHint'   => true,
+                'openWorldHint'    => false,
+            ),
+        ), function ( $args ) {
+            $rows = isset( $args['rows'] ) && is_array( $args['rows'] ) ? $args['rows'] : array();
+            if ( empty( $rows ) ) {
+                return array( 'error' => 'no_rows', 'message' => 'rows array is required (each: { post_id, title?, description?, focus_keyword? }).' );
+            }
+            if ( count( $rows ) > 500 ) {
+                return array( 'error' => 'too_many_rows', 'message' => 'Max 500 rows per request; split and retry.', 'submitted' => count( $rows ) );
+            }
+            $api     = LuwiPress_API::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/seo/meta-bulk' );
+            $request->set_param( 'rows', $rows );
+            $data = $api->handle_bulk_seo_meta( $request );
+            if ( is_wp_error( $data ) ) {
+                return array(
+                    'error'   => $data->get_error_code(),
+                    'message' => $data->get_error_message(),
+                );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
     }
 
     /* ───────────────────── AEO Tools ───────────────────────────────── */
@@ -1330,21 +1385,154 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'translation_status', array(
-            'description' => 'Get translation status for a post across all languages',
+            'description' => 'Site-wide translation queue aggregate. Returns processing/completed post counts per target language. Use translation_post_siblings to resolve WPML/Polylang sibling IDs for a single post.',
             'inputSchema' => array(
                 'type'       => 'object',
-                'properties' => array(
-                    'post_id' => array( 'type' => 'integer', 'description' => 'Post ID to check' ),
-                ),
+                'properties' => new \stdClass(),
+            ),
+            'annotations' => array(
+                'title'           => 'Translation Queue Aggregate',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
             ),
         ), function ( $args ) {
             $trans   = LuwiPress_Translation::get_instance();
             $request = new WP_REST_Request( 'GET', '/luwipress/v1/translation/status' );
-            if ( ! empty( $args['post_id'] ) ) {
-                $request->set_param( 'post_id', $args['post_id'] );
-            }
             $data = $trans->get_translation_status( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        // ─── translation_post_siblings (1.0.22+) ──────────────────────
+        // Post-tarafı muadili of taxonomy_term_get's sibling resolver.
+        // Returns the full WPML/Polylang language→post_id pair map for a
+        // post/page/product, regardless of which language ID was given.
+        // Vendor-FR (Tapadum, 2026-05-20): unblocks DB-level pair resolution
+        // for cross-language SEO sweeps, retranslation drift cleanup, and
+        // any audit that needs sibling IDs without XML+fuzzy slug matching.
+        $this->register_tool( 'translation_post_siblings', array(
+            'description' => 'Resolve all WPML/Polylang sibling post IDs for a single post/page/product. Pass any sibling ID (source or translation), receive the full {lang: post_id} map. Works on any post_type. Returns plugin + source_lang of the input + default_lang for diagnostics. Read-only counterpart to translation_request — use this when you have an EN product ID and need the IT/FR/ES counterparts (or vice versa) without scraping the XML export or fuzzy-matching slugs.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Any sibling post ID (source or translation). Required.' ),
+                ),
+                'required' => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Resolve Translation Siblings',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $post_id = (int) ( $args['post_id'] ?? 0 );
+            if ( $post_id <= 0 ) {
+                return array( 'error' => 'invalid_post_id' );
+            }
+            $post = get_post( $post_id );
+            if ( ! ( $post instanceof WP_Post ) ) {
+                return array( 'error' => 'post_not_found', 'post_id' => $post_id );
+            }
+            $post_type = $post->post_type;
+
+            // WPML path
+            if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+                $element_type = 'post_' . $post_type;
+                $trid = apply_filters( 'wpml_element_trid', null, $post_id, $element_type );
+                if ( empty( $trid ) ) {
+                    // Post not registered with WPML — single-language map.
+                    $default_lang = apply_filters( 'wpml_default_language', null );
+                    return array(
+                        'post_id'      => $post_id,
+                        'post_type'    => $post_type,
+                        'plugin'       => 'wpml',
+                        'siblings'     => array( $default_lang => $post_id ),
+                        'source_lang'  => $default_lang,
+                        'default_lang' => $default_lang,
+                        'resolved_via' => 'wpml_no_trid',
+                        'trid'         => null,
+                    );
+                }
+                $translations = apply_filters( 'wpml_get_element_translations', null, $trid, $element_type );
+                $siblings = array();
+                $source_lang = null;
+                $original_id = null;
+                if ( is_array( $translations ) ) {
+                    foreach ( $translations as $lang_code => $row ) {
+                        $tid = is_object( $row ) ? (int) ( $row->element_id ?? 0 ) : (int) ( $row['element_id'] ?? 0 );
+                        if ( $tid > 0 ) {
+                            $siblings[ (string) $lang_code ] = $tid;
+                        }
+                        $is_original = is_object( $row ) ? ! empty( $row->original ) : ! empty( $row['original'] );
+                        if ( $is_original ) {
+                            $original_id = $tid;
+                            $source_lang = (string) $lang_code;
+                        }
+                    }
+                }
+                // Reverse-lookup the input post's own language code.
+                $input_lang = null;
+                foreach ( $siblings as $code => $sid ) {
+                    if ( $sid === $post_id ) {
+                        $input_lang = $code;
+                        break;
+                    }
+                }
+                return array(
+                    'post_id'      => $post_id,
+                    'post_type'    => $post_type,
+                    'plugin'       => 'wpml',
+                    'siblings'     => $siblings,
+                    'input_lang'   => $input_lang,
+                    'source_lang'  => $source_lang,
+                    'original_id'  => $original_id,
+                    'default_lang' => apply_filters( 'wpml_default_language', null ),
+                    'trid'         => (int) $trid,
+                    'resolved_via' => 'wpml',
+                );
+            }
+
+            // Polylang path
+            if ( function_exists( 'pll_get_post_translations' ) ) {
+                $translations = pll_get_post_translations( $post_id );
+                $siblings = array();
+                if ( is_array( $translations ) ) {
+                    foreach ( $translations as $lang_code => $tid ) {
+                        if ( (int) $tid > 0 ) {
+                            $siblings[ (string) $lang_code ] = (int) $tid;
+                        }
+                    }
+                }
+                $input_lang = null;
+                if ( function_exists( 'pll_get_post_language' ) ) {
+                    $input_lang = pll_get_post_language( $post_id );
+                }
+                $default_lang = function_exists( 'pll_default_language' ) ? pll_default_language() : null;
+                if ( empty( $siblings ) && $input_lang ) {
+                    $siblings = array( $input_lang => $post_id );
+                }
+                return array(
+                    'post_id'      => $post_id,
+                    'post_type'    => $post_type,
+                    'plugin'       => 'polylang',
+                    'siblings'     => $siblings,
+                    'input_lang'   => $input_lang,
+                    'source_lang'  => $default_lang,
+                    'default_lang' => $default_lang,
+                    'resolved_via' => 'polylang',
+                );
+            }
+
+            // No translation plugin active.
+            return array(
+                'post_id'      => $post_id,
+                'post_type'    => $post_type,
+                'plugin'       => 'none',
+                'siblings'     => array(),
+                'resolved_via' => 'none',
+                'error'        => 'no_translation_plugin',
+            );
         } );
 
         $this->register_tool( 'translation_quality_check', array(
@@ -1617,6 +1805,124 @@ class LuwiPress_WebMCP {
             return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
         } );
 
+        // ─── Customer Chat session/history (FR-003) ───────────────────
+        // Surfaces the wp_luwipress_chat_conversations + chat_messages
+        // tables (populated by the storefront chat widget since 3.0.x)
+        // as 3 MCP tools so AI agents can audit tone, search for pain
+        // points, and pull individual session transcripts without
+        // touching the DB directly. All three are admin-only.
+
+        $this->register_tool( 'chat_sessions_list', array(
+            'description' => 'List recent Customer Chat sessions with pagination + filters. Each row carries session_id, customer_email, customer_name, status, escalated_to, page_url (where chat was opened), ip_address, created_at, updated_at, and message_count. Use this as the entry point for chat-tone reviews and audit sweeps. For one session\'s transcript call chat_session_get.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'limit'          => array( 'type' => 'integer', 'description' => '1-200, default 50.' ),
+                    'offset'         => array( 'type' => 'integer', 'description' => 'Pagination offset (default 0).' ),
+                    'status'         => array( 'type' => 'string', 'description' => 'Filter by conversation status (e.g. "active", "escalated").' ),
+                    'escalated_only' => array( 'type' => 'boolean', 'description' => 'Only sessions that have been escalated to WhatsApp/Telegram.' ),
+                    'customer_email' => array( 'type' => 'string', 'description' => 'Partial-match against customer_email (LIKE).' ),
+                    'since'          => array( 'type' => 'string', 'description' => 'ISO datetime — only sessions created_at >= since.' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'List Chat Sessions',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Customer_Chat' ) ) {
+                return array( 'error' => 'unavailable', 'message' => 'Customer Chat module not loaded.' );
+            }
+            $chat    = LuwiPress_Customer_Chat::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/chat/sessions' );
+            foreach ( array( 'limit', 'offset', 'status', 'escalated_only', 'customer_email', 'since' ) as $k ) {
+                if ( array_key_exists( $k, $args ) ) {
+                    $request->set_param( $k, $args[ $k ] );
+                }
+            }
+            $data = $chat->handle_list_sessions( $request );
+            if ( $data instanceof WP_Error ) {
+                return array( 'error' => $data->get_error_code(), 'message' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'chat_session_get', array(
+            'description' => 'Fetch a single chat session\'s full transcript (up to last 50 messages, oldest-first). Returns { exists, status, escalated_to, messages: [{ role, content, source, created_at }, ...] }. Pair with chat_sessions_list to surface session_id candidates.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'session_id' => array( 'type' => 'string', 'description' => 'Hex session identifier ([a-f0-9]{32,64}); required.' ),
+                ),
+                'required' => array( 'session_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Get Chat Session',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Customer_Chat' ) ) {
+                return array( 'error' => 'unavailable', 'message' => 'Customer Chat module not loaded.' );
+            }
+            $session_id = sanitize_text_field( (string) ( $args['session_id'] ?? '' ) );
+            if ( '' === $session_id ) {
+                return array( 'error' => 'invalid_session_id' );
+            }
+            $chat    = LuwiPress_Customer_Chat::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/chat/session/' . $session_id );
+            $request->set_param( 'session_id', $session_id );
+            $data = $chat->handle_get_session( $request );
+            if ( $data instanceof WP_Error ) {
+                return array( 'error' => $data->get_error_code(), 'message' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'chat_messages_search', array(
+            'description' => 'Plain-LIKE search across stored chat messages. Returns { query, total, items[], limit } where each item carries session_id, role, content_snippet (≤240 chars, centered on match), source, created_at, page_url, customer_email. Use for pain-point analysis ("customers asking about shipping costs"), brand-voice audits across FR/IT/ES, or finding sessions to escalate.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'query' => array( 'type' => 'string', 'description' => 'Substring to match (≥2 chars). Required.' ),
+                    'limit' => array( 'type' => 'integer', 'description' => '1-200, default 50.' ),
+                    'role'  => array( 'type' => 'string', 'description' => 'Filter by message role (user / assistant / system).' ),
+                    'since' => array( 'type' => 'string', 'description' => 'ISO datetime — only messages created_at >= since.' ),
+                ),
+                'required' => array( 'query' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Search Chat Messages',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Customer_Chat' ) ) {
+                return array( 'error' => 'unavailable', 'message' => 'Customer Chat module not loaded.' );
+            }
+            $q = trim( (string) ( $args['query'] ?? '' ) );
+            if ( mb_strlen( $q ) < 2 ) {
+                return array( 'error' => 'invalid_query', 'message' => 'query must be at least 2 characters.' );
+            }
+            $chat    = LuwiPress_Customer_Chat::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/chat/messages/search' );
+            $request->set_param( 'q', $q );
+            foreach ( array( 'limit', 'role', 'since' ) as $k ) {
+                if ( array_key_exists( $k, $args ) ) {
+                    $request->set_param( $k, $args[ $k ] );
+                }
+            }
+            $data = $chat->handle_search_messages( $request );
+            if ( $data instanceof WP_Error ) {
+                return array( 'error' => $data->get_error_code(), 'message' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
         // ─── Slug Resolver (3.1.56+) ──────────────────────────────────
         // Core engine that 301-redirects legacy `/<slug>/` page URLs to
         // their matching `/product-category/<slug>/` archive. Migrated
@@ -1765,6 +2071,8 @@ class LuwiPress_WebMCP {
                     'urls'     => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Explicit URLs to probe (in addition to menu_ids). Useful for one-off slug checks.' ),
                     'max_hops' => array( 'type' => 'integer', 'description' => 'Max redirect hops per URL before giving up (default 5).' ),
                     'cache_bust' => array( 'type' => 'boolean', 'description' => 'Append a random ?lwp_audit=… query to bypass page cache (default true).' ),
+                    'parallel'   => array( 'type' => 'boolean', 'description' => 'Probe URLs in parallel via curl_multi (default true). Set false to force the legacy sequential wp_remote_get loop (slower but uses WP HTTP API stack — useful when curl is unavailable or debugging transport issues).' ),
+                    'batch_size' => array( 'type' => 'integer', 'description' => 'Concurrent requests per parallel round (default 20, max 50). Higher values complete faster but pressure the worker. Ignored when parallel=false.' ),
                 ),
             ),
             'annotations' => array(
@@ -1776,6 +2084,9 @@ class LuwiPress_WebMCP {
         ), function ( $args ) {
             $max_hops   = isset( $args['max_hops'] ) ? max( 1, min( 10, (int) $args['max_hops'] ) ) : 5;
             $cache_bust = isset( $args['cache_bust'] ) ? (bool) $args['cache_bust'] : true;
+            $parallel   = isset( $args['parallel'] ) ? (bool) $args['parallel'] : true;
+            $batch_size = isset( $args['batch_size'] ) ? max( 1, min( 50, (int) $args['batch_size'] ) ) : 20;
+            $use_curl_multi = $parallel && function_exists( 'curl_multi_init' );
 
             // Gather URLs.
             $urls = array();
@@ -1812,69 +2123,214 @@ class LuwiPress_WebMCP {
             $urls = array_keys( $urls );
             sort( $urls );
 
-            $results = array();
             $stats = array(
-                'total'        => count( $urls ),
-                'end_200'      => 0,
-                'end_404'      => 0,
-                'end_other'    => 0,
-                'chains_gt_1'  => 0,
-                'loops_5plus'  => 0,
-                'with_sr'      => 0,
+                'total'         => count( $urls ),
+                'end_200'       => 0,
+                'end_404'       => 0,
+                'end_other'     => 0,
+                'chains_gt_1'   => 0,
+                'loops_5plus'   => 0,
+                'with_sr'       => 0,
+                'mode'          => $use_curl_multi ? 'parallel' : 'sequential',
+                'batch_size'    => $use_curl_multi ? $batch_size : 1,
+                'rounds'        => 0,
+                'elapsed_ms'    => 0,
             );
 
-            foreach ( $urls as $start ) {
-                $trail = array();
-                $cur   = $start;
-                $hops  = 0;
-                $saw_sr = false;
-                while ( $hops < $max_hops ) {
-                    $probe_url = $cur;
-                    if ( $cache_bust ) {
-                        $sep = ( strpos( $probe_url, '?' ) === false ) ? '?' : '&';
-                        $probe_url .= $sep . 'lwp_audit=' . wp_generate_uuid4();
+            $t_start = microtime( true );
+            $results = array();
+
+            if ( $use_curl_multi ) {
+                // ── Parallel round-based curl_multi ─────────────────────
+                // Each URL has a state machine: cur, trail, saw_sr, done.
+                // Per round we fire all not-yet-done URLs in batches of
+                // batch_size; any that 3xx push their next URL into the
+                // pending set for the next round. Capped at max_hops rounds.
+                $state = array();
+                foreach ( $urls as $start ) {
+                    $state[ $start ] = array(
+                        'start'   => $start,
+                        'cur'     => $start,
+                        'trail'   => array(),
+                        'saw_sr'  => false,
+                        'done'    => false,
+                    );
+                }
+
+                for ( $round = 0; $round < $max_hops; $round++ ) {
+                    $pending_keys = array();
+                    foreach ( $state as $key => $s ) {
+                        if ( ! $s['done'] ) {
+                            $pending_keys[] = $key;
+                        }
                     }
-                    $resp = wp_remote_get( $probe_url, array(
-                        'redirection' => 0,
-                        'timeout'     => 15,
-                        'sslverify'   => false,
-                        'headers'     => array( 'Cache-Control' => 'no-cache' ),
-                    ) );
-                    if ( is_wp_error( $resp ) ) {
-                        $trail[] = array( 'code' => -1, 'url' => $cur, 'sr' => $resp->get_error_message() );
+                    if ( empty( $pending_keys ) ) {
                         break;
                     }
-                    $code = (int) wp_remote_retrieve_response_code( $resp );
-                    $sr_arr = wp_remote_retrieve_header( $resp, 'x-lwp-sr' );
-                    if ( $sr_arr ) $saw_sr = true;
-                    $sr_str = is_array( $sr_arr ) ? implode( ', ', $sr_arr ) : (string) $sr_arr;
-                    $trail[] = array( 'code' => $code, 'url' => $cur, 'sr' => $sr_str );
-                    if ( in_array( $code, array( 301, 302, 307, 308 ), true ) ) {
-                        $loc = wp_remote_retrieve_header( $resp, 'location' );
-                        if ( is_array( $loc ) ) $loc = $loc[0] ?? '';
-                        if ( ! $loc ) break;
-                        $cur = (string) $loc;
-                        $hops++;
-                        continue;
+                    $stats['rounds'] = $round + 1;
+
+                    foreach ( array_chunk( $pending_keys, $batch_size ) as $chunk ) {
+                        $mh      = curl_multi_init();
+                        $handles = array();
+                        foreach ( $chunk as $key ) {
+                            $probe_url = $state[ $key ]['cur'];
+                            if ( $cache_bust ) {
+                                $sep        = ( strpos( $probe_url, '?' ) === false ) ? '?' : '&';
+                                $probe_url .= $sep . 'lwp_audit=' . wp_generate_uuid4();
+                            }
+                            $ch = curl_init();
+                            curl_setopt_array( $ch, array(
+                                CURLOPT_URL            => $probe_url,
+                                CURLOPT_FOLLOWLOCATION => false,
+                                CURLOPT_RETURNTRANSFER => true,
+                                CURLOPT_HEADER         => true,
+                                CURLOPT_NOBODY         => false,
+                                CURLOPT_TIMEOUT        => 15,
+                                CURLOPT_CONNECTTIMEOUT => 5,
+                                CURLOPT_SSL_VERIFYPEER => true,
+                                CURLOPT_SSL_VERIFYHOST => 2,
+                                CURLOPT_HTTPHEADER     => array( 'Cache-Control: no-cache' ),
+                                CURLOPT_USERAGENT      => 'LuwiPress-SlugAudit/1.0',
+                            ) );
+                            curl_multi_add_handle( $mh, $ch );
+                            $handles[ $key ] = $ch;
+                        }
+
+                        $running = null;
+                        do {
+                            $status = curl_multi_exec( $mh, $running );
+                            if ( $running > 0 ) {
+                                curl_multi_select( $mh, 0.5 );
+                            }
+                        } while ( $running > 0 && $status === CURLM_OK );
+
+                        foreach ( $handles as $key => $ch ) {
+                            $err  = curl_error( $ch );
+                            $body = curl_multi_getcontent( $ch );
+                            $info = curl_getinfo( $ch );
+                            $code = (int) ( $info['http_code'] ?? 0 );
+
+                            // Parse Location + X-LWP-SR from raw response headers.
+                            $location  = '';
+                            $sr_traces = array();
+                            $hdr_size  = (int) ( $info['header_size'] ?? 0 );
+                            if ( $body !== false && $hdr_size > 0 ) {
+                                // Some servers emit multiple HTTP/1.1 blocks (e.g. on 100-continue or
+                                // proxy chains). Walk all header lines so we don't lose Location
+                                // when it's in the final block.
+                                $hdr_raw = substr( $body, 0, $hdr_size );
+                                foreach ( explode( "\r\n", $hdr_raw ) as $line ) {
+                                    if ( stripos( $line, 'Location:' ) === 0 ) {
+                                        $location = trim( substr( $line, 9 ) );
+                                    } elseif ( stripos( $line, 'X-LWP-SR:' ) === 0 ) {
+                                        $sr_traces[] = trim( substr( $line, 9 ) );
+                                    }
+                                }
+                            }
+
+                            if ( ! empty( $sr_traces ) ) {
+                                $state[ $key ]['saw_sr'] = true;
+                            }
+                            $entry = array(
+                                'code' => $err ? -1 : $code,
+                                'url'  => $state[ $key ]['cur'],
+                                'sr'   => $err ? $err : implode( ', ', $sr_traces ),
+                            );
+                            $state[ $key ]['trail'][] = $entry;
+
+                            if ( $err ) {
+                                $state[ $key ]['done'] = true;
+                            } elseif ( in_array( $code, array( 301, 302, 307, 308 ), true ) && $location !== '' ) {
+                                $state[ $key ]['cur'] = $location;
+                                // Stays pending for next round.
+                            } else {
+                                $state[ $key ]['done'] = true;
+                            }
+
+                            curl_multi_remove_handle( $mh, $ch );
+                            curl_close( $ch );
+                        }
+                        curl_multi_close( $mh );
                     }
-                    break;
                 }
-                $last_code = ! empty( $trail ) ? (int) end( $trail )['code'] : 0;
-                if ( $last_code === 200 ) $stats['end_200']++;
-                elseif ( $last_code === 404 ) $stats['end_404']++;
-                else $stats['end_other']++;
-                if ( count( $trail ) > 2 ) $stats['chains_gt_1']++;
-                if ( count( $trail ) >= $max_hops ) $stats['loops_5plus']++;
-                if ( $saw_sr ) $stats['with_sr']++;
-                $results[] = array(
-                    'start'      => $start,
-                    'final_url'  => ! empty( $trail ) ? (string) end( $trail )['url'] : '',
-                    'final_code' => $last_code,
-                    'hops'       => count( $trail ) - 1,
-                    'looped'     => count( $trail ) >= $max_hops,
-                    'trail'      => $trail,
-                );
+
+                // Materialise state → results in the original input order.
+                foreach ( $urls as $start ) {
+                    $s         = $state[ $start ];
+                    $last_code = ! empty( $s['trail'] ) ? (int) end( $s['trail'] )['code'] : 0;
+                    if ( $last_code === 200 ) $stats['end_200']++;
+                    elseif ( $last_code === 404 ) $stats['end_404']++;
+                    else $stats['end_other']++;
+                    if ( count( $s['trail'] ) > 2 ) $stats['chains_gt_1']++;
+                    if ( count( $s['trail'] ) >= $max_hops ) $stats['loops_5plus']++;
+                    if ( $s['saw_sr'] ) $stats['with_sr']++;
+                    $results[] = array(
+                        'start'      => $start,
+                        'final_url'  => ! empty( $s['trail'] ) ? (string) end( $s['trail'] )['url'] : '',
+                        'final_code' => $last_code,
+                        'hops'       => max( 0, count( $s['trail'] ) - 1 ),
+                        'looped'     => count( $s['trail'] ) >= $max_hops,
+                        'trail'      => $s['trail'],
+                    );
+                }
+            } else {
+                // ── Sequential fallback (wp_remote_get, legacy path) ────
+                // Triggered when parallel=false OR curl_multi is unavailable.
+                foreach ( $urls as $start ) {
+                    $trail  = array();
+                    $cur    = $start;
+                    $hops   = 0;
+                    $saw_sr = false;
+                    while ( $hops < $max_hops ) {
+                        $probe_url = $cur;
+                        if ( $cache_bust ) {
+                            $sep        = ( strpos( $probe_url, '?' ) === false ) ? '?' : '&';
+                            $probe_url .= $sep . 'lwp_audit=' . wp_generate_uuid4();
+                        }
+                        $resp = wp_remote_get( $probe_url, array(
+                            'redirection' => 0,
+                            'timeout'     => 15,
+                            'sslverify'   => true,
+                            'headers'     => array( 'Cache-Control' => 'no-cache' ),
+                        ) );
+                        if ( is_wp_error( $resp ) ) {
+                            $trail[] = array( 'code' => -1, 'url' => $cur, 'sr' => $resp->get_error_message() );
+                            break;
+                        }
+                        $code   = (int) wp_remote_retrieve_response_code( $resp );
+                        $sr_arr = wp_remote_retrieve_header( $resp, 'x-lwp-sr' );
+                        if ( $sr_arr ) $saw_sr = true;
+                        $sr_str  = is_array( $sr_arr ) ? implode( ', ', $sr_arr ) : (string) $sr_arr;
+                        $trail[] = array( 'code' => $code, 'url' => $cur, 'sr' => $sr_str );
+                        if ( in_array( $code, array( 301, 302, 307, 308 ), true ) ) {
+                            $loc = wp_remote_retrieve_header( $resp, 'location' );
+                            if ( is_array( $loc ) ) $loc = $loc[0] ?? '';
+                            if ( ! $loc ) break;
+                            $cur = (string) $loc;
+                            $hops++;
+                            continue;
+                        }
+                        break;
+                    }
+                    $last_code = ! empty( $trail ) ? (int) end( $trail )['code'] : 0;
+                    if ( $last_code === 200 ) $stats['end_200']++;
+                    elseif ( $last_code === 404 ) $stats['end_404']++;
+                    else $stats['end_other']++;
+                    if ( count( $trail ) > 2 ) $stats['chains_gt_1']++;
+                    if ( count( $trail ) >= $max_hops ) $stats['loops_5plus']++;
+                    if ( $saw_sr ) $stats['with_sr']++;
+                    $results[] = array(
+                        'start'      => $start,
+                        'final_url'  => ! empty( $trail ) ? (string) end( $trail )['url'] : '',
+                        'final_code' => $last_code,
+                        'hops'       => count( $trail ) - 1,
+                        'looped'     => count( $trail ) >= $max_hops,
+                        'trail'      => $trail,
+                    );
+                }
             }
+
+            $stats['elapsed_ms'] = (int) ( ( microtime( true ) - $t_start ) * 1000 );
 
             // Issues bucket — anything operator should look at.
             $issues = array();
@@ -1957,21 +2413,23 @@ class LuwiPress_WebMCP {
                     $tid = $resolved ? (int) $resolved : 0;
                 }
                 $entry = array(
-                    'lang'    => $code,
-                    'term_id' => $tid ?: null,
-                    'slug'    => null,
-                    'name'    => null,
-                    'count'   => null,
-                    'link'    => null,
+                    'lang'        => $code,
+                    'term_id'     => $tid ?: null,
+                    'slug'        => null,
+                    'name'        => null,
+                    'description' => null,
+                    'count'       => null,
+                    'link'        => null,
                 );
                 if ( $tid > 0 ) {
                     $t = get_term( $tid, $taxonomy );
                     if ( $t instanceof WP_Term ) {
-                        $entry['slug']  = $t->slug;
-                        $entry['name']  = $t->name;
-                        $entry['count'] = (int) $t->count;
+                        $entry['slug']        = $t->slug;
+                        $entry['name']        = $t->name;
+                        $entry['description'] = (string) $t->description;
+                        $entry['count']       = (int) $t->count;
                         $link = get_term_link( $t );
-                        $entry['link']  = is_wp_error( $link ) ? null : (string) $link;
+                        $entry['link']        = is_wp_error( $link ) ? null : (string) $link;
                     }
                 }
                 $translations[] = $entry;
@@ -1986,6 +2444,522 @@ class LuwiPress_WebMCP {
                 ),
                 'translations' => $translations,
             );
+        } );
+
+        // ─── taxonomy_term_get (1.0.22+) ──────────────────────────────
+        // Read-before-write companion to taxonomy_update_term. Returns the
+        // full core fields of a single term by ID, including the core
+        // `description` field that taxonomy_list_terms is scoped to the
+        // default WPML language and wpml_term_translation_get previously
+        // omitted. Lang parameter is optional — pass it only when you want
+        // to fetch a *sibling* term in a specific language (we resolve via
+        // icl_object_id / pll_get_term). If lang is omitted, returns the
+        // term at the given ID as-is.
+        $this->register_tool( 'taxonomy_term_get', array(
+            'description' => 'Read a single term by ID with all core fields (name, slug, description, parent, count). Optional lang parameter resolves to the WPML/Polylang sibling in that language. Use this as the read counterpart of taxonomy_update_term — fetch the existing description before rewriting.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'term_id'  => array( 'type' => 'integer', 'description' => 'Term ID (required). If lang is also passed, treated as the source-term ID and resolved to the lang sibling.' ),
+                    'taxonomy' => array( 'type' => 'string', 'description' => 'Taxonomy (default: product_cat).' ),
+                    'lang'     => array( 'type' => 'string', 'description' => 'Optional WPML/Polylang language code (e.g. fr, it, es). When set, resolves term_id to the sibling in that language before reading.' ),
+                ),
+                'required' => array( 'term_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Get Term (core fields)',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $term_id  = (int) ( $args['term_id'] ?? 0 );
+            $taxonomy = isset( $args['taxonomy'] ) ? (string) $args['taxonomy'] : 'product_cat';
+            $lang     = isset( $args['lang'] ) ? sanitize_text_field( (string) $args['lang'] ) : '';
+            if ( $term_id <= 0 ) {
+                return array( 'error' => 'invalid_term_id' );
+            }
+            $resolved_id = $term_id;
+            $resolved_via = 'direct';
+            if ( '' !== $lang ) {
+                if ( function_exists( 'icl_object_id' ) ) {
+                    $r = icl_object_id( $term_id, $taxonomy, false, $lang );
+                    if ( $r ) {
+                        $resolved_id  = (int) $r;
+                        $resolved_via = 'wpml';
+                    }
+                } elseif ( function_exists( 'pll_get_term' ) ) {
+                    $r = pll_get_term( $term_id, $lang );
+                    if ( $r ) {
+                        $resolved_id  = (int) $r;
+                        $resolved_via = 'polylang';
+                    }
+                }
+            }
+            $term = get_term( $resolved_id, $taxonomy );
+            if ( ! ( $term instanceof WP_Term ) ) {
+                return array(
+                    'error'         => 'term_not_found',
+                    'term_id'       => $term_id,
+                    'resolved_id'   => $resolved_id,
+                    'resolved_via'  => $resolved_via,
+                    'taxonomy'      => $taxonomy,
+                    'lang'          => $lang,
+                );
+            }
+            $link = get_term_link( $term );
+            return array(
+                'term_id'      => (int) $term->term_id,
+                'taxonomy'     => $term->taxonomy,
+                'slug'         => $term->slug,
+                'name'         => $term->name,
+                'description'  => (string) $term->description,
+                'parent'       => (int) $term->parent,
+                'count'        => (int) $term->count,
+                'link'         => is_wp_error( $link ) ? null : (string) $link,
+                'lang'         => $lang ?: null,
+                'resolved_via' => $resolved_via,
+            );
+        } );
+
+        // ─── Bot Account Cleaner (3.1.60+) ────────────────────────────
+        // Score-based detection + safe deletion of fake user accounts.
+        // Eligibility gated to subscriber/customer; admin roles + WC
+        // customers with orders are never scored. 7 tools mirror the
+        // REST surface under /luwipress/v1/bot-accounts/*.
+
+        $this->register_tool( 'bot_account_scan', array(
+            'description' => 'Run a fresh bot-account scan: scores every subscriber/customer user across signals (disposable email domain, random-entropy username, 0 orders + 0 comments + 0 logins, stale registration age, burst registration, missing real name, etc.). Writes rows into wp_luwipress_bot_account_scores. Returns aggregate counts {scanned, flagged, protected, threshold}. Pass limit to cap the batch.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'limit' => array( 'type' => 'integer', 'description' => 'Cap on accounts to score this run (default: settings.scan_batch_size, typically 500).' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Bot Account Scan',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => false,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Account_Cleaner' ) ) {
+                return array( 'error' => 'unavailable', 'message' => 'LuwiPress_Bot_Account_Cleaner requires core 3.1.60+.' );
+            }
+            $c = LuwiPress_Bot_Account_Cleaner::get_instance();
+            $limit = isset( $args['limit'] ) ? (int) $args['limit'] : null;
+            return $c->run_scan( $limit );
+        } );
+
+        $this->register_tool( 'bot_account_list', array(
+            'description' => 'List flagged bot-suspect accounts with score >= threshold, ordered by score desc. Each row includes user_id, score, signals (signal→weight), status, user_login, user_email, display_name, user_registered, roles. Paginated.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'page'      => array( 'type' => 'integer', 'description' => 'Page number (default 1).' ),
+                    'per_page'  => array( 'type' => 'integer', 'description' => 'Rows per page, max 200 (default 50).' ),
+                    'min_score' => array( 'type' => 'integer', 'description' => 'Override the configured threshold for this query (0-100).' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Bot Account List',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Account_Cleaner' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $c = LuwiPress_Bot_Account_Cleaner::get_instance();
+            return $c->list_suspects(
+                isset( $args['page'] ) ? (int) $args['page'] : 1,
+                isset( $args['per_page'] ) ? (int) $args['per_page'] : 50,
+                isset( $args['min_score'] ) ? (int) $args['min_score'] : null
+            );
+        } );
+
+        $this->register_tool( 'bot_account_score', array(
+            'description' => 'Compute (without persisting) the bot-likelihood score for a single user id. Returns {score 0-100, signals map, protected bool, reason?}. Useful for spot-checking why a user was/was-not flagged before bulk action.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'user_id' => array( 'type' => 'integer', 'description' => 'WP user ID to score.' ),
+                ),
+                'required' => array( 'user_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Bot Account Score (single)',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Account_Cleaner' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $c = LuwiPress_Bot_Account_Cleaner::get_instance();
+            return $c->score_user( (int) ( $args['user_id'] ?? 0 ) );
+        } );
+
+        $this->register_tool( 'bot_account_delete', array(
+            'description' => 'Delete bot-suspect user accounts. DRY-RUN BY DEFAULT — pass confirm=true to actually execute. Re-scores each user on the server side and refuses to delete any protected account (admin/editor/shop_manager role, whitelisted, or has WC orders) regardless of caller intent. Reassigns deleted-user content to user ID 1. Returns {deleted, skipped, errors, dry_run}.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'user_ids' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'WP user IDs to delete.' ),
+                    'confirm'  => array( 'type' => 'boolean', 'description' => 'false (default) = dry-run preview; true = actually delete.' ),
+                ),
+                'required' => array( 'user_ids' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Bot Account Delete',
+                'readOnlyHint'    => false,
+                'destructiveHint' => true,
+                'idempotentHint'  => false,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Account_Cleaner' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $c = LuwiPress_Bot_Account_Cleaner::get_instance();
+            $ids = isset( $args['user_ids'] ) && is_array( $args['user_ids'] ) ? array_map( 'intval', $args['user_ids'] ) : array();
+            return $c->delete_users( $ids, ! empty( $args['confirm'] ) );
+        } );
+
+        $this->register_tool( 'bot_account_whitelist', array(
+            'description' => 'Add or remove a user from the bot-account whitelist. Whitelisted users are skipped on every scan and cannot be deleted through this surface. Use action="add" (default) or action="remove".',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'user_id' => array( 'type' => 'integer', 'description' => 'WP user ID.' ),
+                    'action'  => array( 'type' => 'string', 'enum' => array( 'add', 'remove' ), 'description' => 'add (default) or remove.' ),
+                ),
+                'required' => array( 'user_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Bot Account Whitelist',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Account_Cleaner' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $c = LuwiPress_Bot_Account_Cleaner::get_instance();
+            $uid    = (int) ( $args['user_id'] ?? 0 );
+            $action = ( $args['action'] ?? 'add' ) === 'remove' ? 'remove' : 'add';
+            if ( $action === 'remove' ) {
+                $c->whitelist_remove( $uid );
+            } else {
+                $c->whitelist_add( $uid );
+            }
+            return array(
+                'whitelist' => $c->get_whitelist(),
+                'action'    => $action,
+                'user_id'   => $uid,
+            );
+        } );
+
+        $this->register_tool( 'bot_account_stats', array(
+            'description' => 'Aggregate bot-account stats: by_status (scored/whitelisted/deleted counts), flagged count, threshold, score-bucket histogram (high 80+, medium 60-79, low 40-59, noise <40), whitelist size, last_scan summary.',
+            'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+            'annotations' => array(
+                'title'           => 'Bot Account Stats',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Bot_Account_Cleaner' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            return LuwiPress_Bot_Account_Cleaner::get_instance()->get_stats();
+        } );
+
+        $this->register_tool( 'bot_account_settings_set', array(
+            'description' => 'Update bot-account scanner settings (partial-update). Tunable: threshold (0-100, default 60), min_age_days (default 30), scan_batch_size (50-5000, default 500), allowed_roles (default ["subscriber","customer"]). Protected roles + WC-order guard are NOT operator-tweakable safety invariants.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'threshold'       => array( 'type' => 'integer', 'description' => '0-100 score threshold for flagging.' ),
+                    'min_age_days'    => array( 'type' => 'integer', 'description' => 'Grace period for newly registered accounts.' ),
+                    'scan_batch_size' => array( 'type' => 'integer', 'description' => '50-5000 accounts per scan run.' ),
+                    'allowed_roles'   => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Roles eligible for scoring (default subscriber, customer).' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Bot Account Settings (Write)',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Account_Cleaner' ) ) {
+                return array( 'error' => 'unavailable' );
+            }
+            $c = LuwiPress_Bot_Account_Cleaner::get_instance();
+            return $c->update_settings( (array) $args );
+        } );
+
+        // ─── Cookie Consent (3.2.0+) ──────────────────────────────────
+        // GDPR/ePrivacy banner + consent log + AI policy generator.
+
+        $this->register_tool( 'cookie_consent_settings_get', array(
+            'description' => 'Read the current Cookie Consent module settings: enabled flag, mode (info/opt-in/opt-out), position, theme, button toggles, policy URLs, retention, categories, and all banner text strings.',
+            'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+            'annotations' => array( 'title' => 'Cookie Consent Settings (Read)', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Cookie_Consent' ) ) return array( 'error' => 'unavailable', 'message' => 'requires core 3.2.0+' );
+            return LuwiPress_Cookie_Consent::get_instance()->get_settings();
+        } );
+
+        $this->register_tool( 'cookie_consent_settings_set', array(
+            'description' => 'Partial-update Cookie Consent settings. Common patterns: {enabled:true, mode:"opt-in"} to turn on, {position:"bottom-right", theme:"dark"} to restyle, {policy_url:"..."} to link the policy page. Texts may be overridden via {texts:{title:"…", body:"…", accept_all:"…"}}.',
+            'inputSchema' => array(
+                'type' => 'object',
+                'properties' => array(
+                    'enabled'  => array( 'type' => 'boolean' ),
+                    'mode'     => array( 'type' => 'string', 'enum' => array( 'info', 'opt-in', 'opt-out' ) ),
+                    'position' => array( 'type' => 'string', 'enum' => array( 'bottom', 'top', 'bottom-left', 'bottom-right' ) ),
+                    'theme'    => array( 'type' => 'string', 'enum' => array( 'auto', 'light', 'dark' ) ),
+                    'show_reject_button' => array( 'type' => 'boolean' ),
+                    'show_preferences'   => array( 'type' => 'boolean' ),
+                    'policy_url'   => array( 'type' => 'string' ),
+                    'privacy_url'  => array( 'type' => 'string' ),
+                    'imprint_url'  => array( 'type' => 'string' ),
+                    'log_retention_days' => array( 'type' => 'integer' ),
+                    'categories_enabled' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+                    'texts' => array( 'type' => 'object' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Cookie Consent Settings (Write)', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Cookie_Consent' ) ) return array( 'error' => 'unavailable' );
+            return LuwiPress_Cookie_Consent::get_instance()->update_settings( (array) $args );
+        } );
+
+        $this->register_tool( 'cookie_consent_stats', array(
+            'description' => 'Aggregate consent log stats: total records, last_30_days count, by_source breakdown (banner-accept / banner-reject / preferences), per-category accept-rate (analytics, marketing, personalization, necessary), sample size used for the rate calculation, current settings.',
+            'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+            'annotations' => array( 'title' => 'Cookie Consent Stats', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Cookie_Consent' ) ) return array( 'error' => 'unavailable' );
+            return LuwiPress_Cookie_Consent::get_instance()->get_stats();
+        } );
+
+        $this->register_tool( 'cookie_consent_log', array(
+            'description' => 'Paginated consent log. Returns visitor decisions with hashed IP, source (banner-accept/banner-reject/preferences/preferences-accept-all), choices map, country_code (when behind Cloudflare), language, consent_id, created_at.',
+            'inputSchema' => array(
+                'type' => 'object',
+                'properties' => array(
+                    'page'     => array( 'type' => 'integer' ),
+                    'per_page' => array( 'type' => 'integer' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Cookie Consent Log', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Cookie_Consent' ) ) return array( 'error' => 'unavailable' );
+            $page     = isset( $args['page'] ) ? (int) $args['page'] : 1;
+            $per_page = isset( $args['per_page'] ) ? (int) $args['per_page'] : 50;
+            return LuwiPress_Cookie_Consent::get_instance()->get_log( $page, $per_page );
+        } );
+
+        $this->register_tool( 'cookie_consent_policy_generate', array(
+            'description' => 'Generate a site-specific cookie policy paragraph via the AI engine. The prompt is enriched with the list of analytics/marketing/Meta tags actually detected on the site (LuwiPress_Plugin_Detector). Returns {text, detected, language}. Operator pastes the text into their Cookie Policy page.',
+            'inputSchema' => array(
+                'type' => 'object',
+                'properties' => array(
+                    'language' => array( 'type' => 'string', 'description' => 'ISO 639-1 code (en/fr/de/tr/...). Defaults to site language.' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Cookie Policy AI Generator', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Cookie_Consent' ) ) return array( 'error' => 'unavailable' );
+            $lang = $args['language'] ?? null;
+            $out = LuwiPress_Cookie_Consent::get_instance()->generate_policy_text( $lang ? (string) $lang : null );
+            if ( is_wp_error( $out ) ) {
+                return array( 'error' => $out->get_error_code(), 'message' => $out->get_error_message() );
+            }
+            return $out;
+        } );
+
+        // ─── Bot Shield (3.2.0+) ──────────────────────────────────────
+        // Front-edge bot/scraper filter: UA blocklist + rate limit + honeypot
+        // + REST/XML-RPC enumeration block.
+
+        $this->register_tool( 'bot_shield_stats', array(
+            'description' => 'Bot Shield stats: enabled flag, active_blocks count, today_denials, 14-day by_day daily breakdown, by_reason top reasons (ua_blocklist:NAME / rate_limit / honeypot / blocked), allowlist payload.',
+            'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+            'annotations' => array( 'title' => 'Bot Shield Stats', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Bot_Shield' ) ) return array( 'error' => 'unavailable', 'message' => 'requires core 3.2.0+' );
+            return LuwiPress_Bot_Shield::get_instance()->get_stats();
+        } );
+
+        $this->register_tool( 'bot_shield_settings_get', array(
+            'description' => 'Read Bot Shield settings: enabled, block_ua_scrapers, rate_limit_enabled/threshold/window, block_ttl_minutes, block_user_enumeration, disable_xmlrpc, honeypot_enabled, verify_search_engines, sensitive_paths[], honeypot_paths[], ua_blocklist[], log_block_events.',
+            'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+            'annotations' => array( 'title' => 'Bot Shield Settings (Read)', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Bot_Shield' ) ) return array( 'error' => 'unavailable' );
+            return LuwiPress_Bot_Shield::get_instance()->get_settings();
+        } );
+
+        $this->register_tool( 'bot_shield_settings_set', array(
+            'description' => 'Partial-update Bot Shield settings. Most common: {enabled:true} to turn on; {rate_limit_threshold:30, rate_limit_window:60} to tighten throttle; {ua_blocklist:["AhrefsBot","SemrushBot"]} to replace the list. Hard guards (logged-in admins, private IP space) are non-toggleable.',
+            'inputSchema' => array(
+                'type' => 'object',
+                'properties' => array(
+                    'enabled'                => array( 'type' => 'boolean' ),
+                    'block_ua_scrapers'      => array( 'type' => 'boolean' ),
+                    'rate_limit_enabled'     => array( 'type' => 'boolean' ),
+                    'rate_limit_threshold'   => array( 'type' => 'integer', 'minimum' => 1 ),
+                    'rate_limit_window'      => array( 'type' => 'integer', 'minimum' => 1 ),
+                    'block_ttl_minutes'      => array( 'type' => 'integer', 'minimum' => 1 ),
+                    'block_user_enumeration' => array( 'type' => 'boolean' ),
+                    'disable_xmlrpc'         => array( 'type' => 'boolean' ),
+                    'honeypot_enabled'       => array( 'type' => 'boolean' ),
+                    'verify_search_engines'  => array( 'type' => 'boolean' ),
+                    'sensitive_paths'        => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+                    'honeypot_paths'         => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+                    'ua_blocklist'           => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Bot Shield Settings (Write)', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Shield' ) ) return array( 'error' => 'unavailable' );
+            return LuwiPress_Bot_Shield::get_instance()->update_settings( (array) $args );
+        } );
+
+        $this->register_tool( 'bot_shield_blocks_list', array(
+            'description' => 'Paginated list of currently blocked IPs. Each row: ip, reason, hit_count, first_seen, last_seen, expires_at (null = permanent), source (auto|manual), ua_sample, path_sample. Use to spot-check what the shield has caught.',
+            'inputSchema' => array(
+                'type' => 'object',
+                'properties' => array(
+                    'page'     => array( 'type' => 'integer' ),
+                    'per_page' => array( 'type' => 'integer' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Bot Shield Blocks List', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Shield' ) ) return array( 'error' => 'unavailable' );
+            $page     = isset( $args['page'] ) ? (int) $args['page'] : 1;
+            $per_page = isset( $args['per_page'] ) ? (int) $args['per_page'] : 50;
+            return LuwiPress_Bot_Shield::get_instance()->list_blocks( $page, $per_page );
+        } );
+
+        $this->register_tool( 'bot_shield_block', array(
+            'description' => 'Manually block an IP. ttl_minutes default 1440 (24h); pass 0 for a permanent block. reason is a free-text tag (default "manual"). DESTRUCTIVE: deny-lists real visitors if misused.',
+            'inputSchema' => array(
+                'type' => 'object',
+                'properties' => array(
+                    'ip'          => array( 'type' => 'string', 'description' => 'IPv4 or IPv6 address.' ),
+                    'reason'      => array( 'type' => 'string' ),
+                    'ttl_minutes' => array( 'type' => 'integer' ),
+                ),
+                'required' => array( 'ip' ),
+            ),
+            'annotations' => array( 'title' => 'Bot Shield Block IP', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Shield' ) ) return array( 'error' => 'unavailable' );
+            $ip = (string) ( $args['ip'] ?? '' );
+            if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+                return array( 'error' => 'invalid_ip', 'ip' => $ip );
+            }
+            $reason = (string) ( $args['reason'] ?? 'manual' );
+            $ttl    = isset( $args['ttl_minutes'] ) ? (int) $args['ttl_minutes'] : 1440;
+            LuwiPress_Bot_Shield::get_instance()->manual_block( $ip, $reason, $ttl );
+            return array( 'ok' => true, 'ip' => $ip, 'reason' => $reason, 'ttl_minutes' => $ttl );
+        } );
+
+        $this->register_tool( 'bot_shield_unblock', array(
+            'description' => 'Remove an IP from the block list (auto or manual).',
+            'inputSchema' => array(
+                'type' => 'object',
+                'properties' => array( 'ip' => array( 'type' => 'string' ) ),
+                'required' => array( 'ip' ),
+            ),
+            'annotations' => array( 'title' => 'Bot Shield Unblock IP', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Shield' ) ) return array( 'error' => 'unavailable' );
+            $ip = (string) ( $args['ip'] ?? '' );
+            if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+                return array( 'error' => 'invalid_ip', 'ip' => $ip );
+            }
+            LuwiPress_Bot_Shield::get_instance()->unblock( $ip );
+            return array( 'ok' => true, 'ip' => $ip );
+        } );
+
+        $this->register_tool( 'bot_shield_test', array(
+            'description' => 'Dry-run a (IP, UA, path) tuple against the current rule set without firing any deny. Returns {verdict: allow|deny, reason}. Use to tune thresholds without risking lockout. Reasons: private_ip / allowlisted / already_blocked / honeypot:<path> / ua_blocklist:<needle> / sensitive_path_rate_limited.',
+            'inputSchema' => array(
+                'type' => 'object',
+                'properties' => array(
+                    'ip'   => array( 'type' => 'string' ),
+                    'ua'   => array( 'type' => 'string' ),
+                    'path' => array( 'type' => 'string' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Bot Shield Test', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Shield' ) ) return array( 'error' => 'unavailable' );
+            $req = new WP_REST_Request( 'POST', '/luwipress/v1/bot-shield/test' );
+            if ( isset( $args['ip'] ) )   $req->set_param( 'ip',   (string) $args['ip'] );
+            if ( isset( $args['ua'] ) )   $req->set_param( 'ua',   (string) $args['ua'] );
+            if ( isset( $args['path'] ) ) $req->set_param( 'path', (string) $args['path'] );
+            $resp = LuwiPress_Bot_Shield::get_instance()->rest_test( $req );
+            return ( $resp instanceof WP_REST_Response ) ? $resp->get_data() : $resp;
+        } );
+
+        // ─── Bot Shield: comment review (3.3.0+) ──────────────────────
+        $this->register_tool( 'bot_shield_comments_recent', array(
+            'description' => 'List recent bot-suspect comment events caught by Bot Shield (last 100 max). Returns score, action taken (moderated/spam/rejected), the matched signals (link density / spam tokens / author shape / duplicate / etc.), and a 240-char snippet of the body. IPs are masked (last octet zeroed) for GDPR.',
+            'inputSchema' => array(
+                'type' => 'object',
+                'properties' => array(
+                    'limit' => array( 'type' => 'integer', 'description' => 'Max events to return (1..100, default 50).' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Bot Shield: Recent Comment Events', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Shield' ) ) return array( 'error' => 'unavailable' );
+            $limit = isset( $args['limit'] ) ? (int) $args['limit'] : 50;
+            $items = LuwiPress_Bot_Shield::get_instance()->get_recent_comment_events( $limit );
+            return array( 'items' => $items, 'count' => count( $items ) );
+        } );
+
+        $this->register_tool( 'bot_shield_comments_test', array(
+            'description' => 'Dry-run a comment payload against the current Bot Shield comment scorer. Returns {verdict, score, threshold, signals, mode}. Verdicts: allow (below threshold) / moderate (held) / spam (queue) / reject (silent 403). Useful for tuning thresholds + spam-token lists without touching live submissions.',
+            'inputSchema' => array(
+                'type' => 'object',
+                'properties' => array(
+                    'author'  => array( 'type' => 'string',  'description' => 'Comment author name (display).' ),
+                    'email'   => array( 'type' => 'string',  'description' => 'Author email.' ),
+                    'url'     => array( 'type' => 'string',  'description' => 'Author URL field (often a spam tell).' ),
+                    'content' => array( 'type' => 'string',  'description' => 'Comment body (required).' ),
+                    'ip'      => array( 'type' => 'string',  'description' => 'Simulated client IP (defaults to 0.0.0.0).' ),
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Target post id (optional, not scored against currently).' ),
+                ),
+                'required' => array( 'content' ),
+            ),
+            'annotations' => array( 'title' => 'Bot Shield: Test Comment', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Bot_Shield' ) ) return array( 'error' => 'unavailable' );
+            $payload = array(
+                'author'  => isset( $args['author'] )  ? (string) $args['author']  : '',
+                'email'   => isset( $args['email'] )   ? (string) $args['email']   : '',
+                'url'     => isset( $args['url'] )     ? (string) $args['url']     : '',
+                'content' => isset( $args['content'] ) ? (string) $args['content'] : '',
+                'ip'      => isset( $args['ip'] )      ? (string) $args['ip']      : '0.0.0.0',
+                'post_id' => isset( $args['post_id'] ) ? (int) $args['post_id']    : 0,
+            );
+            return LuwiPress_Bot_Shield::get_instance()->test_comment_payload( $payload );
         } );
 
         $this->register_tool( 'translation_fix_elementor', array(
@@ -2586,13 +3560,19 @@ class LuwiPress_WebMCP {
         }
 
         $this->register_tool( 'linker_resolve', array(
-            'description' => 'Request AI to find internal linking opportunities for a post',
+            'description' => 'Process the pre-computed internal-linking backlog for a single post: replace placeholder anchors with concrete URLs once the linker module has matched them against the catalogue. Returns { resolved, remaining }. This is a backlog processor, not an on-demand AI call — if the post has no entries in linker_unresolved the response is {resolved:0, remaining:0}. Pair with linker_unresolved to see what is waiting.',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
-                    'post_id' => array( 'type' => 'integer', 'description' => 'Post ID to analyze (required)' ),
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Post ID whose unresolved-link backlog should be processed (required).' ),
                 ),
                 'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Resolve Internal-Link Backlog',
+                'readOnlyHint'    => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
             ),
         ), function ( $args ) {
             return $this->proxy_rest_post( 'LuwiPress_Internal_Linker', 'handle_resolve_links', array(
@@ -2631,6 +3611,79 @@ class LuwiPress_WebMCP {
             $kg      = LuwiPress_Knowledge_Graph::get_instance();
             $request = new WP_REST_Request( 'GET', '/luwipress/v1/knowledge-graph' );
             $data    = $kg->handle_knowledge_graph( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        // ─── KG Candidates (Action Queue v2 surface) ──────────────────
+        // Modern signal-driven opportunity list — RECENTLY_REGRESSED +
+        // STALE_ENRICHED + MISSING_FAQ + filter-injected companion
+        // candidates. Distinct from content_opportunities (legacy static
+        // 5-category sweep) — that tool only inspects schema state, this
+        // one watches the KG events stream + decay + theme bridge filter.
+        $this->register_tool( 'kg_candidates', array(
+            'description' => 'Action Queue v2 candidate list. Returns ROI-ranked opportunities derived from KG signals: RECENTLY_REGRESSED (pages with traffic/coverage drop in the last window), STALE_ENRICHED (products enriched >90 days ago whose source content changed), MISSING_FAQ + MISSING_HOWTO + MISSING_SCHEMA (schema-shaped gaps), and theme-companion candidates injected via the luwipress_kg_action_queue_external_candidates filter. Each item carries id, type, title, body, impact, effort_min, roi, tier, confidence_score (0-100), and a `why` block with primary/supporting signals + baseline comparison. Snoozed/dismissed candidates are already filtered out. For the legacy static 5-category report (missing_seo_meta, missing_translations, stale_content, thin_content, missing_alt_text), use content_opportunities instead.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'limit' => array( 'type' => 'integer', 'description' => '1-24, default 6 (mirrors the dashboard Action Queue card cap).' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'KG Action Queue Candidates',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $kg      = LuwiPress_Knowledge_Graph::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/knowledge-graph/candidates' );
+            if ( isset( $args['limit'] ) ) {
+                $request->set_param( 'limit', (int) $args['limit'] );
+            }
+            $data = $kg->handle_kg_candidates( $request );
+            if ( $data instanceof WP_Error ) {
+                return array( 'error' => $data->get_error_code(), 'message' => $data->get_error_message() );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        // ─── KG Events stream + summary ───────────────────────────────
+        // The signal layer that feeds KG candidates. Read the raw event
+        // stream (enrich/seo/translate/schema_added) or fetch an aggregate
+        // summary for the last N hours. Useful for verifying that the
+        // signal layer is recording activity, and for cross-referencing
+        // candidate types against their underlying triggers.
+        $this->register_tool( 'kg_events', array(
+            'description' => 'KG event stream (raw rows) or per-window aggregate summary. Event types: enrich, seo, translate, schema_added. Pass summary=true to get count-by-type over the last `hours` window instead of the row stream. Use this to verify the signal layer is actually recording activity — if event counts are zero, the v2 candidate types (RECENTLY_REGRESSED / STALE_ENRICHED) will be empty regardless of candidate generator state.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'limit'       => array( 'type' => 'integer', 'description' => 'Max rows returned (default 50). Ignored when summary=true.' ),
+                    'since'       => array( 'type' => 'string', 'description' => 'MySQL datetime floor in UTC (e.g. "2026-05-01 00:00:00").' ),
+                    'event_types' => array( 'type' => 'string', 'description' => 'Comma-separated whitelist: enrich, seo, translate, schema_added.' ),
+                    'entity_id'   => array( 'type' => 'integer', 'description' => 'Scope stream to a single post/product ID.' ),
+                    'summary'     => array( 'type' => 'boolean', 'description' => 'When true, return aggregated counts over `hours` window instead of the row stream.' ),
+                    'hours'       => array( 'type' => 'integer', 'description' => 'Window size (hours) for summary aggregate (default 24, ignored when summary=false).' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'KG Events Stream',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $kg      = LuwiPress_Knowledge_Graph::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/knowledge-graph/events' );
+            foreach ( array( 'limit', 'since', 'event_types', 'entity_id', 'summary', 'hours' ) as $k ) {
+                if ( array_key_exists( $k, $args ) ) {
+                    $request->set_param( $k, $args[ $k ] );
+                }
+            }
+            $data = $kg->handle_kg_events( $request );
+            if ( $data instanceof WP_Error ) {
+                return array( 'error' => $data->get_error_code(), 'message' => $data->get_error_message() );
+            }
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
     }
@@ -4419,7 +5472,7 @@ class LuwiPress_WebMCP {
         }
 
         $this->register_tool( 'woo_list_orders', array(
-            'description' => 'List WooCommerce orders with filtering by status, date, customer',
+            'description' => 'List WooCommerce orders with filtering by status, date, customer; supports orderby/order for sorting and date_after+date_before for bounded ranges.',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
@@ -4427,8 +5480,10 @@ class LuwiPress_WebMCP {
                     'customer_id' => array( 'type' => 'integer', 'description' => 'Filter by customer user ID' ),
                     'per_page'    => array( 'type' => 'integer', 'description' => 'Results per page (max 50, default 20)' ),
                     'page'        => array( 'type' => 'integer', 'description' => 'Page number' ),
-                    'date_after'  => array( 'type' => 'string', 'description' => 'Orders after this date (YYYY-MM-DD)' ),
-                    'date_before' => array( 'type' => 'string', 'description' => 'Orders before this date (YYYY-MM-DD)' ),
+                    'date_after'  => array( 'type' => 'string', 'description' => 'Orders on or after this date (YYYY-MM-DD)' ),
+                    'date_before' => array( 'type' => 'string', 'description' => 'Orders on or before this date (YYYY-MM-DD)' ),
+                    'orderby'     => array( 'type' => 'string', 'description' => 'Sort field: date (default), modified, id, title, menu_order, rand' ),
+                    'order'       => array( 'type' => 'string', 'description' => 'Sort direction: ASC or DESC (default DESC)' ),
                 ),
             ),
             'annotations' => array( 'title' => 'List Orders', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
@@ -4445,9 +5500,22 @@ class LuwiPress_WebMCP {
             if ( ! empty( $args['customer_id'] ) ) {
                 $query['customer_id'] = absint( $args['customer_id'] );
             }
-            if ( ! empty( $args['date_after'] ) ) {
-                $query['date_created'] = '>' . sanitize_text_field( $args['date_after'] );
+            // Date filter — combine after + before into wc_get_orders range syntax.
+            $after  = ! empty( $args['date_after'] )  ? sanitize_text_field( $args['date_after'] )  : '';
+            $before = ! empty( $args['date_before'] ) ? sanitize_text_field( $args['date_before'] ) : '';
+            if ( $after && $before ) {
+                $query['date_created'] = $after . '...' . $before;
+            } elseif ( $after ) {
+                $query['date_created'] = '>=' . $after;
+            } elseif ( $before ) {
+                $query['date_created'] = '<=' . $before;
             }
+            // Sorting — whitelist orderby field, ASC/DESC default DESC.
+            $allowed_orderby = array( 'date', 'modified', 'id', 'title', 'menu_order', 'rand' );
+            $orderby = isset( $args['orderby'] ) ? sanitize_text_field( $args['orderby'] ) : 'date';
+            $query['orderby'] = in_array( $orderby, $allowed_orderby, true ) ? $orderby : 'date';
+            $order = isset( $args['order'] ) ? strtoupper( sanitize_text_field( $args['order'] ) ) : 'DESC';
+            $query['order'] = in_array( $order, array( 'ASC', 'DESC' ), true ) ? $order : 'DESC';
             $orders = wc_get_orders( $query );
             $list = array();
             foreach ( $orders as $order ) {
@@ -6291,7 +7359,7 @@ class LuwiPress_WebMCP {
         }
 
         $this->register_tool( 'search_products', array(
-            'description' => 'Search products using BM25 ranking — searches title, description, categories, tags, attributes, SKU, and FAQ content with relevance scoring',
+            'description' => 'Search the BM25 index using title, description, categories, tags, attributes, SKU, and FAQ content with relevance scoring. Default scope is products; operators can extend the index to include posts and pages by setting the option `luwipress_search_index_post_types` (or the `luwipress_search_index_post_types` filter) and running search_reindex. Each result row includes `post_type` so chat callers can distinguish a product hit (with price + stock + SKU) from a blog or page hit (price/stock/sku empty, description = trimmed body).',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
@@ -6300,7 +7368,7 @@ class LuwiPress_WebMCP {
                 ),
                 'required' => array( 'query' ),
             ),
-            'annotations' => array( 'title' => 'BM25 Product Search', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+            'annotations' => array( 'title' => 'BM25 Search', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
         ), function ( $args ) {
             $index = LuwiPress_Search_Index::get_instance();
             if ( ! $index->is_indexed() ) {
@@ -6311,17 +7379,33 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'search_reindex', array(
-            'description' => 'Rebuild the BM25 search index for all products — indexes title, description, categories, tags, attributes, SKU, and FAQ content',
+            'description' => 'Rebuild the BM25 search index. Pass `post_types` to override the indexable set for this rebuild AND persist it as the new default (writes the `luwipress_search_index_post_types` option). Omit `post_types` to reindex the current configured set (default: ["product"]; operators opt post/page in here to enable chat RAG over blog/page content — IMP-002). Indexes title, description, categories, tags, attributes, SKU, and FAQ content; product-specific fields (SKU, attributes) are only collected for `product` rows.',
             'inputSchema' => array(
                 'type'       => 'object',
-                'properties' => new stdClass(),
+                'properties' => array(
+                    'post_types' => array(
+                        'type'        => 'array',
+                        'items'       => array( 'type' => 'string' ),
+                        'description' => 'Override the indexable post-type set for this rebuild and persist it as the new default. E.g. ["product","post","page"] to enable cross-content RAG. Omit to reuse the current option value.',
+                    ),
+                ),
             ),
             'annotations' => array( 'title' => 'Rebuild Search Index', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
-        ), function () {
+        ), function ( $args ) {
+            if ( isset( $args['post_types'] ) && is_array( $args['post_types'] ) && ! empty( $args['post_types'] ) ) {
+                $clean = array_values( array_unique( array_map( 'sanitize_key', $args['post_types'] ) ) );
+                if ( ! empty( $clean ) ) {
+                    update_option( 'luwipress_search_index_post_types', $clean );
+                }
+            }
             $index = LuwiPress_Search_Index::get_instance();
             $count = $index->reindex_all();
             $stats = $index->get_stats();
-            return array( 'reindexed' => $count, 'stats' => $stats );
+            return array(
+                'reindexed'  => $count,
+                'post_types' => $index->get_indexable_post_types(),
+                'stats'      => $stats,
+            );
         } );
 
         $this->register_tool( 'search_stats', array(

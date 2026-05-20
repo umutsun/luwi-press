@@ -82,6 +82,47 @@ class LuwiPress_Permission {
     }
 
     /**
+     * Stateless token-authenticated check (no $request reference required).
+     *
+     * Used by internal code paths that run AFTER a REST permission_callback
+     * has already validated the request, but still need to know "is this a
+     * token caller?" for capability gating — `wp_set_current_user()` is NOT
+     * called by check_token(), so `current_user_can()` returns false even
+     * when the request was authenticated via a valid Bearer token.
+     *
+     * Reads Authorization / X-LuwiPress-Token directly from $_SERVER. Uses
+     * hash_equals() against the stored option to prevent timing attacks.
+     * Returns false when no token option is configured.
+     *
+     * @return bool
+     * @since  3.2.11
+     */
+    public static function is_token_authenticated() {
+        $stored = get_option( 'luwipress_seo_api_token', '' );
+        if ( empty( $stored ) ) {
+            return false;
+        }
+
+        $auth = isset( $_SERVER['HTTP_AUTHORIZATION'] ) ? $_SERVER['HTTP_AUTHORIZATION'] : '';
+        if ( empty( $auth ) && isset( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) ) {
+            $auth = $_SERVER['REDIRECT_HTTP_AUTHORIZATION']; // CGI / .htaccess rewrite path
+        }
+        if ( ! empty( $auth ) ) {
+            $token = trim( str_replace( 'Bearer ', '', $auth ) );
+            if ( ! empty( $token ) && hash_equals( $stored, $token ) ) {
+                return true;
+            }
+        }
+
+        $custom = isset( $_SERVER['HTTP_X_LUWIPRESS_TOKEN'] ) ? $_SERVER['HTTP_X_LUWIPRESS_TOKEN'] : '';
+        if ( ! empty( $custom ) && hash_equals( $stored, $custom ) ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Accept either a valid API token OR a logged-in admin.
      *
      * This is the most common permission check — used by endpoints that

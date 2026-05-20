@@ -819,6 +819,7 @@ class LuwiPress_Translation {
                     'meta_description' => $ai_result['meta_description'] ?? '',
                     'focus_keyword'    => $ai_result['focus_keyword'] ?? '',
                     'slug'             => $ai_result['slug'] ?? '',
+                    'faq'              => is_array( $ai_result['faq'] ?? null ) ? $ai_result['faq'] : array(),
                 ),
                 'status' => 'completed',
             ) );
@@ -1042,6 +1043,22 @@ class LuwiPress_Translation {
             return new WP_Error('not_found', 'Post not found', ['status' => 404]);
         }
 
+        // Sanitize FAQ round-trip from AI: preserve entry shape, strip everything
+        // else; drop rows where both Q and A came back empty. Result is the same
+        // serialized array shape as `_luwipress_faq` meta.
+        $raw_faq  = is_array( $content['faq'] ?? null ) ? $content['faq'] : array();
+        $faq_safe = array();
+        foreach ( $raw_faq as $row ) {
+            if ( ! is_array( $row ) ) {
+                continue;
+            }
+            $q = sanitize_text_field( $row['question'] ?? '' );
+            $a = wp_kses_post( $row['answer'] ?? '' );
+            if ( '' !== $q || '' !== $a ) {
+                $faq_safe[] = array( 'question' => $q, 'answer' => $a );
+            }
+        }
+
         // Store translated content
         $translated = [
             'name'              => sanitize_text_field( $content['name'] ?? $content['title'] ?? '' ),
@@ -1051,7 +1068,7 @@ class LuwiPress_Translation {
             'meta_description'  => sanitize_text_field( $content['meta_description'] ?? '' ),
             'focus_keyword'     => sanitize_text_field( $content['focus_keyword'] ?? '' ),
             'slug'              => sanitize_title( $content['slug'] ?? '' ),
-            'faq'               => $content['faq'] ?? [],
+            'faq'               => $faq_safe,
         ];
 
         update_post_meta($product_id, '_luwipress_translation_' . $language, $translated);
@@ -1783,6 +1800,14 @@ class LuwiPress_Translation {
             if ( ! empty( $translated['focus_keyword'] ) && ! empty( $seo['meta_keys']['focus_keyword'] ) ) {
                 update_post_meta( $target_id, $seo['meta_keys']['focus_keyword'], sanitize_text_field( $translated['focus_keyword'] ) );
             }
+        }
+
+        // ── Save translated FAQ schema to the target post (ISSUE-032) ──
+        // _luwipress_faq is the AEO FAQPage source. Without this write,
+        // FR/IT/ES product pages render an empty FAQ tab and FAQPage JSON-LD
+        // even when the AI produced a perfectly good translation set.
+        if ( $target_id && ! empty( $translated['faq'] ) && is_array( $translated['faq'] ) ) {
+            update_post_meta( $target_id, '_luwipress_faq', $translated['faq'] );
         }
     }
 
@@ -2596,6 +2621,13 @@ class LuwiPress_Translation {
             }
             $detector->set_seo_meta($target_id, $seo_data);
         }
+
+        // ── Save translated FAQ schema to the target post (ISSUE-032) ──
+        // Mirrors the WPML branch: persist translated FAQ to target's
+        // _luwipress_faq so the AEO FAQPage emits in the target language.
+        if ( $target_id && ! empty( $translated['faq'] ) && is_array( $translated['faq'] ) ) {
+            update_post_meta( $target_id, '_luwipress_faq', $translated['faq'] );
+        }
     }
 
     // â”€â”€â”€ TAXONOMY TRANSLATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -3215,15 +3247,14 @@ class LuwiPress_Translation {
 
         // â”€â”€ 1. Orphan taxonomy translations: trid has no original â”€â”€
         $orphan_terms = $wpdb->get_results(
-            "SELECT t.translation_id, t.element_id, t.element_type, t.trid, t.language_code
-             FROM {$icl} t
+            "SELECT t.translation_id, t.element_id, t.element_type, t.trid, t.language_code 
+             FROM {$icl} t 
+             LEFT JOIN {$icl} o ON t.trid = o.trid 
+               AND t.element_type = o.element_type 
+               AND o.source_language_code IS NULL 
              WHERE t.element_type LIKE 'tax_%'
                AND t.source_language_code IS NOT NULL
-               AND t.trid NOT IN (
-                   SELECT trid FROM {$icl}
-                   WHERE element_type = t.element_type
-                     AND source_language_code IS NULL
-               )"
+               AND o.trid IS NULL"
         );
 
         foreach ( $orphan_terms as $row ) {
@@ -3240,9 +3271,10 @@ class LuwiPress_Translation {
         // â”€â”€ 2. Orphan post translations: element_id not in wp_posts â”€â”€
         $orphan_posts = $wpdb->get_results(
             "SELECT t.translation_id, t.element_id, t.element_type
-             FROM {$icl} t
+             FROM {$icl} t 
+             LEFT JOIN {$wpdb->posts} p ON t.element_id = p.ID 
              WHERE t.element_type LIKE 'post_%'
-               AND t.element_id NOT IN (SELECT ID FROM {$wpdb->posts})"
+               AND p.ID IS NULL"
         );
 
         foreach ( $orphan_posts as $row ) {
@@ -3255,9 +3287,10 @@ class LuwiPress_Translation {
         // â”€â”€ 3. Orphan term translations: element_id not in wp_term_taxonomy â”€â”€
         $orphan_term_records = $wpdb->get_results(
             "SELECT t.translation_id, t.element_id
-             FROM {$icl} t
+             FROM {$icl} t 
+             LEFT JOIN {$wpdb->term_taxonomy} tt ON t.element_id = tt.term_id 
              WHERE t.element_type LIKE 'tax_%'
-               AND t.element_id NOT IN (SELECT term_id FROM {$wpdb->term_taxonomy})"
+               AND tt.term_id IS NULL"
         );
 
         foreach ( $orphan_term_records as $row ) {

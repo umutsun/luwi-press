@@ -5,15 +5,35 @@ parameters:
 			count: 2
 			path: luwipress/admin/admin-page.php
 
+		# WP 7.0 Consumer pattern (class-luwipress-connectors.php) — the
+		# functions wp_ai_client_get_api_key / wp_ai_client_register_provider
+		# and the class WP_AI_Client are introduced by WordPress 7.0; runtime
+		# guarded with function_exists() / class_exists() / method_exists().
+		# PHPStan can't see WP 7.0 stubs from a 6.x environment.
+		-
+			message: "#^Parameter \\#1 \\$callback of function call_user_func expects callable\\(\\): mixed, 'wp_ai_client_get_api_key' given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-connectors.php
+
+		-
+			message: "#^Call to function method_exists\\(\\) with 'WP_AI_Client' and 'get_provider' will always evaluate to false\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-connectors.php
+
+		-
+			message: "#^Parameter \\#1 \\$callback of function call_user_func expects callable\\(\\): mixed, 'wp_ai_client_register_provider' given\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-connectors.php
+
+		-
+			message: "#^Call to function method_exists\\(\\) with 'WP_AI_Client' and 'register_provider' will always evaluate to false\\.$#"
+			count: 1
+			path: luwipress/includes/class-luwipress-connectors.php
+
 		-
 			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
 			count: 1
 			path: luwipress/admin/admin-page.php
-
-		-
-			message: "#^Offset 'models' on array\\{label\\: 'Claude', vendor\\: 'Anthropic', desc\\: string, key_field\\: 'luwipress_anthropic…', key_value\\: mixed, placeholder\\: 'sk\\-ant\\-…', help_url\\: 'https\\://console…', models\\: array\\{claude\\-haiku\\-4\\-5\\: array\\{label\\: string, cost\\: '\\$0\\.80 / \\$4\\.00 per 1M', recommended\\: true\\}, claude\\-sonnet\\-4\\-6\\: array\\{label\\: string, cost\\: '\\$3\\.00 / \\$15\\.00 per…'\\}\\}, \\.\\.\\.\\}\\|array\\{label\\: 'Custom', vendor\\: string, desc\\: string, key_field\\: 'luwipress_oai…', key_value\\: mixed, placeholder\\: 'sk\\-…', help_url\\: '', models\\: array\\{\\}, \\.\\.\\.\\}\\|array\\{label\\: 'Gemini', vendor\\: 'Google', desc\\: string, key_field\\: 'luwipress_google_ai…', key_value\\: mixed, placeholder\\: 'AIza…', help_url\\: 'https\\://aistudio…', models\\: array\\{gemini\\-2\\.0\\-flash\\: array\\{label\\: string, cost\\: '\\$0\\.10 / \\$0\\.40 per 1M', recommended\\: true\\}, gemini\\-2\\.5\\-flash\\: array\\{label\\: string, cost\\: '\\$0\\.15 / \\$0\\.60 per 1M'\\}, gemini\\-2\\.5\\-pro\\: array\\{label\\: string, cost\\: '\\$1\\.25 / \\$10\\.00 per…'\\}\\}, \\.\\.\\.\\}\\|array\\{label\\: 'GPT', vendor\\: 'OpenAI', desc\\: string, key_field\\: 'luwipress_openai…', key_value\\: mixed, placeholder\\: 'sk\\-…', help_url\\: 'https\\://platform…', models\\: array\\{gpt\\-4o\\-mini\\: array\\{label\\: string, cost\\: '\\$0\\.15 / \\$0\\.60 per 1M', recommended\\: true\\}, gpt\\-4o\\: array\\{label\\: string, cost\\: '\\$2\\.50 / \\$10\\.00 per…'\\}\\}, \\.\\.\\.\\} in isset\\(\\) always exists and is not nullable\\.$#"
-			count: 1
-			path: luwipress/admin/settings-page.php
 
 		-
 			message: "#^Parameter \\#1 \\$text of function esc_attr expects string, float given\\.$#"

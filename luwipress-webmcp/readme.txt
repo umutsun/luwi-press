@@ -2,9 +2,9 @@
 Contributors: luwidev
 Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.19
+Stable tag: 1.0.26
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,53 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.26 — Bot Shield comment review tools + WordPress 7.0 Abilities API alignment (paired with core 3.3.0) =
+* **NEW `bot_shield_comments_recent`**: list the last 100 bot-suspect comment events caught by core 3.3.0's Bot Shield comment review layer. Returns score, action taken (moderated/spam/rejected), the matched signals (link density / spam tokens / author shape / duplicate / IP already blocked / URL-only body), and a 240-char snippet. IPs are masked (last octet zeroed) for GDPR.
+* **NEW `bot_shield_comments_test`**: dry-run a comment payload against the current scorer. Returns `{verdict, score, threshold, signals, mode}`. Verdicts: allow / moderate / spam / reject. Tune thresholds + spam-token lists without risking live submissions.
+* **COMPAT WP 7.0**: paired release with core LuwiPress 3.3.0. WebMCP HTTP endpoint stays as the primary surface for headless / agentic clients (Open Claw, Hermes, direct MCP HTTP); core's Abilities bridge (`LuwiPress_Abilities`) mirrors the same tool registry into the native WP 7.0 Abilities API so WP-native consumers (Claude Code, Cursor, Automattic's official MCP Adapter plugin) discover the catalog without a separate auth layer.
+* **NEW admin info-box**: when WP 7.0 Abilities API is detected on the site, the WebMCP admin page surfaces a "Dual-registry" panel — operator sees at a glance whether the official MCP Adapter is active and whether LuwiPress tools are mirrored through both surfaces. `Tested up to: 7.0`.
+
+= 1.0.25 — Parallel redirect audit + KG Action Queue surface + multi-post-type reindex =
+* **slug_resolver_redirect_audit timeout fix (Hub-BUG-010)**: handler refactored to round-based `curl_multi_init` parallel batching. Each round fires up to `batch_size` (default 20, max 50) pending URLs concurrently; URLs that 3xx queue their next hop for the following round. Wall-time for the Tapadum 216-URL menu sweep drops from ~4 minutes (MCP timeout) to ~10-20 seconds. New params `parallel` (default true) and `batch_size` (default 20) expose tuning; set `parallel: false` to force the legacy sequential `wp_remote_get` loop when debugging transport issues or when curl is unavailable. Response `stats` now carries `mode` (parallel/sequential), `batch_size`, `rounds`, and `elapsed_ms` for audit trail.
+* **NEW `kg_candidates`**: Action Queue v2 candidate list. Returns ROI-ranked opportunities derived from KG signals — RECENTLY_REGRESSED, STALE_ENRICHED, MISSING_FAQ, MISSING_HOWTO, MISSING_SCHEMA, plus theme-companion candidates injected via `luwipress_kg_action_queue_external_candidates`. Each item carries impact, effort_min, roi, tier, confidence_score (0-100), and a `why` block with primary/supporting signals + baseline comparison. Distinct from `content_opportunities` (legacy static 5-category sweep): use that for missing_seo_meta / missing_translations / stale_content / thin_content / missing_alt_text; use `kg_candidates` for signal-driven Action Queue feed.
+* **NEW `kg_events`**: KG event stream (raw rows) or per-window aggregate summary. Event types: enrich, seo, translate, schema_added. Pass `summary=true` + `hours=N` for count-by-type aggregate. Use to verify the signal layer is actually recording activity — if event counts are zero, the v2 candidate types will be empty regardless of generator state.
+* **search_reindex** accepts a `post_types` argument (e.g. `["product","post","page"]`) that overrides the indexable set AND persists it as the new default option. Pairs with core 3.2.10's multi-post-type BM25 surface to enable chat RAG over blog and page content (IMP-002).
+* **search_products** description clarifies the multi-post-type result shape: each row carries `post_type`; non-product rows have empty `price`/`stock`/`sku`.
+* Requires core LuwiPress 3.2.10+ for the multi-post-type index extension.
+
+= 1.0.24 — Bulk SEO meta + Customer Chat session/history MCP tools + linker_resolve clarity =
+* **NEW `seo_meta_bulk`**: wrap of `POST /seo/meta-bulk` (server-cap 500 rows/request). Bulk-write SEO meta (title, description, focus keyword) across up to 500 posts in a single call. Per-row partial-update: missing fields leave existing values untouched. Returns `{ applied, skipped, error_rows[], total }`. Closes a Tapadum silent-regression gap — the REST endpoint had shipped since 3.1.7 but never had an MCP wrapper.
+* **NEW Customer Chat surface (3 tools, FR-003)**:
+  * `chat_sessions_list` — paginated session listing with filters (status, escalated_only, customer_email partial, since-datetime). Each row carries session_id, customer_*, status, escalated_to, page_url, ip_address, timestamps, message_count.
+  * `chat_session_get(session_id)` — full transcript (up to 50 messages, oldest-first) with status + escalation state.
+  * `chat_messages_search(query)` — plain-LIKE content search with snippet centring (≤240 chars around match) + role + since filters. For chat-tone reviews, pain-point analysis, and brand-voice audits across translated chat traffic.
+* **`linker_resolve` description honesty**: catalog description rewritten to "Process the pre-computed internal-linking backlog for a single post" — the tool is a backlog processor, NOT an on-demand AI call. Returns `{ resolved, remaining }`. Empty-backlog responses are `{resolved:0, remaining:0}`, expected. Pairs with `linker_unresolved` to see what's waiting. Behaviour unchanged.
+* Requires core LuwiPress 3.2.9+ for the chat surface (REST endpoints land in core).
+
+= 1.0.23 — WPML/Polylang post-side sibling resolver =
+* **NEW `translation_post_siblings`**: post-side counterpart to `taxonomy_term_get`'s sibling resolver. Pass any sibling post/page/product ID (source or translation) and receive the full `{lang: post_id}` pair map — works under both WPML and Polylang. Returns `plugin`, `input_lang`, `source_lang`, `default_lang`, and (under WPML) the `trid` for diagnostics. Closes a Tapadum-reported gap (vendor-FR §6.18): cross-language SEO sweeps, retranslation drift cleanup, and any audit that needs DB-level pair resolution no longer require XML exports + fuzzy slug matching. The `taxonomy_term_get` pattern, applied to posts.
+* **`translation_status` description clarified**: catalog description now reads "Site-wide translation queue aggregate" — the misleading `post_id` parameter (declared in schema but silently ignored by the handler) has been removed. For per-post sibling resolution use `translation_post_siblings`. Behavior unchanged; contract honest.
+
+= 1.0.22 — Read-before-write taxonomy term + woo_list_orders polish =
+* **NEW `taxonomy_term_get`**: read-before-write companion to `taxonomy_update_term`. Returns the full core fields (`name`, `slug`, `description`, `parent`, `count`, `link`) of a single term by ID. Optional `lang` parameter resolves to the WPML/Polylang sibling in that language before reading. Closes a Tapadum-reported gap (A2) — translation-term descriptions were unreadable from MCP, breaking the "read current description before rewriting" discipline.
+* **`wpml_term_translation_get`** now includes `description` in each sibling entry — same read-gap fix at the bulk-translation-listing level.
+* **`woo_list_orders`** — `date_before` parameter now actually filters the query (was declared in the schema but ignored by the builder, forcing full-table scans on wide ranges). Added `orderby` (date / modified / id / title / menu_order / rand) and `order` (ASC / DESC) parameters so callers can sort without post-processing. Closes Tapadum feedback gaps C3 (BUG-002) and C5 (BUG-004).
+
+= 1.0.21 — Cookie Consent + Bot Shield MCP tools (12 tools) =
+* **NEW Cookie Consent tools (5)** — `cookie_consent_settings_get`, `cookie_consent_settings_set` (partial-update), `cookie_consent_stats` (per-category accept-rate), `cookie_consent_log` (paginated consent records), `cookie_consent_policy_generate` (AI-generates a site-specific cookie policy paragraph using the LuwiPress Plugin Detector's detected tags as context).
+* **NEW Bot Shield tools (7)** — `bot_shield_stats`, `bot_shield_settings_get`, `bot_shield_settings_set`, `bot_shield_blocks_list`, `bot_shield_block` (manual block; `destructiveHint: true`), `bot_shield_unblock`, `bot_shield_test` (dry-run a UA/IP/path triple against the current rule set without firing — verdict: allow|deny + reason).
+* Requires core LuwiPress 3.2.0+.
+
+= 1.0.20 — Bot Account Cleaner MCP tools (7 tools) =
+* **NEW (`bot_account_scan`)**: trigger a fresh bot-account scan; scores every subscriber/customer user across the signal stack and writes rows into `wp_luwipress_bot_account_scores`. Returns aggregate counts {scanned, flagged, protected, threshold}.
+* **NEW (`bot_account_list`)**: paginated list of flagged accounts (score ≥ threshold), each row carrying user_id, score, signals → weight map, status, login, email, display_name, registration date, roles. Optional `min_score` override to query at a different cutoff.
+* **NEW (`bot_account_score`)**: compute (without persisting) the bot-likelihood score for a single user id. Returns {score 0-100, signals map, protected bool, reason?}. Useful for spot-checking why a specific user was/was-not flagged before bulk action.
+* **NEW (`bot_account_delete`)**: bulk delete with hard-coded safety. Dry-run by default; pass `confirm=true` to actually execute. Server re-scores each user inline and refuses any protected account (admin/editor/shop_manager role, whitelisted, has WC orders) regardless of caller intent. Carries `destructiveHint: true` so MCP clients can warn before invocation.
+* **NEW (`bot_account_whitelist`)**: add or remove a user from the permanent whitelist (action: add|remove). Whitelisted users are hidden from scans and blocked from deletion via this surface.
+* **NEW (`bot_account_stats`)**: aggregate dashboard payload — counts by status, flagged total, threshold, score-bucket histogram (high 80+, medium 60-79, low 40-59, noise <40), whitelist size, last-scan summary.
+* **NEW (`bot_account_settings_set`)**: partial-update scanner config — threshold (0-100), min_age_days (grace period), scan_batch_size (50-5000), allowed_roles array. Protected roles + WC-order guard are safety invariants and not operator-tweakable.
+* Requires core LuwiPress 3.1.60+.
 
 = 1.0.19 — taxonomy_update_term WPML translation-term fix (Vendor-BUG-004) =
 * **FIX (`taxonomy_update_term`)**: WPML translation terms could not be updated — even a description-only call returned `The slug "<x>" is already in use by another term`. Root cause: `wp_update_term()` always re-runs `wp_unique_term_slug()`, which is not WPML-language-aware and falsely flags the sibling-language slug as a collision. Fix is two-layer: (a) description-only updates now bypass `wp_update_term` entirely via direct `$wpdb->update()` on `wp_term_taxonomy` + `clean_term_cache()` + `edited_term` action (the common SEO-description sweep path); (b) full updates (name/slug/parent) set WPML language context via `$sitepress->switch_lang($term_lang)` before `wp_update_term()` and restore the previous language after, so the slug-uniqueness check scopes to the term's own language siblings. Response now includes a `method` field (`direct_description_write` | `wp_update_term`). Reported by Tapadum Hub session 102 during the Clay Darbuka category SEO pilot — closes the 156 translation-term description backlog blocker.

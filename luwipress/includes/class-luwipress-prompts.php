@@ -515,10 +515,40 @@ Review: %4$s',
 	 * @return array ['system' => string, 'user' => string]
 	 */
 	public static function translation( array $content, $source_lang, $target_lang, $product_id = 0 ) {
+		// FAQ round-trip: enumerate source Q&A entries so the AI can translate each
+		// in place, then emit a matching-length JSON array for the writer to persist
+		// back to the target post's _luwipress_faq meta. See ISSUE-032.
+		$faq        = is_array( $content['faq'] ?? null ) ? $content['faq'] : array();
+		$faq_count  = 0;
+		$faq_lines  = array();
+		foreach ( $faq as $i => $entry ) {
+			if ( ! is_array( $entry ) ) {
+				continue;
+			}
+			$q = isset( $entry['question'] ) ? (string) $entry['question'] : '';
+			$a = isset( $entry['answer'] )   ? (string) $entry['answer']   : '';
+			if ( '' === $q && '' === $a ) {
+				continue;
+			}
+			$faq_lines[] = sprintf( "  [%d] Q: %s\n      A: %s", $i, $q, $a );
+			$faq_count++;
+		}
+		$faq_input  = $faq_lines ? "FAQ entries (translate each Q AND A):\n" . implode( "\n", $faq_lines ) : 'FAQ entries: none';
+		$faq_schema = '';
+		if ( $faq_count > 0 ) {
+			$faq_schema = ', "faq": [' . rtrim( str_repeat( '{"question": "", "answer": ""}, ', $faq_count ), ', ' ) . ']';
+		} else {
+			$faq_schema = ', "faq": []';
+		}
+
 		$system = sprintf(
 			'You are an expert SEO-aware translator for e-commerce. Translate the following product from %1$s to %2$s.
 
-RULES: Preserve brand names as-is. Meta title <60 chars. Meta description <160 chars. Natural language. Preserve HTML.',
+RULES:
+- Preserve brand names, SKUs, and proper nouns as-is.
+- Meta title <60 chars. Meta description <160 chars. Use natural %2$s. Preserve HTML markup.
+- Focus Keyword MUST be fully translated to %2$s. No source-language tokens may remain (e.g. "silent" → "silencieux"). If the source keyword is multi-word, translate every word.
+- If FAQ entries are provided, translate BOTH the question and the answer of EACH entry. Keep the same count and order; never drop, merge, or invent entries.',
 			$source_lang,
 			$target_lang
 		);
@@ -532,9 +562,10 @@ Short Description: %5$s
 Meta Title: %6$s
 Meta Description: %7$s
 Focus Keyword: %8$s
+%9$s
 
 Respond ONLY with valid JSON:
-{"product_id": %1$d, "target_language": "%2$s", "title": "", "description": "", "short_description": "", "meta_title": "", "meta_description": "", "focus_keyword": "", "slug": ""}',
+{"product_id": %1$d, "target_language": "%2$s", "title": "", "description": "", "short_description": "", "meta_title": "", "meta_description": "", "focus_keyword": "", "slug": ""%10$s}',
 			$product_id,
 			$target_lang,
 			$content['name'] ?? $content['title'] ?? '',
@@ -542,7 +573,9 @@ Respond ONLY with valid JSON:
 			$content['short_description'] ?? '',
 			$content['meta_title'] ?? '',
 			$content['meta_description'] ?? '',
-			$content['focus_keyword'] ?? ''
+			$content['focus_keyword'] ?? '',
+			$faq_input,
+			$faq_schema
 		);
 
 		$prompt = array( 'system' => $system, 'user' => $user );

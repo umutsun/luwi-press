@@ -187,4 +187,15 @@ class LuwiPress_Marketplace_Walmart implements LuwiPress_Marketplace_Adapter {
 
 		return $body ?: array();
 	}
+
+	public function get_brand_color() {
+		return '#0071dc';
+	}
+
+	public function get_settings_schema() {
+		return array(
+			array( 'id' => 'luwipress_walmart_client_id', 'label' => 'Client ID', 'type' => 'text', 'default' => '' ),
+			array( 'id' => 'luwipress_walmart_client_secret', 'label' => 'Client Secret', 'type' => 'password', 'default' => '' ),
+		);
+	}
 }

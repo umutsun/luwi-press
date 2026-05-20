@@ -45,6 +45,7 @@ class LuwiPress_Plugin_Detector {
 			'google_ads'       => $this->detect_google_ads(),
 			'meta_ads'         => $this->detect_meta_ads(),
 			'product_feed'     => $this->detect_product_feed(),
+			'security'         => $this->detect_security(),
 		);
 	}
 
@@ -289,6 +290,39 @@ class LuwiPress_Plugin_Detector {
 			}
 			$result['method'] = 'smtp';
 		}
+		// Easy WP SMTP 2.x (SendLayer/Awesome Motive rewrite). The `EASY_WP_SMTP_VERSION`
+		// constant is the documented signature, but the post-SendLayer builds sometimes
+		// load the autoloader before the constant is defined, or only expose namespaced
+		// classes. We OR multiple signatures so a single missing constant doesn't break
+		// detection. Also check function `easy_wp_smtp()` which is the v2 bootstrap helper.
+		elseif (
+			defined( 'EASY_WP_SMTP_VERSION' )
+			|| function_exists( 'easy_wp_smtp' )
+			|| class_exists( 'EasyWPSMTP\\Plugin' )
+			|| class_exists( 'EasyWPSMTP\\Core' )
+			|| class_exists( '\\EasyWPSMTP\\Plugin' )
+		) {
+			$result['plugin']  = 'easy-wp-smtp';
+			$result['version'] = defined( 'EASY_WP_SMTP_VERSION' ) ? constant( 'EASY_WP_SMTP_VERSION' ) : 'unknown';
+			$easy_opts = get_option( 'easy_wp_smtp', array() );
+			if ( ! empty( $easy_opts['mail']['from_email'] ) ) {
+				$result['from_email'] = $easy_opts['mail']['from_email'];
+			}
+			if ( ! empty( $easy_opts['mail']['from_name'] ) ) {
+				$result['from_name'] = $easy_opts['mail']['from_name'];
+			}
+			if ( ! empty( $easy_opts['mail']['mailer'] ) ) {
+				$result['method'] = $easy_opts['mail']['mailer'];
+			} else {
+				$result['method'] = 'smtp';
+			}
+		}
+		// Easy WP SMTP 1.x legacy (`SWPSMTP_VERSION_NUM` constant) — kept for older installs
+		elseif ( defined( 'SWPSMTP_VERSION_NUM' ) ) {
+			$result['plugin']  = 'easy-wp-smtp';
+			$result['version'] = constant( 'SWPSMTP_VERSION_NUM' );
+			$result['method']  = 'smtp';
+		}
 
 		// WooCommerce email overrides
 		if ( class_exists( 'WooCommerce' ) ) {
@@ -311,26 +345,12 @@ class LuwiPress_Plugin_Detector {
 	// ------------------------------------------------------------------
 
 	public function detect_crm() {
-		if ( isset( $this->cache['crm'] ) ) {
-			return $this->cache['crm'];
-		}
-
-		$result = array(
-			'plugin' => 'none',
-			'version' => null,
-		);
-
-		if ( defined( 'FLUENTCRM_PLUGIN_VERSION' ) ) {
-			$result['plugin']  = 'fluentcrm';
-			$result['version'] = FLUENTCRM_PLUGIN_VERSION;
-		} elseif ( class_exists( 'MailChimp_WooCommerce' ) ) {
-			$result['plugin'] = 'mailchimp-for-woocommerce';
-		} elseif ( class_exists( 'Klaviyo' ) ) {
-			$result['plugin'] = 'klaviyo';
-		}
-
-		$this->cache['crm'] = $result;
-		return $result;
+		// CRM track is intentionally pure-Woo as of 3.2.4 — LuwiPress is its own
+		// content-analysis + segmentation surface. Operators export cohorts to
+		// whatever email tool they prefer via the segment CSV. We no longer pay
+		// the runtime cost of probing third-party CRM plugins.
+		$this->cache['crm'] = array( 'plugin' => 'none', 'version' => null );
+		return $this->cache['crm'];
 	}
 
 	// ------------------------------------------------------------------
@@ -338,23 +358,11 @@ class LuwiPress_Plugin_Detector {
 	// ------------------------------------------------------------------
 
 	public function detect_customer_support() {
-		if ( isset( $this->cache['customer_support'] ) ) {
-			return $this->cache['customer_support'];
-		}
-
-		$result = array(
-			'plugin'  => 'none',
-			'version' => null,
-		);
-
-		if ( class_exists( 'LiveChat\\LiveChat' ) || defined( 'STARTER_PLUGIN_VERSION' ) ) {
-			$result['plugin'] = 'livechat';
-		} elseif ( class_exists( 'TawkTo_Settings' ) ) {
-			$result['plugin'] = 'tawk-to';
-		}
-
-		$this->cache['customer_support'] = $result;
-		return $result;
+		// Customer support track dropped as of 3.2.4 — LuwiPress ships its own
+		// Customer Chat module so there's no need to probe LiveChat / Tawk.to.
+		// Keeping the method as a no-op preserves the detect_all() shape.
+		$this->cache['customer_support'] = array( 'plugin' => 'none', 'version' => null );
+		return $this->cache['customer_support'];
 	}
 
 	// ------------------------------------------------------------------
@@ -404,6 +412,50 @@ class LuwiPress_Plugin_Detector {
 		}
 
 		$this->cache['cache'] = $result;
+		return $result;
+	}
+
+	// ------------------------------------------------------------------
+	// Security (Wordfence / Sucuri / iThemes / AIOS) Detection
+	// ------------------------------------------------------------------
+
+	/**
+	 * Detect installed security / firewall / malware-scan plugins. When
+	 * Wordfence is detected, the LuwiPress Bot Shield module switches its
+	 * UA blocklist + rate limit + honeypot layers to OFF so the two
+	 * defences don't double-block the same request. Cookie consent +
+	 * REST user enumeration + XML-RPC kill stay on under LuwiPress
+	 * because Wordfence Free does not provide those.
+	 *
+	 * @return array{plugin:string,version:string|null,is_premium:bool,delegate_layers:array<string>}
+	 */
+	public function detect_security() {
+		if ( isset( $this->cache['security'] ) ) {
+			return $this->cache['security'];
+		}
+
+		$result = array(
+			'plugin'          => 'none',
+			'version'         => null,
+			'is_premium'      => false,
+			'delegate_layers' => array(),
+		);
+
+		// Wordfence (free + premium share the same constant).
+		if ( defined( 'WORDFENCE_VERSION' ) ) {
+			$result['plugin']  = 'wordfence';
+			$result['version'] = WORDFENCE_VERSION;
+			// Premium check: the premium key file exists in wp-content/.
+			$result['is_premium'] = defined( 'WORDFENCE_PREMIUM' ) ? (bool) WORDFENCE_PREMIUM : false;
+			// What layers we delegate when Wordfence is present.
+			$result['delegate_layers'] = array(
+				'ua_blocklist',
+				'rate_limit',
+				'honeypot',
+			);
+		}
+
+		$this->cache['security'] = $result;
 		return $result;
 	}
 
@@ -610,6 +662,27 @@ class LuwiPress_Plugin_Detector {
 				'google_shopping'  => true,
 				'facebook'         => true,
 				'custom_templates' => true,
+			);
+		}
+		// RexTheme Product Feed Manager (Free + PRO) — `WPPFM_VERSION` (Free) / `WPPFM_PRO_VERSION` (PRO)
+		elseif ( defined( 'WPPFM_VERSION' ) || defined( 'WPPFM_PRO_VERSION' ) || class_exists( 'Rex_Product_Feed' ) ) {
+			$is_pro = defined( 'WPPFM_PRO_VERSION' );
+			$result['plugin']  = $is_pro ? 'rextheme-pfm-pro' : 'rextheme-pfm';
+			// Defensive constant access: PHPStan can't statically verify
+			// third-party plugin constants exist, so each branch guards.
+			if ( defined( 'WPPFM_PRO_VERSION' ) ) {
+				$result['version'] = constant( 'WPPFM_PRO_VERSION' );
+			} elseif ( defined( 'WPPFM_VERSION' ) ) {
+				$result['version'] = constant( 'WPPFM_VERSION' );
+			} else {
+				$result['version'] = null;
+			}
+			$result['features'] = array(
+				'google_shopping'  => true,
+				'facebook'         => true,
+				'bing'             => $is_pro,
+				'custom_templates' => true,
+				'multi_channel'    => $is_pro,
 			);
 		}
 

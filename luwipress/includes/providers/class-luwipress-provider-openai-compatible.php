@@ -39,6 +39,10 @@ class LuwiPress_Provider_OpenAI_Compatible implements LuwiPress_AI_Provider {
 	private $base_url;
 
 	public function __construct() {
+		// OAI-Compatible vendors (DeepSeek, Kimi, Groq, Together, self-hosted)
+		// are out of scope for WP 7.0 Connectors — Connectors only covers
+		// OpenAI / Anthropic / Google. Keep reading from the LuwiPress
+		// option layer for this provider.
 		$this->api_key = get_option( 'luwipress_oai_compat_api_key', '' );
 		$this->preset  = get_option( 'luwipress_oai_compat_preset', 'deepseek' );
 

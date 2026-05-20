@@ -152,6 +152,16 @@
         border-bottom-color: var(--lp-surface-secondary);
     }
 
+    /* Form table labels (Settings page) */
+    .luwipress-settings .form-table th,
+    .luwipress-settings .form-table td label,
+    .luwipress-settings .form-table td p.description {
+        color: var(--lp-text);
+    }
+    .luwipress-settings .form-table td p.description {
+        color: var(--lp-text-secondary);
+    }
+
     /* Code blocks */
     code, pre {
         background: var(--lp-surface-hover) !important;
@@ -305,6 +315,47 @@ a:focus-visible {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
     margin-bottom: 24px;
+}
+
+/* Compact "mini card" grid — column-shaped tiles in a tight horizontal row.
+   Used by Bot Defense, Cookie Consent and similar status surfaces where the
+   default flex-row card variant is too tall. */
+.luwipress-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.luwipress-stat-grid .luwipress-stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 16px;
+    gap: 4px;
+    min-height: 0;
+}
+.luwipress-stat-grid .stat-value {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--lp-text, #111827);
+}
+.luwipress-stat-grid .stat-label {
+    display: block;
+    font-size: 11px;
+    color: var(--lp-text-muted, #64748b);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1.2;
+}
+.luwipress-stat-grid .stat-link {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--lp-primary, #6366f1);
+    text-decoration: none;
+}
+.luwipress-stat-grid .stat-link:hover {
+    text-decoration: underline;
 }
 
 .luwipress-stat-card {
@@ -766,6 +817,88 @@ a:focus-visible {
 }
 
 /* ========================================
+   WordPress 7.0 Connectors banner + migration UI
+   ======================================== */
+
+.lp-wp7-banner {
+    border-left: 4px solid var(--lp-primary, #4f46e5);
+    background: var(--lp-surface-alt, #f9fafb);
+}
+
+.lp-wp7-banner-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    margin-bottom: 6px;
+}
+
+.lp-wp7-banner-head .dashicons {
+    color: var(--lp-primary, #4f46e5);
+}
+
+.lp-wp7-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.lp-wp7-pills .lp-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.lp-wp7-pills .lp-pill .lp-pill-state {
+    color: var(--lp-text-muted, #6b7280);
+    font-weight: 400;
+}
+
+.lp-wp7-actions {
+    margin-top: 10px;
+}
+
+.lp-field-wp7-managed .lp-wp7-managed-row {
+    padding: 4px 0 6px;
+}
+
+.lp-field-wp7-managed .lp-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+.lp-wp7-migrate-table {
+    margin-top: 12px;
+}
+
+.lp-wp7-migrate-table .lp-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+@keyframes lp-spin-keys {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+.lp-spin {
+    animation: lp-spin-keys 1s linear infinite;
+}
+
+/* ========================================
    Settings Page
    ======================================== */
 
@@ -1145,6 +1278,152 @@ a:focus-visible {
     font-size: 12px;
     margin-left: 6px;
     color: var(--lp-gray);
+}
+
+/* Indeterminate variant — shimmer gradient slides across continuously while
+   the caller waits on a single REST call with no progress events. Width is
+   stretched so the bar reads as a full row. */
+.luwipress-progress-bar--indeterminate {
+    width: 100%;
+    max-width: 320px;
+    height: 6px;
+    background: var(--lp-border-light, #e5e7eb);
+    background-image: linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--lp-primary, #6366f1) 30%,
+        var(--lp-primary, #6366f1) 50%,
+        transparent 80%,
+        transparent 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: lp-shimmer 1.4s linear infinite;
+}
+
+/* Inline "doing-something" pill — small badge with a pulsing dot. Pairs with
+   the indeterminate progress bar in flows where the operator just kicked off
+   an async task and we want clear "still working" feedback. */
+.lp-working-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--lp-primary-soft, #eef2ff);
+    color: var(--lp-primary, #6366f1);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    vertical-align: middle;
+}
+.lp-working-pill::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--lp-primary, #6366f1);
+    animation: lp-miss-pulse 1.2s ease-in-out infinite;
+}
+
+/* ========================================
+   Bot Defense — Animated Sweep
+   ======================================== */
+
+.lwp-bot-sweep-panel {
+    padding: 12px 14px;
+    background: var(--lp-surface-secondary, #fafafa);
+    border: 1px solid var(--lp-border, #e5e7eb);
+    border-radius: var(--radius-md, 10px);
+}
+.lwp-bot-sweep-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.lwp-bot-sweep-counts {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.lwp-bot-sweep-counts .lp-pill {
+    font-size: 11px;
+    padding: 3px 9px;
+    line-height: 1.4;
+}
+.lwp-bot-sweep-counts .lp-pill strong {
+    font-weight: 700;
+    margin: 0 2px;
+}
+.lwp-bot-sweep-actions {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 6px;
+}
+.lwp-bot-sweep-bar {
+    height: 6px;
+    background: var(--lp-border-light, #f3f4f6);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+}
+.lwp-bot-sweep-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--lp-primary, #6366f1), var(--lp-primary-light, #818cf8));
+    border-radius: 999px;
+    transition: width 220ms var(--ease-out, ease-out);
+}
+
+/* Row state transitions during sweep */
+#lwp-bot-table tbody tr {
+    transition:
+        background-color 200ms ease,
+        opacity 320ms ease,
+        transform 320ms var(--ease-out, ease-out),
+        max-height 320ms ease,
+        padding 320ms ease;
+    transform-origin: top center;
+}
+.lwp-bot-row--deleting {
+    background-color: var(--lp-error-bg, #fef2f2) !important;
+    animation: lwp-bot-row-pulse 360ms ease-in-out;
+}
+.lwp-bot-row--deleted {
+    opacity: 0;
+    transform: translateX(12px) scale(0.98);
+    pointer-events: none;
+}
+.lwp-bot-row--kept {
+    background-color: var(--lp-success-bg, #f0fdf4) !important;
+    opacity: 0.65;
+}
+.lwp-bot-row--kept td { color: var(--lp-text-secondary, #6b7280); }
+.lwp-bot-keep-pill {
+    font-size: 10px !important;
+    padding: 2px 7px !important;
+    line-height: 1.4;
+    vertical-align: middle;
+}
+
+@keyframes lwp-bot-row-pulse {
+    0%   { background-color: var(--lp-error-bg, #fef2f2); }
+    50%  { background-color: rgba(220, 38, 38, 0.18); }
+    100% { background-color: var(--lp-error-bg, #fef2f2); }
+}
+
+/* Sweep button — subtle red affordance without screaming */
+.lwp-bot-sweep-btn {
+    color: var(--lp-error, #b91c1c) !important;
+    border-color: var(--lp-error, #b91c1c) !important;
+}
+.lwp-bot-sweep-btn:hover:not(:disabled) {
+    background: var(--lp-error-bg, #fef2f2) !important;
+}
+.lwp-bot-sweep-btn:disabled {
+    opacity: 0.6;
 }
 
 /* ========================================
@@ -2471,6 +2750,17 @@ a:focus-visible {
 .pill-err .lp-pill-dot { background: #ef4444; opacity: 1; }
 .pill-neutral { background: #f0f9ff; color: #1e40af; }
 .pill-neutral .lp-pill-dot { background: #3b82f6; opacity: 1; }
+/* Semantic aliases referenced by Settings/Bot Defense/Cookies/Theme pages
+   and the WP 7.0 Connectors banner. Kept side-by-side with the ok/err/neutral
+   palette so callers can pick whichever vocabulary fits their context. */
+.pill-success { background: #ecfdf5; color: #065f46; }
+.pill-success .lp-pill-dot { background: #10b981; opacity: 1; }
+.pill-warning { background: #fef3c7; color: #92400e; }
+.pill-warning .lp-pill-dot { background: #f59e0b; opacity: 1; }
+.pill-info { background: #eff6ff; color: #1e40af; }
+.pill-info .lp-pill-dot { background: #2563eb; opacity: 1; }
+.pill-danger { background: #fef2f2; color: #991b1b; }
+.pill-danger .lp-pill-dot { background: #ef4444; opacity: 1; }
 
 /* Hover/focus tooltip — one-line label is the at-a-glance signal,
    tooltip carries the "what does this enable / what's recommended" copy. */

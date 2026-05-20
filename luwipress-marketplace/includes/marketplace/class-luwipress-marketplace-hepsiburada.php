@@ -129,4 +129,16 @@ class LuwiPress_Marketplace_Hepsiburada implements LuwiPress_Marketplace_Adapter
 
 		return $body ?: array();
 	}
+
+	public function get_brand_color() {
+		return '#ff6000';
+	}
+
+	public function get_settings_schema() {
+		return array(
+			array( 'id' => 'luwipress_hepsiburada_api_key', 'label' => 'API Key', 'type' => 'password', 'default' => '' ),
+			array( 'id' => 'luwipress_hepsiburada_api_secret', 'label' => 'API Secret', 'type' => 'password', 'default' => '' ),
+			array( 'id' => 'luwipress_hepsiburada_merchant_id', 'label' => 'Merchant ID', 'type' => 'text', 'default' => '' ),
+		);
+	}
 }

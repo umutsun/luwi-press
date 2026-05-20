@@ -990,7 +990,7 @@ if ( $is_wpml ) {
 					<?php foreach ( array( 'drift' => 'Drift', 'outdated' => 'Outdated', 'structural_gap' => 'Structure', 'schema_parity' => 'Schema' ) as $tkey => $tlabel ) :
 						$cnt = isset( $by_type[ $tkey ] ) ? (int) $by_type[ $tkey ] : 0;
 						if ( $cnt <= 0 ) continue; ?>
-						<span class="tm-sync-pill tm-sync-pill-<?php echo esc_attr( $tkey ); ?>"><?php echo esc_html( $tlabel ); ?>: <?php echo $cnt; ?></span>
+						<span class="tm-sync-pill tm-sync-pill-<?php echo esc_attr( $tkey ); ?>"><?php echo esc_html( $tlabel ); ?>: <?php echo esc_html( (string) $cnt ); ?></span>
 					<?php endforeach; ?>
 				<?php else : ?>
 					<span class="tm-sync-pill tm-sync-pill-idle"><?php esc_html_e( 'Click to run audit', 'luwipress' ); ?></span>

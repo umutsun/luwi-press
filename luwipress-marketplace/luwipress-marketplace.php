@@ -1,14 +1,14 @@
 <?php
 /**
- * Plugin Name: LuwiPress Marketplace Sync
- * Plugin URI: https://luwi.dev/luwipress-marketplace-sync
- * Description: Multi-marketplace product publishing for WooCommerce — Amazon, eBay, Trendyol, Hepsiburada, N11, Etsy, Walmart, Alibaba. Companion to the core LuwiPress plugin.
+ * Plugin Name: LuwiPress Marketplace
+ * Plugin URI: https://luwi.dev/luwipress-marketplace
+ * Description: Multi-marketplace product publishing for WooCommerce. Companion to the core LuwiPress plugin.
  * Version: 1.0.1
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: luwipress-marketplace-sync
+ * Text Domain: luwipress-marketplace
  * Requires at least: 5.6
  * Tested up to: 6.9
  * Requires PHP: 7.4
@@ -44,9 +44,9 @@ function luwipress_marketplace_core_missing_notice() {
         return;
     }
     echo '<div class="notice notice-warning"><p><strong>'
-        . esc_html__( 'LuwiPress Marketplace Sync is paused.', 'luwipress-marketplace-sync' )
+        . esc_html__( 'LuwiPress Marketplace is paused.', 'luwipress-marketplace' )
         . '</strong> '
-        . esc_html__( 'The core LuwiPress plugin is not active, so marketplace publishing is sitting idle until you reactivate it.', 'luwipress-marketplace-sync' )
+        . esc_html__( 'The core LuwiPress plugin is not active, so marketplace publishing is sitting idle until you reactivate it.', 'luwipress-marketplace' )
         . '</p></div>';
 }
 
@@ -62,9 +62,9 @@ function luwipress_marketplace_woo_missing_notice() {
         return;
     }
     echo '<div class="notice notice-info"><p><strong>'
-        . esc_html__( 'LuwiPress Marketplace Sync is waiting for WooCommerce.', 'luwipress-marketplace-sync' )
+        . esc_html__( 'LuwiPress Marketplace is waiting for WooCommerce.', 'luwipress-marketplace' )
         . '</strong> '
-        . esc_html__( 'You can configure credentials now; publishing will start once WooCommerce is active.', 'luwipress-marketplace-sync' )
+        . esc_html__( 'You can configure credentials now; publishing will start once WooCommerce is active.', 'luwipress-marketplace' )
         . '</p></div>';
 }
 
@@ -92,6 +92,7 @@ function luwipress_marketplace_init() {
     require_once LUWIPRESS_MARKETPLACE_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-n11.php';
     require_once LUWIPRESS_MARKETPLACE_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-etsy.php';
     require_once LUWIPRESS_MARKETPLACE_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-walmart.php';
+    require_once LUWIPRESS_MARKETPLACE_PLUGIN_DIR . 'includes/marketplace/class-luwipress-marketplace-custom.php';
     require_once LUWIPRESS_MARKETPLACE_PLUGIN_DIR . 'includes/class-luwipress-marketplace.php';
 
     // Instantiate manager (registers REST endpoints on rest_api_init).
@@ -123,16 +124,16 @@ function luwipress_marketplace_activate() {
     if ( ! is_plugin_active( 'luwipress/luwipress.php' ) ) {
         deactivate_plugins( plugin_basename( __FILE__ ) );
         wp_die(
-            '<h1>' . esc_html__( 'Cannot activate LuwiPress Marketplace Sync', 'luwipress-marketplace-sync' ) . '</h1>'
-            . '<p>' . esc_html__( 'LuwiPress Marketplace Sync is a companion plugin and needs the core LuwiPress plugin to be installed and active first.', 'luwipress-marketplace-sync' ) . '</p>'
-            . '<p><strong>' . esc_html__( 'What to do:', 'luwipress-marketplace-sync' ) . '</strong></p>'
+            '<h1>' . esc_html__( 'Cannot activate LuwiPress Marketplace', 'luwipress-marketplace' ) . '</h1>'
+            . '<p>' . esc_html__( 'LuwiPress Marketplace is a companion plugin and needs the core LuwiPress plugin to be installed and active first.', 'luwipress-marketplace' ) . '</p>'
+            . '<p><strong>' . esc_html__( 'What to do:', 'luwipress-marketplace' ) . '</strong></p>'
             . '<ol>'
-            . '<li>' . esc_html__( 'Go to Plugins -> Add New and install LuwiPress (3.1.43 or newer).', 'luwipress-marketplace-sync' ) . '</li>'
-            . '<li>' . esc_html__( 'Activate LuwiPress.', 'luwipress-marketplace-sync' ) . '</li>'
-            . '<li>' . esc_html__( 'Come back here and activate LuwiPress Marketplace Sync.', 'luwipress-marketplace-sync' ) . '</li>'
+            . '<li>' . esc_html__( 'Go to Plugins -> Add New and install LuwiPress (3.1.43 or newer).', 'luwipress-marketplace' ) . '</li>'
+            . '<li>' . esc_html__( 'Activate LuwiPress.', 'luwipress-marketplace' ) . '</li>'
+            . '<li>' . esc_html__( 'Come back here and activate LuwiPress Marketplace.', 'luwipress-marketplace' ) . '</li>'
             . '</ol>'
-            . '<p><a href="' . esc_url( admin_url( 'plugins.php' ) ) . '">&larr; ' . esc_html__( 'Back to Plugins', 'luwipress-marketplace-sync' ) . '</a></p>',
-            esc_html__( 'Plugin dependency missing', 'luwipress-marketplace-sync' ),
+            . '<p><a href="' . esc_url( admin_url( 'plugins.php' ) ) . '">&larr; ' . esc_html__( 'Back to Plugins', 'luwipress-marketplace' ) . '</a></p>',
+            esc_html__( 'Plugin dependency missing', 'luwipress-marketplace' ),
             array( 'response' => 200, 'back_link' => true )
         );
     }
@@ -154,8 +155,8 @@ register_activation_hook( __FILE__, 'luwipress_marketplace_activate' );
 function luwipress_marketplace_add_admin_menu() {
     add_submenu_page(
         'luwipress',
-        __( 'Marketplaces', 'luwipress-marketplace-sync' ),
-        __( 'Marketplaces', 'luwipress-marketplace-sync' ),
+        __( 'Marketplaces', 'luwipress-marketplace' ),
+        __( 'Marketplaces', 'luwipress-marketplace' ),
         'manage_options',
         'luwipress-marketplaces',
         'luwipress_marketplace_render_settings_page'

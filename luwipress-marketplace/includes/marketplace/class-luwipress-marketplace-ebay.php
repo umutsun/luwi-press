@@ -274,4 +274,16 @@ class LuwiPress_Marketplace_Ebay implements LuwiPress_Marketplace_Adapter {
 
 		return $body ?: array();
 	}
+
+	public function get_brand_color() {
+		return '#e53238';
+	}
+
+	public function get_settings_schema() {
+		return array(
+			array( 'id' => 'luwipress_ebay_api_key', 'label' => 'OAuth Token', 'type' => 'password', 'default' => '' ),
+			array( 'id' => 'luwipress_ebay_environment', 'label' => 'Environment', 'type' => 'select', 'default' => 'sandbox', 'options' => array( 'sandbox' => 'Sandbox', 'production' => 'Production' ) ),
+			array( 'id' => 'luwipress_ebay_marketplace_id', 'label' => 'Market', 'type' => 'select', 'default' => 'EBAY_US', 'options' => array( 'EBAY_US' => 'US', 'EBAY_GB' => 'UK', 'EBAY_DE' => 'DE', 'EBAY_FR' => 'FR', 'EBAY_IT' => 'IT', 'EBAY_ES' => 'ES', 'EBAY_AU' => 'AU' ) ),
+		);
+	}
 }

@@ -229,4 +229,16 @@ class LuwiPress_Marketplace_Alibaba implements LuwiPress_Marketplace_Adapter {
 
 		return $body ?: array();
 	}
+
+	public function get_brand_color() {
+		return '#ff6a00';
+	}
+
+	public function get_settings_schema() {
+		return array(
+			array( 'id' => 'luwipress_alibaba_app_key', 'label' => 'App Key', 'type' => 'text', 'default' => '' ),
+			array( 'id' => 'luwipress_alibaba_app_secret', 'label' => 'App Secret', 'type' => 'password', 'default' => '' ),
+			array( 'id' => 'luwipress_alibaba_access_token', 'label' => 'Access Token', 'type' => 'password', 'default' => '' ),
+		);
+	}
 }

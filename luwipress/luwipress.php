@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.1.59
+ * Version: 3.3.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -11,7 +11,7 @@
  * Text Domain: luwipress
  * Domain Path: /languages
  * Requires at least: 5.6
- * Tested up to: 6.9
+ * Tested up to: 7.0
  * Requires PHP: 7.4
  */
 
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.1.59');
+define('LUWIPRESS_VERSION', '3.3.0');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -141,6 +141,9 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-seo-writer.php';
 
         // AI Engine: provider interface, providers, prompts, dispatcher, image handler
+        // WordPress 7.0 Connectors bridge — must load BEFORE providers so each
+        // provider constructor can call LuwiPress_Connectors::get_api_key().
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-connectors.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-ai-provider.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/providers/class-luwipress-provider-anthropic.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/providers/class-luwipress-provider-openai.php';
@@ -195,8 +198,22 @@ class LuwiPress {
         // diagnostic surface for cross-customer troubleshooting.
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-slug-resolver.php';
 
+        // Bot Account Cleaner — score-based detection + safe deletion of fake
+        // user accounts (3.1.60+). Eligibility gated to subscriber/customer
+        // roles only; admins/editors/shop_managers never scored. WC customers
+        // with any order are auto-excluded. Dry-run by default for bulk delete.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-bot-account-cleaner.php';
+
+        // Cookie Consent — GDPR/ePrivacy banner + preferences modal +
+        // consent log + AI policy generator + script-blocking helper (3.2.1+).
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-cookie-consent.php';
+
+        // Bot Shield — UA blocklist + rate limit + honeypot + REST/XML-RPC
+        // enumeration block. Front-edge guard at `init` priority 1 (3.2.1+).
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-bot-shield.php';
+
     }
-    
+
     /**
      * Plugin activation
      */
@@ -209,6 +226,9 @@ class LuwiPress {
         LuwiPress_Token_Tracker::create_table();
         LuwiPress_Customer_Chat::create_table();
         LuwiPress_Search_Index::create_table();
+        LuwiPress_Bot_Account_Cleaner::create_table();
+        LuwiPress_Cookie_Consent::create_table();
+        LuwiPress_Bot_Shield::create_table();
         // Marketplace listings table created by the LuwiPress Marketplace Sync
         // companion plugin's own activation hook (3.1.44+).
 
@@ -286,6 +306,9 @@ class LuwiPress {
         LuwiPress_ACP_Attribution::get_instance();
         LuwiPress_Theme_Bridge::get_instance();
         LuwiPress_Slug_Resolver::get_instance();
+        LuwiPress_Bot_Account_Cleaner::get_instance();
+        LuwiPress_Cookie_Consent::get_instance();
+        LuwiPress_Bot_Shield::get_instance();
 
         // Elementor integration (only if Elementor is active)
         if ( LuwiPress_Elementor::is_elementor_active() || is_admin() ) {
@@ -389,6 +412,32 @@ class LuwiPress {
             );
         }
 
+        // Bot Defense (3.2.2+) — unified surface for Bot Accounts + Bot Shield.
+        // All configuration lives under LuwiPress → Settings → Bot tab.
+        add_submenu_page(
+            'luwipress',
+            __( 'Bot Defense', 'luwipress' ),
+            __( 'Bot Defense', 'luwipress' ),
+            'manage_options',
+            'luwipress-bot-defense',
+            array( $this, 'bot_defense_page' )
+        );
+
+        // Back-compat: keep the old slugs as HIDDEN routes (null parent) so any
+        // existing bookmarks / MCP integrations / deep links continue resolving.
+        add_submenu_page( '', __( 'Bot Accounts', 'luwipress' ), __( 'Bot Accounts', 'luwipress' ), 'manage_options', 'luwipress-bot-accounts', array( $this, 'bot_defense_page' ) );
+        add_submenu_page( '', __( 'Bot Shield', 'luwipress' ),   __( 'Bot Shield', 'luwipress' ),   'manage_options', 'luwipress-bot-shield',   array( $this, 'bot_defense_page' ) );
+
+        // Cookie Consent (3.2.1+) — GDPR banner + consent log.
+        add_submenu_page(
+            'luwipress',
+            __( 'Cookie Consent', 'luwipress' ),
+            __( 'Cookie Consent', 'luwipress' ),
+            'manage_options',
+            'luwipress-cookies',
+            array( $this, 'cookies_page' )
+        );
+
     }
     
     /**
@@ -424,6 +473,22 @@ class LuwiPress {
      */
     public function theme_page() {
         include LUWIPRESS_PLUGIN_DIR . 'admin/theme-page.php';
+    }
+
+    /**
+     * Bot Defense page — unified Bot Accounts + Bot Shield surface.
+     * Old slugs (luwipress-bot-accounts / luwipress-bot-shield) route here too;
+     * the template detects the slug and preselects the matching tab.
+     */
+    public function bot_defense_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/bot-defense-page.php';
+    }
+
+    /**
+     * Cookie Consent page — GDPR banner + consent log + AI policy generator.
+     */
+    public function cookies_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/cookies-page.php';
     }
 
     /**
@@ -570,6 +635,9 @@ class LuwiPress {
             LuwiPress_Token_Tracker::create_table();
             LuwiPress_Customer_Chat::create_table();
             LuwiPress_Search_Index::create_table();
+            LuwiPress_Bot_Account_Cleaner::create_table();
+            LuwiPress_Cookie_Consent::create_table();
+            LuwiPress_Bot_Shield::create_table();
             update_option( 'luwipress_db_version', LUWIPRESS_VERSION );
 
             // Auto-build BM25 index on first upgrade

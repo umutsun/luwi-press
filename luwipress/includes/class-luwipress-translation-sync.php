@@ -476,8 +476,8 @@ class LuwiPress_Translation_Sync {
 	}
 
 	/**
-	 * Schema parity: source has FAQ/HowTo/Speakable but a translation doesn't.
-	 * Looks at _luwipress_faq, _luwipress_howto, _luwipress_speakable meta
+	 * Schema parity: source has Schema/FAQ/HowTo/Speakable but a translation doesn't.
+	 * Looks at _luwipress_schema, _luwipress_faq, _luwipress_howto, _luwipress_speakable meta
 	 * across WPML trid siblings and flags missing keys per translation.
 	 */
 	private function detect_schema_parity( $args ) {
@@ -495,7 +495,7 @@ class LuwiPress_Translation_Sync {
 			"SELECT DISTINCT p.ID
 			 FROM {$wpdb->posts} p
 			 JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID
-			   AND pm.meta_key IN ('_luwipress_faq','_luwipress_howto','_luwipress_speakable')
+			   AND pm.meta_key IN ('_luwipress_schema','_luwipress_faq','_luwipress_howto','_luwipress_speakable')
 			   AND pm.meta_value != ''
 			   AND pm.meta_value != 'a:0:{}'
 			 JOIN {$wpdb->prefix}icl_translations t
@@ -515,6 +515,7 @@ class LuwiPress_Translation_Sync {
 		foreach ( $rows as $r ) {
 			$sid = (int) $r->ID;
 			$src_meta = array(
+				'schema'     => $this->meta_has( $sid, '_luwipress_schema' ),
 				'faq'        => $this->meta_has( $sid, '_luwipress_faq' ),
 				'howto'      => $this->meta_has( $sid, '_luwipress_howto' ),
 				'speakable'  => $this->meta_has( $sid, '_luwipress_speakable' ),

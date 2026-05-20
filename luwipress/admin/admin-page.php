@@ -20,10 +20,22 @@ $environment = $detector->get_environment();
 $wc_active   = class_exists( 'WooCommerce' );
 $ai_provider = get_option( 'luwipress_ai_provider', 'openai' );
 $ai_model    = get_option( 'luwipress_ai_model', 'gpt-4o-mini' );
-$ai_key      = get_option( 'luwipress_openai_api_key', '' )
-            ?: get_option( 'luwipress_anthropic_api_key', '' )
-            ?: get_option( 'luwipress_google_ai_api_key', '' )
-            ?: get_option( 'luwipress_openai_compatible_api_key', '' );
+// Resolve AI key via Connectors bridge so the dashboard pill reflects WP 7.0
+// native Connectors first, falling back to LuwiPress's own option layer.
+$wp7_connectors_active = class_exists( 'LuwiPress_Connectors' ) && LuwiPress_Connectors::is_active();
+$ai_key                = '';
+if ( class_exists( 'LuwiPress_Connectors' ) ) {
+	$ai_key = LuwiPress_Connectors::get_api_key( 'openai' )
+		?: LuwiPress_Connectors::get_api_key( 'anthropic' )
+		?: LuwiPress_Connectors::get_api_key( 'google' );
+}
+if ( '' === $ai_key ) {
+	// OpenAI-compatible vendors stay outside Connectors scope, so this stays a direct read.
+	$ai_key = get_option( 'luwipress_oai_compat_api_key', '' )
+		?: get_option( 'luwipress_openai_api_key', '' )
+		?: get_option( 'luwipress_anthropic_api_key', '' )
+		?: get_option( 'luwipress_google_ai_api_key', '' );
+}
 
 $provider_labels = array(
 	'openai'             => 'OpenAI',
@@ -149,15 +161,39 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 				'google-listings-and-ads' => admin_url( 'admin.php?page=wc-admin&path=%2Fgoogle%2Fdashboard' ),
 				// Meta
 				'facebook-for-woocommerce' => admin_url( 'admin.php?page=wc-facebook' ),
+				// Security
+				'wordfence'       => admin_url( 'admin.php?page=Wordfence' ),
 			);
 			return $map[ $detected_slug ] ?? admin_url( 'plugins.php' );
 		};
 
-		// AI Engine — config slot, not a plugin. Click → Settings (API keys tab).
-		if ( ! empty( $ai_key ) ) {
+		// AI Engine — config slot, not a plugin. When WordPress 7.0 Connectors
+		// is active AND the key is sourced from Connectors, surface that
+		// distinction in the pill so the operator knows where to manage it.
+		$connectors_source = false;
+		if ( $wp7_connectors_active && class_exists( 'LuwiPress_Connectors' ) ) {
+			$wp7_state = LuwiPress_Connectors::list_active_connectors();
+			foreach ( $wp7_state as $row ) {
+				if ( ! empty( $row['in_connectors'] ) ) {
+					$connectors_source = true;
+					break;
+				}
+			}
+		}
+
+		if ( ! empty( $ai_key ) && $connectors_source ) {
+			$pills[] = array( 'ok', 'dashicons-admin-generic',
+				sprintf( __( 'Connectors · %s (%s)', 'luwipress' ), $provider_label, $ai_model ),
+				sprintf( __( 'AI key sourced from WordPress 7.0 Connectors. Provider: %1$s · model %2$s. Click to manage native Connectors.', 'luwipress' ), $provider_label, $ai_model ),
+				admin_url( 'options-general.php' ) );
+		} elseif ( ! empty( $ai_key ) ) {
 			$pills[] = array( 'ok', 'dashicons-admin-generic', sprintf( '%s (%s)', $provider_label, $ai_model ),
 				sprintf( __( 'AI provider configured: %1$s · model %2$s. Click to manage in Settings.', 'luwipress' ), $provider_label, $ai_model ),
 				admin_url( 'admin.php?page=luwipress-settings' ) );
+		} elseif ( $wp7_connectors_active ) {
+			$pills[] = array( 'err', 'dashicons-admin-generic', __( 'No AI key (Connectors)', 'luwipress' ),
+				__( 'WordPress 7.0 Connectors detected but no AI provider configured. Click to open Settings → Connectors.', 'luwipress' ),
+				admin_url( 'options-general.php' ) );
 		} else {
 			$pills[] = array( 'err', 'dashicons-admin-generic', __( 'No AI key', 'luwipress' ),
 				__( 'No AI provider key set. Click to open Settings → API Keys (OpenAI, Anthropic, Google, or any OpenAI-compatible endpoint).', 'luwipress' ),
@@ -293,6 +329,24 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 				$install_url( 'product-feed-pro-for-woocommerce' ) );
 		}
 
+		// Security — Wordfence-aware. When detected, Bot Shield delegates UA /
+		// rate-limit / honeypot layers to it (see Plugin Detector::detect_security
+		// + Bot Shield::delegated_layers).
+		$security = $environment['security'] ?? array( 'plugin' => 'none' );
+		if ( ! empty( $security['plugin'] ) && 'none' !== $security['plugin'] ) {
+			$sec_label = $slug_label( $security['plugin'] );
+			if ( ! empty( $security['version'] ) ) {
+				$sec_label .= ' v' . $security['version'];
+			}
+			$pills[] = array( 'ok', 'dashicons-shield-alt', $sec_label,
+				sprintf( __( 'Security plugin: %s. Bot Shield delegates UA blocklist + rate limit + honeypot to it. Click to manage.', 'luwipress' ), $slug_label( $security['plugin'] ) ),
+				$manage_url( $security['plugin'] ) );
+		} else {
+			$pills[] = array( 'err', 'dashicons-shield-alt', __( 'No security plugin', 'luwipress' ),
+				__( 'No third-party security plugin detected. LuwiPress Bot Shield handles the full layer stack itself. Click to install Wordfence Free to delegate the noisy edge layers.', 'luwipress' ),
+				$install_url( 'wordfence' ) );
+		}
+
 		foreach ( $pills as $p ) :
 			$state = $p[0];
 			$icon  = $p[1];
@@ -305,13 +359,12 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			// the WP modal handler. Otherwise the link would open the iframe
 			// URL directly in the parent window. Detect by URL fragment.
 			$is_thickbox = $url && false !== strpos( $url, 'TB_iframe=true' );
-			$href  = $url ? ' href="' . esc_url( $url ) . '"' : '';
 			$class_extra = $url ? ' lp-pill--action' : '';
 			if ( $is_thickbox ) {
 				$class_extra .= ' thickbox';
 			}
 		?>
-		<<?php echo esc_html( $tag ); ?> class="lp-pill lp-pill--has-tip <?php echo esc_attr( $cls . $class_extra ); ?>" tabindex="0" title="<?php echo esc_attr( $tip ); ?>"<?php echo $href; // already escaped ?>>
+		<<?php echo esc_html( $tag ); ?> class="lp-pill lp-pill--has-tip <?php echo esc_attr( $cls . $class_extra ); ?>" tabindex="0" title="<?php echo esc_attr( $tip ); ?>"<?php if ( $url ) : ?> href="<?php echo esc_url( $url ); ?>"<?php endif; ?>>
 			<span class="lp-pill-dot" aria-hidden="true"></span>
 			<span class="dashicons <?php echo esc_attr( $icon ); ?>"></span>
 			<?php echo esc_html( $label ); ?>

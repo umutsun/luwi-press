@@ -144,4 +144,15 @@ class LuwiPress_Marketplace_N11 implements LuwiPress_Marketplace_Adapter {
 
 		return $rbody ?: array();
 	}
+
+	public function get_brand_color() {
+		return '#1a237e';
+	}
+
+	public function get_settings_schema() {
+		return array(
+			array( 'id' => 'luwipress_n11_api_key', 'label' => 'API Key', 'type' => 'password', 'default' => '' ),
+			array( 'id' => 'luwipress_n11_api_secret', 'label' => 'API Secret', 'type' => 'password', 'default' => '' ),
+		);
+	}
 }

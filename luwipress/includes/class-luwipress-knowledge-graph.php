@@ -31,7 +31,7 @@ class LuwiPress_Knowledge_Graph {
 		'not_enriched'            => 15,
 		'thin_content'            => 10,
 		'missing_translation'     => 8,
-		'missing_faq'             => 6,
+		// 'missing_faq'             => 6, // disabled: FAQ rich results restricted by Google to government/health sites (Aug 2023)
 		'missing_schema'          => 5,
 		// 'missing_howto'  => 4,  // disabled: HowTo deprecated by Google for product pages
 		// 'missing_speakable' => 3, // disabled: Speakable deprecated by Google late 2024
@@ -187,7 +187,7 @@ class LuwiPress_Knowledge_Graph {
 					'sanitize_callback' => 'sanitize_text_field',
 				),
 				'event_types' => array(
-					'description' => 'Comma-separated whitelist: enrich, seo, translate.',
+					'description' => 'Comma-separated whitelist: enrich, seo, translate, schema_added.',
 					'type'        => 'string',
 					'sanitize_callback' => 'sanitize_text_field',
 				),
@@ -929,20 +929,15 @@ class LuwiPress_Knowledge_Graph {
 					$score += $this->score_weights['missing_translation'];
 				}
 			}
-			if ( ! $has_faq ) {
-				$opps[] = 'missing_faq';
-				$score += $this->score_weights['missing_faq'];
-			}
 			if ( ! $has_schema ) {
 				$opps[] = 'missing_schema';
 				$score += $this->score_weights['missing_schema'];
 			}
-			// 'missing_howto' and 'missing_speakable' opportunities are intentionally
-			// NOT counted in the score (3.1.42 IMP-006 / Schema Reality v1.1 doctrine).
-			// Google deprecated HowTo for product pages and Speakable entirely (late
-			// 2024). Counting them inflated the priority queue with dead signals
-			// (~%12 of total score on Tapadum). The booleans $has_howto/$has_speakable
-			// are still surfaced in the per-product `aeo` payload below for visibility,
+			// 'missing_faq', 'missing_howto' and 'missing_speakable' opportunities are intentionally
+			// NOT counted in the score. Google deprecated HowTo for product pages and Speakable
+			// entirely (late 2024), and heavily restricted FAQ rich results to government/health
+			// sites (Aug 2023). Counting them inflated the priority queue with dead signals.
+			// The booleans are still surfaced in the per-product `aeo` payload below for visibility,
 			// but they no longer drive prioritisation.
 			if ( $reviews['count'] === 0 ) {
 				$opps[] = 'no_reviews';
@@ -1044,7 +1039,7 @@ class LuwiPress_Knowledge_Graph {
 				$cat_data[ $cat_id ]['product_count']++;
 				$cat_data[ $cat_id ]['total_score'] += $p['opportunity_score'];
 
-				if ( $p['seo']['has_title'] && $p['seo']['has_description'] ) {
+				if ( $p['seo']['has_title'] && $p['seo']['has_description'] && $p['aeo']['has_schema'] ) {
 					$cat_data[ $cat_id ]['seo_complete']++;
 				}
 				if ( 'completed' === $p['enrichment']['status'] ) {
@@ -1323,7 +1318,7 @@ class LuwiPress_Knowledge_Graph {
 		$aeo_counts   = array( 'faq' => 0, 'howto' => 0, 'schema' => 0, 'speakable' => 0 );
 
 		foreach ( $product_nodes as $p ) {
-			if ( $p['seo']['has_title'] && $p['seo']['has_description'] ) {
+			if ( $p['seo']['has_title'] && $p['seo']['has_description'] && $p['aeo']['has_schema'] ) {
 				$seo_complete++;
 			}
 			if ( 'completed' === $p['enrichment']['status'] ) {

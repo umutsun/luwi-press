@@ -1,24 +1,22 @@
 <?php
 /**
- * LuwiPress Open Claw — AI Chat Assistant
+ * LuwiPress Agentic — AI Chat Assistant
  *
  * Lightweight admin chat interface. Fast local queries resolve without AI.
- * Complex questions route through LuwiPress_AI_Engine::dispatch().
+ * Complex questions route through the active agent adapter (HTTP backend).
  *
  * Slash commands: /scan /seo /translate /enrich /thin /stale /generate
  *                 /aeo /reviews /plugins /crm /revenue /products /help
  *
  * @package LuwiPress
- * @since   1.3.0 (original), 2.0.0 (slim rewrite — removed n8n dependency,
- *          channel system, 300-line action engine. AI calls route through
- *          LuwiPress_AI_Engine::dispatch())
+ * @since   1.1.0 (rebrand: was LuwiPress Open Claw, file/class renamed)
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class LuwiPress_Open_Claw {
+class LuwiPress_Agentic {
 
 	private static $instance = null;
 
@@ -34,6 +32,65 @@ class LuwiPress_Open_Claw {
 		add_action( 'wp_ajax_luwipress_claw_history', array( $this, 'ajax_get_history' ) );
 		add_action( 'wp_ajax_luwipress_claw_clear_history', array( $this, 'ajax_clear_history' ) );
 		add_action( 'wp_ajax_luwipress_claw_execute', array( $this, 'ajax_execute_action' ) );
+		add_action( 'wp_ajax_luwipress_agentic_save_backend', array( $this, 'ajax_save_backend' ) );
+	}
+
+	/* ═══════════════════════════════════════════════════════════════════
+	 *  AJAX: Save backend settings (active adapter + per-adapter endpoint/token)
+	 * ═══════════════════════════════════════════════════════════════════ */
+
+	public function ajax_save_backend() {
+		check_ajax_referer( 'luwipress_claw_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( 'Unauthorized' );
+		}
+
+		$adapter_id = sanitize_key( $_POST['adapter_id'] ?? '' );
+		$endpoint   = esc_url_raw( wp_unslash( $_POST['endpoint'] ?? '' ) );
+		$token      = sanitize_text_field( wp_unslash( $_POST['token'] ?? '' ) );
+		$set_active = ! empty( $_POST['set_active'] );
+
+		$option_map = array(
+			'open-claw' => 'luwipress_agent_open_claw',
+			'hermes'    => 'luwipress_agent_hermes',
+		);
+		if ( ! isset( $option_map[ $adapter_id ] ) ) {
+			wp_send_json_error( 'Unknown adapter' );
+		}
+
+		$option_key = $option_map[ $adapter_id ];
+		$existing   = get_option( $option_key, array() );
+		if ( ! is_array( $existing ) ) {
+			$existing = array();
+		}
+		// Empty endpoint = clear override and fall back to adapter default.
+		if ( $endpoint !== '' ) {
+			$existing['endpoint'] = $endpoint;
+		} else {
+			unset( $existing['endpoint'] );
+		}
+		// Token: only overwrite when caller sent a non-empty value, so the
+		// UI can render an empty input without wiping the stored secret on
+		// save-without-edit.
+		if ( $token !== '' ) {
+			$existing['token'] = $token;
+		}
+		update_option( $option_key, $existing );
+
+		if ( $set_active && class_exists( 'LuwiPress_Agent_Host' ) ) {
+			LuwiPress_Agent_Host::get_instance()->set_active_id( $adapter_id );
+		}
+
+		$host    = class_exists( 'LuwiPress_Agent_Host' ) ? LuwiPress_Agent_Host::get_instance() : null;
+		$adapter = $host ? $host->get_adapter( $adapter_id ) : null;
+
+		wp_send_json_success( array(
+			'adapter_id'     => $adapter_id,
+			'configured'     => $adapter ? $adapter->is_configured() : false,
+			'active_id'      => $host ? $host->get_active_id() : '',
+			'has_token'      => ! empty( $existing['token'] ),
+			'endpoint_saved' => isset( $existing['endpoint'] ) ? $existing['endpoint'] : '',
+		) );
 	}
 
 	/* ═══════════════════════════════════════════════════════════════════
@@ -162,46 +219,202 @@ class LuwiPress_Open_Claw {
 	 *  AI ENGINE CALL (synchronous)
 	 * ═══════════════════════════════════════════════════════════════════ */
 
+	/**
+	 * Maximum number of tool-calling turns before giving up. Prevents runaway
+	 * cost from a model that infinite-loops on tool calls.
+	 */
+	const MAX_TOOL_TURNS = 5;
+
+	/**
+	 * Multi-turn AI dispatch with WebMCP tool-calling.
+	 *
+	 * Loop: send messages + WebMCP tool catalog → if the model returns
+	 * tool_calls, execute each locally via the WebMCP handler, append
+	 * results as 'tool' role messages, loop again. Stop when the model
+	 * returns a plain text response (no tool_calls) or the turn cap hits.
+	 */
 	private function call_ai( $message, $conversation_id ) {
-		if ( ! class_exists( 'LuwiPress_AI_Engine' ) ) {
-			return new WP_Error( 'no_ai', 'AI Engine not available. Configure an API key in Settings.' );
+		if ( ! class_exists( 'LuwiPress_Agent_Host' ) ) {
+			return new WP_Error( 'no_host', 'Agent host not loaded.' );
+		}
+		$adapter = LuwiPress_Agent_Host::get_instance()->get_active_adapter();
+		if ( ! $adapter ) {
+			return new WP_Error( 'no_adapter', 'No agent runtime available.' );
 		}
 
-		$ctx   = $this->build_site_context();
-		$store = $ctx['site_name'];
+		$ctx     = $this->build_site_context();
+		$history = $this->get_conversation( $conversation_id );
+		$tools   = $this->build_tool_catalog();
 
-		$system = "You are the AI assistant for {$store}, a WooCommerce store. "
-				. "{$ctx['products']} products. SEO: {$ctx['seo_plugin']}. Translation: {$ctx['translation_plugin']}. "
-				. ( ! empty( $ctx['active_languages'] ) ? 'Languages: ' . implode( ', ', $ctx['active_languages'] ) . '. ' : '' )
-				. "Be concise. For actions, include JSON: {\"action\": \"type\", \"params\": {...}}";
-
-		$history  = $this->get_conversation( $conversation_id );
-		$messages = array( array( 'role' => 'system', 'content' => $system ) );
+		$messages = array();
 		foreach ( array_slice( $history, -10 ) as $msg ) {
-			if ( in_array( $msg['role'] ?? '', array( 'user', 'assistant' ), true ) ) {
-				$messages[] = array( 'role' => $msg['role'], 'content' => $msg['content'] ?? '' );
+			$role = $msg['role'] ?? '';
+			if ( in_array( $role, array( 'user', 'assistant' ), true ) ) {
+				$messages[] = array( 'role' => $role, 'content' => $msg['content'] ?? '' );
 			}
 		}
 		$messages[] = array( 'role' => 'user', 'content' => $message );
 
-		$result = LuwiPress_AI_Engine::dispatch( 'open-claw', $messages, array( 'timeout' => 45 ) );
-		if ( is_wp_error( $result ) ) {
-			return $result;
-		}
+		$text             = '';
+		$actions_executed = array();
 
-		$text    = $result['content'] ?? '';
-		$actions = array();
+		for ( $turn = 0; $turn < self::MAX_TOOL_TURNS; $turn++ ) {
+			$result = $adapter->dispatch( $messages, $ctx, $tools );
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
 
-		if ( preg_match( '/\{"action"\s*:.*?\}/s', $text, $match ) ) {
-			$parsed = json_decode( $match[0], true );
-			if ( $parsed && ! empty( $parsed['action'] ) ) {
-				$actions[] = $parsed;
-				$text = trim( str_replace( $match[0], '', $text ) );
+			$text       = isset( $result['response'] ) ? (string) $result['response'] : '';
+			$tool_calls = isset( $result['tool_calls'] ) && is_array( $result['tool_calls'] )
+				? $result['tool_calls'] : array();
+
+			// No tool calls = final answer.
+			if ( empty( $tool_calls ) ) {
+				break;
+			}
+
+			// Persist the assistant turn (with its requested tool_calls) so the
+			// next dispatch can echo them back to OpenAI as native tool_calls.
+			$messages[] = array(
+				'role'       => 'assistant',
+				'content'    => $text,
+				'tool_calls' => $tool_calls,
+			);
+
+			// Execute each tool call locally and feed results back as 'tool' messages.
+			foreach ( $tool_calls as $tc ) {
+				$tool_name = $tc['function_name'] ?? ( $tc['action'] ?? '' );
+				$tool_args = $tc['arguments']     ?? ( $tc['params'] ?? array() );
+				$tool_id   = $tc['id'] ?? ( 'call_' . $turn . '_' . count( $messages ) );
+
+				$tool_result = $this->execute_tool_call( $tool_name, $tool_args );
+				$messages[]  = array(
+					'role'         => 'tool',
+					'tool_call_id' => $tool_id,
+					'content'      => is_string( $tool_result ) ? $tool_result : wp_json_encode( $tool_result ),
+				);
+				$actions_executed[] = array(
+					'action' => $tool_name,
+					'params' => $tool_args,
+					'result' => $tool_result,
+				);
 			}
 		}
 
-		$this->save_message( $conversation_id, 'assistant', $text, $actions );
-		return array( 'response' => $text, 'actions' => $actions );
+		$this->save_message( $conversation_id, 'assistant', $text, $actions_executed );
+		return array( 'response' => $text, 'actions' => $actions_executed );
+	}
+
+	/**
+	 * Build the OpenAI function-calling tool catalog from WebMCP's registry.
+	 *
+	 * Only read-only tools (annotations.readOnlyHint=true) are exposed to the
+	 * LLM by default — destructive operations require operator-confirmed
+	 * action paths, never autonomous LLM invocation. Catalog is cached for
+	 * an hour. Capped to {@see MAX_TOOL_CATALOG_SIZE} entries to keep the
+	 * prompt size reasonable.
+	 *
+	 * Returns array of OpenAI tool definitions:
+	 *   [ { type: 'function', function: { name, description, parameters } }, ... ]
+	 */
+	const MAX_TOOL_CATALOG_SIZE = 40;
+	const TOOL_CATALOG_TRANSIENT = 'luwipress_agentic_tool_catalog_v1';
+
+	private function build_tool_catalog() {
+		$cached = get_transient( self::TOOL_CATALOG_TRANSIENT );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+		if ( ! class_exists( 'LuwiPress_WebMCP' ) ) {
+			return array();
+		}
+
+		$tools = $this->read_webmcp_tools();
+		if ( empty( $tools ) ) {
+			return array();
+		}
+
+		$catalog = array();
+		foreach ( $tools as $name => $def ) {
+			$annotations = $def['annotations'] ?? array();
+			// Safety invariant: never expose mutating tools to autonomous LLM calls.
+			if ( empty( $annotations['readOnlyHint'] ) ) {
+				continue;
+			}
+			$schema = $def['inputSchema'] ?? array( 'type' => 'object', 'properties' => new stdClass() );
+			$catalog[] = array(
+				'type'     => 'function',
+				'function' => array(
+					'name'        => (string) $name,
+					'description' => isset( $def['description'] ) ? (string) $def['description'] : '',
+					'parameters'  => $schema,
+				),
+			);
+			if ( count( $catalog ) >= self::MAX_TOOL_CATALOG_SIZE ) {
+				break;
+			}
+		}
+
+		set_transient( self::TOOL_CATALOG_TRANSIENT, $catalog, HOUR_IN_SECONDS );
+		return $catalog;
+	}
+
+	/**
+	 * Reflect into LuwiPress_WebMCP to read its private $tools registry.
+	 * Reflection is intentional — keeps the contract loose so webmcp doesn't
+	 * need a coupled public API for this single internal consumer.
+	 */
+	private function read_webmcp_tools() {
+		try {
+			$webmcp = LuwiPress_WebMCP::get_instance();
+			$ref    = new ReflectionClass( $webmcp );
+			if ( ! $ref->hasProperty( 'tools' ) ) {
+				return array();
+			}
+			$prop = $ref->getProperty( 'tools' );
+			$prop->setAccessible( true );
+			$tools = $prop->getValue( $webmcp );
+			return is_array( $tools ) ? $tools : array();
+		} catch ( \Throwable $e ) {
+			return array();
+		}
+	}
+
+	/**
+	 * Execute a WebMCP tool by name through its registered handler.
+	 * Returns the handler's raw result (typically an array) or an error array.
+	 */
+	private function execute_tool_call( $name, $args ) {
+		if ( ! is_string( $name ) || '' === $name ) {
+			return array( 'error' => 'missing_tool_name' );
+		}
+		if ( ! is_array( $args ) ) {
+			// Best-effort: coerce JSON string into array.
+			$decoded = json_decode( (string) $args, true );
+			$args    = is_array( $decoded ) ? $decoded : array();
+		}
+		if ( ! class_exists( 'LuwiPress_WebMCP' ) ) {
+			return array( 'error' => 'webmcp_not_loaded' );
+		}
+		try {
+			$webmcp = LuwiPress_WebMCP::get_instance();
+			$ref    = new ReflectionClass( $webmcp );
+			if ( ! $ref->hasProperty( 'handlers' ) ) {
+				return array( 'error' => 'webmcp_handlers_unavailable' );
+			}
+			$prop = $ref->getProperty( 'handlers' );
+			$prop->setAccessible( true );
+			$handlers = $prop->getValue( $webmcp );
+
+			if ( ! isset( $handlers[ $name ] ) || ! is_callable( $handlers[ $name ] ) ) {
+				return array( 'error' => 'unknown_tool', 'tool' => $name );
+			}
+
+			$result = call_user_func( $handlers[ $name ], $args );
+			return $result;
+		} catch ( \Throwable $e ) {
+			return array( 'error' => 'tool_exception', 'message' => $e->getMessage() );
+		}
 	}
 
 	/* ═══════════════════════════════════════════════════════════════════

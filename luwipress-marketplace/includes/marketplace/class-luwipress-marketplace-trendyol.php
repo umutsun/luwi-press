@@ -273,4 +273,17 @@ class LuwiPress_Marketplace_Trendyol implements LuwiPress_Marketplace_Adapter {
 
 		return 18;
 	}
+
+	public function get_brand_color() {
+		return '#f27a1a';
+	}
+
+	public function get_settings_schema() {
+		return array(
+			array( 'id' => 'luwipress_trendyol_api_key', 'label' => 'API Key', 'type' => 'password', 'default' => '' ),
+			array( 'id' => 'luwipress_trendyol_api_secret', 'label' => 'API Secret', 'type' => 'password', 'default' => '' ),
+			array( 'id' => 'luwipress_trendyol_seller_id', 'label' => 'Seller ID', 'type' => 'text', 'default' => '' ),
+			array( 'id' => 'luwipress_trendyol_cargo_company_id', 'label' => 'Cargo ID', 'type' => 'number', 'default' => 10 ),
+		);
+	}
 }

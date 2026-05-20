@@ -252,4 +252,16 @@ class LuwiPress_Marketplace_Amazon implements LuwiPress_Marketplace_Adapter {
 		// Fall back to store name
 		return get_bloginfo( 'name' );
 	}
+
+	public function get_brand_color() {
+		return '#ff9900';
+	}
+
+	public function get_settings_schema() {
+		return array(
+			array( 'id' => 'luwipress_amazon_api_key', 'label' => 'API Key', 'type' => 'password', 'default' => '' ),
+			array( 'id' => 'luwipress_amazon_seller_id', 'label' => 'Seller ID', 'type' => 'text', 'default' => '' ),
+			array( 'id' => 'luwipress_amazon_region', 'label' => 'Region', 'type' => 'select', 'default' => 'na', 'options' => array( 'na' => 'NA', 'eu' => 'EU', 'fe' => 'FE' ) ),
+		);
+	}
 }
