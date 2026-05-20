@@ -60,6 +60,11 @@ $buckets       = $acct_stats['buckets'];
 $active_blocks = (int) $sh_stats['active_blocks'];
 $today_denials = (int) $sh_stats['today_denials'];
 
+// Comment review settings — referenced from the shared JS block at the
+// bottom regardless of $active_tab, so initialise unconditionally to
+// avoid an "undefined variable" path on the Overview / Accounts tabs.
+$comments_threshold = (int) ( $sh_settings['comments_threshold'] ?? 40 );
+
 // Severity → stat-card accent helper (shared by both modules).
 $state_class = function ( $count, $warn = 10, $err = 100 ) {
 	if ( $count >= $err )  return 'stat-error';
@@ -954,6 +959,84 @@ $tab_url = function ( $tab ) {
 				loadBlocks();
 			});
 		});
+
+		/* -------- COMMENT REVIEW PANEL -------- */
+		var cSave = document.getElementById('bs-c-save');
+		if (cSave) {
+			cSave.addEventListener('click', function () {
+				var patch = {
+					comments_enabled:   document.getElementById('bs-c-enabled').checked,
+					comments_mode:      document.getElementById('bs-c-mode').value,
+					comments_threshold: parseInt(document.getElementById('bs-c-threshold').value, 10) || 40,
+					comments_max_links: parseInt(document.getElementById('bs-c-max-links').value, 10) || 2
+				};
+				document.getElementById('bs-c-save-status').textContent = '<?php echo esc_js( __( 'Saving…', 'luwipress' ) ); ?>';
+				apiShield('settings', { method: 'POST', body: JSON.stringify(patch) }).then(function (r) {
+					document.getElementById('bs-c-save-status').textContent = r.ok ? '<?php echo esc_js( __( 'Saved.', 'luwipress' ) ); ?>' : '<?php echo esc_js( __( 'Save failed.', 'luwipress' ) ); ?>';
+				});
+			});
+		}
+
+		var cTestBtn = document.getElementById('bs-c-test-btn');
+		if (cTestBtn) {
+			cTestBtn.addEventListener('click', function () {
+				var p = {
+					author:  document.getElementById('bs-c-test-author').value,
+					url:     document.getElementById('bs-c-test-url').value,
+					content: document.getElementById('bs-c-test-body').value
+				};
+				var out = document.getElementById('bs-c-test-result');
+				out.textContent = '<?php echo esc_js( __( 'Testing…', 'luwipress' ) ); ?>';
+				apiShield('comments/test', { method: 'POST', body: JSON.stringify(p) }).then(function (r) {
+					if (!r.ok) { out.innerHTML = '<span class="lp-pill pill-warning">err</span>'; return; }
+					var d = r.data || {};
+					var color = d.verdict === 'allow' ? 'pill-success' :
+						(d.verdict === 'reject' ? 'pill-warning' : 'pill-neutral');
+					var sigs = (d.signals || []).map(function (s) {
+						return '<span class="lp-pill pill-neutral" style="font-size:10px; padding:2px 6px; margin:1px;">' +
+							s.name.replace(/_/g, ' ') + ' +' + s.weight + '</span>';
+					}).join(' ');
+					out.innerHTML = '<span class="lp-pill ' + color + '" style="font-weight:600;">' + d.verdict + '</span> ' +
+						'<strong>' + d.score + '</strong>/<?php echo (int) $comments_threshold; ?> ' + sigs;
+				});
+			});
+		}
+
+		function loadRecentComments() {
+			var tbody = document.getElementById('bs-c-recent-tbody');
+			if (!tbody) return;
+			apiShield('comments/recent?limit=50', { method: 'GET' }).then(function (r) {
+				if (!r.ok || !r.data || !r.data.items) {
+					tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:14px; color:var(--lp-text-muted);"><?php echo esc_js( __( 'No recent caught comments — enable comment review or wait for activity.', 'luwipress' ) ); ?></td></tr>';
+					return;
+				}
+				var items = r.data.items || [];
+				if (!items.length) {
+					tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:14px; color:var(--lp-text-muted);"><?php echo esc_js( __( 'No caught comments in the last 100 events.', 'luwipress' ) ); ?></td></tr>';
+					return;
+				}
+				tbody.innerHTML = items.map(function (it) {
+					var when = new Date(it.time * 1000).toLocaleString();
+					var actionPill = it.action === 'spam' ? 'pill-warning' :
+						(it.action === 'rejected' ? 'pill-warning' : 'pill-neutral');
+					var sigs = (it.signals || []).map(function (s) {
+						return '<span class="lp-pill pill-neutral" style="font-size:10px; padding:2px 6px; margin:1px; line-height:1.3;" title="' + s.detail + '">' +
+							s.name.replace(/_/g, ' ') + ' +' + s.weight + '</span>';
+					}).join(' ');
+					return (
+						'<tr>' +
+						'<td style="font-size:11px;">' + when + '</td>' +
+						'<td><span class="lp-pill ' + actionPill + '" style="font-size:10px;">' + it.action + '</span></td>' +
+						'<td><strong>' + it.score + '</strong></td>' +
+						'<td><strong>' + (it.author || '—') + '</strong><br><small style="color:var(--lp-text-muted);">' + (it.ip || '') + '</small></td>' +
+						'<td>' + (sigs || '—') + '</td>' +
+						'<td style="font-size:11px; color:var(--lp-text-muted);">' + (it.snippet || '').replace(/</g, '&lt;') + '</td>' +
+						'</tr>'
+					);
+				}).join('');
+			});
+		}
+		loadRecentComments();
 	}
 
 })();
