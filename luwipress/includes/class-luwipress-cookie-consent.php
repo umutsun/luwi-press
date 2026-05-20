@@ -259,36 +259,74 @@ class LuwiPress_Cookie_Consent {
 		wp_enqueue_style( 'luwipress-cookie-consent' );
 		wp_enqueue_script( 'luwipress-cookie-consent' );
 
-		// Microsoft Clarity Consent v2 bridge — small adapter that translates
+		// Microsoft Clarity Consent v2 bridge — adapter that translates
 		// LuwiPress consent toggles into Clarity's native `consentv2` API.
-		// Operator-gated (`clarity_consent_v2_enabled`); fires on every
+		// Operator-gated (`clarity_consent_v2_enabled`). Fires on every
 		// `luwipress:consent` CustomEvent dispatched by cookie-banner.js
-		// (4 GCM-aligned signals: analytics_storage, ad_storage,
-		// ad_user_data, ad_personalization). Vendor-Tapadum request — no
-		// Clarity SDK changes required, just respect the toggles already
-		// captured by the banner.
+		// AND replays the stored cookie on page load so visitors with an
+		// existing consent record don't get reset on every navigation.
+		//
+		// Two consent payload shapes are accepted because the source of
+		// truth differs between paths:
+		//   - Fresh banner dispatch: event.detail IS the choices object
+		//     {necessary, analytics, marketing, personalization}
+		//   - Cookie replay: cookie body is base64(JSON({v, ts, id, c: {...}}))
+		//     so we have to atob() first, then read the `c` nested field.
+		// Earlier versions of this bridge (Vendor-Tapadum bug 2026-05-21)
+		// missed both the atob() step AND the nested `.c` accessor, which
+		// is why Clarity stayed at "denied" after Accept-all on KLON.
 		if ( ! empty( $settings['clarity_consent_v2_enabled'] ) ) {
+			$debug = (bool) apply_filters( 'luwipress_clarity_bridge_debug', defined( 'WP_DEBUG' ) && WP_DEBUG );
 			$bridge = "(function(){\n"
-				. "  function send(detail){\n"
-				. "    if (typeof window.clarity !== 'function') return;\n"
-				. "    var analytics = !!(detail && detail.analytics);\n"
-				. "    var marketing = !!(detail && detail.marketing);\n"
-				. "    try {\n"
-				. "      window.clarity('consentv2', {\n"
-				. "        analytics_storage:  analytics ? 'granted' : 'denied',\n"
-				. "        ad_storage:         marketing ? 'granted' : 'denied',\n"
-				. "        ad_user_data:       marketing ? 'granted' : 'denied',\n"
-				. "        ad_personalization: marketing ? 'granted' : 'denied'\n"
-				. "      });\n"
-				. "    } catch(e) {}\n"
+				. "  var TAG = '[LuwiPress Clarity Bridge]';\n"
+				. "  var DEBUG = " . ( $debug ? 'true' : 'false' ) . ";\n"
+				. "  function log() { if (DEBUG && window.console) console.log.apply(console, [TAG].concat([].slice.call(arguments))); }\n"
+				. "\n"
+				. "  // Accept BOTH shapes: top-level choices (banner dispatch) and\n"
+				. "  // nested { c: choices } (cookie envelope).\n"
+				. "  function normalize(detail) {\n"
+				. "    if (!detail || typeof detail !== 'object') return null;\n"
+				. "    if (detail.c && typeof detail.c === 'object') return detail.c;\n"
+				. "    return detail;\n"
 				. "  }\n"
-				. "  window.addEventListener('luwipress:consent', function(e){ send(e.detail); });\n"
-				. "  // Replay stored choices on page load so visitors with an existing\n"
-				. "  // consent cookie don't get reset to default on every navigation.\n"
+				. "\n"
+				. "  function send(detail, source) {\n"
+				. "    if (typeof window.clarity !== 'function') { log('skip — window.clarity not loaded yet', source); return; }\n"
+				. "    var c = normalize(detail);\n"
+				. "    if (!c) { log('skip — empty/invalid payload', source, detail); return; }\n"
+				. "    var analytics = !!c.analytics;\n"
+				. "    var marketing = !!c.marketing;\n"
+				. "    // Microsoft Clarity Consent v2 uses CamelCase keys (ad_Storage,\n"
+				. "    // analytics_Storage) — NOT the Google Consent Mode lowercase\n"
+				. "    // variant. Sending lowercase keys leaves Clarity at 'denied'.\n"
+				. "    // Vendor-Tapadum confirmed working manual call uses CamelCase.\n"
+				. "    var payload = {\n"
+				. "      analytics_Storage: analytics ? 'granted' : 'denied',\n"
+				. "      ad_Storage:        marketing ? 'granted' : 'denied'\n"
+				. "    };\n"
+				. "    log('forwarding', source, payload);\n"
+				. "    try { window.clarity('consentv2', payload); }\n"
+				. "    catch (e) { log('clarity threw', e); }\n"
+				. "  }\n"
+				. "\n"
+				. "  // Path 1 — listen for fresh consent changes from the banner.\n"
+				. "  window.addEventListener('luwipress:consent', function(e){ send(e.detail, 'event'); });\n"
+				. "  log('listener registered');\n"
+				. "\n"
+				. "  // Path 2 — replay stored cookie on page load. Cookie body is\n"
+				. "  // encodeURIComponent(btoa(JSON.stringify({v, ts, id, c}))) per\n"
+				. "  // cookie-banner.js writeCookie() — we MUST atob() before parsing.\n"
 				. "  try {\n"
 				. "    var m = document.cookie.match(/(?:^|;\\s*)luwipress_consent=([^;]+)/);\n"
-				. "    if (m && m[1]) send(JSON.parse(decodeURIComponent(m[1])));\n"
-				. "  } catch(e) {}\n"
+				. "    if (m && m[1]) {\n"
+				. "      var raw = decodeURIComponent(m[1]);\n"
+				. "      var json = (typeof atob === 'function') ? atob(raw) : raw;\n"
+				. "      var parsed = JSON.parse(json);\n"
+				. "      send(parsed, 'replay');\n"
+				. "    } else {\n"
+				. "      log('no stored consent cookie');\n"
+				. "    }\n"
+				. "  } catch(e) { log('replay parse failed', e); }\n"
 				. "}());";
 			wp_add_inline_script( 'luwipress-cookie-consent', $bridge, 'after' );
 		}
