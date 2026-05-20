@@ -42,6 +42,20 @@ class LuwiPress_WebMCP {
     /** @var array Registered MCP tool definitions, keyed by tool name. */
     private $tools = array();
 
+    /**
+     * Per-category tool-registration audit. Populated by register_all_tools()
+     * after every category's register_* method runs. Used to surface deploy
+     * integrity issues (e.g. a class-gated category silently registering 0
+     * tools because the required core class isn't loaded — usually a partial
+     * ZIP upload). Exposed via the `webmcp_deploy_audit` MCP tool.
+     *
+     * Shape: [ category => [ method, added, skipped, gate_class?, gate_class_exists? ] ]
+     *
+     * @since 1.0.27
+     * @var array
+     */
+    private $registration_audit = array();
+
     /** @var array Map of tool name → internal handler callable. */
     private $handlers = array();
 
@@ -698,30 +712,92 @@ class LuwiPress_WebMCP {
      */
 
     private function register_all_tools() {
-        $this->register_system_tools();
-        $this->register_content_tools();
-        $this->register_seo_tools();
-        $this->register_aeo_tools();
-        $this->register_translation_tools();
-        $this->register_crm_tools();
-        $this->register_email_tools();
-        $this->register_workflow_tools();
-        $this->register_token_tools();
-        $this->register_review_tools();
-        $this->register_linker_tools();
-        $this->register_knowledge_graph_tools();
-        $this->register_elementor_tools();
-        $this->register_admin_tools();
-        $this->register_taxonomy_tools();
-        $this->register_woo_tools();
-        $this->register_media_tools();
-        $this->register_comment_tools();
-        $this->register_settings_tools();
-        $this->register_plugin_theme_tools();
-        $this->register_menu_tools();
-        $this->register_meta_tools();
-        $this->register_search_tools();
-        $this->register_attribution_tools();
+        // Category → register method. Iterating instead of straight-line calls
+        // so we can wrap each method in a count diff for the deploy audit
+        // (3.3.1+). Order preserved exactly from the pre-1.0.27 implementation.
+        $categories = array(
+            'system'           => 'register_system_tools',
+            'content'          => 'register_content_tools',
+            'seo'              => 'register_seo_tools',
+            'aeo'              => 'register_aeo_tools',
+            'translation'      => 'register_translation_tools',
+            'crm'              => 'register_crm_tools',
+            'email'            => 'register_email_tools',
+            'workflow'         => 'register_workflow_tools',
+            'token'            => 'register_token_tools',
+            'review'           => 'register_review_tools',
+            'linker'           => 'register_linker_tools',
+            'knowledge_graph'  => 'register_knowledge_graph_tools',
+            'elementor'        => 'register_elementor_tools',
+            'admin'            => 'register_admin_tools',
+            'taxonomy'         => 'register_taxonomy_tools',
+            'woo'              => 'register_woo_tools',
+            'media'            => 'register_media_tools',
+            'comment'          => 'register_comment_tools',
+            'settings'         => 'register_settings_tools',
+            'plugin_theme'     => 'register_plugin_theme_tools',
+            'menu'             => 'register_menu_tools',
+            'meta'             => 'register_meta_tools',
+            'search'           => 'register_search_tools',
+            'attribution'      => 'register_attribution_tools',
+        );
+
+        foreach ( $categories as $cat => $method ) {
+            $before = count( $this->tools );
+            $this->$method();
+            $after = count( $this->tools );
+            $this->registration_audit[ $cat ] = array(
+                'method'  => $method,
+                'added'   => $after - $before,
+                'skipped' => ( $after - $before ) === 0,
+            );
+        }
+
+        // Annotate categories whose register_*_tools early-returns when a
+        // required core class isn't loaded. If the audit shows 0 tools AND
+        // class_exists() is false, that's the deploy-integrity smoking gun
+        // (partial ZIP upload — main plugin file says new version but class
+        // files weren't refreshed). Vendor-FR-006 + FR-007 root cause.
+        $gates = array(
+            'crm'              => 'LuwiPress_CRM_Bridge',
+            'review'           => 'LuwiPress_Review_Analytics',
+            'linker'           => 'LuwiPress_Internal_Linker',
+            'knowledge_graph'  => 'LuwiPress_Knowledge_Graph',
+            'elementor'        => 'LuwiPress_Elementor',
+            'woo'              => 'WooCommerce',
+            'search'           => 'LuwiPress_Search_Index',
+            'attribution'      => 'LuwiPress_ACP_Attribution',
+        );
+        foreach ( $gates as $cat => $cls ) {
+            if ( ! empty( $this->registration_audit[ $cat ] ) && ! empty( $this->registration_audit[ $cat ]['skipped'] ) ) {
+                $this->registration_audit[ $cat ]['gate_class']        = $cls;
+                $this->registration_audit[ $cat ]['gate_class_exists'] = class_exists( $cls );
+            }
+        }
+
+        // Single warning log if ANY known gate failed (deploy integrity hint).
+        $missing = array();
+        foreach ( $this->registration_audit as $cat => $info ) {
+            if ( ! empty( $info['skipped'] ) && isset( $info['gate_class'] ) && empty( $info['gate_class_exists'] ) ) {
+                $missing[ $cat ] = $info['gate_class'];
+            }
+        }
+        if ( ! empty( $missing ) && class_exists( 'LuwiPress_Logger' ) ) {
+            LuwiPress_Logger::log(
+                sprintf(
+                    'WebMCP %s: %d tool %s registered 0 tools — required class(es) missing. Likely a partial ZIP deploy. Check /webmcp/deploy-audit.',
+                    LUWIPRESS_WEBMCP_VERSION,
+                    count( $missing ),
+                    count( $missing ) === 1 ? 'category' : 'categories'
+                ),
+                'warning',
+                array( 'missing' => $missing )
+            );
+        }
+
+        // The deploy-audit tool itself ships last so the audit array is
+        // fully populated when the tool's data is read.
+        $this->register_deploy_audit_tool();
 
         /**
          * Allow third-party extensions to register additional MCP tools.
@@ -729,6 +805,53 @@ class LuwiPress_WebMCP {
          * @param LuwiPress_WebMCP $webmcp  The WebMCP instance.
          */
         do_action( 'luwipress_webmcp_register_tools', $this );
+    }
+
+    /**
+     * Public accessor for the registration audit (read-only).
+     *
+     * @since 1.0.27
+     * @return array
+     */
+    public function get_registration_audit() {
+        return $this->registration_audit;
+    }
+
+    /**
+     * Register the `webmcp_deploy_audit` MCP tool. Surfaces the per-category
+     * registration outcome so operators (and Tapadum-style remote vendors)
+     * can diagnose silent class_exists-gated skips without server-side log
+     * access. See Vendor-FR-006 + FR-007 closure notes.
+     *
+     * @since 1.0.27
+     */
+    private function register_deploy_audit_tool() {
+        $this->register_tool( 'webmcp_deploy_audit', array(
+            'description' => 'WebMCP deploy integrity audit: per-category tool registration count + which class-gated categories registered 0 tools because their required core class is missing. Use this when a tool you expect to see is absent from tool_search — a `skipped: true, gate_class_exists: false` entry means the deployed ZIP is partial (main plugin file at new version but the gated module class file is stale or missing). Returns: { webmcp_version, total_tools, categories: { <name>: { method, added, skipped, gate_class?, gate_class_exists? } }, missing_classes: [ ... ] }.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'WebMCP Deploy Audit', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $audit   = $this->registration_audit;
+            $missing = array();
+            foreach ( $audit as $cat => $info ) {
+                if ( ! empty( $info['skipped'] ) && isset( $info['gate_class'] ) && empty( $info['gate_class_exists'] ) ) {
+                    $missing[] = array(
+                        'category'   => $cat,
+                        'gate_class' => $info['gate_class'],
+                    );
+                }
+            }
+            return array(
+                'webmcp_version'  => defined( 'LUWIPRESS_WEBMCP_VERSION' ) ? LUWIPRESS_WEBMCP_VERSION : 'unknown',
+                'core_version'    => defined( 'LUWIPRESS_VERSION' ) ? LUWIPRESS_VERSION : 'unknown',
+                'total_tools'     => count( $this->tools ),
+                'categories'      => $audit,
+                'missing_classes' => $missing,
+            );
+        } );
     }
 
     /**

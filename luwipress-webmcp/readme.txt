@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.26
+Stable tag: 1.0.27
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,11 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.27 — Deploy integrity audit surface (Vendor-FR-006/007 closure) =
+* **NEW `webmcp_deploy_audit`**: read-only MCP tool that surfaces the per-category tool-registration outcome. Returns `{webmcp_version, core_version, total_tools, categories: {<name>: {method, added, skipped, gate_class?, gate_class_exists?}}, missing_classes: [...]}`. When an expected tool is missing from the catalog (e.g. `taxonomy_meta_set`, `search_products`), this is the first thing to call — a `skipped: true, gate_class_exists: false` entry confirms a partial ZIP deploy (main plugin file at the new version but a gated module's class file is stale or missing). Closes the diagnosis gap Vendor reported in FR-006 + FR-007 where silent `class_exists()` skips left operators with no server-side log access wondering whether the catalog was cached, version-mismatched, or genuinely missing.
+* **NEW boot warning**: `register_all_tools()` now logs a single `warning` via `LuwiPress_Logger` when any class-gated category registers 0 tools because its required class is unavailable. Survives ahead of operator-driven `webmcp_deploy_audit` calls so deploy issues surface in the LuwiPress activity log immediately.
+* **Refactor**: `register_all_tools()` rewritten to iterate a category → method map so each registration block is wrapped in a count diff. Execution order preserved exactly — no observable change for healthy deploys.
 
 = 1.0.26 — Bot Shield comment review tools + WordPress 7.0 Abilities API alignment (paired with core 3.3.0) =
 * **NEW `bot_shield_comments_recent`**: list the last 100 bot-suspect comment events caught by core 3.3.0's Bot Shield comment review layer. Returns score, action taken (moderated/spam/rejected), the matched signals (link density / spam tokens / author shape / duplicate / IP already blocked / URL-only body), and a 240-char snippet. IPs are masked (last octet zeroed) for GDPR.
