@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.3.0
+Stable tag: 3.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,15 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.3.1 — CRM Campaign Launcher: one-click sales conversion from KG Customers view =
+* **NEW `LuwiPress_CRM_Campaigns` module** — replaces the legacy "Export CSV → take to Mailchimp by hand" friction on the Knowledge Graph Customers view with a one-click in-platform email + WooCommerce coupon dispatcher. Click a segment node (One-Time, At-Risk, New, VIP, Loyal, Dormant) in the KG sidebar → primary "Send win-back to N customers →" CTA opens a modal. AI drafts a segment-tuned email (win-back / re-engagement / onboarding / VIP perk — four new prompt templates with distinct rhetoric tuned per cohort), the modal suggests segment-aware coupon defaults (One-Time: 15%/30d, At-Risk: 20%/14d, VIP: free shipping/90d, etc.), operator reviews + optionally edits the subject / body / coupon settings, one click fires `wp_mail()` per recipient + creates a single shared `WC_Coupon` with `usage_limit_per_user = 1` so each customer can only burn the perk once. Hard cap of 200 recipients per send (inbox-reputation safety + AI budget control). Dry-run mode logs the planned send without firing emails.
+* **NEW conversion tracking** — every `woocommerce_order_status_completed` hook checks if the buyer was emailed via a campaign in the last 30 days; if so, marks the send as converted + records a `campaign_converted` `kg_event` so the dashboard can show sent → opened → purchased funnel ratios per cohort. Per-campaign revenue attribution stored in `wp_luwipress_campaigns.conversion_revenue`.
+* **NEW REST surface** — `GET /crm/campaign/preview?segment=X` (recipient count + suggested coupon + AI-drafted envelope), `POST /crm/campaign/send` (executes the dispatch + creates coupon + records sends), `GET /crm/campaign/history` (list past campaigns with conversion stats).
+* **NEW two DB tables** — `wp_luwipress_campaigns` (one row per send batch: segment, coupon code/%, recipient/sent/failed/conversion/revenue counts) and `wp_luwipress_campaign_sends` (one row per recipient with sent_at + converted_at + order_id for attribution).
+* **Knowledge Graph Refresh → CRM re-classification chain** — Shift+Refresh on KG now also fires `POST /crm/refresh-segments` before the graph fetch so a stale `luwipress_crm_segment_counts` cache (only refilled by weekly cron) doesn't keep showing "58 customers" on a 200-customer store. Plain Refresh is unchanged (cache-aware reload).
+* **Email shell** — AI body is wrapped in a minimal branded HTML shell (store name eyebrow, white body, dashed coupon callout block with code + perk-line); plain enough that Gmail/Outlook don't strip it, expressive enough to look intentional. Token substitution supports `{{first_name}}` (falls back to "there"), `{{store_name}}`, `{{coupon_code}}`, `{{coupon_url}}` (cart URL with coupon pre-applied).
+* **Safety invariants** — per-recipient `usage_limit_per_user = 1` always; admin token required for both preview + send; dispatch logs every send to `wp_luwipress_logs` for audit trail; on AI failure, falls back to a generic localized envelope (never sends "undefined").
 
 = 3.3.0 — WordPress 7.0 Connectors + Bot Shield comment review + Theme Bridge token-auth fix + Clarity Consent v2 bridge =
 * **NEW Microsoft Clarity Consent v2 bridge** (Tapadum vendor request): Cookie Consent gains a `clarity_consent_v2_enabled` toggle that, when on, forwards every visitor consent decision to Microsoft Clarity's native `clarity('consentv2', {…})` API. Maps LuwiPress's analytics category to `analytics_storage` and the marketing category to the three ad-side signals (`ad_storage`, `ad_user_data`, `ad_personalization`) so Clarity respects GDPR/ePrivacy toggles in lock-step with the banner — no extra glue plugin needed. Bridge is a small inline JS adapter enqueued after the consent banner; replays the stored cookie on every page load so visitors with an existing consent record never get reset. Settings → Cookie Consent → "Microsoft Clarity" row exposes the toggle.

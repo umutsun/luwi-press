@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.3.0
+ * Version: 3.3.1
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.3.0');
+define('LUWIPRESS_VERSION', '3.3.1');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -162,6 +162,7 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-internal-linker.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-review-analytics.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-crm-bridge.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-crm-campaigns.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-knowledge-graph.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-kg-signals.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-kg-opportunities.php';
@@ -229,6 +230,7 @@ class LuwiPress {
         LuwiPress_Bot_Account_Cleaner::create_table();
         LuwiPress_Cookie_Consent::create_table();
         LuwiPress_Bot_Shield::create_table();
+        LuwiPress_CRM_Campaigns::maybe_create_tables();
         // Marketplace listings table created by the LuwiPress Marketplace Sync
         // companion plugin's own activation hook (3.1.44+).
 
@@ -295,6 +297,7 @@ class LuwiPress {
         LuwiPress_Internal_Linker::get_instance();
         LuwiPress_Review_Analytics::get_instance();
         LuwiPress_CRM_Bridge::get_instance();
+        LuwiPress_CRM_Campaigns::get_instance();
         LuwiPress_Knowledge_Graph::get_instance();
         LuwiPress_KG_Signals::get_instance();
         LuwiPress_KG_Opportunities::get_instance();

@@ -41,8 +41,16 @@ function animateCounter(el, target, suffix) {
 // path on a 1000+ post store used to be ~110-130s before this split; with
 // the split phase A returns first and the user sees an interactive page
 // while phase B continues in the background.
-var KG_PHASE_A_SECTIONS = 'products,categories,translation,store,posts,pages,plugins,taxonomy,crm';
-var KG_PHASE_B_SECTIONS = 'design_audit,order_analytics,opportunities';
+// `opportunities` lives in Phase A because the server-side `$needs_products`
+// gate (class-luwipress-knowledge-graph.php line 428) lists it alongside the
+// other product-dependent sections — leaving it in Phase B forced the heavy
+// load_product_posts → load_product_meta → load_product_terms → load_image_stats
+// → load_review_stats → load_wpml_translation_status chain to run a SECOND
+// time during Phase B for no incremental data win. Phase B now only carries
+// design_audit + order_analytics so it can finish well under the 45s
+// watchdog even on large catalogs.
+var KG_PHASE_A_SECTIONS = 'products,categories,translation,store,posts,pages,plugins,taxonomy,crm,opportunities';
+var KG_PHASE_B_SECTIONS = 'design_audit,order_analytics';
 var KG_ALL_SECTIONS     = KG_PHASE_A_SECTIONS + ',' + KG_PHASE_B_SECTIONS;
 
 function fetchGraphSections(sections, forceFresh, cb) {
@@ -88,7 +96,27 @@ function fetchGraphProgressive(onPhaseA, onPhaseB, forceFresh) {
 		// Phase B runs detached — no global loader, the heavy stat cards
 		// keep their skeleton class until B lands. If B fails the cards
 		// stay at 0 / N/A and the user can Shift+Refresh to retry.
+		//
+		// Watchdog: Phase B fetches `design_audit,order_analytics,opportunities`
+		// which can hit 30+ s on large catalogs or 500 silently on a server-side
+		// fatal (PHP notice → header sent → JSON.parse throws but `fetch` already
+		// resolved). When that happens the inner callback never fires and the
+		// three heavy cards stay skeleton-locked forever. Fire `onPhaseB` with
+		// a timeout error at the 45-second mark if we haven't heard back — the
+		// receiver already handles `err` by dropping skeleton (line ~2374), so
+		// the cards revert to whatever's currently in _kgData (0 / N/A) and the
+		// user can Shift+Refresh to retry rather than stare at a forever-spinner.
+		var phaseBDone = false;
+		var phaseBTimeout = setTimeout(function () {
+			if (phaseBDone) return;
+			phaseBDone = true;
+			if (onPhaseB) onPhaseB(new Error('phase_b_timeout'));
+		}, 45000);
+
 		fetchGraphSections(KG_PHASE_B_SECTIONS, forceFresh, function(err2, dataB) {
+			if (phaseBDone) return; // watchdog already fired
+			phaseBDone = true;
+			clearTimeout(phaseBTimeout);
 			if (onPhaseB) onPhaseB(err2, dataB);
 		});
 	});
@@ -119,7 +147,10 @@ function mergePhaseBInto(target, sourceB) {
 // the PHP markup at first render, but we re-apply on refresh) and `false`
 // after phase B lands.
 function markHeavyCardsSkeleton(on) {
-	['kg-stat-design', 'kg-stat-revenue', 'kg-stat-opportunities'].forEach(function (id) {
+	// `kg-stat-opportunities` moved to Phase A (opportunities section ships
+	// with the product nodes load anyway, no extra cost), so only design +
+	// revenue stay skeleton-locked until Phase B lands.
+	['kg-stat-design', 'kg-stat-revenue'].forEach(function (id) {
 		var card = document.getElementById(id);
 		if (!card) return;
 		if (on) {
@@ -1378,6 +1409,30 @@ function showDetailPanel(d) {
 		h += '<p style="margin:8px 0;color:var(--lp-text-muted);font-size:12px;font-style:italic;">→ ' + escHtml(info.priority) + '</p>';
 		h += '</div>';
 
+		// ── Campaign Launcher (gamified primary CTA) ──
+		// Replaces the "Export CSV → take to Mailchimp manually" pattern with a
+		// one-click in-platform email send + WC coupon generator. Renders only
+		// when the segment has at least one customer to act on.
+		if (count > 0) {
+			var campaignVerbMap = {
+				one_time: 'Send win-back to', at_risk: 'Send re-engagement to',
+				dormant: 'Send reactivation to', lost: 'Send last-chance to',
+				new: 'Send onboarding to', vip: 'Send VIP perk to',
+				loyal: 'Send loyalty perk to', active: 'Send cross-sell to'
+			};
+			var campaignVerb = campaignVerbMap[seg] || 'Email';
+			var safeCount = Math.min(count, 200); // matches server cap
+			h += '<div class="kg-p-section">';
+			h += '<button class="kg-rec kg-rec-high kg-campaign-launch" data-segment="' + escHtml(seg) + '" data-count="' + safeCount + '" style="cursor:pointer;border:none;width:100%;">';
+			h += '<span class="kg-rec-dot"></span>';
+			h += '<span class="kg-rec-body">';
+			h += '<strong>' + campaignVerb + ' ' + safeCount + ' customer' + (safeCount !== 1 ? 's' : '') + ' →</strong><br>';
+			h += '<small>AI drafts the email, LuwiPress creates a coupon, you click send. ';
+			h += 'Conversions tracked back to this segment automatically.</small>';
+			h += '</span></button>';
+			h += '</div>';
+		}
+
 		// Segment-specific recommendations — each ships with either a CSV export
 		// action (concrete, non-destructive) or a link to the WooCommerce customer list
 		// filtered for this cohort. LuwiPress never writes to third-party CRM plugins.
@@ -1685,9 +1740,10 @@ function updateStats(data, phase) {
 	renderAchievements(stats, summary, data);
 
 	// During phase A of a progressive load, the heavy cards must keep their
-	// skeleton state — design_health / revenue_30d / opportunity_score_total
-	// haven't been fetched yet. Phase B clears them via markHeavyCardsSkeleton(false).
-	var heavyCardIds = (phase === 'a') ? ['kg-stat-design', 'kg-stat-revenue', 'kg-stat-opportunities'] : [];
+	// skeleton state — design_health / revenue_30d haven't been fetched yet.
+	// opportunity_score_total was moved into Phase A (lives with the product
+	// load that runs there anyway), so its card unlocks alongside SEO/enriched.
+	var heavyCardIds = (phase === 'a') ? ['kg-stat-design', 'kg-stat-revenue'] : [];
 	document.querySelectorAll('.kg-stat').forEach(function(el) {
 		if (heavyCardIds.indexOf(el.id) !== -1) return; // leave skeleton on
 		el.classList.remove('kg-stat-skeleton');
@@ -1696,8 +1752,8 @@ function updateStats(data, phase) {
 
 	// In phase A of progressive load, skip writing values for heavy metrics —
 	// their backing data hasn't arrived yet so anything computed from it would
-	// be 0 (misleading "design 0%" / "revenue €0" / "opportunities 0").
-	var heavyKeys = (phase === 'a') ? ['design_health', 'revenue_30d', 'opportunity_score_total'] : [];
+	// be 0 (misleading "design 0%" / "revenue €0").
+	var heavyKeys = (phase === 'a') ? ['design_health', 'revenue_30d'] : [];
 	Object.keys(stats).forEach(function(key) {
 		if (heavyKeys.indexOf(key) !== -1) return;
 		var el = document.querySelector('[data-counter="' + key + '"]');
@@ -2320,7 +2376,25 @@ document.getElementById('kg-detail-close').onclick = function() {
 // the 30-60s cold path users used to get on every Refresh tap when the
 // underlying data hadn't changed.
 document.getElementById('kg-refresh').onclick = function(ev) {
-	init(!!(ev && ev.shiftKey));
+	var force = !!(ev && ev.shiftKey);
+	// Shift+Refresh additionally triggers a server-side CRM re-classification
+	// before pulling the graph. The customer segment counts shown on the
+	// Customers view come from a cached option (`luwipress_crm_segment_counts`)
+	// that's only refilled by a weekly cron — a "58 customers" reading on a
+	// store with 200+ real users typically means the cron hasn't run. Fire
+	// the re-classify endpoint first, ignore failures (silent fallback to
+	// the cached count), then let init() pull a forced-fresh graph.
+	if (force) {
+		var restBase = (window.lpKgConfig && window.lpKgConfig.restBase) || '';
+		var headers = { 'Content-Type': 'application/json', 'X-WP-Nonce': CONFIG.nonce };
+		if (CONFIG.apiToken) headers['Authorization'] = 'Bearer ' + CONFIG.apiToken;
+		fetch(restBase + 'crm/refresh-segments', {
+			method: 'POST', headers: headers, credentials: 'same-origin'
+		}).catch(function () { /* silent — graph fetch still runs */ })
+		  .finally(function () { init(true); });
+		return;
+	}
+	init(false);
 };
 // Surface the dual behaviour on hover so operators discover the modifier.
 (function () {
@@ -4240,3 +4314,202 @@ function kgAutopilotInit() {
 }
 
 document.addEventListener('DOMContentLoaded', kgAutopilotInit);
+
+// ── Campaign Launcher (3.3.1 — sidebar primary CTA on Customer segments) ──
+//
+// Replaces the legacy "Export CSV → take to Mailchimp manually" friction with
+// a one-click flow:
+//   click  → preview modal opens (GET /crm/campaign/preview?segment=X)
+//             → AI drafts subject + body, suggests segment-aware coupon
+//   review → operator edits subject / body / coupon % / coupon days
+//   send   → POST /crm/campaign/send → fires wp_mail per recipient + creates
+//             WC_Coupon → records kg_event per send → modal flips to summary
+//
+// The button is rendered inside the segment detail panel (see segment block
+// in showDetailPanel). Event is delegated from document so the same handler
+// works whether the panel was painted by Phase A or by a subsequent refresh.
+document.addEventListener('click', function (e) {
+	var btn = e.target.closest && e.target.closest('.kg-campaign-launch');
+	if (!btn) return;
+	e.preventDefault();
+	var segment = btn.getAttribute('data-segment');
+	var count   = parseInt(btn.getAttribute('data-count') || '0', 10);
+	if (!segment) return;
+	openCampaignModal(segment, count, btn);
+});
+
+function openCampaignModal(segment, count, sourceBtn) {
+	if (sourceBtn) {
+		sourceBtn.setAttribute('disabled', 'disabled');
+		sourceBtn.style.opacity = '0.6';
+	}
+
+	// Skeleton modal first — fetch preview, then populate.
+	var existing = document.getElementById('kg-campaign-modal');
+	if (existing) existing.remove();
+
+	var modal = document.createElement('div');
+	modal.id = 'kg-campaign-modal';
+	modal.className = 'luwipress-modal';
+	modal.innerHTML =
+		'<div class="luwipress-modal-content" style="max-width:680px;">' +
+			'<div class="luwipress-modal-header">' +
+				'<h3>Launching campaign for <code>' + segment + '</code></h3>' +
+				'<button type="button" class="luwipress-modal-close" aria-label="Close">&times;</button>' +
+			'</div>' +
+			'<div id="kg-campaign-modal-body" style="padding:20px;">' +
+				'<p style="color:#6b7280;">Loading AI preview…</p>' +
+				'<div class="kg-action-spinner" style="margin:0;"></div>' +
+			'</div>' +
+		'</div>';
+	document.body.appendChild(modal);
+
+	function closeModal() {
+		modal.remove();
+		if (sourceBtn) {
+			sourceBtn.removeAttribute('disabled');
+			sourceBtn.style.opacity = '';
+		}
+	}
+	modal.querySelector('.luwipress-modal-close').addEventListener('click', closeModal);
+	modal.addEventListener('click', function (ev) { if (ev.target === modal) closeModal(); });
+
+	var headers = { 'X-WP-Nonce': lpKgNonce };
+	var token = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
+	if (token) headers['Authorization'] = 'Bearer ' + token;
+
+	fetch(lpKgRestUrl + 'crm/campaign/preview?segment=' + encodeURIComponent(segment), {
+		headers: headers,
+		credentials: 'same-origin'
+	}).then(function (r) { return r.json(); })
+	  .then(function (data) {
+			if (!data || data.code) {
+				modal.querySelector('#kg-campaign-modal-body').innerHTML =
+					'<div class="luwipress-info-box" style="border-left-color:#dc2626;">' +
+					'<strong>Preview failed:</strong> ' + ((data && data.message) || 'Unknown error') + '</div>';
+				return;
+			}
+			renderCampaignForm(modal, segment, count, data, closeModal);
+	  })
+	  .catch(function (err) {
+			modal.querySelector('#kg-campaign-modal-body').innerHTML =
+				'<div class="luwipress-info-box" style="border-left-color:#dc2626;">' +
+				'<strong>Preview failed:</strong> ' + (err.message || err) + '</div>';
+	  });
+}
+
+function renderCampaignForm(modal, segment, displayCount, preview, closeModal) {
+	var recipients = preview.recipient_count || 0;
+	var defaults   = preview.defaults || {};
+	var env        = preview.preview || {};
+
+	var subject = env.subject || '';
+	var body    = env.body_html || '';
+	var pct     = (defaults.coupon_pct === undefined) ? 15 : defaults.coupon_pct;
+	var days    = (defaults.coupon_days === undefined) ? 30 : defaults.coupon_days;
+	var freeShip = !!defaults.free_shipping;
+
+	var html =
+		'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+			'<div><strong style="font-size:14px;">' + recipients + '</strong> recipient' + (recipients !== 1 ? 's' : '') +
+				' will receive this email.</div>' +
+			'<a href="#" class="kg-campaign-dry-toggle" style="font-size:12px;color:#6b7280;">Dry-run mode</a>' +
+		'</div>' +
+
+		'<label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-top:8px;">Subject</label>' +
+		'<input type="text" id="kg-camp-subject" class="regular-text" style="width:100%;" value="' +
+			(subject.replace(/"/g, '&quot;')) + '" />' +
+
+		'<label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-top:12px;">Body (HTML allowed)</label>' +
+		'<textarea id="kg-camp-body" rows="8" style="width:100%;font-family:monospace;font-size:12px;">' +
+			body.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' +
+
+		'<div style="margin-top:14px;padding:12px;background:#f9fafb;border-radius:6px;">' +
+			'<strong style="font-size:12px;color:#374151;">Coupon (optional)</strong>' +
+			'<div style="display:flex;gap:8px;margin-top:8px;align-items:end;flex-wrap:wrap;">' +
+				'<div><label style="font-size:11px;color:#6b7280;">Discount %</label><br>' +
+					'<input type="number" id="kg-camp-pct" min="0" max="80" value="' + pct + '" style="width:80px;" /></div>' +
+				'<div><label style="font-size:11px;color:#6b7280;">Expires (days)</label><br>' +
+					'<input type="number" id="kg-camp-days" min="0" max="365" value="' + days + '" style="width:80px;" /></div>' +
+				'<label style="font-size:12px;color:#374151;display:flex;align-items:center;gap:6px;margin-left:8px;">' +
+					'<input type="checkbox" id="kg-camp-ship" ' + (freeShip ? 'checked' : '') + ' /> Free shipping</label>' +
+			'</div>' +
+			'<p style="font-size:11px;color:#6b7280;margin:6px 0 0;">Pct 0 + free shipping unchecked = email without coupon.</p>' +
+		'</div>' +
+
+		'<div id="kg-camp-result" style="margin-top:14px;"></div>' +
+
+		'<div style="margin-top:18px;display:flex;justify-content:flex-end;gap:8px;align-items:center;">' +
+			'<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:6px;">' +
+				'<input type="checkbox" id="kg-camp-dry" /> Dry-run (build coupon + log, skip emails)</label>' +
+			'<button type="button" class="button" id="kg-camp-cancel">Cancel</button>' +
+			'<button type="button" class="button button-primary" id="kg-camp-send">' +
+				'<span class="dashicons dashicons-email-alt"></span> Send to ' + recipients +
+			'</button>' +
+		'</div>';
+
+	modal.querySelector('#kg-campaign-modal-body').innerHTML = html;
+
+	modal.querySelector('#kg-camp-cancel').addEventListener('click', closeModal);
+
+	modal.querySelector('#kg-camp-send').addEventListener('click', function () {
+		var sendBtn = modal.querySelector('#kg-camp-send');
+		sendBtn.setAttribute('disabled', 'disabled');
+		sendBtn.innerHTML = '<span class="kg-action-spinner"></span> Sending…';
+
+		var payload = {
+			segment: segment,
+			subject: modal.querySelector('#kg-camp-subject').value,
+			body_html: modal.querySelector('#kg-camp-body').value,
+			coupon_pct: parseInt(modal.querySelector('#kg-camp-pct').value, 10) || 0,
+			coupon_days: parseInt(modal.querySelector('#kg-camp-days').value, 10) || 0,
+			free_shipping: modal.querySelector('#kg-camp-ship').checked,
+			dry_run: modal.querySelector('#kg-camp-dry').checked
+		};
+
+		var sendHeaders = { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce };
+		var token = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
+		if (token) sendHeaders['Authorization'] = 'Bearer ' + token;
+
+		fetch(lpKgRestUrl + 'crm/campaign/send', {
+			method: 'POST',
+			headers: sendHeaders,
+			credentials: 'same-origin',
+			body: JSON.stringify(payload)
+		}).then(function (r) { return r.json(); })
+		  .then(function (data) {
+				if (!data || !data.ok) {
+					modal.querySelector('#kg-camp-result').innerHTML =
+						'<div class="luwipress-info-box" style="border-left-color:#dc2626;">' +
+						'<strong>Send failed:</strong> ' + ((data && data.message) || 'Unknown error') + '</div>';
+					sendBtn.removeAttribute('disabled');
+					sendBtn.innerHTML = '<span class="dashicons dashicons-email-alt"></span> Retry';
+					return;
+				}
+				var msg = data.dry_run
+					? 'Dry-run complete. Would have sent to ' + data.sent + ' (failed: ' + data.failed + ').'
+					: 'Sent ' + data.sent + ' / failed ' + data.failed + '.';
+				modal.querySelector('#kg-camp-result').innerHTML =
+					'<div class="luwipress-info-box" style="border-left-color:#10b981;">' +
+					'<strong>✓ ' + msg + '</strong>' +
+					(data.coupon_code ? '<div style="margin-top:6px;font-size:12px;">Coupon code: <code>' + data.coupon_code + '</code></div>' : '') +
+					'<div style="margin-top:6px;font-size:11px;color:#6b7280;">Conversions will track automatically over the next 30 days.</div>' +
+					'</div>';
+				sendBtn.innerHTML = '✓ Sent';
+				// Visually demote the launcher button in the sidebar so operator
+				// knows the campaign already fired (avoids accidental re-send).
+				document.querySelectorAll('.kg-campaign-launch[data-segment="' + segment + '"]').forEach(function (b) {
+					b.setAttribute('disabled', 'disabled');
+					b.style.opacity = '0.5';
+					b.querySelector('strong').textContent = '✓ Campaign sent';
+				});
+		  })
+		  .catch(function (err) {
+				modal.querySelector('#kg-camp-result').innerHTML =
+					'<div class="luwipress-info-box" style="border-left-color:#dc2626;">' +
+					'<strong>Network error:</strong> ' + (err.message || err) + '</div>';
+				sendBtn.removeAttribute('disabled');
+				sendBtn.innerHTML = '<span class="dashicons dashicons-email-alt"></span> Retry';
+		  });
+	});
+}

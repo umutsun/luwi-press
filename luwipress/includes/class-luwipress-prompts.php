@@ -774,4 +774,123 @@ Rules:
 
 		return apply_filters( 'luwipress_prompt_image_generation', $prompt, $title, $context );
 	}
+
+	// ────────────────────────────────────────────────────────────────────
+	// CRM Campaign prompts (win-back / onboarding / vip-perk / loyalty)
+	// ────────────────────────────────────────────────────────────────────
+	//
+	// Each segment has its own voice + conversion goal. We do NOT share a
+	// generic "marketing email" prompt because the rhetoric is wildly
+	// different: a one-time buyer needs a no-shame nudge ("here's what's
+	// new"); an at-risk loyal customer needs acknowledgement ("we miss
+	// you"); a VIP needs scarcity + privilege ("48-hour pre-access").
+	//
+	// All four return `['system' => …, 'user' => …]` and ask the model for
+	// strict JSON: `{ subject, preheader, body_html, cta_label }`. Campaign
+	// dispatcher reads that envelope; non-JSON responses get a generic
+	// fallback so a malformed AI reply never silently sends "undefined".
+
+	/**
+	 * Win-back campaign for one-time buyers (highest-ROI segment).
+	 *
+	 * @param array $ctx { store_name, customer_first_name?, last_purchase?, language, coupon_pct?, coupon_days? }
+	 * @return array
+	 */
+	public static function crm_winback_one_time( array $ctx = array() ) {
+		$language = $ctx['language'] ?? 'English';
+		$store    = $ctx['store_name'] ?? get_bloginfo( 'name' );
+		$pct      = absint( $ctx['coupon_pct'] ?? 15 );
+		$days     = absint( $ctx['coupon_days'] ?? 30 );
+		$first    = (string) ( $ctx['customer_first_name'] ?? '' );
+
+		$system = 'You are a thoughtful e-commerce copywriter. Tone: warm, no shame, no FOMO bullying, no exclamation-mark spam. Goal: invite a one-time buyer back with a single soft reason + a single concrete offer. NEVER use phrases like "we miss you" verbatim, NEVER guilt-trip, NEVER write more than 90 words in body. Respond ONLY in JSON: { "subject": string (<= 55 chars), "preheader": string (<= 90 chars), "body_html": string (HTML allowed: <p>, <strong>, <a>), "cta_label": string (<= 22 chars) }.';
+
+		$user = sprintf(
+			"Write a win-back email for a one-time buyer of %s.\n\nLanguage: %s.\nCustomer first name (use only if non-empty): %s\n\nOffer: %d%% off, code provided separately, expires in %d days.\n\nBody must include: (1) a single sentence acknowledging time has passed, (2) one specific reason to come back NOW (new arrivals OR a category they likely care about — keep it abstract), (3) the offer one-liner, (4) CTA paragraph.\n\nNo emojis. Plain professional tone.",
+			$store,
+			$language,
+			'' !== $first ? $first : '(unknown — use generic greeting like "Hi there,")',
+			$pct,
+			$days
+		);
+
+		return apply_filters( 'luwipress_prompt_crm_winback_one_time', array( 'system' => $system, 'user' => $user ), $ctx );
+	}
+
+	/**
+	 * At-risk loyalty perk — for customers whose last order is ageing but
+	 * who have multiple historical purchases. Tone: appreciative, not desperate.
+	 */
+	public static function crm_at_risk_perk( array $ctx = array() ) {
+		$language = $ctx['language'] ?? 'English';
+		$store    = $ctx['store_name'] ?? get_bloginfo( 'name' );
+		$pct      = absint( $ctx['coupon_pct'] ?? 20 );
+		$days     = absint( $ctx['coupon_days'] ?? 14 );
+		$first    = (string) ( $ctx['customer_first_name'] ?? '' );
+
+		$system = 'You are a retention copywriter for a high-trust independent store. Tone: appreciative, slightly intimate (they bought from you multiple times before), zero gimmicks. Goal: re-engage a loyal customer whose last order is ageing, before they drift permanently. NEVER use clichés ("long time no see"), NEVER mention churn or risk language. Respond ONLY in JSON: { "subject": string (<= 55 chars), "preheader": string (<= 90 chars), "body_html": string (HTML allowed), "cta_label": string (<= 22 chars) }.';
+
+		$user = sprintf(
+			"Write an at-risk loyalty perk email for a previously regular customer of %s.\n\nLanguage: %s.\nCustomer first name (use only if non-empty): %s\n\nOffer: %d%% off thank-you perk, code provided separately, expires in %d days.\n\nBody must include: (1) a one-line thank-you anchor that acknowledges their prior support without being saccharine, (2) one sentence on what's recent / interesting at the store, (3) the perk one-liner framed as a thank-you not a discount push, (4) CTA paragraph.\n\nUnder 90 words. No emojis.",
+			$store,
+			$language,
+			'' !== $first ? $first : '(unknown — use respectful generic greeting)',
+			$pct,
+			$days
+		);
+
+		return apply_filters( 'luwipress_prompt_crm_at_risk_perk', array( 'system' => $system, 'user' => $user ), $ctx );
+	}
+
+	/**
+	 * New customer onboarding — first 30 days, builds the second purchase.
+	 */
+	public static function crm_new_onboarding( array $ctx = array() ) {
+		$language = $ctx['language'] ?? 'English';
+		$store    = $ctx['store_name'] ?? get_bloginfo( 'name' );
+		$pct      = absint( $ctx['coupon_pct'] ?? 10 );
+		$days     = absint( $ctx['coupon_days'] ?? 30 );
+		$first    = (string) ( $ctx['customer_first_name'] ?? '' );
+
+		$system = 'You are an onboarding copywriter for a craft / specialty e-commerce store. Tone: welcoming, useful, low-pressure. Goal: orient a brand-new customer (just made their first purchase) and seed the second one without aggression. NEVER write a hard sales push, NEVER use "limited time" pressure language. Respond ONLY in JSON: { "subject": string (<= 55 chars), "preheader": string (<= 90 chars), "body_html": string (HTML allowed), "cta_label": string (<= 22 chars) }.';
+
+		$user = sprintf(
+			"Write an onboarding email for a brand-new customer of %s (within their first 30 days).\n\nLanguage: %s.\nCustomer first name (use only if non-empty): %s\n\nOffer: %d%% off welcome perk for their second purchase, code provided separately, expires in %d days.\n\nBody must include: (1) a real welcome (no robot voice), (2) one sentence on what makes this store worth exploring (quality / craft / curation — keep it concrete), (3) one suggestion of what to look at next (categories, recently added — abstract is fine), (4) the perk + CTA.\n\nUnder 100 words. No emojis.",
+			$store,
+			$language,
+			'' !== $first ? $first : '(unknown — use friendly generic greeting)',
+			$pct,
+			$days
+		);
+
+		return apply_filters( 'luwipress_prompt_crm_new_onboarding', array( 'system' => $system, 'user' => $user ), $ctx );
+	}
+
+	/**
+	 * VIP perk announcement — top spenders, scarcity + privilege not discount.
+	 */
+	public static function crm_vip_perk( array $ctx = array() ) {
+		$language = $ctx['language'] ?? 'English';
+		$store    = $ctx['store_name'] ?? get_bloginfo( 'name' );
+		$pct      = absint( $ctx['coupon_pct'] ?? 0 ); // VIPs often get free shipping, not %.
+		$days     = absint( $ctx['coupon_days'] ?? 90 );
+		$free_ship = ! empty( $ctx['free_shipping'] );
+		$first    = (string) ( $ctx['customer_first_name'] ?? '' );
+
+		$perk_line = $free_ship && 0 === $pct
+			? 'Free shipping (no minimum) for the next ' . $days . ' days.'
+			: ( $pct > 0 ? $pct . '% off + free shipping (no minimum), expires in ' . $days . ' days.' : 'A small thank-you perk — details inside.' );
+
+		$system = 'You are writing to the top 5% of customers by lifetime spend. Tone: composed, low-key, treat them like insiders not marks. Goal: reinforce belonging + offer a quiet privilege (not a discount push). NEVER write "VIP" or "exclusive" in the subject line. NEVER use scarcity manipulation. Respond ONLY in JSON: { "subject": string (<= 55 chars), "preheader": string (<= 90 chars), "body_html": string (HTML allowed), "cta_label": string (<= 22 chars) }.';
+
+		$user = sprintf(
+			"Write a top-customer thank-you perk email for %s.\n\nLanguage: %s.\nCustomer first name (use only if non-empty): %s\n\nPerk: %s\n\nBody must include: (1) a single sentence framing them as someone the store knows + values (without naming the segment), (2) one quiet acknowledgement of their share of the store's growth, (3) the perk in plain English, (4) low-key CTA.\n\nUnder 80 words. No emojis. No hype.",
+			$store,
+			$language,
+			'' !== $first ? $first : '(unknown — use respectful generic greeting)',
+			$perk_line
+		);
+
+		return apply_filters( 'luwipress_prompt_crm_vip_perk', array( 'system' => $system, 'user' => $user ), $ctx );
+	}
 }
