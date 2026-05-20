@@ -199,17 +199,25 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 		<div class="luwipress-section" style="margin-top:16px;">
 			<h2 style="margin-top:0;"><?php esc_html_e( 'AI cookie policy generator', 'luwipress' ); ?></h2>
 			<p class="description"><?php esc_html_e( 'Click Generate and a Cookie Policy WP page is created (or updated) automatically with a plain-language paragraph customized to the third-party tags detected on this site. Edit the text below and click "Save edits" to push your tweaks to the page.', 'luwipress' ); ?></p>
-			<p>
-				<button id="lwp-cc-gen-btn" class="button button-primary">
-					<span class="dashicons dashicons-art" style="vertical-align:middle;"></span>
+			<div class="lp-cta-row" style="margin: 12px 0 18px;">
+				<button id="lwp-cc-gen-btn" type="button" class="lp-cta lp-cta--primary">
+					<!-- Sparkles glyph — universally read as "AI generate" -->
+					<svg class="lp-cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
+					</svg>
 					<?php esc_html_e( 'Generate & save policy', 'luwipress' ); ?>
 				</button>
-				<button id="lwp-cc-policy-save" class="button" type="button">
-					<span class="dashicons dashicons-saved" style="vertical-align:middle;"></span>
+				<button id="lwp-cc-policy-save" type="button" class="lp-cta lp-cta--secondary">
+					<!-- Cloud-up glyph — "push my edits to the page" -->
+					<svg class="lp-cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M16 16l-4-4-4 4"/>
+						<path d="M12 12v9"/>
+						<path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+					</svg>
 					<?php esc_html_e( 'Save edits to page', 'luwipress' ); ?>
 				</button>
-				<span id="lwp-cc-gen-status" style="margin-left:12px; color:var(--lp-text-muted);"></span>
-			</p>
+				<span id="lwp-cc-gen-status" class="lp-cta-status"></span>
+			</div>
 			<textarea id="lwp-cc-policy-text" rows="14" style="width:100%; max-width:880px; font-family:Georgia,serif; font-size:14px; line-height:1.6;"></textarea>
 			<p class="description"><?php esc_html_e( 'Detected third-party tags appear in the JSON block below after generation. The page is saved at /cookie-policy/ by default — the Cookie Policy URL setting auto-updates to the new permalink.', 'luwipress' ); ?></p>
 			<pre id="lwp-cc-policy-detected" style="background:var(--lp-bg-muted,#f4f4f4); padding:12px; border-radius:6px; max-width:880px; overflow:auto;"></pre>
