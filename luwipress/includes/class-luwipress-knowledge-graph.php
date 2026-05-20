@@ -50,35 +50,93 @@ class LuwiPress_Knowledge_Graph {
 	private function __construct() {
 		add_action( 'rest_api_init', array( $this, 'register_endpoints' ) );
 
-		// Auto-invalidate cache when content changes
-		add_action( 'save_post', array( $this, 'invalidate_cache' ) );
-		add_action( 'delete_post', array( $this, 'invalidate_cache' ) );
-		add_action( 'created_term', array( $this, 'invalidate_cache' ) );
-		add_action( 'delete_term', array( $this, 'invalidate_cache' ) );
+		// Auto-invalidate cache when content changes.
+		// `save_post_<type>` (not generic save_post) so the hook only fires
+		// for post types we actually index. Avoids hot-loop invalidation from
+		// noisy types (revisions, _luwipress_token_log, oembed_cache, …).
+		add_action( 'save_post_product', array( $this, 'maybe_invalidate_on_save_post' ), 10, 3 );
+		add_action( 'save_post_post',    array( $this, 'maybe_invalidate_on_save_post' ), 10, 3 );
+		add_action( 'save_post_page',    array( $this, 'maybe_invalidate_on_save_post' ), 10, 3 );
+		add_action( 'delete_post',       array( $this, 'maybe_invalidate_on_delete_post' ), 10, 1 );
 
-		// Invalidate when LuwiPress AI pipelines write product meta directly.
+		// Terms only fire for taxonomies we actually surface in the graph.
+		add_action( 'created_product_cat', array( $this, 'invalidate_cache' ) );
+		add_action( 'delete_product_cat',  array( $this, 'invalidate_cache' ) );
+		add_action( 'created_category',    array( $this, 'invalidate_cache' ) );
+		add_action( 'delete_category',     array( $this, 'invalidate_cache' ) );
+
+		// Invalidate when LuwiPress AI pipelines write tracked meta directly
+		// (async AI jobs sometimes bypass save_post).
 		add_action( 'updated_post_meta', array( $this, 'maybe_invalidate_on_meta' ), 10, 4 );
 		add_action( 'added_post_meta',   array( $this, 'maybe_invalidate_on_meta' ), 10, 4 );
 	}
 
 	/**
+	 * Scoped save_post invalidation — only flushes when the saved row is
+	 * actually a user-visible content change. Skips autosave / revisions /
+	 * auto-drafts so a writer typing in Gutenberg doesn't trigger 1 invalidate
+	 * per keystroke via auto-save heartbeat.
+	 *
+	 * @param int      $post_id
+	 * @param \WP_Post $post
+	 * @param bool     $update
+	 */
+	public function maybe_invalidate_on_save_post( $post_id, $post, $update = false ) {
+		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) {
+			return;
+		}
+		if ( ! ( $post instanceof \WP_Post ) ) {
+			return;
+		}
+		if ( in_array( $post->post_status, array( 'auto-draft', 'inherit', 'trash' ), true ) ) {
+			return;
+		}
+		$this->invalidate_cache();
+	}
+
+	/**
+	 * delete_post fires for every type — only flush for ones we index.
+	 */
+	public function maybe_invalidate_on_delete_post( $post_id ) {
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			return;
+		}
+		if ( ! in_array( $post->post_type, array( 'product', 'post', 'page' ), true ) ) {
+			return;
+		}
+		$this->invalidate_cache();
+	}
+
+	/**
 	 * Flush graph cache when LuwiPress-owned meta keys change — save_post
 	 * doesn't always fire for direct update_post_meta from async AI jobs.
+	 *
+	 * Scoped to tracked meta keys only (LuwiPress own + Rank Math + Yoast),
+	 * and additionally requires the parent post to be a graph-indexed type
+	 * (product/post/page) — meta writes on revisions, attachments, or
+	 * unrelated CPTs no longer trigger a global graph flush.
 	 */
 	public function maybe_invalidate_on_meta( $meta_id, $post_id, $meta_key, $meta_value ) {
 		if ( ! is_string( $meta_key ) || '' === $meta_key ) {
 			return;
 		}
-		if ( 0 === strpos( $meta_key, '_luwipress_' )
-			|| 'rank_math_title' === $meta_key
-			|| 'rank_math_description' === $meta_key
+		$tracked =
+			   0 === strpos( $meta_key, '_luwipress_' )
+			|| 'rank_math_title'        === $meta_key
+			|| 'rank_math_description'  === $meta_key
 			|| 'rank_math_focus_keyword' === $meta_key
-			|| '_yoast_wpseo_title' === $meta_key
-			|| '_yoast_wpseo_metadesc' === $meta_key
-			|| '_yoast_wpseo_focuskw' === $meta_key
-		) {
-			$this->invalidate_cache();
+			|| '_yoast_wpseo_title'     === $meta_key
+			|| '_yoast_wpseo_metadesc'  === $meta_key
+			|| '_yoast_wpseo_focuskw'   === $meta_key;
+		if ( ! $tracked ) {
+			return;
 		}
+		$type = get_post_type( $post_id );
+		if ( ! in_array( $type, array( 'product', 'post', 'page' ), true ) ) {
+			return;
+		}
+		$this->invalidate_cache();
 	}
 
 	public function register_endpoints() {
@@ -536,8 +594,12 @@ class LuwiPress_Knowledge_Graph {
 
 		$response['meta']['execution_time_ms'] = round( ( microtime( true ) - $start ) * 1000, 1 );
 
-		// Cache for 5 minutes
-		$ttl = absint( get_option( 'luwipress_knowledge_graph_ttl', 300 ) );
+		// Cache for 30 minutes by default — content changes already bust the
+		// cache via scoped save_post / delete_post / meta hooks, so a long
+		// idle TTL is safe and avoids cold-path rebuilds for everyone after
+		// the first viewer of the day. Operators can override via the
+		// `luwipress_knowledge_graph_ttl` option (seconds).
+		$ttl = absint( get_option( 'luwipress_knowledge_graph_ttl', 1800 ) );
 		set_transient( $cache_key, $response, $ttl );
 
 		return rest_ensure_response( $response );

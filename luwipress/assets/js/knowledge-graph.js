@@ -2226,9 +2226,20 @@ document.getElementById('kg-detail-close').onclick = function() {
 };
 
 // ── Refresh ──
-document.getElementById('kg-refresh').onclick = function() {
-	init(true); // explicit user refresh → bypass cache
+// Default click = cache-aware reload (cheap when the transient is warm).
+// Shift+click = force-fresh (bypasses cache + rebuilds from DB). This avoids
+// the 30-60s cold path users used to get on every Refresh tap when the
+// underlying data hadn't changed.
+document.getElementById('kg-refresh').onclick = function(ev) {
+	init(!!(ev && ev.shiftKey));
 };
+// Surface the dual behaviour on hover so operators discover the modifier.
+(function () {
+	var btn = document.getElementById('kg-refresh');
+	if (btn && !btn.title.match(/Shift/)) {
+		btn.title = 'Refresh (cache-aware). Hold Shift to force a fresh DB rebuild.';
+	}
+}());
 
 // ── Resize ──
 window.addEventListener('resize', function() {
