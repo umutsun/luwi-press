@@ -110,26 +110,36 @@ $category_labels = array(
 
 	<?php if ( $wp7_abilities_available ) :
 		// Minimal single-line status strip — only renders when WP 7.0 Abilities API
-		// is actually present (no false promise on older WP). Adapter install link
-		// uses WP's own search so the operator doesn't have to know the slug.
-		$adapter_install_url = admin_url( 'plugin-install.php?s=MCP+Adapter&tab=search&type=term' );
+		// is actually present (no false promise on older WP). The MCP Adapter
+		// piece is informational: Automattic's official adapter is preview-only
+		// on GitHub today (not in the WP Plugin Directory), so a generic
+		// "Install" search button just returned unrelated MCP plugins. When
+		// it's not detected we show a static "Auto-detect" pill that links to
+		// the upstream GitHub for operators who want the preview build, and
+		// surface the fact that LuwiPress's Abilities mirror means no extra
+		// plugin is required for WP-native discovery.
 	?>
 		<div class="mcp-wp7-strip">
 			<span class="dashicons dashicons-admin-plugins mcp-wp7-icon"></span>
 			<span class="mcp-wp7-label"><?php esc_html_e( 'WP 7.0 Abilities API', 'luwipress' ); ?></span>
 
 			<?php if ( $wp7_abilities_mirrored ) : ?>
-				<span class="lp-pill pill-success"><?php esc_html_e( 'Mirroring on', 'luwipress' ); ?></span>
+				<span class="lp-pill pill-success"
+				      title="<?php esc_attr_e( 'LuwiPress tools are registered into the native WP 7.0 Abilities API. Any WP-native MCP client will discover them automatically — no extra plugin needed.', 'luwipress' ); ?>">
+					<?php esc_html_e( 'Mirroring on', 'luwipress' ); ?>
+				</span>
 			<?php endif; ?>
 
 			<?php if ( $wp7_mcp_adapter_active ) : ?>
-				<span class="lp-pill pill-success"><?php esc_html_e( 'MCP Adapter active', 'luwipress' ); ?></span>
+				<span class="lp-pill pill-success"
+				      title="<?php esc_attr_e( 'Automattic\'s MCP Adapter is active. WP-native AI clients (Claude Code, Cursor) can call LuwiPress tools through it directly.', 'luwipress' ); ?>">
+					<?php esc_html_e( 'MCP Adapter active', 'luwipress' ); ?>
+				</span>
 			<?php else : ?>
-				<a href="<?php echo esc_url( $adapter_install_url ); ?>"
-				   class="lp-pill pill-neutral mcp-wp7-install"
-				   title="<?php esc_attr_e( 'Optional: install Automattic\'s official MCP Adapter so WP-native AI clients (Claude Code, Cursor) can discover this server\'s tools alongside the headless WebMCP HTTP endpoint.', 'luwipress' ); ?>">
-					<?php esc_html_e( 'Install MCP Adapter', 'luwipress' ); ?> →
-				</a>
+				<span class="lp-pill pill-neutral mcp-wp7-adapter-info"
+				      title="<?php esc_attr_e( 'Automattic\'s official MCP Adapter is a preview build on GitHub (not in the WordPress Plugin Directory yet). When it lands on .org it will auto-detect here. In the meantime, Abilities mirroring above already exposes LuwiPress tools to WP-native MCP clients — no extra plugin required.', 'luwipress' ); ?>">
+					<?php esc_html_e( 'MCP Adapter: auto-detect when available', 'luwipress' ); ?>
+				</span>
 			<?php endif; ?>
 
 			<span class="mcp-wp7-spacer"></span>
