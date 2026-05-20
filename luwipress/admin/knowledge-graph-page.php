@@ -193,16 +193,16 @@ if ( ! current_user_can( 'manage_options' ) ) {
 		<div class="kg-action-queue-list" id="kg-action-queue-list"></div>
 	</div>
 
-	<!-- Autopilot panel (Track D.3) — settings + manual run + recent dispatch log.
-	     Default: disabled + dry-run. Operator opts in explicitly. -->
-	<div class="kg-autopilot" id="kg-autopilot">
-		<div class="kg-autopilot-header">
-			<span class="kg-autopilot-title">
-				<span class="kg-autopilot-icon" aria-hidden="true">⚙</span>
-				<?php esc_html_e( 'AI Autopilot', 'luwipress' ); ?>
-			</span>
-			<span class="kg-autopilot-sub" id="kg-autopilot-state">—</span>
-		</div>
+	<!-- Autopilot — minimal collapsible. Native <details> for toggle (no JS).
+	     Default: collapsed, summary line shows live state. Operator opens to tune. -->
+	<details class="kg-autopilot kg-autopilot--mini" id="kg-autopilot">
+		<summary class="kg-autopilot-summary">
+			<span class="kg-autopilot-icon" aria-hidden="true">⚙</span>
+			<span class="kg-autopilot-title"><?php esc_html_e( 'AI Autopilot', 'luwipress' ); ?></span>
+			<span class="kg-autopilot-pill" id="kg-autopilot-state" data-state="off">—</span>
+			<span class="kg-autopilot-summary-meta" id="kg-autopilot-meta"></span>
+			<span class="kg-autopilot-chevron" aria-hidden="true">▾</span>
+		</summary>
 		<div class="kg-autopilot-body" id="kg-autopilot-body">
 			<div class="kg-autopilot-settings" id="kg-autopilot-settings">
 				<div class="kg-autopilot-row">
@@ -212,7 +212,7 @@ if ( ! current_user_can( 'manage_options' ) ) {
 					</label>
 					<label class="kg-autopilot-toggle">
 						<input type="checkbox" id="kg-autopilot-dry-run" checked />
-						<span><?php esc_html_e( 'Dry-run only (logs, no real dispatch)', 'luwipress' ); ?></span>
+						<span><?php esc_html_e( 'Dry-run only (no real dispatch)', 'luwipress' ); ?></span>
 					</label>
 				</div>
 				<div class="kg-autopilot-row">
@@ -221,19 +221,19 @@ if ( ! current_user_can( 'manage_options' ) ) {
 						<input type="number" id="kg-autopilot-min-confidence" min="0" max="100" value="60" />
 					</label>
 					<label class="kg-autopilot-field">
-						<span><?php esc_html_e( 'Window (hours)', 'luwipress' ); ?></span>
+						<span><?php esc_html_e( 'Window (h)', 'luwipress' ); ?></span>
 						<input type="number" id="kg-autopilot-window" min="1" max="720" value="24" />
 					</label>
 					<label class="kg-autopilot-field">
-						<span><?php esc_html_e( 'Cap: enrich/day', 'luwipress' ); ?></span>
+						<span><?php esc_html_e( 'Enrich/d', 'luwipress' ); ?></span>
 						<input type="number" id="kg-autopilot-cap-enrich" min="0" max="100" value="5" />
 					</label>
 					<label class="kg-autopilot-field">
-						<span><?php esc_html_e( 'Cap: seo/day', 'luwipress' ); ?></span>
+						<span><?php esc_html_e( 'SEO/d', 'luwipress' ); ?></span>
 						<input type="number" id="kg-autopilot-cap-seo" min="0" max="100" value="5" />
 					</label>
 					<label class="kg-autopilot-field">
-						<span><?php esc_html_e( 'Cap: translate/day', 'luwipress' ); ?></span>
+						<span><?php esc_html_e( 'Translate/d', 'luwipress' ); ?></span>
 						<input type="number" id="kg-autopilot-cap-translate" min="0" max="100" value="3" />
 					</label>
 				</div>
@@ -248,11 +248,11 @@ if ( ! current_user_can( 'manage_options' ) ) {
 				<div class="kg-autopilot-log" id="kg-autopilot-log"><?php esc_html_e( 'Loading…', 'luwipress' ); ?></div>
 			</div>
 		</div>
-	</div>
+	</details>
 
 	<!-- Activity Feed — last N operator actions (enrichment, translation, AEO).
 	     Polls /logs every 30s while visible to surface background job completions. -->
-	<div class="kg-activity" id="kg-activity" hidden>
+	<div class="kg-activity kg-activity--mini" id="kg-activity" hidden>
 		<div class="kg-activity-header">
 			<span class="kg-activity-title"><?php esc_html_e( 'Recent activity', 'luwipress' ); ?></span>
 			<span class="kg-activity-sub" id="kg-activity-sub">—</span>

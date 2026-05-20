@@ -568,6 +568,17 @@ class LuwiPress_Cookie_Consent {
 				'language' => array( 'type' => 'string' ),
 			),
 		) );
+
+		register_rest_route( $ns, '/cookies/save-policy-page', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'rest_save_policy_page' ),
+			'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+			'args'                => array(
+				'text'   => array( 'type' => 'string' ),
+				'title'  => array( 'type' => 'string' ),
+				'detected' => array( 'type' => 'object' ),
+			),
+		) );
 	}
 
 	/**
@@ -644,5 +655,115 @@ class LuwiPress_Cookie_Consent {
 			return $out;
 		}
 		return rest_ensure_response( $out );
+	}
+
+	/**
+	 * Persist a generated cookie policy paragraph as a WordPress page so
+	 * the operator doesn't have to copy/paste manually. Resolution order:
+	 *
+	 *   1. `policy_url` setting already points to an existing page → update it.
+	 *   2. A page with slug `cookie-policy` exists → update it + write URL
+	 *      back into the policy_url setting.
+	 *   3. Neither exists → create a published page with that slug, write
+	 *      URL back into the policy_url setting.
+	 *
+	 * The detected third-party tags JSON is appended as an HTML comment so
+	 * future regenerations see what was on the site at write time without
+	 * affecting the rendered page.
+	 *
+	 * @since 3.3.0
+	 */
+	public function rest_save_policy_page( $request ) {
+		$text     = (string) $request->get_param( 'text' );
+		$title    = trim( (string) $request->get_param( 'title' ) );
+		$detected = $request->get_param( 'detected' );
+
+		if ( '' === trim( $text ) ) {
+			return new WP_Error( 'no_text', 'Refusing to save an empty cookie policy. Generate text first.', array( 'status' => 400 ) );
+		}
+		if ( '' === $title ) {
+			$title = __( 'Cookie Policy', 'luwipress' );
+		}
+
+		// Append an HTML-comment audit footer so regenerations preserve a
+		// snapshot of detected tags + generator version without polluting
+		// the rendered page.
+		$plugin_version = defined( 'LUWIPRESS_VERSION' ) ? LUWIPRESS_VERSION : 'unknown';
+		$footer = "\n\n<!-- luwipress:cookie-policy generated_at=" . esc_attr( current_time( 'c' ) )
+			. " plugin_version=" . esc_attr( $plugin_version );
+		if ( is_array( $detected ) && ! empty( $detected ) ) {
+			$footer .= " detected=" . esc_attr( wp_json_encode( $detected ) );
+		}
+		$footer .= " -->";
+
+		$content = wp_kses_post( $text ) . $footer;
+
+		$settings   = $this->get_settings();
+		$existing_id = 0;
+
+		// 1. Honour policy_url setting if it points to a real WP page.
+		if ( ! empty( $settings['policy_url'] ) ) {
+			$candidate = url_to_postid( $settings['policy_url'] );
+			if ( $candidate && get_post_status( $candidate ) ) {
+				$existing_id = (int) $candidate;
+			}
+		}
+
+		// 2. Otherwise look for a page with the canonical slug.
+		if ( ! $existing_id ) {
+			$by_slug = get_posts( array(
+				'post_type'      => 'page',
+				'name'           => 'cookie-policy',
+				'post_status'    => array( 'publish', 'draft', 'private' ),
+				'numberposts'    => 1,
+				'suppress_filters' => true,
+			) );
+			if ( ! empty( $by_slug ) ) {
+				$existing_id = (int) $by_slug[0]->ID;
+			}
+		}
+
+		$action = 'updated';
+		if ( $existing_id ) {
+			$result = wp_update_post( array(
+				'ID'           => $existing_id,
+				'post_title'   => sanitize_text_field( $title ),
+				'post_content' => $content,
+				'post_status'  => 'publish',
+			), true );
+		} else {
+			$action = 'created';
+			$result = wp_insert_post( array(
+				'post_title'   => sanitize_text_field( $title ),
+				'post_name'    => 'cookie-policy',
+				'post_content' => $content,
+				'post_status'  => 'publish',
+				'post_type'    => 'page',
+				'meta_input'   => array(
+					'_luwipress_cookie_policy_managed' => 1,
+				),
+			), true );
+		}
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		$page_id  = (int) $result;
+		$page_url = get_permalink( $page_id );
+
+		// Write the canonical URL back into the policy_url setting so the
+		// frontend banner and footer links point at the freshly saved page
+		// without the operator having to wire it manually.
+		if ( $page_url && $page_url !== $settings['policy_url'] ) {
+			$settings['policy_url'] = esc_url_raw( $page_url );
+			update_option( self::OPTION_SETTINGS, $settings, false );
+		}
+
+		return rest_ensure_response( array(
+			'page_id'  => $page_id,
+			'url'      => $page_url,
+			'edit_url' => admin_url( 'post.php?post=' . $page_id . '&action=edit' ),
+			'action'   => $action,
+		) );
 	}
 }

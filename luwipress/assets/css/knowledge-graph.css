@@ -1839,3 +1839,124 @@ div.kg-rec {
     border: 1px solid var(--lp-border-light, #e8e2d3);
 }
 .kg-autopilot-log-row[data-action="dispatched"] { background: rgba(212, 175, 55, .06); }
+
+/* ── Minimal collapsible Autopilot ──────────────────────────────────
+   The `kg-autopilot--mini` modifier turns the card into a single-row
+   <details>/<summary> that expands inline when the operator wants to
+   tune the config. Default state is closed — page real estate stays
+   for the graph + stat cards. */
+details.kg-autopilot--mini { padding: 0; margin: 14px 0; }
+details.kg-autopilot--mini > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    user-select: none;
+}
+details.kg-autopilot--mini > summary::-webkit-details-marker { display: none; }
+details.kg-autopilot--mini .kg-autopilot-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-right: 4px;
+}
+details.kg-autopilot--mini .kg-autopilot-icon { font-size: 14px; }
+details.kg-autopilot--mini .kg-autopilot-pill {
+    font-family: ui-monospace, 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+details.kg-autopilot--mini .kg-autopilot-pill[data-state="off"]  { background: #f0f0f0; color: #777; }
+details.kg-autopilot--mini .kg-autopilot-pill[data-state="dry"]  { background: #fef9e6; color: #735c00; }
+details.kg-autopilot--mini .kg-autopilot-pill[data-state="live"] { background: #d4af37; color: #fff; }
+details.kg-autopilot--mini .kg-autopilot-summary-meta {
+    flex: 1 1 auto;
+    color: var(--lp-text-secondary, #7f7663);
+    font-size: 12px;
+    font-family: ui-monospace, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+details.kg-autopilot--mini .kg-autopilot-chevron {
+    color: var(--lp-text-secondary, #7f7663);
+    font-size: 14px;
+    transition: transform .15s ease;
+}
+details.kg-autopilot--mini[open] .kg-autopilot-chevron { transform: rotate(180deg); }
+details.kg-autopilot--mini .kg-autopilot-body {
+    padding: 6px 16px 16px;
+    border-top: 1px solid var(--lp-border-light, #f0ebe0);
+}
+/* Tighter field row inside the expanded body — smaller labels, smaller inputs. */
+details.kg-autopilot--mini .kg-autopilot-row { gap: 12px 18px; margin-bottom: 10px; }
+details.kg-autopilot--mini .kg-autopilot-field { font-size: 10px; }
+details.kg-autopilot--mini .kg-autopilot-field input { width: 64px; font-size: 12px; padding: 4px 6px; }
+details.kg-autopilot--mini .kg-autopilot-log {
+    max-height: 180px;
+}
+details.kg-autopilot--mini .kg-autopilot-log-row {
+    grid-template-columns: 16px 120px 1fr auto;
+    padding: 4px 12px;
+    font-size: 11.5px;
+}
+details.kg-autopilot--mini .kg-autopilot-log-empty {
+    padding: 12px;
+    font-size: 12px;
+    border: 1px dashed var(--lp-border-light, #f0ebe0);
+    border-radius: 6px;
+    background: transparent;
+}
+
+/* ── Minimal Recent Activity timeline ──────────────────────────────
+   Replaces the per-row "INFO chip + timestamp + message" tabular feel
+   with a quiet timeline: small severity dot + monospaced ts + message.
+   Hover gives a subtle bg, error/warning lift via dot color only. */
+.kg-activity--mini .kg-activity-row {
+    display: grid;
+    grid-template-columns: 10px 96px 1fr;
+    gap: 10px;
+    align-items: baseline;
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--lp-border-light, #f0ebe0);
+    font-size: 12px;
+    transition: background .12s ease;
+}
+.kg-activity--mini .kg-activity-row:hover { background: var(--lp-bg-alt, #f6f3f2); }
+.kg-activity--mini .kg-activity-row:last-child { border-bottom: none; }
+.kg-activity--mini .kg-activity-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--lp-text-secondary, #9ca3af);
+    align-self: center;
+    flex-shrink: 0;
+}
+.kg-activity--mini .kg-activity-row[data-level="error"]   .kg-activity-dot { background: #dc2626; }
+.kg-activity--mini .kg-activity-row[data-level="warning"] .kg-activity-dot { background: #f59e0b; }
+.kg-activity--mini .kg-activity-row[data-level="success"] .kg-activity-dot { background: #16a34a; }
+.kg-activity--mini .kg-activity-row[data-level="info"]    .kg-activity-dot { background: #cbd5e1; }
+.kg-activity--mini .kg-activity-time {
+    font-family: ui-monospace, monospace;
+    color: var(--lp-text-secondary, #7f7663);
+    font-size: 11px;
+}
+.kg-activity--mini .kg-activity-msg {
+    color: var(--lp-text, #1b1c1c);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.kg-activity--mini .kg-activity-empty {
+    padding: 14px;
+    border: 1px dashed var(--lp-border-light, #f0ebe0);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--lp-text-secondary, #7f7663);
+    font-size: 12px;
+    text-align: center;
+}

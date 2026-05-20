@@ -1900,11 +1900,13 @@ function renderActivityFeed(logs) {
 				}
 			} catch (e) {}
 		}
+		// Minimal row (kg-activity--mini): severity dot + ts + message.
+		// INFO chip dropped because it's the default 90% of the time and
+		// produces visual noise; the colored dot carries the same signal.
 		return '<div class="kg-activity-row" data-level="' + escHtml(level) + '">'
+			+ '<span class="kg-activity-dot" aria-hidden="true"></span>'
 			+ '<span class="kg-activity-time" title="' + escHtml(entry.timestamp || '') + '">' + escHtml(ts) + '</span>'
-			+ '<span class="kg-activity-level" data-level="' + escHtml(level) + '">' + escHtml(level) + '</span>'
-			+ icon
-			+ '<span class="kg-activity-msg" title="' + escHtml(msg) + '">' + escHtml(msg) + '</span>'
+			+ '<span class="kg-activity-msg" title="' + escHtml(msg) + '">' + (icon ? icon + ' ' : '') + escHtml(msg) + '</span>'
 			+ '</div>';
 	}).join('');
 	list.innerHTML = html;
@@ -4104,17 +4106,36 @@ function kgAutopilotInit() {
 	}
 
 	function renderState(s) {
-		if (!state) return;
-		if (!s.enabled) {
-			state.textContent = 'Disabled';
-			state.setAttribute('data-state', 'off');
-			return;
+		if (state) {
+			if (!s.enabled) {
+				state.textContent = 'Disabled';
+				state.setAttribute('data-state', 'off');
+			} else {
+				state.textContent = s.dry_run ? 'Dry-run' : 'Live';
+				state.setAttribute('data-state', s.dry_run ? 'dry' : 'live');
+			}
 		}
-		state.textContent = s.dry_run ? 'Enabled · dry-run' : 'Enabled · LIVE';
-		state.setAttribute('data-state', s.dry_run ? 'dry' : 'live');
+		// Mini-mode summary meta line — compact "60% · 24h · 5/5/3" hint so
+		// the operator sees the config at a glance without expanding the
+		// <details> panel. Updated on every load + save.
+		var meta = $('kg-autopilot-meta');
+		if (meta) {
+			var caps = s.caps || {};
+			meta.textContent = (s.min_confidence || 0) + '% · '
+				+ (s.dispatch_window_hours || 0) + 'h · '
+				+ (caps.enrich || 0) + '/' + (caps.seo || 0) + '/' + (caps.translate || 0);
+		}
 	}
 
-	function save() {
+	// Debounced auto-save — operator no longer has to click Save after every
+	// change. 600ms debounce so a quick spin through 5 fields = one POST.
+	var autoSaveTimer = null;
+	function autoSave() {
+		if (autoSaveTimer) clearTimeout(autoSaveTimer);
+		autoSaveTimer = setTimeout(function () { save(true); }, 600);
+	}
+
+	function save(isAuto) {
 		saveBtn.disabled = true;
 		var body = {
 			enabled:               $('kg-autopilot-enabled').checked,
@@ -4138,8 +4159,8 @@ function kgAutopilotInit() {
 			saveBtn.disabled = false;
 			renderState(s);
 			if (msg) {
-				msg.textContent = 'Saved';
-				setTimeout(function () { msg.textContent = ''; }, 2000);
+				msg.textContent = isAuto ? 'Auto-saved' : 'Saved';
+				setTimeout(function () { msg.textContent = ''; }, isAuto ? 1200 : 2000);
 			}
 		})
 		.catch(function () {
@@ -4147,6 +4168,16 @@ function kgAutopilotInit() {
 			if (msg) msg.textContent = 'Save failed';
 		});
 	}
+
+	// Wire auto-save to every config control. Native checkbox/input events
+	// catch both keyboard + mouse changes; the 600ms debounce in autoSave()
+	// collapses bursts to a single POST.
+	['kg-autopilot-enabled', 'kg-autopilot-dry-run', 'kg-autopilot-min-confidence',
+	 'kg-autopilot-window', 'kg-autopilot-cap-enrich', 'kg-autopilot-cap-seo',
+	 'kg-autopilot-cap-translate'].forEach(function (id) {
+		var el = $(id);
+		if (el) el.addEventListener('change', autoSave);
+	});
 
 	function runNow() {
 		runBtn.disabled = true;

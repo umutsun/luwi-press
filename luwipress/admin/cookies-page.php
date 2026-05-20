@@ -198,16 +198,20 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 
 		<div class="luwipress-section" style="margin-top:16px;">
 			<h2 style="margin-top:0;"><?php esc_html_e( 'AI cookie policy generator', 'luwipress' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'Generate a plain-language policy paragraph customized to the third-party tags actually detected on this site. Paste the result into your Cookie Policy page.', 'luwipress' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Click Generate and a Cookie Policy WP page is created (or updated) automatically with a plain-language paragraph customized to the third-party tags detected on this site. Edit the text below and click "Save edits" to push your tweaks to the page.', 'luwipress' ); ?></p>
 			<p>
 				<button id="lwp-cc-gen-btn" class="button button-primary">
 					<span class="dashicons dashicons-art" style="vertical-align:middle;"></span>
-					<?php esc_html_e( 'Generate policy text', 'luwipress' ); ?>
+					<?php esc_html_e( 'Generate & save policy', 'luwipress' ); ?>
+				</button>
+				<button id="lwp-cc-policy-save" class="button" type="button">
+					<span class="dashicons dashicons-saved" style="vertical-align:middle;"></span>
+					<?php esc_html_e( 'Save edits to page', 'luwipress' ); ?>
 				</button>
 				<span id="lwp-cc-gen-status" style="margin-left:12px; color:var(--lp-text-muted);"></span>
 			</p>
 			<textarea id="lwp-cc-policy-text" rows="14" style="width:100%; max-width:880px; font-family:Georgia,serif; font-size:14px; line-height:1.6;"></textarea>
-			<p class="description"><?php esc_html_e( 'Detected third-party tags appear in the JSON block on the right after generation.', 'luwipress' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Detected third-party tags appear in the JSON block below after generation. The page is saved at /cookie-policy/ by default — the Cookie Policy URL setting auto-updates to the new permalink.', 'luwipress' ); ?></p>
 			<pre id="lwp-cc-policy-detected" style="background:var(--lp-bg-muted,#f4f4f4); padding:12px; border-radius:6px; max-width:880px; overflow:auto;"></pre>
 		</div>
 
@@ -300,7 +304,9 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 		});
 	}
 
-	// Policy generator
+	// Policy generator — single-page workflow: Generate → auto-save to a
+	// WP page → show a "View / Edit" link. Operator no longer has to copy
+	// the text into a separate page.
 	var gen = document.getElementById('lwp-cc-gen-btn');
 	if (gen) {
 		gen.addEventListener('click', function () {
@@ -308,9 +314,39 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 			status.textContent = '<?php echo esc_js( __( 'Generating with AI…', 'luwipress' ) ); ?>';
 			api('policy-text', { method: 'POST', body: JSON.stringify({}) }).then(function (r) {
 				if (!r.ok) { status.textContent = '<?php echo esc_js( __( 'Failed.', 'luwipress' ) ); ?>'; return; }
-				document.getElementById('lwp-cc-policy-text').value = r.data.text || '';
-				document.getElementById('lwp-cc-policy-detected').textContent = JSON.stringify(r.data.detected || {}, null, 2);
-				status.textContent = '<?php echo esc_js( __( 'Done.', 'luwipress' ) ); ?>';
+				var text = r.data.text || '';
+				var detected = r.data.detected || {};
+				document.getElementById('lwp-cc-policy-text').value = text;
+				document.getElementById('lwp-cc-policy-detected').textContent = JSON.stringify(detected, null, 2);
+				if (!text) { status.textContent = '<?php echo esc_js( __( 'Empty result — try again.', 'luwipress' ) ); ?>'; return; }
+				status.textContent = '<?php echo esc_js( __( 'Saving to Cookie Policy page…', 'luwipress' ) ); ?>';
+				api('save-policy-page', { method: 'POST', body: JSON.stringify({ text: text, detected: detected }) }).then(function (s) {
+					if (!s.ok || !s.data || !s.data.url) { status.textContent = '<?php echo esc_js( __( 'Generated, but auto-save failed — copy the text manually.', 'luwipress' ) ); ?>'; return; }
+					var verb = s.data.action === 'created'
+						? '<?php echo esc_js( __( 'Created', 'luwipress' ) ); ?>'
+						: '<?php echo esc_js( __( 'Updated', 'luwipress' ) ); ?>';
+					status.innerHTML = verb + ' — <a href="' + s.data.url + '" target="_blank" rel="noopener">'
+						+ '<?php echo esc_js( __( 'View page', 'luwipress' ) ); ?> →</a> · '
+						+ '<a href="' + s.data.edit_url + '">'
+						+ '<?php echo esc_js( __( 'Edit', 'luwipress' ) ); ?></a>';
+				});
+			});
+		});
+	}
+
+	// Manual re-save — operator tweaks the textarea after generation and
+	// wants those edits persisted without re-running the AI. The same
+	// endpoint accepts a `text` field, so we just POST the current value.
+	var saveBtn = document.getElementById('lwp-cc-policy-save');
+	if (saveBtn) {
+		saveBtn.addEventListener('click', function () {
+			var status = document.getElementById('lwp-cc-gen-status');
+			var text   = document.getElementById('lwp-cc-policy-text').value;
+			if (!text.trim()) { status.textContent = '<?php echo esc_js( __( 'Nothing to save.', 'luwipress' ) ); ?>'; return; }
+			status.textContent = '<?php echo esc_js( __( 'Saving…', 'luwipress' ) ); ?>';
+			api('save-policy-page', { method: 'POST', body: JSON.stringify({ text: text }) }).then(function (s) {
+				if (!s.ok || !s.data || !s.data.url) { status.textContent = '<?php echo esc_js( __( 'Save failed.', 'luwipress' ) ); ?>'; return; }
+				status.innerHTML = '<?php echo esc_js( __( 'Saved', 'luwipress' ) ); ?> — <a href="' + s.data.url + '" target="_blank" rel="noopener"><?php echo esc_js( __( 'View page', 'luwipress' ) ); ?> →</a>';
 			});
 		});
 	}
