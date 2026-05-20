@@ -85,44 +85,35 @@ $category_labels = array(
 		</div>
 	</div>
 
-	<?php if ( $wp7_abilities_available || $wp7_mcp_adapter_active ) : ?>
-		<div class="lpress-card" style="border-left:4px solid var(--lp-primary,#4f46e5);">
-			<h2>
-				<span class="dashicons dashicons-info-outline" style="color:var(--lp-primary,#4f46e5);"></span>
-				<?php esc_html_e( 'WordPress 7.0 Abilities API detected', 'luwipress' ); ?>
-			</h2>
-			<p>
-				<?php
-				if ( $wp7_abilities_mirrored ) {
-					echo esc_html__( 'LuwiPress tools are mirrored into the native Abilities API alongside this MCP server. WP-native AI clients (Claude Code, Cursor, the official MCP Adapter plugin) discover them automatically — your headless WebMCP endpoint remains available for direct HTTP integrations.', 'luwipress' );
-				} else {
-					echo esc_html__( 'WordPress 7.0 native Abilities API is available but LuwiPress core has not loaded its bridge yet. Please ensure the LuwiPress core plugin is active.', 'luwipress' );
-				}
-				?>
-			</p>
-			<ul style="margin:8px 0 0 18px;">
-				<li>
-					<strong><?php esc_html_e( 'WP 7.0 Native MCP', 'luwipress' ); ?>:</strong>
-					<?php
-					if ( $wp7_mcp_adapter_active ) {
-						echo '<span class="lp-pill pill-success" style="margin-left:6px;"><span class="dashicons dashicons-yes-alt"></span> ' . esc_html__( 'Automattic MCP Adapter active', 'luwipress' ) . '</span>';
-					} else {
-						echo '<span class="lp-pill pill-warning" style="margin-left:6px;"><span class="dashicons dashicons-warning"></span> ' . esc_html__( 'MCP Adapter plugin not installed', 'luwipress' ) . '</span>';
-					}
-					?>
-				</li>
-				<li>
-					<strong><?php esc_html_e( 'LuwiPress WebMCP (this server)', 'luwipress' ); ?>:</strong>
-					<?php if ( $enabled ) : ?>
-						<span class="lp-pill pill-success" style="margin-left:6px;"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Active — headless/advanced surface', 'luwipress' ); ?></span>
-					<?php else : ?>
-						<span class="lp-pill pill-neutral" style="margin-left:6px;"><span class="dashicons dashicons-marker"></span> <?php esc_html_e( 'Disabled', 'luwipress' ); ?></span>
-					<?php endif; ?>
-				</li>
-			</ul>
-			<p class="description" style="margin-top:8px;">
-				<?php esc_html_e( 'Dual-registry pattern: pick whichever surface your client supports. Both expose the same tool catalog.', 'luwipress' ); ?>
-			</p>
+	<?php if ( $wp7_abilities_available ) :
+		// Minimal single-line status strip — only renders when WP 7.0 Abilities API
+		// is actually present (no false promise on older WP). Adapter install link
+		// uses WP's own search so the operator doesn't have to know the slug.
+		$adapter_install_url = admin_url( 'plugin-install.php?s=MCP+Adapter&tab=search&type=term' );
+	?>
+		<div class="mcp-wp7-strip">
+			<span class="dashicons dashicons-admin-plugins mcp-wp7-icon"></span>
+			<span class="mcp-wp7-label"><?php esc_html_e( 'WP 7.0 Abilities API', 'luwipress' ); ?></span>
+
+			<?php if ( $wp7_abilities_mirrored ) : ?>
+				<span class="lp-pill pill-success"><?php esc_html_e( 'Mirroring on', 'luwipress' ); ?></span>
+			<?php endif; ?>
+
+			<?php if ( $wp7_mcp_adapter_active ) : ?>
+				<span class="lp-pill pill-success"><?php esc_html_e( 'MCP Adapter active', 'luwipress' ); ?></span>
+			<?php else : ?>
+				<a href="<?php echo esc_url( $adapter_install_url ); ?>"
+				   class="lp-pill pill-neutral mcp-wp7-install"
+				   title="<?php esc_attr_e( 'Optional: install Automattic\'s official MCP Adapter so WP-native AI clients (Claude Code, Cursor) can discover this server\'s tools alongside the headless WebMCP HTTP endpoint.', 'luwipress' ); ?>">
+					<?php esc_html_e( 'Install MCP Adapter', 'luwipress' ); ?> →
+				</a>
+			<?php endif; ?>
+
+			<span class="mcp-wp7-spacer"></span>
+			<a href="https://make.wordpress.org/core/?s=abilities+api" target="_blank" rel="noopener" class="mcp-wp7-help"
+			   title="<?php esc_attr_e( 'Dual-registry pattern: native WP Abilities + this headless HTTP endpoint. Both expose the same tool catalog — pick whichever surface your client supports.', 'luwipress' ); ?>">
+				<?php esc_html_e( 'What\'s this?', 'luwipress' ); ?>
+			</a>
 		</div>
 	<?php endif; ?>
 

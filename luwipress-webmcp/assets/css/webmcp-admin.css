@@ -82,6 +82,56 @@
 	box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
 }
 
+/* WP 7.0 Abilities API status strip — minimal single-line replacement for
+   the old info-card. Only renders when the host site actually exposes the
+   Abilities API. Adapter pill is a real install link when the plugin is
+   missing so the operator never has to hunt for the slug. */
+.mcp-wp7-strip {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 14px;
+	margin: 10px 0 18px;
+	background: var(--lp-bg-muted, #f9fafb);
+	border: 1px solid var(--lp-border-subtle, #e5e7eb);
+	border-radius: 8px;
+	font-size: 13px;
+	line-height: 1.4;
+}
+.mcp-wp7-icon {
+	color: var(--lp-text-muted, #6b7280);
+	font-size: 16px;
+	line-height: 1;
+}
+.mcp-wp7-label {
+	color: var(--lp-text, #111827);
+	font-weight: 500;
+}
+.mcp-wp7-spacer {
+	flex: 1 1 auto;
+}
+.mcp-wp7-strip .lp-pill {
+	font-size: 11px;
+	padding: 2px 8px;
+	line-height: 1.5;
+}
+.mcp-wp7-install {
+	text-decoration: none;
+}
+.mcp-wp7-install:hover {
+	filter: brightness(0.96);
+}
+.mcp-wp7-help {
+	color: var(--lp-text-muted, #6b7280);
+	font-size: 12px;
+	text-decoration: none;
+	border-bottom: 1px dotted var(--lp-text-muted, #6b7280);
+}
+.mcp-wp7-help:hover {
+	color: var(--lp-text, #111827);
+	border-bottom-color: var(--lp-text, #111827);
+}
+
 /* ---------- Stats grid ---------- */
 .lpress-dashboard .mcp-stats {
 	display: grid;
