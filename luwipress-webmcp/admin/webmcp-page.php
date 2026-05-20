@@ -23,7 +23,15 @@ if ( isset( $_POST['luwipress_webmcp_save'] ) && check_admin_referer( 'luwipress
 
 $enabled      = LuwiPress_WebMCP::is_enabled();
 $endpoint_url = rest_url( 'luwipress/v1/mcp' );
-$api_token    = get_option( 'luwipress_seo_api_token', '' );
+// Lite-mode aware token resolution — prefer Core's option name (existing
+// installs keep their token after Core install/uninstall), fall back to
+// WebMCP's own option in standalone installs. Mirrors the resolution in
+// LuwiPress_Permission::get_stored_token().
+$api_token    = (string) get_option( 'luwipress_seo_api_token', '' );
+if ( '' === $api_token ) {
+	$api_token = (string) get_option( 'luwipress_webmcp_api_token', '' );
+}
+$lite_mode    = ! function_exists( 'luwipress_webmcp_core_active' ) || ! luwipress_webmcp_core_active();
 $origins      = get_option( 'luwipress_webmcp_allowed_origins', '' );
 
 // Get tool catalog
@@ -84,6 +92,21 @@ $category_labels = array(
 			<span class="mcp-status-text"><?php echo $enabled ? esc_html__( 'Active', 'luwipress' ) : esc_html__( 'Disabled', 'luwipress' ); ?></span>
 		</div>
 	</div>
+
+	<?php if ( $lite_mode ) : ?>
+		<div class="mcp-lite-banner">
+			<div class="mcp-lite-banner-left">
+				<span class="dashicons dashicons-info-outline mcp-lite-icon"></span>
+				<div>
+					<strong><?php esc_html_e( 'Lite mode active', 'luwipress' ); ?></strong>
+					<span class="mcp-lite-sub"><?php esc_html_e( 'WordPress-native toolset only (system, plugins, themes, menus, taxonomies, comments, media, WooCommerce + Elementor when present). AI enrichment / SEO meta / AEO schema / translation pipelines / knowledge graph / marketplace sync require LuwiPress core.', 'luwipress' ); ?></span>
+				</div>
+			</div>
+			<a class="button button-primary" href="https://luwi.dev/luwipress" target="_blank" rel="noopener">
+				<?php esc_html_e( 'Unlock full catalog →', 'luwipress' ); ?>
+			</a>
+		</div>
+	<?php endif; ?>
 
 	<?php if ( $wp7_abilities_available ) :
 		// Minimal single-line status strip — only renders when WP 7.0 Abilities API

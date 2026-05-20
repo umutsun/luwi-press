@@ -121,6 +121,12 @@ class LuwiPress_Cookie_Consent {
 			'imprint_url'       => '',
 			'log_retention_days'=> 730, // 2 years per GDPR demonstrable-consent guidance
 			'categories_enabled'=> array( 'necessary', 'analytics', 'marketing', 'personalization' ),
+			// Microsoft Clarity Consent v2 bridge (3.3.0+, requested by Tapadum vendor).
+			// When `clarity_consent_v2_enabled` is true and the storefront has Microsoft
+			// Clarity loaded (`window.clarity`), the consent banner fires `clarity('consentv2', …)`
+			// every time the visitor changes preferences so Clarity respects analytics +
+			// marketing toggles without operators bolting on extra glue plugins.
+			'clarity_consent_v2_enabled' => false,
 			'texts'             => array(
 				'title'        => __( 'We value your privacy', 'luwipress' ),
 				'body'         => __( 'We use cookies to enhance browsing, analyze traffic, and personalize content. You can accept all, reject non-essential, or customize your preferences.', 'luwipress' ),
@@ -166,7 +172,7 @@ class LuwiPress_Cookie_Consent {
 				$next['theme'] = $theme;
 			}
 		}
-		foreach ( array( 'show_reject_button', 'show_preferences' ) as $bk ) {
+		foreach ( array( 'show_reject_button', 'show_preferences', 'clarity_consent_v2_enabled' ) as $bk ) {
 			if ( array_key_exists( $bk, $patch ) ) {
 				$next[ $bk ] = (bool) $patch[ $bk ];
 			}
@@ -252,6 +258,40 @@ class LuwiPress_Cookie_Consent {
 
 		wp_enqueue_style( 'luwipress-cookie-consent' );
 		wp_enqueue_script( 'luwipress-cookie-consent' );
+
+		// Microsoft Clarity Consent v2 bridge — small adapter that translates
+		// LuwiPress consent toggles into Clarity's native `consentv2` API.
+		// Operator-gated (`clarity_consent_v2_enabled`); fires on every
+		// `luwipress:consent` CustomEvent dispatched by cookie-banner.js
+		// (4 GCM-aligned signals: analytics_storage, ad_storage,
+		// ad_user_data, ad_personalization). Vendor-Tapadum request — no
+		// Clarity SDK changes required, just respect the toggles already
+		// captured by the banner.
+		if ( ! empty( $settings['clarity_consent_v2_enabled'] ) ) {
+			$bridge = "(function(){\n"
+				. "  function send(detail){\n"
+				. "    if (typeof window.clarity !== 'function') return;\n"
+				. "    var analytics = !!(detail && detail.analytics);\n"
+				. "    var marketing = !!(detail && detail.marketing);\n"
+				. "    try {\n"
+				. "      window.clarity('consentv2', {\n"
+				. "        analytics_storage:  analytics ? 'granted' : 'denied',\n"
+				. "        ad_storage:         marketing ? 'granted' : 'denied',\n"
+				. "        ad_user_data:       marketing ? 'granted' : 'denied',\n"
+				. "        ad_personalization: marketing ? 'granted' : 'denied'\n"
+				. "      });\n"
+				. "    } catch(e) {}\n"
+				. "  }\n"
+				. "  window.addEventListener('luwipress:consent', function(e){ send(e.detail); });\n"
+				. "  // Replay stored choices on page load so visitors with an existing\n"
+				. "  // consent cookie don't get reset to default on every navigation.\n"
+				. "  try {\n"
+				. "    var m = document.cookie.match(/(?:^|;\\s*)luwipress_consent=([^;]+)/);\n"
+				. "    if (m && m[1]) send(JSON.parse(decodeURIComponent(m[1])));\n"
+				. "  } catch(e) {}\n"
+				. "}());";
+			wp_add_inline_script( 'luwipress-cookie-consent', $bridge, 'after' );
+		}
 	}
 
 	private function detect_language() {

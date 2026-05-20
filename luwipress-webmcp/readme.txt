@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.27
+Stable tag: 1.0.28
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,14 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.28 — Standalone "Lite mode" — runs without LuwiPress Core (WP.org submission path) =
+* **NEW Lite mode**: WebMCP now activates and runs without the LuwiPress Core plugin. The `Requires Plugins: luwipress` header is dropped; the activation hook no longer `wp_die()`s. When Core is absent the companion registers only the WordPress-native tool categories (system / plugins / themes / menus / taxonomies / comments / media + WooCommerce and Elementor when those plugins are present) — roughly 50–70 tools depending on the host site. The 13 AI-pipeline categories (content / seo / aeo / translation / crm / knowledge_graph / scheduler / token / review / linker / search / attribution / etc.) silently skip via the existing `class_exists()` gates inside each category's register method, and the `webmcp_deploy_audit` tool reports exactly which classes are missing so the operator can see whether they want Core for the unlocked categories.
+* **NEW Permission shim**: when `LuwiPress_Permission` isn't defined (Core absent), `class-luwipress-permission-shim.php` loads a drop-in with the exact same static surface (`is_admin` / `check_token` / `check_token_or_admin` / `require_token` / `is_token_authenticated`). Reads the same option name Core uses (`luwipress_seo_api_token`) when present, falling back to a WebMCP-owned option (`luwipress_webmcp_api_token`) on pure-Lite installs. Operators who move between Lite ↔ Core keep their existing token.
+* **NEW Lite-mode top-level menu**: when Core is absent, WebMCP creates its own `dashicons-rest-api` top-level menu ("LuwiPress MCP", position 68 — just below "Plugins"). When Core is present the companion still attaches as a submenu of the LuwiPress parent, exactly as before.
+* **NEW Lite-mode banner** on the WebMCP admin page: explains the standalone surface and links to luwi.dev/luwipress for the full ~210-tool catalog. Non-alarming, dismissible-style design.
+* **REPLACED** the old "WebMCP is paused" Plugins-screen warning with a friendlier "Lite mode active" info notice that names what IS available rather than what isn't.
+* Net effect: WebMCP is now eligible for direct WordPress.org distribution as a standalone MCP server — the previous hard dependency made .org submission impossible (Core isn't on .org so users couldn't install the dependency through the directory). Existing Pro / paired installs see zero behaviour change.
 
 = 1.0.27 — Deploy integrity audit surface (Vendor-FR-006/007 closure) =
 * **NEW `webmcp_deploy_audit`**: read-only MCP tool that surfaces the per-category tool-registration outcome. Returns `{webmcp_version, core_version, total_tools, categories: {<name>: {method, added, skipped, gate_class?, gate_class_exists?}}, missing_classes: [...]}`. When an expected tool is missing from the catalog (e.g. `taxonomy_meta_set`, `search_products`), this is the first thing to call — a `skipped: true, gate_class_exists: false` entry confirms a partial ZIP deploy (main plugin file at the new version but a gated module's class file is stale or missing). Closes the diagnosis gap Vendor reported in FR-006 + FR-007 where silent `class_exists()` skips left operators with no server-side log access wondering whether the catalog was cached, version-mismatched, or genuinely missing.

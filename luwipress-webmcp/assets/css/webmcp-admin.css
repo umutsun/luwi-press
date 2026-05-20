@@ -82,6 +82,43 @@
 	box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
 }
 
+/* Lite-mode banner — only shown when running standalone (Core absent).
+   Compact, single row, with a primary CTA to the marketing page. */
+.mcp-lite-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 12px 16px;
+	margin: 10px 0 18px;
+	background: linear-gradient(135deg, rgba(99,102,241,0.06), rgba(99,102,241,0.02));
+	border: 1px solid var(--lp-primary, #6366f1);
+	border-radius: 10px;
+}
+.mcp-lite-banner-left {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+}
+.mcp-lite-icon {
+	color: var(--lp-primary, #6366f1);
+	font-size: 22px;
+	line-height: 1.2;
+	flex-shrink: 0;
+}
+.mcp-lite-banner strong {
+	display: block;
+	color: var(--lp-text, #111827);
+	font-size: 14px;
+}
+.mcp-lite-sub {
+	display: block;
+	color: var(--lp-text-muted, #6b7280);
+	font-size: 12px;
+	line-height: 1.5;
+	margin-top: 2px;
+}
+
 /* WP 7.0 Abilities API status strip — minimal single-line replacement for
    the old info-card. Only renders when the host site actually exposes the
    Abilities API. Adapter pill is a real install link when the plugin is

@@ -139,6 +139,13 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 						</td>
 					</tr>
 					<tr>
+						<th><label for="cc-clarity"><?php esc_html_e( 'Microsoft Clarity', 'luwipress' ); ?></label></th>
+						<td>
+							<label><input type="checkbox" id="cc-clarity" <?php checked( ! empty( $settings['clarity_consent_v2_enabled'] ) ); ?> /> <?php esc_html_e( 'Forward consent decisions to Microsoft Clarity (Consent v2 API).', 'luwipress' ); ?></label>
+							<p class="description"><?php esc_html_e( 'When enabled, every consent change fires window.clarity("consentv2", {…}) with analytics + marketing toggles mapped to the four GCM-aligned signals. Requires Microsoft Clarity to be loaded on the site (no SDK changes needed).', 'luwipress' ); ?></p>
+						</td>
+					</tr>
+					<tr>
 						<th><label for="cc-policy-url"><?php esc_html_e( 'Cookie policy URL', 'luwipress' ); ?></label></th>
 						<td><input type="url" id="cc-policy-url" value="<?php echo esc_attr( $settings['policy_url'] ); ?>" class="regular-text" /></td>
 					</tr>
@@ -232,6 +239,7 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 				theme:   document.getElementById('cc-theme').value,
 				show_reject_button: document.getElementById('cc-reject').checked,
 				show_preferences:   document.getElementById('cc-prefs').checked,
+				clarity_consent_v2_enabled: document.getElementById('cc-clarity').checked,
 				policy_url:  document.getElementById('cc-policy-url').value,
 				privacy_url: document.getElementById('cc-privacy-url').value,
 				log_retention_days: parseInt(document.getElementById('cc-retention').value, 10)
