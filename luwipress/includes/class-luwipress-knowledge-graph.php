@@ -617,9 +617,9 @@ class LuwiPress_Knowledge_Graph {
 			$translation_plugin = 'polylang';
 		}
 
-		// For WPML: only original products (not translations)
+		// For WPML: only original products (not translations).
 		if ( 'wpml' === $translation_plugin ) {
-			return $wpdb->get_results(
+			$rows = $wpdb->get_results(
 				"SELECT p.ID, p.post_title, p.post_name, p.post_status,
 				        p.post_date, p.post_modified,
 				        LENGTH(p.post_content) AS content_length
@@ -632,6 +632,42 @@ class LuwiPress_Knowledge_Graph {
 				 ORDER BY p.ID ASC
 				 LIMIT 2000"
 			);
+
+			// 3.3.3 defensive fallback: if the WPML JOIN returns zero rows on
+			// a site that demonstrably has products (`SELECT COUNT(*)` against
+			// wp_posts alone is non-zero), the icl_translations table is
+			// missing entries for some / all products (WPML "Product
+			// translation" was never activated for the `product` post type,
+			// the table was partially purged during a WPML reinstall, or the
+			// site was imported before WPML setup). Falling back to the
+			// plain query here keeps the KG dashboard usable while logging
+			// the diagnostic so the operator can repair WPML separately.
+			if ( empty( $rows ) ) {
+				$raw_count = (int) $wpdb->get_var(
+					"SELECT COUNT(*) FROM {$wpdb->posts}
+					 WHERE post_type = 'product' AND post_status = 'publish'"
+				);
+				if ( $raw_count > 0 ) {
+					if ( class_exists( 'LuwiPress_Logger' ) ) {
+						LuwiPress_Logger::log(
+							'KG product loader: WPML JOIN returned 0 but wp_posts has ' . $raw_count . ' published products — falling back to non-WPML query. Check WPML > Settings > Multilingual Content Setup > Custom Posts and re-register `product`.',
+							'warning'
+						);
+					}
+					$rows = $wpdb->get_results(
+						"SELECT p.ID, p.post_title, p.post_name, p.post_status,
+						        p.post_date, p.post_modified,
+						        LENGTH(p.post_content) AS content_length
+						 FROM {$wpdb->posts} p
+						 WHERE p.post_type = 'product'
+						   AND p.post_status = 'publish'
+						 ORDER BY p.ID ASC
+						 LIMIT 2000"
+					);
+				}
+			}
+
+			return $rows;
 		}
 
 		return $wpdb->get_results(

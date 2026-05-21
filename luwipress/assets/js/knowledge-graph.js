@@ -1015,16 +1015,31 @@ function showDetailPanel(d) {
 	var h = '';
 
 	if (d.type === 'product') {
-		var p = d.data;
+		var p = d.data || {};
+		// 3.3.3: defensive — fake objects passed from Action Queue (Next Wins)
+		// previously crashed here with "Cannot read property 'has_title' of
+		// undefined" when the candidate's seo / aeo / enrichment subkeys
+		// weren't hydrated (which happens on opportunity-driven cards). The
+		// closure's TypeError silently killed the click handler and the
+		// Review button looked dead. Hydrate every expected subobject so the
+		// rest of the panel renderer can pretend the shape is complete.
+		var pSeo = p.seo || {};
+		var pAeo = p.aeo || {};
+		var pEnr = p.enrichment || {};
+		var pTra = p.translation || {};
+		p.seo = pSeo;
+		p.aeo = pAeo;
+		p.enrichment = pEnr;
+		p.translation = pTra;
 
 		// ── Calculate health ──
 		var total = 0, done = 0;
-		total += 3; done += (p.seo.has_title?1:0) + (p.seo.has_description?1:0) + (p.seo.has_focus_kw?1:0);
-		total += 3; done += (p.aeo.has_faq?1:0) + (p.aeo.has_howto?1:0) + (p.aeo.has_schema?1:0);
-		total += 1; done += (p.enrichment.status === 'completed'?1:0);
-		var langKeys = Object.keys(p.translation || {});
+		total += 3; done += (pSeo.has_title?1:0) + (pSeo.has_description?1:0) + (pSeo.has_focus_kw?1:0);
+		total += 3; done += (pAeo.has_faq?1:0) + (pAeo.has_howto?1:0) + (pAeo.has_schema?1:0);
+		total += 1; done += (pEnr.status === 'completed'?1:0);
+		var langKeys = Object.keys(pTra);
 		total += langKeys.length;
-		langKeys.forEach(function(l) { if (p.translation[l]==='completed') done++; });
+		langKeys.forEach(function(l) { if (pTra[l]==='completed') done++; });
 		var healthPct = total > 0 ? Math.round(done/total*100) : 0;
 		var healthCls = healthPct >= 80 ? 'good' : healthPct >= 40 ? 'warn' : 'bad';
 
@@ -2280,10 +2295,14 @@ function renderActionQueue(data) {
 		c.roi = c.impact / Math.max(1, c.effort);
 	});
 	candidates.sort(function(a, b) { return b.roi - a.roi; });
-	// 3.3.2: surface more wins at once. Operator asked for "küçük kartlar
-	// + daha çok task verebiliriz" — went from 3 large cards to 8 compact
-	// cards so the gamification loop stays alive longer between refreshes.
-	candidates = candidates.slice(0, 8);
+	// 3.3.3: stay on a single row. Operator wants "tek satırda, 8 kart çok,
+	// yapıldıkça sola doğru yüklenmeye devam etsin" — render up to 12
+	// candidates in a flex queue; only ~5 fit visually per row at standard
+	// admin widths, the rest sit in DOM ready to slide in when a card
+	// resolves. The resolved card collapses (flex: 0 0 0 + opacity 0) and
+	// the queue shifts left, giving the operator a continuous flow rather
+	// than a static board.
+	candidates = candidates.slice(0, 12);
 
 	// Render
 	var countEl = document.getElementById('kg-action-queue-count');
@@ -2325,14 +2344,29 @@ function renderActionQueue(data) {
 	});
 	list.innerHTML = html;
 
-	// Wire the CTAs and the whole-card click (card click = same as CTA)
+	// Wire the CTAs and the whole-card click (card click = same as CTA).
+	// 3.3.3: handler now wraps the candidate onClick in try/catch + surfaces
+	// a visible warning + console.warn so the operator never sees a silent
+	// "nothing happens" — earlier reports of Review-button-doing-nothing
+	// were always an exception inside the closure (most commonly a missing
+	// product.seo / product.aeo subkey that crashed showDetailPanel).
 	candidates.forEach(function(c, i) {
 		var card = list.querySelector('[data-idx="' + i + '"]');
 		if (!card) return;
 		var cta = card.querySelector('.kg-aq-cta');
 		var handler = function(e) {
 			if (e) e.stopPropagation();
-			if (typeof c.onClick === 'function') c.onClick();
+			if (typeof c.onClick !== 'function') {
+				console.warn('[lpKg] Action card has no onClick callback', c);
+				flashCardError(card, 'No action wired');
+				return;
+			}
+			try {
+				c.onClick();
+			} catch (err) {
+				console.error('[lpKg] Action onClick threw', err, c);
+				flashCardError(card, err && err.message ? err.message : 'Action failed');
+			}
 		};
 		card.addEventListener('click', handler);
 		if (cta) cta.addEventListener('click', handler);
@@ -3784,6 +3818,23 @@ function collectProductIdsByCategory(catId) {
 	return ids;
 }
 
+// 3.3.3 — surface silent click failures. The previous "Review button does
+// nothing" reports were ALWAYS an uncaught exception inside a closure (missing
+// product.seo subkey crashing showDetailPanel). Now the click handler wraps
+// the onClick in try/catch and flashes a visible red banner on the card so
+// the operator sees something is wrong instead of guessing.
+function flashCardError(card, msg) {
+	if (!card) return;
+	var existing = card.querySelector('.kg-aq-error');
+	if (existing) existing.remove();
+	var banner = document.createElement('div');
+	banner.className = 'kg-aq-error';
+	banner.textContent = '⚠ ' + (msg || 'Action failed');
+	banner.style.cssText = 'position:absolute;left:0;right:0;bottom:0;background:#fef2f2;color:#991b1b;font-size:10.5px;padding:4px 8px;border-top:1px solid #fecaca;animation:kgErrFlash 220ms ease;';
+	card.appendChild(banner);
+	setTimeout(function () { if (banner.parentNode) banner.remove(); }, 4500);
+}
+
 // 3.3.2 — gamification feedback. Pop a "+N pts" badge above the resolved
 // Next Wins card and float it toward the Store Health hero so the operator
 // sees their work moving the score in real time. Tier-based fixed payouts:
@@ -3797,11 +3848,12 @@ function kgFloatScoreDelta(btn) {
 	var tier = (card && card.getAttribute('data-tier')) || 'low';
 	var pts  = tier === 'high' ? 15 : (tier === 'medium' ? 10 : 5);
 
-	// Resolved styling on the card itself.
+	// Resolved styling on the card (green dim) — shown briefly before collapse.
 	if (card) {
 		card.classList.add('kg-aq-resolved');
 	}
 
+	// Float "+N pts" badge up from the button toward the Store Health hero.
 	var rect = btn.getBoundingClientRect();
 	var bubble = document.createElement('div');
 	bubble.className = 'kg-score-float';
@@ -3810,6 +3862,23 @@ function kgFloatScoreDelta(btn) {
 	bubble.style.top  = (rect.top - 8) + 'px';
 	document.body.appendChild(bubble);
 	setTimeout(function () { if (bubble.parentNode) bubble.parentNode.removeChild(bubble); }, 1700);
+
+	// After the score float lands, collapse the resolved card so the queue
+	// shifts left and the next candidate slides into the visible window.
+	// 12 candidates render into the queue (renderActionQueue slice(0, 12)),
+	// only ~5 fit visually — the others sit ready to flow in as cards
+	// resolve. Removes the card from DOM after the CSS animation completes
+	// so memory + later re-renders stay clean.
+	if (card) {
+		setTimeout(function () {
+			card.classList.add('kg-aq-resolving');
+			setTimeout(function () {
+				if (card.parentNode) {
+					card.parentNode.removeChild(card);
+				}
+			}, 500); // matches kgCardCollapse keyframe duration + small buffer
+		}, 1100); // let the +pts badge crest before card starts collapsing
+	}
 }
 
 function kgAction(action, productId, btn, langs) {

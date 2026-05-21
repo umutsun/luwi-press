@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.3.2
+Stable tag: 3.3.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.3.3 — Next Wins single-row queue + Review button silent-fail fix + WPML product loader fallback =
+* **NEW single-row Next Wins queue** — operator-requested "tek satırda olsun, yapıldıkça sola doğru yüklenmeye devam etsin". The Action Queue went from a 2-row grid to a horizontal flex queue: 12 candidates render into DOM, ~5 fit visually per row at standard admin widths (responsive: 4 at 1280px, 3 at 1024px, 2 at 768px, 1 at 540px). When an action resolves, the card now **collapses** (`flex-basis: 0 + opacity 0`) over 450ms — the queue automatically shifts left and the next pending candidate slides into the visible window. Continuous flow rather than a static board.
+* **FIX Review button silent failures** — long-standing reports of "Review tıklayınca bir şey olmuyor" traced to an uncaught TypeError inside `showDetailPanel`'s product branch: opportunity-driven Next Wins candidates passed a fake product object with no `.seo` / `.aeo` / `.enrichment` subkeys, the very first health-calculation line crashed (`p.seo.has_title` against undefined), and the click handler died silently with nothing visible to the operator. Two-layer fix: (a) `showDetailPanel` now hydrates the four expected subobjects to empty maps when missing, so the renderer always has a working shape; (b) the click handler now wraps `c.onClick()` in try/catch + flashes a red error banner on the card + `console.warn`s the exception, so any future regression is visible at the source instead of a silent dead button.
+* **FIX WPML product loader fallback** — Knowledge Graph product node count was reading 0 on sites where products exist in `wp_posts` but aren't registered in `wp_icl_translations` (typical failure mode when WPML's "Multilingual Content Setup → Custom Posts" never had the `product` post type enabled, or when icl_translations was partially purged during a WPML reinstall). The product loader's INNER JOIN was eliminating every row. Now: if the WPML query returns 0 but `wp_posts` has published products, the loader falls back to the non-WPML query and logs a diagnostic warning ("KG product loader: WPML JOIN returned 0 but wp_posts has N published products — check WPML Settings → Custom Posts"). KG dashboard stays usable while the operator repairs WPML separately.
 
 = 3.3.2 — Next Wins gamification redesign: 8 compact cards + score float animation =
 * **NEW compact Next Wins layout** — the Knowledge Graph Action Queue went from 3 large cards to **8 compact cards** in a denser `repeat(auto-fill, minmax(200px, 1fr))` grid so the gamification loop stays alive longer between refreshes. Operator-requested: "küçük kartlar + daha çok task verebiliriz." Card padding 12px → 9px, label 13px → 12px, description clamped to 2 lines, meta chips downsized to 9.5px uppercase tags, CTA button 12px → 11.5px and full-width inside the card so the click target stays generous even at the smaller scale.
