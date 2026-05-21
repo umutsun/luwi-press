@@ -236,23 +236,34 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 	<?php else: /* policy */ ?>
 
 		<div class="luwipress-section" style="margin-top:16px;">
-			<h2 style="margin-top:0;"><?php esc_html_e( 'AI cookie policy generator', 'luwipress' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'Click Generate and a Cookie Policy WP page is created (or updated) automatically with a plain-language paragraph customized to the third-party tags detected on this site. Edit the text below and click "Save edits" to push your tweaks to the page.', 'luwipress' ); ?></p>
-			<div class="lp-cta-row" style="margin: 12px 0 18px;">
-				<button id="lwp-cc-gen-btn" type="button" class="lp-cta lp-cta--primary">
-					<!-- Minimal 4-point sparkle — "AI generate" without the visual noise -->
-					<svg class="lp-cta-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-						<path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2zM19 14l.75 2.25L22 17l-2.25.75L19 20l-.75-2.25L16 17l2.25-.75L19 14z"/>
-					</svg>
-					<?php esc_html_e( 'Generate & save', 'luwipress' ); ?>
-				</button>
-				<button id="lwp-cc-policy-save" type="button" class="lp-cta lp-cta--secondary">
-					<!-- Simple arrow-up — "push edits up to the page" -->
-					<svg class="lp-cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-						<path d="M12 19V5M5 12l7-7 7 7"/>
-					</svg>
-					<?php esc_html_e( 'Save edits', 'luwipress' ); ?>
-				</button>
+			<!-- Header row: heading on the left, CTA buttons on the right, status pill trailing.
+			     Operator feedback (2026-05-21): the previous layout (description → buttons → tall
+			     empty textarea) felt like the buttons were below the box because the 14-row textarea
+			     dominated the panel vertically. New layout pins the CTAs to the top so they're
+			     always above the box regardless of textarea content state. -->
+			<div style="display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap; justify-content:space-between; margin-bottom:8px;">
+				<div style="flex:1 1 320px; min-width:0;">
+					<h2 style="margin:0 0 4px 0;"><?php esc_html_e( 'AI cookie policy generator', 'luwipress' ); ?></h2>
+					<p class="description" style="margin:0;"><?php esc_html_e( 'Click Generate and a Cookie Policy WP page is created (or updated) automatically with a plain-language paragraph customized to the third-party tags detected on this site. Edit the text below and click "Save edits" to push your tweaks to the page.', 'luwipress' ); ?></p>
+				</div>
+				<div class="lp-cta-row" style="flex:0 0 auto;">
+					<button id="lwp-cc-gen-btn" type="button" class="lp-cta lp-cta--primary">
+						<!-- Minimal 4-point sparkle — "AI generate" without the visual noise -->
+						<svg class="lp-cta-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+							<path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2zM19 14l.75 2.25L22 17l-2.25.75L19 20l-.75-2.25L16 17l2.25-.75L19 14z"/>
+						</svg>
+						<?php esc_html_e( 'Generate & save', 'luwipress' ); ?>
+					</button>
+					<button id="lwp-cc-policy-save" type="button" class="lp-cta lp-cta--secondary">
+						<!-- Simple arrow-up — "push edits up to the page" -->
+						<svg class="lp-cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<path d="M12 19V5M5 12l7-7 7 7"/>
+						</svg>
+						<?php esc_html_e( 'Save edits', 'luwipress' ); ?>
+					</button>
+				</div>
+			</div>
+			<div style="margin-bottom:12px;">
 				<span id="lwp-cc-gen-status" class="lp-cta-status"></span>
 			</div>
 			<textarea id="lwp-cc-policy-text" rows="14" style="width:100%; max-width:880px; font-family:Georgia,serif; font-size:14px; line-height:1.6;"></textarea>
