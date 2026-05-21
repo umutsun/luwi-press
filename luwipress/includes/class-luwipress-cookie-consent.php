@@ -74,6 +74,39 @@ class LuwiPress_Cookie_Consent {
 		// Frontend asset enqueue — only when the module is enabled AND the
 		// current request is on the front of the site (not admin, not AJAX).
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+
+		// Marketing-script interceptor (3.3.4+) — wraps known pixel/ad
+		// scripts in the consent-gated type="text/plain" pattern so plugins
+		// that emit their own inline <script> tags (Meta pixel for WP,
+		// PixelYourSite, GTM, etc.) respect the banner without operator
+		// glue. Only attaches when both the consent module AND interceptor
+		// are enabled.
+		add_action( 'init', array( $this, 'maybe_attach_marketing_interceptor' ), 0 );
+	}
+
+	/**
+	 * Frontend-only hook attachment for the marketing-script interceptor.
+	 * Splits from __construct so admin pages don't pay the output-buffer
+	 * cost, and so the setting can be toggled at runtime without re-instantiating.
+	 *
+	 * @since 3.3.4
+	 */
+	public function maybe_attach_marketing_interceptor() {
+		if ( is_admin() ) {
+			return;
+		}
+		$settings = $this->get_settings();
+		if ( empty( $settings['enabled'] ) || empty( $settings['intercept_marketing_scripts'] ) ) {
+			return;
+		}
+		// p0 opens the buffer BEFORE every other handler runs; p9999 closes
+		// it AFTER everything has emitted. Same pattern on wp_footer so
+		// pixel snippets injected late (auto-event detection, etc) also
+		// get wrapped.
+		add_action( 'wp_head',   array( $this, 'intercept_marketing_start' ), 0 );
+		add_action( 'wp_head',   array( $this, 'intercept_marketing_end' ),   9999 );
+		add_action( 'wp_footer', array( $this, 'intercept_marketing_start' ), 0 );
+		add_action( 'wp_footer', array( $this, 'intercept_marketing_end' ),   9999 );
 	}
 
 	public static function create_table() {
@@ -127,6 +160,31 @@ class LuwiPress_Cookie_Consent {
 			// every time the visitor changes preferences so Clarity respects analytics +
 			// marketing toggles without operators bolting on extra glue plugins.
 			'clarity_consent_v2_enabled' => false,
+			// Marketing-script interceptor (3.3.4+) — wraps unguarded pixel
+			// snippets emitted by other plugins (Meta pixel for WP, PixelYourSite,
+			// raw GTM, etc.) into the type="text/plain" data-luwipress-consent="marketing"
+			// pattern so the banner releases them on consent. Default ON when
+			// the consent module is enabled — closes the GDPR gap that
+			// operators previously had to glue manually with Code Snippets.
+			'intercept_marketing_scripts' => true,
+			'intercept_src_patterns'      => array(
+				'connect.facebook.net',
+				'fbevents.js',
+				'googletagmanager.com/gtm.js',
+				'snap.licdn.com/li.lms-analytics',
+				'sc-static.net/scevent',
+				'analytics.tiktok.com/i18n/pixel',
+				'static.ads-twitter.com/uwt.js',
+			),
+			'intercept_inline_patterns'   => array(
+				'fbq\s*\(',
+				'_paq\.push\s*\(',
+				'gtm\.start',
+				'snaptr\s*\(',
+				'lintrk\s*\(',
+				'ttq\.(load|track)\s*\(',
+				'twq\s*\(',
+			),
 			'texts'             => array(
 				'title'        => __( 'We value your privacy', 'luwipress' ),
 				'body'         => __( 'We use cookies to enhance browsing, analyze traffic, and personalize content. You can accept all, reject non-essential, or customize your preferences.', 'luwipress' ),
@@ -172,9 +230,15 @@ class LuwiPress_Cookie_Consent {
 				$next['theme'] = $theme;
 			}
 		}
-		foreach ( array( 'show_reject_button', 'show_preferences', 'clarity_consent_v2_enabled' ) as $bk ) {
+		foreach ( array( 'show_reject_button', 'show_preferences', 'clarity_consent_v2_enabled', 'intercept_marketing_scripts' ) as $bk ) {
 			if ( array_key_exists( $bk, $patch ) ) {
 				$next[ $bk ] = (bool) $patch[ $bk ];
+			}
+		}
+		foreach ( array( 'intercept_src_patterns', 'intercept_inline_patterns' ) as $arr_key ) {
+			if ( array_key_exists( $arr_key, $patch ) && is_array( $patch[ $arr_key ] ) ) {
+				$clean = array_values( array_unique( array_filter( array_map( 'trim', array_map( 'strval', $patch[ $arr_key ] ) ) ) ) );
+				$next[ $arr_key ] = $clean;
 			}
 		}
 		foreach ( array( 'policy_url', 'privacy_url', 'imprint_url' ) as $url_key ) {
@@ -693,6 +757,249 @@ class LuwiPress_Cookie_Consent {
 			return $out;
 		}
 		return rest_ensure_response( $out );
+	}
+
+	/* ═══════════════════════════════════════════════════════════════════
+	 *  MARKETING-SCRIPT INTERCEPTOR (3.3.4+)
+	 *
+	 *  Catches pixel / ad-tag scripts that other plugins emit straight into
+	 *  wp_head / wp_footer without consent gating (Meta pixel for WordPress
+	 *  is the canonical offender — emits an unwrapped fbq() inline snippet
+	 *  + connect.facebook.net external script). Strategy:
+	 *
+	 *    1. ob_start at wp_head/wp_footer priority 0 (BEFORE any pixel
+	 *       plugin's add_action emits)
+	 *    2. ob_get_clean + regex-rewrite at priority 9999 (AFTER everything)
+	 *    3. <script src="…fbevents.js…"></script> becomes
+	 *         <script type="text/plain" data-luwipress-consent="marketing"
+	 *                 data-src="…fbevents.js…"></script>
+	 *    4. <script>…fbq(…)…</script> becomes
+	 *         <script type="text/plain" data-luwipress-consent="marketing">
+	 *           …fbq(…)…
+	 *         </script>
+	 *
+	 *  cookie-banner.js unblockScripts() already finds those wrapped tags
+	 *  on luwipress:consent and re-inserts them as live <script>s, so
+	 *  release is automatic — no JS change needed elsewhere.
+	 *
+	 *  Manual opt-out: add data-lwp-no-intercept to any <script> tag and
+	 *  the regex skips it. Already-wrapped tags
+	 *  (data-luwipress-consent attribute present) are skipped too — no
+	 *  double-wrapping.
+	 * ═══════════════════════════════════════════════════════════════════ */
+
+	public function intercept_marketing_start() {
+		ob_start();
+	}
+
+	public function intercept_marketing_end() {
+		// ob_get_clean returns false if no buffer is active (defensive).
+		$buf = ob_get_clean();
+		if ( false === $buf ) {
+			return;
+		}
+		echo $this->wrap_marketing_scripts( $buf ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- HTML is mutated, not introduced.
+	}
+
+	/**
+	 * Rewrite matching `<script>` tags in a chunk of HTML to the
+	 * consent-gated `type="text/plain" data-luwipress-consent="marketing"`
+	 * form. Idempotent + skip-aware.
+	 *
+	 * @param  string $html
+	 * @return string
+	 */
+	public function wrap_marketing_scripts( $html ) {
+		if ( '' === trim( (string) $html ) || false === stripos( $html, '<script' ) ) {
+			return $html;
+		}
+
+		$settings       = $this->get_settings();
+		$src_patterns   = isset( $settings['intercept_src_patterns'] ) ? (array) $settings['intercept_src_patterns'] : array();
+		$inline_patterns = isset( $settings['intercept_inline_patterns'] ) ? (array) $settings['intercept_inline_patterns'] : array();
+
+		/**
+		 * Filter the lists at runtime — operators can swap them per-request
+		 * (e.g. disable a pattern only on Checkout when their PSP needs it).
+		 */
+		$src_patterns    = (array) apply_filters( 'luwipress_intercept_src_patterns',    $src_patterns,    $this );
+		$inline_patterns = (array) apply_filters( 'luwipress_intercept_inline_patterns', $inline_patterns, $this );
+
+		$hit_counter = 0;
+		$hit_samples = array();
+
+		// Pass 1 — `<script src="…">` external pixel loaders.
+		if ( ! empty( $src_patterns ) ) {
+			$html = preg_replace_callback(
+				'#<script\b([^>]*?)\bsrc=(["\'])([^"\']*)\2([^>]*?)>(.*?)</script>#is',
+				function ( $m ) use ( $src_patterns, &$hit_counter, &$hit_samples ) {
+					$full  = $m[0];
+					$attrs_before = $m[1];
+					$src   = $m[3];
+					$attrs_after  = $m[4];
+					$body  = $m[5];
+					if ( false !== stripos( $full, 'data-luwipress-consent' ) ) {
+						return $full;
+					}
+					if ( false !== stripos( $full, 'data-lwp-no-intercept' ) ) {
+						return $full;
+					}
+					foreach ( $src_patterns as $needle ) {
+						if ( '' !== $needle && false !== stripos( $src, $needle ) ) {
+							$hit_counter++;
+							if ( count( $hit_samples ) < 8 ) {
+								$hit_samples[] = 'src:' . $src;
+							}
+							// Drop type=, swap src= for data-src=, prepend our markers.
+							$cleaned_before = preg_replace( '#\btype=(["\'])[^"\']*\1#i', '', $attrs_before );
+							$cleaned_after  = preg_replace( '#\btype=(["\'])[^"\']*\1#i', '', $attrs_after );
+							return '<script type="text/plain" data-luwipress-consent="marketing" data-src="' . esc_attr( $src ) . '"'
+								. $cleaned_before . $cleaned_after . '>' . $body . '</script>';
+						}
+					}
+					return $full;
+				},
+				$html
+			);
+		}
+
+		// Pass 2 — `<script>…inline body…</script>` snippets (no src= attribute).
+		if ( ! empty( $inline_patterns ) ) {
+			$html = preg_replace_callback(
+				'#<script\b([^>]*)>(.*?)</script>#is',
+				function ( $m ) use ( $inline_patterns, &$hit_counter, &$hit_samples ) {
+					$full  = $m[0];
+					$attrs = $m[1];
+					$body  = $m[2];
+					if ( false !== stripos( $attrs, 'src=' ) ) {
+						return $full; // External script — handled in pass 1.
+					}
+					if ( false !== stripos( $attrs, 'data-luwipress-consent' ) ) {
+						return $full;
+					}
+					if ( false !== stripos( $attrs, 'data-lwp-no-intercept' ) ) {
+						return $full;
+					}
+					if ( '' === trim( $body ) ) {
+						return $full;
+					}
+					foreach ( $inline_patterns as $regex ) {
+						if ( '' === $regex ) {
+							continue;
+						}
+						$delim_safe = str_replace( '#', '\\#', $regex );
+						if ( @preg_match( '#' . $delim_safe . '#i', $body ) ) {
+							$hit_counter++;
+							if ( count( $hit_samples ) < 8 ) {
+								$hit_samples[] = 'inline:' . substr( ltrim( $body ), 0, 64 );
+							}
+							$cleaned = preg_replace( '#\btype=(["\'])[^"\']*\1#i', '', $attrs );
+							return '<script type="text/plain" data-luwipress-consent="marketing"' . $cleaned . '>' . $body . '</script>';
+						}
+					}
+					return $full;
+				},
+				$html
+			);
+		}
+
+		if ( $hit_counter > 0 ) {
+			$this->record_marketing_intercepts( $hit_counter, $hit_samples );
+		}
+		return $html;
+	}
+
+	/**
+	 * Bump the daily counter + ring-buffer recent samples for the admin UI.
+	 * Persisted as a single option to keep DB writes cheap (one update per
+	 * request that has any hits, not per hit).
+	 *
+	 * @param int      $count
+	 * @param string[] $samples
+	 */
+	private function record_marketing_intercepts( $count, $samples ) {
+		$state = get_option( 'luwipress_marketing_intercept_state', array() );
+		if ( ! is_array( $state ) ) {
+			$state = array();
+		}
+		$today = gmdate( 'Y-m-d' );
+
+		$by_day = isset( $state['by_day'] ) && is_array( $state['by_day'] ) ? $state['by_day'] : array();
+		$by_day[ $today ] = ( isset( $by_day[ $today ] ) ? (int) $by_day[ $today ] : 0 ) + (int) $count;
+		// Keep 14 days max.
+		krsort( $by_day );
+		$by_day = array_slice( $by_day, 0, 14, true );
+
+		$recent = isset( $state['recent'] ) && is_array( $state['recent'] ) ? $state['recent'] : array();
+		$ts     = time();
+		foreach ( $samples as $sample ) {
+			array_unshift( $recent, array( 't' => $ts, 's' => substr( (string) $sample, 0, 120 ) ) );
+		}
+		$recent = array_slice( $recent, 0, 40 );
+
+		$state['by_day'] = $by_day;
+		$state['recent'] = $recent;
+		$state['total']  = ( isset( $state['total'] ) ? (int) $state['total'] : 0 ) + (int) $count;
+		update_option( 'luwipress_marketing_intercept_state', $state, false );
+	}
+
+	/**
+	 * Public accessor for the admin panel — returns the daily counts +
+	 * recent samples for display.
+	 *
+	 * @return array{by_day:array,recent:array,total:int}
+	 */
+	public function get_marketing_intercept_state() {
+		$state = get_option( 'luwipress_marketing_intercept_state', array() );
+		if ( ! is_array( $state ) ) {
+			$state = array();
+		}
+		return array(
+			'by_day' => isset( $state['by_day'] ) && is_array( $state['by_day'] ) ? $state['by_day'] : array(),
+			'recent' => isset( $state['recent'] ) && is_array( $state['recent'] ) ? $state['recent'] : array(),
+			'total'  => isset( $state['total'] ) ? (int) $state['total'] : 0,
+		);
+	}
+
+	/**
+	 * Detected pixel plugins via the existing Plugin Detector. Used by the
+	 * admin UI to render a "Detected pixel plugins" panel so the operator
+	 * sees exactly which scripts the interceptor will wrap.
+	 *
+	 * @return array
+	 */
+	public function get_detected_pixel_plugins() {
+		if ( ! class_exists( 'LuwiPress_Plugin_Detector' ) ) {
+			return array();
+		}
+		$detector = LuwiPress_Plugin_Detector::get_instance();
+		$out = array();
+
+		$meta = $detector->detect_meta_ads();
+		if ( ! empty( $meta['plugin'] ) && 'none' !== $meta['plugin'] ) {
+			$out[] = array(
+				'category'  => 'meta_ads',
+				'plugin'    => $meta['plugin'],
+				'version'   => isset( $meta['version'] ) ? $meta['version'] : null,
+				'features'  => isset( $meta['features'] ) ? $meta['features'] : array(),
+				'wrapped_by' => 'src+inline', // Meta plugins emit both an external loader + inline fbq()
+			);
+		}
+
+		// Analytics detection (Site Kit / GA4 / GTM4WP / MonsterInsights).
+		if ( method_exists( $detector, 'detect_analytics' ) ) {
+			$analytics = $detector->detect_analytics();
+			if ( ! empty( $analytics['plugin'] ) && 'none' !== $analytics['plugin'] ) {
+				$out[] = array(
+					'category'  => 'analytics',
+					'plugin'    => $analytics['plugin'],
+					'version'   => isset( $analytics['version'] ) ? $analytics['version'] : null,
+					'features'  => isset( $analytics['features'] ) ? $analytics['features'] : array(),
+					'wrapped_by' => 'inline', // GTM bootstrap + GA inline init
+				);
+			}
+		}
+		return $out;
 	}
 
 	/**

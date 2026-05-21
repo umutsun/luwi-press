@@ -23,6 +23,10 @@ $cc       = LuwiPress_Cookie_Consent::get_instance();
 $settings = $cc->get_settings();
 $stats    = $cc->get_stats();
 
+// 3.3.4 — Marketing-script interceptor data for the Settings tab panel.
+$intercept_state    = method_exists( $cc, 'get_marketing_intercept_state' ) ? $cc->get_marketing_intercept_state() : array( 'by_day' => array(), 'recent' => array(), 'total' => 0 );
+$detected_pixels    = method_exists( $cc, 'get_detected_pixel_plugins' ) ? $cc->get_detected_pixel_plugins() : array();
+
 $active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'settings';
 if ( ! in_array( $active_tab, array( 'settings', 'log', 'policy' ), true ) ) {
 	$active_tab = 'settings';
@@ -146,6 +150,41 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 						</td>
 					</tr>
 					<tr>
+						<th><label for="cc-intercept"><?php esc_html_e( 'Marketing scripts', 'luwipress' ); ?></label></th>
+						<td>
+							<label><input type="checkbox" id="cc-intercept" <?php checked( ! empty( $settings['intercept_marketing_scripts'] ) ); ?> /> <?php esc_html_e( 'Intercept unguarded pixel / ad-tag scripts and gate them on consent (3.3.4+).', 'luwipress' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Catches inline pixel snippets (Meta pixel for WordPress, PixelYourSite, raw GTM, etc.) that other plugins emit straight into wp_head/wp_footer without consent gating. Rewrites them to type="text/plain" data-luwipress-consent="marketing" so the banner releases them on consent. Manual opt-out: add data-lwp-no-intercept to any <script> tag.', 'luwipress' ); ?></p>
+
+							<?php if ( ! empty( $detected_pixels ) ) : ?>
+								<div class="lwp-intercept-detected">
+									<strong style="font-size:12px; color:var(--lp-text-muted); text-transform:uppercase; letter-spacing:0.04em;"><?php esc_html_e( 'Detected pixel / analytics plugins', 'luwipress' ); ?></strong>
+									<ul style="margin:6px 0 0 0; padding:0; list-style:none;">
+										<?php foreach ( $detected_pixels as $det ) : ?>
+											<li style="display:flex; gap:8px; align-items:center; padding:4px 0;">
+												<span class="lp-pill pill-info" style="font-size:11px;"><?php echo esc_html( $det['plugin'] ); ?><?php if ( ! empty( $det['version'] ) ) : ?> <span style="opacity:.7;">v<?php echo esc_html( $det['version'] ); ?></span><?php endif; ?></span>
+												<span style="color:var(--lp-text-muted); font-size:12px;"><?php echo esc_html( sprintf( __( 'wrapped via %s', 'luwipress' ), $det['wrapped_by'] ) ); ?></span>
+											</li>
+										<?php endforeach; ?>
+									</ul>
+								</div>
+							<?php endif; ?>
+
+							<?php if ( (int) $intercept_state['total'] > 0 ) : ?>
+								<div class="lwp-intercept-stats" style="margin-top:10px; padding:8px 12px; background:var(--lp-bg-muted,#f9fafb); border-radius:6px; font-size:12px;">
+									<strong><?php echo (int) $intercept_state['total']; ?></strong> <?php esc_html_e( 'scripts intercepted', 'luwipress' ); ?>
+									<?php if ( ! empty( $intercept_state['recent'] ) ) : ?>
+										<span style="color:var(--lp-text-muted); margin-left:6px;">·</span>
+										<span style="color:var(--lp-text-muted); margin-left:6px;"><?php esc_html_e( 'recent:', 'luwipress' ); ?></span>
+										<?php $recent_samples = array_slice( $intercept_state['recent'], 0, 3 ); ?>
+										<?php foreach ( $recent_samples as $r ) : ?>
+											<code style="font-size:11px; background:var(--lp-bg-alt,#f3f4f6); padding:1px 6px; border-radius:3px; margin-left:4px;"><?php echo esc_html( substr( $r['s'], 0, 60 ) ); ?></code>
+										<?php endforeach; ?>
+									<?php endif; ?>
+								</div>
+							<?php endif; ?>
+						</td>
+					</tr>
+					<tr>
 						<th><label for="cc-policy-url"><?php esc_html_e( 'Cookie policy URL', 'luwipress' ); ?></label></th>
 						<td><input type="url" id="cc-policy-url" value="<?php echo esc_attr( $settings['policy_url'] ); ?>" class="regular-text" /></td>
 					</tr>
@@ -250,6 +289,7 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 				show_reject_button: document.getElementById('cc-reject').checked,
 				show_preferences:   document.getElementById('cc-prefs').checked,
 				clarity_consent_v2_enabled: document.getElementById('cc-clarity').checked,
+				intercept_marketing_scripts: document.getElementById('cc-intercept').checked,
 				policy_url:  document.getElementById('cc-policy-url').value,
 				privacy_url: document.getElementById('cc-privacy-url').value,
 				log_retention_days: parseInt(document.getElementById('cc-retention').value, 10)

@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.3.3
+Stable tag: 3.3.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,14 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.3.4 — Marketing-script interceptor: pre-consent pixel gating (Vendor-Tapadum FB-Pixel) =
+* **NEW marketing-script interceptor** — closes the GDPR gap where pixel plugins (Meta pixel for WordPress, Meta for WooCommerce, PixelYourSite, raw GTM snippets, etc.) emit their `<script>` tags straight into `wp_head` / `wp_footer` without consent gating, fire `fbq("track", "PageView")` before the banner even renders, and leave operators glueing manual `<script type="text/plain">` wraps via Code Snippets. New `LuwiPress_Cookie_Consent` interceptor opens an output buffer at `wp_head` / `wp_footer` priority 0 (before any pixel plugin emits), closes it at priority 9999 (after everything), and regex-rewrites matching `<script>` tags to the `type="text/plain" data-luwipress-consent="marketing"` form so the existing `cookie-banner.js unblockScripts()` releases them on consent.
+* Two pattern lists drive the rewrite (default + filterable via `luwipress_intercept_src_patterns` / `luwipress_intercept_inline_patterns`): **external loaders** (`connect.facebook.net`, `fbevents.js`, `googletagmanager.com/gtm.js`, `snap.licdn.com/li.lms-analytics`, `sc-static.net/scevent`, `analytics.tiktok.com/i18n/pixel`, `static.ads-twitter.com/uwt.js`) and **inline body matchers** (`fbq(`, `_paq.push(`, `gtm.start`, `snaptr(`, `lintrk(`, `ttq.load(`, `twq(`). Manual opt-out: add `data-lwp-no-intercept` to any `<script>` tag and the regex skips it. Already-wrapped tags (those with `data-luwipress-consent` already present) are skipped — no double-wrapping.
+* **NEW Settings → Cookie Consent → Marketing scripts** toggle (default ON when Cookie Consent module enabled). Below the toggle the admin panel surfaces a **"Detected pixel / analytics plugins"** list (via existing `LuwiPress_Plugin_Detector` results — meta-pixel / meta-for-woocommerce / pixelyoursite / Site Kit / GTM4WP / MonsterInsights) so the operator sees exactly which scripts will be wrapped. A running counter (total intercepted + 3 most-recent samples) ships alongside so the operator can verify the interceptor is actually firing on their store.
+* Audit state persisted as a single option (`luwipress_marketing_intercept_state`) — one DB write per request that has any hits, not per-hit. Daily counts (last 14 days), recent samples (last 40), and lifetime total.
+* No JavaScript change required on the release side — `cookie-banner.js` already scans for `<script type="text/plain" data-luwipress-consent="…">` tags on consent fire and re-inserts them as live `<script>`s with the proper `src` (from `data-src`) or `textContent` (for inline snippets) preserved.
+* **Closes the operator-side glue problem at the platform level** — Vendor-Tapadum (Özgür) flagged that the official Meta pixel for WordPress plugin (v5.1.0) doesn't respect WP Consent API and fires PageView pre-consent. Every LuwiPress operator running any pixel plugin had the same issue. With 3.3.4, the interceptor catches them automatically — no manual Code Snippets wrap needed.
 
 = 3.3.3 — Next Wins single-row queue + Review button silent-fail fix + WPML product loader fallback =
 * **NEW single-row Next Wins queue** — operator-requested "tek satırda olsun, yapıldıkça sola doğru yüklenmeye devam etsin". The Action Queue went from a 2-row grid to a horizontal flex queue: 12 candidates render into DOM, ~5 fit visually per row at standard admin widths (responsive: 4 at 1280px, 3 at 1024px, 2 at 768px, 1 at 540px). When an action resolves, the card now **collapses** (`flex-basis: 0 + opacity 0`) over 450ms — the queue automatically shifts left and the next pending candidate slides into the visible window. Continuous flow rather than a static board.
