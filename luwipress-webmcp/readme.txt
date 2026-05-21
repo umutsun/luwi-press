@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.28
+Stable tag: 1.0.29
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,10 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.29 — tools/list page-size 200 → 500 (Vendor-FR-006/FR-007 root cause) =
+* **FIX `handle_tools_list()` page size 200 → 500.** When the WebMCP catalog grew past 200 tools in 1.0.28 (added `search_products`, `search_reindex`, `search_stats`, `taxonomy_meta_set`, `taxonomy_meta_delete`, `webmcp_deploy_audit`), the last ~12 tools landed on cursor page 2. Several popular clients (notably `mcp-remote` and certain Claude Desktop builds) don't follow `nextCursor` reliably — they take the first page and stop, leaving the page-2 tools invisible. This is the actual root cause behind the Tapadum Vendor-FR-006/FR-007 reports: `webmcp_deploy_audit` showed the tools registered server-side, but operator-side `tool_search` couldn't find them because the client never paginated past 200. CANLI-vs-KLON asymmetry explained too — CANLI has fewer active modules so its catalog is under 200, fits in page 1, while KLON's full 212-tool catalog overflowed.
+* New page_size accommodates catalog growth to ~500 tools before pagination matters again. The cursor mechanism is preserved (still emits `nextCursor` when the catalog exceeds 500) — clients that DO paginate keep working.
 
 = 1.0.28 — Standalone "Lite mode" — runs without LuwiPress Core (WP.org submission path) =
 * **NEW Lite mode**: WebMCP now activates and runs without the LuwiPress Core plugin. The `Requires Plugins: luwipress` header is dropped; the activation hook no longer `wp_die()`s. When Core is absent the companion registers only the WordPress-native tool categories (system / plugins / themes / menus / taxonomies / comments / media + WooCommerce and Elementor when those plugins are present) — roughly 50–70 tools depending on the host site. The 13 AI-pipeline categories (content / seo / aeo / translation / crm / knowledge_graph / scheduler / token / review / linker / search / attribution / etc.) silently skip via the existing `class_exists()` gates inside each category's register method, and the `webmcp_deploy_audit` tool reports exactly which classes are missing so the operator can see whether they want Core for the unlocked categories.

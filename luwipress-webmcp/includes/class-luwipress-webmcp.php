@@ -409,7 +409,18 @@ class LuwiPress_WebMCP {
      */
     private function handle_tools_list( $id, $params ) {
         $cursor     = $params['cursor'] ?? null;
-        $page_size  = 200;
+        // Page size 500 (was 200). MCP spec supports cursor-based pagination
+        // but several popular clients (mcp-remote ≤ 0.x, Claude Desktop
+        // some builds) don't follow `nextCursor` reliably — they take the
+        // first page and stop. That left our last ~12 tools invisible once
+        // the catalog grew past 200 in 1.0.28 (search_*, taxonomy_meta_set,
+        // taxonomy_meta_delete, webmcp_deploy_audit all registered after
+        // position 200 in insertion order). Vendor-Tapadum FR-006/FR-007
+        // smoking gun: server-side audit showed the tools registered,
+        // operator-side tool_search couldn't find them — page 2 was the
+        // dead zone. 500 accommodates catalog growth to ~500 tools before
+        // pagination matters again; revisit when we approach that ceiling.
+        $page_size  = 500;
         $tool_names = array_keys( $this->tools );
 
         // Cursor = base64-encoded offset
