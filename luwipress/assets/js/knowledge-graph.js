@@ -2280,7 +2280,10 @@ function renderActionQueue(data) {
 		c.roi = c.impact / Math.max(1, c.effort);
 	});
 	candidates.sort(function(a, b) { return b.roi - a.roi; });
-	candidates = candidates.slice(0, 3);
+	// 3.3.2: surface more wins at once. Operator asked for "küçük kartlar
+	// + daha çok task verebiliriz" — went from 3 large cards to 8 compact
+	// cards so the gamification loop stays alive longer between refreshes.
+	candidates = candidates.slice(0, 8);
 
 	// Render
 	var countEl = document.getElementById('kg-action-queue-count');
@@ -3781,6 +3784,34 @@ function collectProductIdsByCategory(catId) {
 	return ids;
 }
 
+// 3.3.2 — gamification feedback. Pop a "+N pts" badge above the resolved
+// Next Wins card and float it toward the Store Health hero so the operator
+// sees their work moving the score in real time. Tier-based fixed payouts:
+//   high=15, medium=10, low=5 (matches the tier color stripe on the card).
+// We don't compute a precise health delta yet (that's a 3.4 candidate —
+// requires diffing the summary block server-side); the fixed payout gives an
+// immediate engagement signal without waiting on a re-fetch.
+function kgFloatScoreDelta(btn) {
+	if (!btn) return;
+	var card = btn.closest && btn.closest('.kg-aq-card');
+	var tier = (card && card.getAttribute('data-tier')) || 'low';
+	var pts  = tier === 'high' ? 15 : (tier === 'medium' ? 10 : 5);
+
+	// Resolved styling on the card itself.
+	if (card) {
+		card.classList.add('kg-aq-resolved');
+	}
+
+	var rect = btn.getBoundingClientRect();
+	var bubble = document.createElement('div');
+	bubble.className = 'kg-score-float';
+	bubble.textContent = '+' + pts + ' pts';
+	bubble.style.left = (rect.left + rect.width / 2) + 'px';
+	bubble.style.top  = (rect.top - 8) + 'px';
+	document.body.appendChild(bubble);
+	setTimeout(function () { if (bubble.parentNode) bubble.parentNode.removeChild(bubble); }, 1700);
+}
+
 function kgAction(action, productId, btn, langs) {
 	var originalText = btn.innerHTML;
 	btn.disabled = true;
@@ -3876,6 +3907,7 @@ function kgAction(action, productId, btn, langs) {
 			btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> Saved ' + totalSaved + '/' + totalTerms;
 			btn.classList.add('kg-action-done');
 			btn.disabled = true;
+			kgFloatScoreDelta(btn);
 			if (typeof fetchActivity === 'function') setTimeout(fetchActivity, 1500);
 			// Refresh delay scaled to AI volume: ~3s per term + 8s safety, capped at 60s.
 			var refreshMs = Math.min(8000 + totalTerms * 3000, 60000);
@@ -3911,6 +3943,7 @@ function kgAction(action, productId, btn, langs) {
 		var isQueued = data.status === 'processing' || data.status === 'queued' || data.job_id || data.batch_id;
 		btn.innerHTML = '<span class="kg-action-icon" style="color:var(--lp-success);">&#10003;</span> ' + (isQueued ? 'Queued' : 'Done');
 		btn.classList.add('kg-action-done');
+		kgFloatScoreDelta(btn);
 		// Keep the button locked in its Queued/Done state until the panel
 		// refreshes. The refresh re-renders the whole panel from fresh data,
 		// which produces a button that reflects the new state (usually the
