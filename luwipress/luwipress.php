@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.4.0
+ * Version: 3.4.1
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.4.0');
+define('LUWIPRESS_VERSION', '3.4.1');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -218,6 +218,17 @@ class LuwiPress {
         // enumeration block. Front-edge guard at `init` priority 1 (3.2.1+).
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-bot-shield.php';
 
+        // Content Audit — promotional-phrase detection across title / meta /
+        // body for GMC-disapproval prevention (3.4.1+). Multilingual phrase
+        // bank (en/tr/fr/it/es) with per-language WPML/Polylang detection.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-content-audit.php';
+
+        // Frontend Inspector — fetch live URL + dump head / content / meta /
+        // schema scopes (3.4.1+). Composes with Schema Registry's diagnostic
+        // emitter; replaces 80%+ of chrome-devtools-mcp round-trips for SEO
+        // and rendering audits.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-frontend-inspector.php';
+
     }
 
     /**
@@ -318,6 +329,8 @@ class LuwiPress {
         LuwiPress_Bot_Account_Cleaner::get_instance();
         LuwiPress_Cookie_Consent::get_instance();
         LuwiPress_Bot_Shield::get_instance();
+        LuwiPress_Content_Audit::get_instance();
+        LuwiPress_Frontend_Inspector::get_instance();
 
         // Elementor integration (only if Elementor is active)
         if ( LuwiPress_Elementor::is_elementor_active() || is_admin() ) {

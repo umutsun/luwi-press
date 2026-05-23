@@ -995,7 +995,43 @@ class LuwiPress_AI_Content {
         // wp_head p5 — single canonical emitter. (Was duplicated here on
         // wp_footer p20 → caused 2 FAQPage <script> blocks per product page,
         // see audit 2026-05-16 finding G.)
+
+        // Category archive — render the same FAQ accordion from term meta.
+        // Closes Vendor-FR-013 A leg (Tapadum, 2026-05-23).
+        //
+        // We register THREE entry points + a per-term double-render guard.
+        // Themes echo the term description through one of several paths and
+        // we cover each — the guard ensures only the first fire of a given
+        // term emits the accordion:
+        //
+        //   (a) `term_description` filter — fires inside `get_term_field()`
+        //       which is called by `term_description()` (used directly by
+        //       luwipress-gold's `woocommerce/archive-product.php`) AND by
+        //       `get_the_archive_description()`. Catches Elementor archive
+        //       templates whose archive-description widget reads the term
+        //       description via this path, and any theme that calls
+        //       `term_description()` explicitly. Filter args include
+        //       `$term_id` + `$taxonomy` + `$context` so we can scope
+        //       safely to the queried product_cat, display context only.
+        //   (b) `get_the_archive_description` filter — secondary catch for
+        //       themes that compose the archive description via the
+        //       higher-level function. Same guard prevents double-append
+        //       when both this and (a) fire on the same request.
+        //   (c) `woocommerce_archive_description` action — fallback for
+        //       vanilla WC theme templates that walk the standard WC hook
+        //       order without going through either filter.
+        add_filter( 'term_description', array( __CLASS__, 'filter_term_description' ), 20, 4 );
+        add_filter( 'get_the_archive_description', array( __CLASS__, 'filter_term_faq_archive' ), 20 );
+        add_action( 'woocommerce_archive_description', array( __CLASS__, 'render_term_faq_archive' ), 20 );
     }
+
+    /**
+     * Per-request "have we already rendered the FAQ for this term?" guard.
+     * Keyed by term_id. Both the action and the filter consult + update it.
+     *
+     * @var array<int,bool>
+     */
+    private static $faq_archive_rendered = array();
 
     /**
      * Output JSON-LD schema in <head>
@@ -1056,6 +1092,138 @@ class LuwiPress_AI_Content {
             echo '</details>';
         }
         echo '</div>';
+    }
+
+    /**
+     * Action entry: echo the FAQ accordion on `woocommerce_archive_description`.
+     * Used by vanilla WC templates. Elementor archive templates bypass this
+     * action; the `get_the_archive_description` filter below covers those.
+     *
+     * @since 3.4.1 — Vendor-FR-013 A leg.
+     */
+    public static function render_term_faq_archive() {
+        $html = self::build_term_faq_archive_html();
+        if ( '' !== $html ) {
+            echo $html;
+        }
+    }
+
+    /**
+     * Filter entry: append the FAQ accordion to the term description string.
+     * Used by Elementor archive templates and by any path that consumes the
+     * description through `get_the_archive_description()`.
+     *
+     * @param string $description The term/archive description string.
+     * @return string Description with FAQ accordion appended (or unchanged).
+     * @since 3.4.1 — Vendor-FR-013 A leg.
+     */
+    public static function filter_term_faq_archive( $description ) {
+        $html = self::build_term_faq_archive_html();
+        if ( '' === $html ) {
+            return $description;
+        }
+        return $description . $html;
+    }
+
+    /**
+     * Filter entry on `term_description` — fires inside `sanitize_term_field()`
+     * for every term description read via `get_term_field('description', ...)`.
+     * This is the path that `term_description()` (used by luwipress-gold's
+     * `woocommerce/archive-product.php`) takes, and also the path used by
+     * `get_the_archive_description()`.
+     *
+     * Safety gates:
+     *   - $context must be 'display' (skip edit / rest / raw contexts).
+     *   - $taxonomy must be 'product_cat'.
+     *   - $term_id must match the currently queried product_cat term (so
+     *     descriptions for OTHER terms rendered on the same page — e.g. a
+     *     subcategory widget — don't get the wrong FAQ accordion appended).
+     *   - Existing per-term guard inside `build_term_faq_archive_html()`
+     *     prevents the same term getting accordion HTML twice.
+     *
+     * @param string $value    Filtered description value.
+     * @param int    $term_id  ID of the term whose description is being read.
+     * @param string $taxonomy Taxonomy slug.
+     * @param string $context  Field context — 'display' / 'edit' / etc.
+     * @return string Description (with accordion appended when eligible).
+     * @since 3.4.1 — Vendor-FR-013 A leg, hotfix2.
+     */
+    public static function filter_term_description( $value, $term_id, $taxonomy, $context ) {
+        if ( 'display' !== $context || 'product_cat' !== $taxonomy ) {
+            return $value;
+        }
+        if ( ! function_exists( 'is_product_category' ) || ! is_product_category() ) {
+            return $value;
+        }
+        $queried = get_queried_object();
+        if ( ! ( $queried instanceof WP_Term ) || (int) $queried->term_id !== (int) $term_id ) {
+            return $value;
+        }
+        $html = self::build_term_faq_archive_html();
+        return '' === $html ? $value : $value . $html;
+    }
+
+    /**
+     * Build the FAQ accordion HTML for the current product_cat archive,
+     * applying the per-term double-render guard so repeated calls within
+     * the same request return an empty string.
+     *
+     * Mirrors `output_faq_tab()` but reads term meta and ships an outer
+     * `<section>` with an `<h2>` heading because archive pages lack a
+     * tab container. CSS class `.luwipress-faq` matches the product-tab
+     * markup so theme styling cascades to both surfaces.
+     *
+     * Filters:
+     *   - `luwipress_term_faq_render_enabled` ($enabled, $term) — return
+     *     false to suppress entirely (e.g. theme has its own accordion).
+     *   - `luwipress_term_faq_render_heading` ($heading, $term) — override
+     *     the default heading text (e.g. localised per category).
+     *
+     * @return string Accordion HTML or '' if not eligible / already rendered.
+     */
+    private static function build_term_faq_archive_html() {
+        if ( ! function_exists( 'is_product_category' ) || ! is_product_category() ) {
+            return '';
+        }
+        $term = get_queried_object();
+        if ( ! ( $term instanceof WP_Term ) ) {
+            return '';
+        }
+        if ( isset( self::$faq_archive_rendered[ $term->term_id ] ) ) {
+            return '';
+        }
+        if ( ! apply_filters( 'luwipress_term_faq_render_enabled', true, $term ) ) {
+            return '';
+        }
+        $faq = get_term_meta( $term->term_id, '_luwipress_faq', true );
+        if ( empty( $faq ) || ! is_array( $faq ) ) {
+            return '';
+        }
+
+        $heading = apply_filters(
+            'luwipress_term_faq_render_heading',
+            __( 'Frequently Asked Questions', 'luwipress' ),
+            $term
+        );
+
+        self::$faq_archive_rendered[ $term->term_id ] = true;
+
+        $id = 'luwipress-faq-heading-' . (int) $term->term_id;
+        $html  = '<section class="luwipress-faq luwipress-faq--archive" aria-labelledby="' . esc_attr( $id ) . '">';
+        $html .= '<h2 id="' . esc_attr( $id ) . '" class="luwipress-faq__heading">' . esc_html( $heading ) . '</h2>';
+        foreach ( $faq as $item ) {
+            if ( empty( $item['question'] ) || empty( $item['answer'] ) ) {
+                continue;
+            }
+            $q = esc_html( $item['question'] );
+            $a = wp_kses_post( $item['answer'] );
+            $html .= '<details class="luwipress-faq__item">';
+            $html .= '<summary class="luwipress-faq__q">' . $q . '</summary>';
+            $html .= '<div class="luwipress-faq__a">' . $a . '</div>';
+            $html .= '</details>';
+        }
+        $html .= '</section>';
+        return $html;
     }
 
     /**

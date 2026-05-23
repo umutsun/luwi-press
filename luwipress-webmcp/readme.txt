@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.31
+Stable tag: 1.0.32
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,11 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.32 — Promotional Phrase Audit + Frontend Render Dump (paired with core 3.4.1) =
+* **NEW `content_promotional_phrase_audit`** — daily GMC compliance scan. Surfaces promotional-pressure phrases ("free shipping", "limited time", "şimdi al", "livraison gratuite", "spedizione gratuita", "envío gratis", …) across SEO meta title/description (high severity → GMC disapproval risk), post title/excerpt (medium → feed-syndicated fallback) and body content (low → editorial cleanup). Multilingual phrase bank (en/tr/fr/it/es); per-post language auto-detect via WPML/Polylang. Accepts `post_id` for a single-post check or `post_type` + `category_id` for a sweep. Read-only.
+* **NEW `content_promotional_phrase_bank`** — read-only introspection of the canonical phrase bank used by the audit. Useful for confirming coverage before a sweep and for the agentic loop to surface which phrases will match.
+* **NEW `lwp_frontend_render_dump`** — broader sibling of `seo_schema_render`. Fetches a URL once and returns four scopes in a single call: **head** (title, canonical, robots, hreflang chain, OpenGraph + Twitter meta), **content** (word count, h1..h6 counts, image alt coverage, internal/external/nofollow link counts, text/HTML ratio), **meta** (response headers — cache layer markers, X-Robots-Tag, content-language) and **schema** (parsed JSON-LD blocks). Replaces ~5 chrome-devtools-mcp probes per audit. Pass `url`, `post_id`, or `term_id+taxonomy`; optional `scopes` array restricts the payload.
 
 = 1.0.31 — Schema Registry MCP tools + WPML SEO settings tools (paired with core 3.4.0) =
 * **NEW `aeo_save_schema`** — generic schema save. Pairs with the core 3.4.0 Schema Registry. One tool covers every registered schema type (FAQPage, HowTo, Speakable, LocalBusiness, Service, Course, Review, AggregateRating, plus the auto-generated ItemList for category archives — and any future type registered via the `luwipress_schema_registry_init` filter). Accepts `{schema_type, object_type, object_id, data}`. Pass a fully-formed schema.org array for LocalBusiness/Service/Course/Review/AggregateRating (passthrough types); pass `{faqs:[{question, answer}]}` shape for `faq`; pass `{name, steps:[{name, text}]}` for `howto`. Convenience aliases: `post_id`, `term_id`.

@@ -1178,6 +1178,51 @@ class LuwiPress_WebMCP {
             $data    = $ai->handle_stale_content( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
+
+        // ─── content_promotional_phrase_audit (1.0.32+) ──────────────
+        // Daily GMC compliance scan: surfaces promotional-pressure phrases
+        // ("free shipping", "limited time", "şimdi al", …) across meta
+        // title/description (high severity → GMC disapproval risk), post
+        // title/excerpt (medium → feed-syndicated fallback) and body
+        // content (low → editorial cleanup). Multilingual phrase bank
+        // (en/tr/fr/it/es); per-post language auto-detect via WPML/Polylang.
+        $this->register_tool( 'content_promotional_phrase_audit', array(
+            'description' => 'Scan posts for promotional/urgency phrases that trigger Google Merchant Center disapprovals. Severity ladder: high (meta title/desc), medium (post title/excerpt), low (body). Pass post_id for a single post, or post_type + category_id for a sweep. Multilingual; per-post language auto-detect via WPML/Polylang. Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'         => array( 'type' => 'integer', 'description' => 'Audit a single post only' ),
+                    'post_type'       => array( 'type' => 'string',  'description' => 'Post type to scan (default product)' ),
+                    'category_id'     => array( 'type' => 'integer', 'description' => 'Restrict to a product_cat term (only when post_type=product)' ),
+                    'lang'            => array( 'type' => 'string',  'description' => 'Force language code (en/tr/fr/it/es); default = per-post detect' ),
+                    'scope'           => array( 'type' => 'string',  'description' => 'meta | body | all (default all)', 'enum' => array( 'meta', 'body', 'all' ) ),
+                    'limit'           => array( 'type' => 'integer', 'description' => 'Max posts to scan (default 50, max 500)', 'minimum' => 1, 'maximum' => 500 ),
+                    'offset'          => array( 'type' => 'integer', 'description' => 'Pagination offset', 'minimum' => 0 ),
+                    'only_violations' => array( 'type' => 'boolean', 'description' => 'Return only posts with findings (default true)' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Promotional Phrase Audit', 'readOnlyHint' => true, 'idempotentHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Content_Audit', 'rest_promotional_phrase_audit', $args );
+        } );
+
+        // ─── content_promotional_phrase_bank (1.0.32+) ───────────────
+        // Read-only introspection of the phrase bank itself. Useful for the
+        // operator to confirm coverage before running a sweep, and for the
+        // agentic loop to surface which phrases will be matched.
+        $this->register_tool( 'content_promotional_phrase_bank', array(
+            'description' => 'Return the canonical promotional-phrase bank used by content_promotional_phrase_audit. Read-only; lists per-language phrase counts and the full bank for inspection.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new \stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Promotional Phrase Bank', 'readOnlyHint' => true, 'idempotentHint' => true ),
+        ), function () {
+            $audit   = LuwiPress_Content_Audit::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/content/promotional-phrase-bank' );
+            $data    = $audit->rest_phrase_bank( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
     }
 
     /* ───────────────────── SEO / Enrichment Tools ──────────────────── */
@@ -1541,6 +1586,35 @@ class LuwiPress_WebMCP {
             'annotations' => array( 'title' => 'Render Schema (Diagnostic)', 'readOnlyHint' => true, 'idempotentHint' => true ),
         ), function ( $args ) {
             return $this->proxy_rest_post( 'LuwiPress_Schema_Registry', 'rest_diagnostic_render', $args );
+        } );
+
+        // ─── lwp_frontend_render_dump (1.0.32+) ──────────────────────
+        // Broader sibling of seo_schema_render. Fetches a URL once and
+        // returns head (title/canonical/robots/hreflang/og/twitter/meta),
+        // content (word count, h-counts, image alt, link counts), meta
+        // (response headers including cache layer markers + X-Robots-Tag)
+        // and schema scopes. Replaces ~5 chrome-devtools-mcp round-trips
+        // per audit; designed for daily SEO QA + post-write verification +
+        // multilingual render parity probes.
+        $this->register_tool( 'lwp_frontend_render_dump', array(
+            'description' => 'Fetch a live URL with cache-bypass and dump structured data across head / content / meta / schema scopes in one call. Default scopes=[head,content,meta,schema]. Pass either url, or post_id, or term_id+taxonomy. Replaces multiple DevTools probes for SEO audits. Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'url'      => array( 'type' => 'string',  'description' => 'Full URL to fetch' ),
+                    'post_id'  => array( 'type' => 'integer', 'description' => 'Resolve URL from post permalink' ),
+                    'term_id'  => array( 'type' => 'integer', 'description' => 'Resolve URL from term archive (requires taxonomy)' ),
+                    'taxonomy' => array( 'type' => 'string',  'description' => 'Taxonomy slug for term_id resolution' ),
+                    'scopes'   => array(
+                        'type'        => 'array',
+                        'items'       => array( 'type' => 'string', 'enum' => array( 'head', 'content', 'meta', 'schema' ) ),
+                        'description' => 'Which scopes to extract. Default: all four.',
+                    ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Frontend Render Dump', 'readOnlyHint' => true, 'idempotentHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Frontend_Inspector', 'rest_render_dump', $args );
         } );
     }
 
