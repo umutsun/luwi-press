@@ -2106,12 +2106,37 @@ function renderActionQueue(data) {
 			candidateType: sc.type,
 			candidateWhy: sc.why || null,
 			onClick: function (btn) {
-				if (sc.entity_type === 'product' && sc.entity_id && typeof openDetailPanel === 'function') {
-					openDetailPanel('product', sc.entity_id);
-				} else if (sc.workflow === 'queue-review') {
-					var preset = document.querySelector('[data-preset="high-opportunity"]');
-					if (preset) preset.click();
+				// Server-side v2 candidates carry entity_type + entity_id.
+				// Look up the matching product node so showDetailPanel gets
+				// the shape it expects (it crashes silently on malformed
+				// nodes — see line 1019 defensive hydration). The original
+				// implementation called openDetailPanel(type, id) which does
+				// not exist anywhere in this bundle, so the click was a no-op.
+				if (sc.entity_type === 'product' && sc.entity_id) {
+					var prods = (data.nodes && data.nodes.products) || [];
+					var p = null;
+					for (var i = 0; i < prods.length; i++) {
+						if (prods[i].id === sc.entity_id) { p = prods[i]; break; }
+					}
+					if (p && window.lpKg && window.lpKg.showDetailPanel) {
+						window.lpKg.showDetailPanel({
+							type: 'product', data: p, label: p.name, radius: 8,
+							score: p.opportunity_score,
+							seo: p.seo, enrichment: p.enrichment,
+							aeo: p.aeo, translation: p.translation
+						});
+						return;
+					}
+					// Product id present but not in the loaded graph (e.g.
+					// view filter excluded it). Fall through to preset hop.
 				}
+				if (sc.workflow === 'queue-review') {
+					// Preset key uses underscore in the PHP markup (data-preset="high_opportunity").
+					var preset = document.querySelector('[data-preset="high_opportunity"]');
+					if (preset) preset.click();
+					return;
+				}
+				console.warn('[lpKg] v2 candidate has no resolvable target', sc);
 			}
 		});
 	});

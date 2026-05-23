@@ -473,8 +473,14 @@ class LuwiPress_Knowledge_Graph {
 			),
 		);
 
-		// Summary
-		$response['summary'] = $this->build_summary( $product_nodes, $category_nodes, $language_nodes, $segment_nodes, $target_languages );
+		// Summary — only build when product-bearing sections were requested.
+		// Phase B (sections=design_audit,order_analytics) would otherwise emit
+		// a zero-filled summary that the JS merger Object.assigns over Phase A's
+		// real values, AND would write today's `luwipress_kg_summary_history`
+		// snapshot with zeros, poisoning the 30-day trend deltas.
+		if ( $needs_products ) {
+			$response['summary'] = $this->build_summary( $product_nodes, $category_nodes, $language_nodes, $segment_nodes, $target_languages );
+		}
 
 		// Nodes
 		$response['nodes'] = array();

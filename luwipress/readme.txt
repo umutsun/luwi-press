@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.3.4
+Stable tag: 3.3.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.3.5 — KG dashboard: metric cards + Next Wins Review button fixes =
+* **FIX Knowledge Graph stat cards reading 0 for Products / Enriched / Opportunities** even though the live data is healthy (e.g. 126 products / 38.9% enriched / 2,505 opportunity points on a representative store). Root cause: the two-phase progressive loader in `knowledge-graph.js` issues a second request with `sections=design_audit,order_analytics` once Phase A returns; the REST handler was rebuilding the full `summary` block on that request too, which — with no product nodes loaded — emitted zeros for every product-derived field. The JS merger then `Object.assign`ed those zeros over Phase A's real values. Fix: the handler now skips `build_summary()` entirely when no product-bearing sections were requested, so Phase B simply has no `summary` key and the Phase A values stand.
+* **FIX trend baseline poisoning** — same bug also wrote today's snapshot to `luwipress_kg_summary_history` with zeros for `total_products`, `seo_coverage`, `enrichment_coverage`, and `opportunity_total` every time Phase B fired. That snapshot drives the "Last 7 days" delta line in the Store Health subtitle, which is why operators saw misleading numbers like "-89.7% SEO, -38.1% enriched, -2878 opportunity pts" on healthy stores. After this fix the first KG page load overwrites today's row with real values; older poisoned rows age out of the 30-day ring over the next week.
+* **FIX Next Wins Review button no-op on server-side v2 candidates** — clicking Review on a v2 Action Queue card (the ones with the ⚡ primary-signal chip) did nothing. The click handler called `openDetailPanel('product', sc.entity_id)` but no function by that name exists in the bundle (the real one is `showDetailPanel(node)` and it takes a node object with a different shape). The else-branch fallback queried `[data-preset="high-opportunity"]` with a hyphen, but the dropdown button uses `data-preset="high_opportunity"` with an underscore, so it was also dead code. Fix: the handler now looks up the matching product in `data.nodes.products` and invokes `window.lpKg.showDetailPanel(...)` with a properly hydrated node, and the preset fallback selector is corrected to use the underscore form.
 
 = 3.3.4 — Marketing-script interceptor: pre-consent pixel gating (Vendor-Tapadum FB-Pixel) =
 * **NEW marketing-script interceptor** — closes the GDPR gap where pixel plugins (Meta pixel for WordPress, Meta for WooCommerce, PixelYourSite, raw GTM snippets, etc.) emit their `<script>` tags straight into `wp_head` / `wp_footer` without consent gating, fire `fbq("track", "PageView")` before the banner even renders, and leave operators glueing manual `<script type="text/plain">` wraps via Code Snippets. New `LuwiPress_Cookie_Consent` interceptor opens an output buffer at `wp_head` / `wp_footer` priority 0 (before any pixel plugin emits), closes it at priority 9999 (after everything), and regex-rewrites matching `<script>` tags to the `type="text/plain" data-luwipress-consent="marketing"` form so the existing `cookie-banner.js unblockScripts()` releases them on consent.

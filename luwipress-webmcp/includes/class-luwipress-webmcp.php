@@ -5509,10 +5509,23 @@ class LuwiPress_WebMCP {
             // WPML-language-aware. On translation terms this falsely flags the
             // sibling-language slug as a collision. For description-only updates
             // we bypass the whole pipeline with a direct term_taxonomy write.
+            //
+            // Description sanitizer is `wp_kses_post` — symmetric with the
+            // luwipress-gold render side (1.7.34+) which echoes the description
+            // through `wp_kses_post()`. Allows prose HTML (anchors, headings,
+            // lists, emphasis) so operators can author internal-link / AEO
+            // structure into category descriptions; still blocks script /
+            // iframe / inline event handlers. The previous
+            // `sanitize_textarea_field()` was a plain-text helper that
+            // stripped every tag, then `wpautop` on the render side
+            // re-wrapped paragraphs but anchors / h2 / h3 / ul / li never
+            // came back. Matches the WP-core "post content" sanitizer that
+            // the WP admin term-edit screen applies for users with
+            // `unfiltered_html`.
             if ( $has_desc && ! $has_name && ! $has_slug && ! $has_parent ) {
                 $updated = $wpdb->update(
                     $wpdb->term_taxonomy,
-                    array( 'description' => sanitize_textarea_field( $args['description'] ) ),
+                    array( 'description' => wp_kses_post( (string) $args['description'] ) ),
                     array( 'term_taxonomy_id' => (int) $term->term_taxonomy_id ),
                     array( '%s' ),
                     array( '%d' )
@@ -5551,9 +5564,32 @@ class LuwiPress_WebMCP {
             if ( $has_name )   $term_args['name']        = sanitize_text_field( $args['name'] );
             if ( $has_slug )   $term_args['slug']        = sanitize_title( $args['slug'] );
             if ( $has_parent ) $term_args['parent']      = absint( $args['parent'] );
-            if ( $has_desc )   $term_args['description'] = sanitize_textarea_field( $args['description'] );
+            // wp_kses_post matches the render-side filter the luwipress-gold
+            // theme uses (1.7.34+). See the direct path above for the full
+            // rationale.
+            if ( $has_desc )   $term_args['description'] = wp_kses_post( (string) $args['description'] );
+
+            // wp_update_term → sanitize_term → sanitize_term_field('description', …, 'db')
+            // applies the `pre_term_description` filter. WP core attaches
+            // `wp_filter_kses` (restrictive: allows <a>, blocks <h2>/<h3>/<ul>/<li>)
+            // unless the current user has `unfiltered_html`. Our token-auth path
+            // intentionally does NOT call wp_set_current_user (see
+            // LuwiPress_Permission::is_token_authenticated docblock) so that
+            // capability is false in this context. Swap to the permissive
+            // `wp_filter_post_kses` for the duration of this call so the input
+            // we pre-sanitized with wp_kses_post survives intact, then restore.
+            $kses_swap = $has_desc;
+            if ( $kses_swap ) {
+                remove_filter( 'pre_term_description', 'wp_filter_kses' );
+                add_filter( 'pre_term_description', 'wp_filter_post_kses' );
+            }
 
             $result = wp_update_term( $term_id, $taxonomy, $term_args );
+
+            if ( $kses_swap ) {
+                remove_filter( 'pre_term_description', 'wp_filter_post_kses' );
+                add_filter( 'pre_term_description', 'wp_filter_kses' );
+            }
 
             if ( $restore_lang !== null && is_object( $sitepress ) ) {
                 $sitepress->switch_lang( $restore_lang );
