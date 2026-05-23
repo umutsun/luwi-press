@@ -1410,14 +1410,16 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'aeo_save_faq', array(
-            'description' => 'Save FAQ schema data for a product (JSON-LD FAQPage)',
+            'description' => 'Save FAQ schema (JSON-LD FAQPage) for a product OR a taxonomy term. Pass product_id for product pages; pass term_id+taxonomy for category archives (Vendor-FR-013, 3.4.0+).',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
-                    'product_id' => array( 'type' => 'integer', 'description' => 'Product ID (required)' ),
+                    'product_id' => array( 'type' => 'integer', 'description' => 'Product ID (post path). Required if term_id not given.' ),
+                    'term_id'    => array( 'type' => 'integer', 'description' => 'Term ID (term path — typically product_cat). Required if product_id not given.' ),
+                    'taxonomy'   => array( 'type' => 'string', 'description' => 'Taxonomy slug (defaults to product_cat). Used with term_id.' ),
                     'faqs'       => array( 'type' => 'array', 'description' => 'Array of {question, answer} objects', 'items' => array( 'type' => 'object' ) ),
                 ),
-                'required'   => array( 'product_id', 'faqs' ),
+                'required'   => array( 'faqs' ),
             ),
             'annotations' => array( 'title' => 'Save FAQ Schema', 'readOnlyHint' => false, 'idempotentHint' => true ),
         ), function ( $args ) {
@@ -1453,6 +1455,92 @@ class LuwiPress_WebMCP {
             'annotations' => array( 'title' => 'Save Speakable Schema', 'readOnlyHint' => false, 'idempotentHint' => true ),
         ), function ( $args ) {
             return $this->proxy_rest_post( 'LuwiPress_AEO', 'save_speakable_data', $args );
+        } );
+
+        // ─── Schema Registry (Vendor-FR-1 + FR-013 + MCP-4, 3.4.0+) ──────
+
+        $this->register_tool( 'aeo_save_schema', array(
+            'description' => 'Generic schema save — registers a JSON-LD schema for any registered type (LocalBusiness, Service, Course, Review, AggregateRating, plus FAQ/HowTo/Speakable). Works on posts OR terms. Use aeo_list_schema_types to discover available types and their allowed contexts.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'schema_type' => array( 'type' => 'string', 'description' => 'Type slug — one of: faq, howto, speakable, localbusiness, service, course, review, aggregaterating' ),
+                    'object_type' => array( 'type' => 'string', 'enum' => array( 'post', 'term' ), 'description' => 'Storage object type (default: post)' ),
+                    'object_id'   => array( 'type' => 'integer', 'description' => 'Post ID or Term ID (required — or use post_id / term_id aliases)' ),
+                    'post_id'     => array( 'type' => 'integer', 'description' => 'Alias for object_id when object_type=post' ),
+                    'term_id'     => array( 'type' => 'integer', 'description' => 'Alias for object_id when object_type=term' ),
+                    'data'        => array( 'type' => 'object', 'description' => 'Schema data — fully-formed schema.org array (for passthrough types) or {faqs:[...]} / {name,steps:[...]} shape for FAQ/HowTo.' ),
+                    'schema_json' => array( 'type' => 'string', 'description' => 'Alternative to `data` — JSON string that decodes to the data object.' ),
+                ),
+                'required'   => array( 'schema_type' ),
+            ),
+            'annotations' => array( 'title' => 'Save Schema (Generic)', 'readOnlyHint' => false, 'idempotentHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Schema_Registry', 'rest_save_schema', $args );
+        } );
+
+        $this->register_tool( 'aeo_get_schema', array(
+            'description' => 'Read stored schema for a post or term. If schema_type is omitted, returns every registered schema type that has data on the object.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'schema_type' => array( 'type' => 'string', 'description' => 'Type slug (optional — omit to dump all)' ),
+                    'object_type' => array( 'type' => 'string', 'enum' => array( 'post', 'term' ), 'description' => 'Storage object type (default: post)' ),
+                    'object_id'   => array( 'type' => 'integer', 'description' => 'Post ID or Term ID' ),
+                    'post_id'     => array( 'type' => 'integer', 'description' => 'Alias for object_id' ),
+                    'term_id'     => array( 'type' => 'integer', 'description' => 'Alias for object_id when object_type=term' ),
+                ),
+                'required'   => array(),
+            ),
+            'annotations' => array( 'title' => 'Get Schema', 'readOnlyHint' => true, 'idempotentHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Schema_Registry', 'rest_get_schema', $args );
+        } );
+
+        $this->register_tool( 'aeo_delete_schema', array(
+            'description' => 'Remove stored schema for a post or term.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'schema_type' => array( 'type' => 'string', 'description' => 'Type slug (required)' ),
+                    'object_type' => array( 'type' => 'string', 'enum' => array( 'post', 'term' ) ),
+                    'object_id'   => array( 'type' => 'integer' ),
+                    'post_id'     => array( 'type' => 'integer' ),
+                    'term_id'     => array( 'type' => 'integer' ),
+                ),
+                'required'   => array( 'schema_type' ),
+            ),
+            'annotations' => array( 'title' => 'Delete Schema', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Schema_Registry', 'rest_delete_schema', $args );
+        } );
+
+        $this->register_tool( 'aeo_list_schema_types', array(
+            'description' => 'List every registered schema type — slug, schema.org @type, allowed contexts (where it can be saved), deprecation flag.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'List Schema Types', 'readOnlyHint' => true, 'idempotentHint' => true ),
+        ), function () {
+            return $this->proxy_rest_post( 'LuwiPress_Schema_Registry', 'rest_list_types', array() );
+        } );
+
+        $this->register_tool( 'seo_schema_render', array(
+            'description' => 'Diagnostic — fetch a URL and dump every <script type="application/ld+json"> block found. Saves the round-trip through DevTools for schema audits. Pass either url, or post_id, or term_id+taxonomy.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'url'      => array( 'type' => 'string', 'description' => 'Full URL to fetch' ),
+                    'post_id'  => array( 'type' => 'integer', 'description' => 'Resolve URL from post permalink' ),
+                    'term_id'  => array( 'type' => 'integer', 'description' => 'Resolve URL from term archive (requires taxonomy)' ),
+                    'taxonomy' => array( 'type' => 'string', 'description' => 'Taxonomy slug for term_id resolution' ),
+                ),
+                'required'   => array(),
+            ),
+            'annotations' => array( 'title' => 'Render Schema (Diagnostic)', 'readOnlyHint' => true, 'idempotentHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Schema_Registry', 'rest_diagnostic_render', $args );
         } );
     }
 
@@ -6389,6 +6477,123 @@ class LuwiPress_WebMCP {
                 return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
             } );
         }
+
+        // ─── WPML SEO Settings (Vendor-MCP-3, 3.4.0+) ──────────────────────
+        //
+        // WPML stores everything in one giant `icl_sitepress_settings` array
+        // with cross-linked sub-options (`icl_lang_neg_url_type`, etc.) that
+        // are SET via icl_sitepress_settings but READ via separate option
+        // keys. Migration / config-audit scripts need both read AND write,
+        // which neither core settings_get/set nor WPML's admin UI exposes
+        // via API. These two tools surface the SEO-relevant subset.
+
+        $wpml_safe_keys = array(
+            'default_language'      => array( 'parent' => 'icl_sitepress_settings', 'path' => array( 'default_language' ),                              'type' => 'string' ),
+            'language_url_type'     => array( 'option' => 'icl_lang_neg_url_type',                                                                       'type' => 'integer' ),
+            'use_directory'         => array( 'parent' => 'icl_sitepress_settings', 'path' => array( 'language_negotiation_type' ),                      'type' => 'integer' ),
+            'hide_default_lang'     => array( 'parent' => 'icl_sitepress_settings', 'path' => array( 'urls', 'hide_language_switchers_for_default_lang' ), 'type' => 'integer' ),
+            'taxonomies_sync'       => array( 'parent' => 'icl_sitepress_settings', 'path' => array( 'taxonomies_sync_option' ),                         'type' => 'array' ),
+            'sync_post_taxonomies'  => array( 'parent' => 'icl_sitepress_settings', 'path' => array( 'sync_taxonomies' ),                                'type' => 'integer' ),
+            'sync_post_date'        => array( 'parent' => 'icl_sitepress_settings', 'path' => array( 'sync_post_date' ),                                 'type' => 'integer' ),
+            'sync_page_template'    => array( 'parent' => 'icl_sitepress_settings', 'path' => array( 'sync_page_template' ),                             'type' => 'integer' ),
+            'wpml_seo_settings'     => array( 'option' => 'wpml_seo_settings',                                                                            'type' => 'array' ),
+            'hreflang_show'         => array( 'parent' => 'icl_sitepress_settings', 'path' => array( 'seo', 'head_langs' ),                              'type' => 'integer' ),
+        );
+
+        $this->register_tool( 'wpml_seo_settings_get', array(
+            'description' => 'Read WPML language + SEO settings — default_language, URL pattern (1=subdir/2=subdomain/3=different domain), hreflang head emission, taxonomy sync flags, language negotiation type. Vendor-MCP-3.',
+            'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+            'annotations' => array( 'title' => 'WPML SEO Settings (Read)', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () use ( $wpml_safe_keys ) {
+            if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+                return array( 'error' => 'WPML not active' );
+            }
+            $sitepress_opt = get_option( 'icl_sitepress_settings', array() );
+            $out = array();
+            foreach ( $wpml_safe_keys as $alias => $cfg ) {
+                if ( isset( $cfg['option'] ) ) {
+                    $out[ $alias ] = get_option( $cfg['option'] );
+                    continue;
+                }
+                // walk path inside sitepress array
+                $cursor = $sitepress_opt;
+                foreach ( $cfg['path'] as $segment ) {
+                    if ( is_array( $cursor ) && array_key_exists( $segment, $cursor ) ) {
+                        $cursor = $cursor[ $segment ];
+                    } else {
+                        $cursor = null;
+                        break;
+                    }
+                }
+                $out[ $alias ] = $cursor;
+            }
+            // Active languages — separate API.
+            if ( function_exists( 'icl_get_languages' ) ) {
+                $langs = icl_get_languages( 'skip_missing=N' );
+                $out['active_languages'] = is_array( $langs ) ? array_keys( $langs ) : array();
+            }
+            return array( 'wpml_active' => true, 'settings' => $out );
+        } );
+
+        $this->register_tool( 'wpml_seo_settings_set', array(
+            'description' => 'Update WPML language + SEO settings (partial update). Pass `settings` object with any subset of: default_language, language_url_type, use_directory, hide_default_lang, sync_post_taxonomies, sync_post_date, sync_page_template, wpml_seo_settings, hreflang_show. Vendor-MCP-3.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'settings' => array( 'type' => 'object', 'description' => 'Partial update — only keys present are written.' ),
+                ),
+                'required' => array( 'settings' ),
+            ),
+            'annotations' => array( 'title' => 'WPML SEO Settings (Write)', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) use ( $wpml_safe_keys ) {
+            if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+                return array( 'error' => 'WPML not active' );
+            }
+            $settings = isset( $args['settings'] ) ? (array) $args['settings'] : array();
+            if ( empty( $settings ) ) {
+                return array( 'error' => 'No settings provided' );
+            }
+            $sitepress_opt = get_option( 'icl_sitepress_settings', array() );
+            $changed       = array();
+            foreach ( $settings as $alias => $value ) {
+                if ( ! isset( $wpml_safe_keys[ $alias ] ) ) {
+                    continue; // silently skip unknown aliases
+                }
+                $cfg = $wpml_safe_keys[ $alias ];
+
+                // Type coercion based on declared type.
+                if ( 'integer' === $cfg['type'] ) {
+                    $value = intval( $value );
+                } elseif ( 'string' === $cfg['type'] ) {
+                    $value = sanitize_text_field( $value );
+                } elseif ( 'array' === $cfg['type'] && ! is_array( $value ) ) {
+                    continue;
+                }
+
+                if ( isset( $cfg['option'] ) ) {
+                    update_option( $cfg['option'], $value );
+                    $changed[ $alias ] = $value;
+                    continue;
+                }
+                // walk path and set; create intermediate arrays as needed
+                $ref =& $sitepress_opt;
+                foreach ( $cfg['path'] as $i => $segment ) {
+                    if ( $i === count( $cfg['path'] ) - 1 ) {
+                        $ref[ $segment ] = $value;
+                    } else {
+                        if ( ! isset( $ref[ $segment ] ) || ! is_array( $ref[ $segment ] ) ) {
+                            $ref[ $segment ] = array();
+                        }
+                        $ref =& $ref[ $segment ];
+                    }
+                }
+                unset( $ref );
+                $changed[ $alias ] = $value;
+            }
+            // Persist sitepress block (only if any path-based change touched it).
+            update_option( 'icl_sitepress_settings', $sitepress_opt );
+            return array( 'updated' => true, 'changed' => $changed );
+        } );
     }
 
     /* ───────────────────── Plugin & Theme Tools ────────────────────── */

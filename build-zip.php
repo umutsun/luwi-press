@@ -63,7 +63,7 @@ $phpstan = __DIR__ . '/vendor/bin/phpstan';
 if ( file_exists( $phpstan ) && $slug === 'luwipress' ) {
     echo "Running PHPStan...\n";
     $stan_out = []; $stan_code = 0;
-    exec( 'php -d memory_limit=2G ' . escapeshellarg( $phpstan ) . ' analyse --no-progress --memory-limit=2G 2>&1', $stan_out, $stan_code );
+    exec( 'php -d memory_limit=4G ' . escapeshellarg( $phpstan ) . ' analyse --no-progress --memory-limit=4G 2>&1', $stan_out, $stan_code );
     if ( $stan_code !== 0 ) {
         echo implode( "\n", $stan_out ) . "\n";
         die( "\nBLOCKED: PHPStan found new errors. Fix before building.\n" );

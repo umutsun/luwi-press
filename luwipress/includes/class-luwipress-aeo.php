@@ -234,22 +234,24 @@ class LuwiPress_AEO {
     }
 
     /**
-     * POST /aeo/save-faq — Async callback with generated FAQ data
+     * POST /aeo/save-faq — Async callback with generated FAQ data.
+     *
+     * Supports two storage targets (3.4.0):
+     *   1. Product post (legacy): pass `product_id` (or `post_id`).
+     *   2. Taxonomy term (FR-013): pass `term_id` + `taxonomy` (default
+     *      `product_cat`). Writes to term meta, renders on archive pages
+     *      via LuwiPress_Schema_Registry.
+     *
+     * Backwards-compatible: existing `aeo_save_faq` callers that only
+     * send `product_id` keep working unchanged.
      */
     public function save_faq_data($request) {
         // Pull params from every channel — internal MCP callers populate via
         // set_param() (proxy_rest_post in 3.1.42), real HTTP clients via JSON body.
         $json_data = $request->get_json_params() ?: array();
-        $product_id = absint( $request->get_param('product_id') ?: ( $json_data['product_id'] ?? 0 ) );
-
-        $wc_check = $this->require_woocommerce();
-        if ( is_wp_error( $wc_check ) ) {
-            return $wc_check;
-        }
-
-        if (!$product_id || !wc_get_product($product_id)) {
-            return new WP_Error('invalid_product', 'Invalid product ID', ['status' => 400]);
-        }
+        $product_id = absint( $request->get_param('product_id') ?: ( $json_data['product_id'] ?? $json_data['post_id'] ?? 0 ) );
+        $term_id    = absint( $request->get_param('term_id') ?: ( $json_data['term_id'] ?? 0 ) );
+        $taxonomy   = sanitize_key( $request->get_param('taxonomy') ?: ( $json_data['taxonomy'] ?? 'product_cat' ) );
 
         // Accept both 'faq' (singular legacy) and 'faqs' (plural — matches the MCP
         // tool schema in WebMCP). Either works; whichever arrives first wins.
@@ -260,7 +262,7 @@ class LuwiPress_AEO {
             return new WP_Error('invalid_data', 'FAQ data is required', ['status' => 400]);
         }
 
-        // Sanitize FAQ items
+        // Sanitize FAQ items (shared between post + term paths)
         $sanitized = [];
         foreach ($faq_items as $item) {
             if (!empty($item['question']) && !empty($item['answer'])) {
@@ -269,6 +271,38 @@ class LuwiPress_AEO {
                     'answer'   => wp_kses_post($item['answer']),
                 ];
             }
+        }
+        if (empty($sanitized)) {
+            return new WP_Error('invalid_data', 'No valid FAQ items (each needs question + answer).', ['status' => 400]);
+        }
+
+        // ─── Term path (FR-013) ─────────────────────────────────────
+        if ($term_id) {
+            $term = get_term($term_id, $taxonomy);
+            if (!$term || is_wp_error($term)) {
+                return new WP_Error('invalid_term', sprintf('Invalid term ID %d for taxonomy %s', $term_id, $taxonomy), ['status' => 400]);
+            }
+            update_term_meta($term_id, '_luwipress_faq', $sanitized);
+            update_term_meta($term_id, '_luwipress_aeo_faq_updated', current_time('c'));
+            delete_transient('luwipress_aeo_coverage');
+
+            return rest_ensure_response([
+                'status'    => 'saved',
+                'object'    => 'term',
+                'term_id'   => $term_id,
+                'taxonomy'  => $taxonomy,
+                'faq_count' => count($sanitized),
+            ]);
+        }
+
+        // ─── Post path (legacy) ─────────────────────────────────────
+        $wc_check = $this->require_woocommerce();
+        if ( is_wp_error( $wc_check ) ) {
+            return $wc_check;
+        }
+
+        if (!$product_id || !wc_get_product($product_id)) {
+            return new WP_Error('invalid_product', 'Invalid product ID — pass product_id (post) OR term_id+taxonomy (term).', ['status' => 400]);
         }
 
         update_post_meta($product_id, '_luwipress_faq', $sanitized);
@@ -280,6 +314,7 @@ class LuwiPress_AEO {
 
         return rest_ensure_response([
             'status'     => 'saved',
+            'object'     => 'post',
             'product_id' => $product_id,
             'faq_count'  => count($sanitized),
         ]);

@@ -65,6 +65,14 @@ class LuwiPress_SEO_Writer {
 		if ( 'never' !== get_option( 'luwipress_hreflang_mode', 'auto' ) ) {
 			add_action( 'wp_head', array( $this, 'output_hreflang_tags' ), 1 );
 		}
+
+		// x-default supplement (Vendor-FR-012) — runs LATE so WPML/Polylang have
+		// already emitted their hreflang block. If x-default is missing, we add
+		// just that one line pointing at the default-language URL. Default-on
+		// for all LuwiPress users (option `luwipress_hreflang_xdefault`).
+		if ( 'off' !== get_option( 'luwipress_hreflang_xdefault', 'auto' ) ) {
+			add_action( 'wp_head', array( $this, 'output_xdefault_supplement' ), 99 );
+		}
 	}
 
 	// ─── META FALLBACK ─────────────────────────────────────────────────
@@ -194,6 +202,132 @@ class LuwiPress_SEO_Writer {
 			);
 		}
 		echo "<!-- /LuwiPress hreflang -->\n";
+	}
+
+	/**
+	 * x-default supplement — Vendor-FR-012.
+	 *
+	 * Some WPML installs (especially with WPML SEO 2.x) emit hreflang tags
+	 * for every active language but skip x-default. Code Snippets filters
+	 * on `wpml_hreflangs` don't always fire (depends on which WPML
+	 * code path produced the tags). Tapadum reported this on
+	 * `new.tapadum.com/product-category/string-instruments/tar/`.
+	 *
+	 * This callback runs at priority 99 — after WPML/Polylang/our own
+	 * `output_hreflang_tags` have already emitted. We never duplicate:
+	 * if x-default is already in the buffered output, this is a no-op.
+	 * If it's missing, we add a single link pointing at the default
+	 * language's URL for the current request (singular OR taxonomy archive).
+	 *
+	 * Option `luwipress_hreflang_xdefault`:
+	 *   - auto (default) — emit when missing, regardless of which plugin
+	 *     produced the rest of the hreflang block.
+	 *   - always — emit even if already present (will dedupe via output buffer)
+	 *   - off    — disabled (hook not registered)
+	 */
+	public function output_xdefault_supplement() {
+		if ( is_admin() || is_feed() || is_404() ) {
+			return;
+		}
+
+		// We need a singular post OR a taxonomy archive — search results / home / archives don't get hreflang.
+		$is_supported_context = is_singular() || is_tax() || is_category() || is_tag();
+		if ( ! $is_supported_context ) {
+			return;
+		}
+
+		$detector = LuwiPress_Plugin_Detector::get_instance();
+		$trans    = $detector->detect_translation();
+
+		// No translation plugin → no hreflang at all → no x-default needed.
+		if ( 'none' === $trans['plugin'] || count( $trans['active_languages'] ) < 2 ) {
+			return;
+		}
+
+		$default_lang = $trans['default_language'] ?? '';
+		if ( empty( $default_lang ) ) {
+			return;
+		}
+
+		// Resolve the default-language URL for the current request.
+		$default_url = $this->resolve_default_language_url( $default_lang, $trans );
+		if ( empty( $default_url ) ) {
+			return;
+		}
+
+		echo sprintf(
+			"<link rel=\"alternate\" hreflang=\"x-default\" href=\"%s\" /> <!-- LuwiPress x-default supplement -->\n",
+			esc_url( $default_url )
+		);
+	}
+
+	/**
+	 * Get the default-language URL for whatever the current request is
+	 * rendering. Works on both singular posts and taxonomy archives.
+	 */
+	private function resolve_default_language_url( $default_lang, $trans ) {
+		// Singular post — WPML/Polylang both expose a permalink filter.
+		if ( is_singular() ) {
+			$post_id = get_queried_object_id();
+			if ( ! $post_id ) {
+				return '';
+			}
+
+			// WPML: apply_filters('wpml_permalink', $url, $lang)
+			if ( 'wpml' === $trans['plugin'] ) {
+				$url = apply_filters( 'wpml_permalink', get_permalink( $post_id ), $default_lang );
+				return is_string( $url ) ? $url : '';
+			}
+
+			// Polylang: pll_get_post returns the post ID in the target language.
+			if ( 'polylang' === $trans['plugin'] && function_exists( 'pll_get_post' ) ) {
+				$target_id = pll_get_post( $post_id, $default_lang );
+				return $target_id ? get_permalink( $target_id ) : '';
+			}
+
+			return get_permalink( $post_id );
+		}
+
+		// Taxonomy archive — WPML provides a per-language term link via the
+		// translation API. We translate the term, then call get_term_link()
+		// while WPML's switch_lang context is active (WPML hooks term_link).
+		if ( is_tax() || is_category() || is_tag() ) {
+			$term = get_queried_object();
+			if ( ! $term instanceof WP_Term ) {
+				return '';
+			}
+
+			if ( 'wpml' === $trans['plugin'] ) {
+				$translated_id = apply_filters( 'wpml_object_id', $term->term_id, $term->taxonomy, false, $default_lang );
+				if ( ! $translated_id ) {
+					return '';
+				}
+				// Briefly switch the WPML language context so get_term_link uses
+				// the right URL pattern (subdir/subdomain/different domain).
+				$current_lang = apply_filters( 'wpml_current_language', null );
+				if ( $current_lang !== $default_lang ) {
+					do_action( 'wpml_switch_language', $default_lang );
+				}
+				$link = get_term_link( $translated_id, $term->taxonomy );
+				if ( $current_lang !== $default_lang ) {
+					do_action( 'wpml_switch_language', $current_lang );
+				}
+				return is_wp_error( $link ) ? '' : $link;
+			}
+
+			if ( 'polylang' === $trans['plugin'] && function_exists( 'pll_get_term' ) ) {
+				$target_term = pll_get_term( $term->term_id, $default_lang );
+				if ( ! $target_term ) {
+					return '';
+				}
+				$link = get_term_link( $target_term, $term->taxonomy );
+				return is_wp_error( $link ) ? '' : $link;
+			}
+
+			return get_term_link( $term );
+		}
+
+		return '';
 	}
 
 	/**

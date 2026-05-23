@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.3.5
+ * Version: 3.4.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.3.5');
+define('LUWIPRESS_VERSION', '3.4.0');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -155,6 +155,11 @@ class LuwiPress {
 
         // Content & automation modules
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-ai-content.php';
+        // Schema Registry — generic JSON-LD type registry (3.4.0+). Loads BEFORE
+        // AEO so AEO can register its (now-legacy) FAQ/HowTo/Speakable types
+        // through the registry and any third-party plugin can pile on at the
+        // `luwipress_schema_registry_init` action.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-schema-registry.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-aeo.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-translation.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-translation-sync.php';
@@ -290,6 +295,7 @@ class LuwiPress {
         // Content & automation modules
         LuwiPress_AI_Content::get_instance();
         LuwiPress_AI_Content::init_frontend_hooks();
+        LuwiPress_Schema_Registry::get_instance();
         LuwiPress_AEO::get_instance();
         LuwiPress_Translation::get_instance();
         LuwiPress_Translation_Sync::get_instance();
