@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.33
+Stable tag: 1.0.34
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,16 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.34 — Vendors module MCP tools (paired with core 3.5.2) =
+* **6 NEW MCP tools** for the new `LuwiPress_Vendors` core module — generic vendor / maker / atelier / team CPT with E-E-A-T trust signals:
+  - `vendor_settings_get` (read-only) — read module config (archive slug, labels, entity_type, social field toggles, legacy redirects).
+  - `vendor_settings_set` — partial settings write. Slug / label changes auto-flush rewrite rules.
+  - `vendor_list` (read-only) — list all vendor profiles with location, specialty, years, social link count.
+  - `vendor_get` (read-only) — single vendor with full meta + auto-built Schema.org Person / Organization / LocalBusiness JSON-LD preview.
+  - `vendor_meta_set` — write per-vendor profile fields (location, specialty, years_active, 8 verified social URLs, quote, occupation). Partial update.
+  - `vendor_flush_rewrite` — manual rewrite-rules flush.
+* All tools route through the `LuwiPress_Vendors` instance via the stable REST surface (`/luwipress/v1/vendors/*`).
 
 = 1.0.32 — Promotional Phrase Audit + Frontend Render Dump (paired with core 3.4.1) =
 * **NEW `content_promotional_phrase_audit`** — daily GMC compliance scan. Surfaces promotional-pressure phrases ("free shipping", "limited time", "şimdi al", "livraison gratuite", "spedizione gratuita", "envío gratis", …) across SEO meta title/description (high severity → GMC disapproval risk), post title/excerpt (medium → feed-syndicated fallback) and body content (low → editorial cleanup). Multilingual phrase bank (en/tr/fr/it/es); per-post language auto-detect via WPML/Polylang. Accepts `post_id` for a single-post check or `post_type` + `category_id` for a sweep. Read-only.

@@ -95,6 +95,10 @@ if ( ! current_user_can( 'manage_options' ) ) {
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 						<?php esc_html_e( 'Customers', 'luwipress' ); ?>
 					</button>
+					<button type="button" class="kg-view-btn" data-view="vendor">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 7h20l-1.5 11a2 2 0 0 1-2 1.7H5.5a2 2 0 0 1-2-1.7Z"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><circle cx="9" cy="13" r="1.5"/><circle cx="15" cy="13" r="1.5"/></svg>
+						<?php esc_html_e( 'Vendors', 'luwipress' ); ?>
+					</button>
 				</div>
 			</div>
 		</div>
@@ -161,6 +165,16 @@ if ( ! current_user_can( 'manage_options' ) ) {
 			<div class="kg-stat-value" data-counter="media_health">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Media Health', 'luwipress' ); ?></div>
 			<div class="kg-stat-cue"><?php esc_html_e( 'View library →', 'luwipress' ); ?></div>
+		</div>
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-vendors" data-view="vendor">
+			<div class="kg-stat-value" data-counter="total_vendors">—</div>
+			<div class="kg-stat-label"><?php esc_html_e( 'Vendors', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'View x-ray →', 'luwipress' ); ?></div>
+		</div>
+		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-customers" data-view="customer">
+			<div class="kg-stat-value" data-counter="total_customers">—</div>
+			<div class="kg-stat-label"><?php esc_html_e( 'Customers', 'luwipress' ); ?></div>
+			<div class="kg-stat-cue"><?php esc_html_e( 'View detail →', 'luwipress' ); ?></div>
 		</div>
 	</div>
 

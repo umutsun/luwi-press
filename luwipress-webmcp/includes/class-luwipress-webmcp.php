@@ -751,6 +751,7 @@ class LuwiPress_WebMCP {
             'meta'             => 'register_meta_tools',
             'search'           => 'register_search_tools',
             'attribution'      => 'register_attribution_tools',
+            'vendors'          => 'register_vendors_tools',
         );
 
         foreach ( $categories as $cat => $method ) {
@@ -778,6 +779,7 @@ class LuwiPress_WebMCP {
             'woo'              => 'WooCommerce',
             'search'           => 'LuwiPress_Search_Index',
             'attribution'      => 'LuwiPress_ACP_Attribution',
+            'vendors'          => 'LuwiPress_Vendors',
         );
         foreach ( $gates as $cat => $cls ) {
             if ( ! empty( $this->registration_audit[ $cat ] ) && ! empty( $this->registration_audit[ $cat ]['skipped'] ) ) {
@@ -8203,6 +8205,156 @@ class LuwiPress_WebMCP {
             ),
         ), function () {
             return LuwiPress_ACP_Attribution::get_instance()->test_dispatch();
+        } );
+    }
+
+    /* ───────────────────── Vendor Tools (3.5.2+) ─────────────────────── */
+
+    private function register_vendors_tools() {
+        if ( ! class_exists( 'LuwiPress_Vendors' ) ) {
+            return;
+        }
+
+        $this->register_tool( 'vendor_settings_get', array(
+            'description' => 'Read the Vendors (CPT) module configuration — archive slug, singular/plural labels, with_front toggle, profile field visibility, social-link field toggles, and legacy redirect pairs. Generic across verticals: rename to "Luthier"/"Chef"/"Artist"/"Team"/etc. per site.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Vendor Settings Read', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            return array(
+                'settings'  => LuwiPress_Vendors::get_all_settings(),
+                'post_type' => LuwiPress_Vendors::POST_TYPE,
+                'count'     => (int) ( wp_count_posts( LuwiPress_Vendors::POST_TYPE )->publish ?? 0 ),
+            );
+        } );
+
+        $this->register_tool( 'vendor_settings_set', array(
+            'description' => 'Update Vendors module settings (partial — only keys present in payload are written). Changing archive_slug or with_front automatically re-registers the CPT and flushes rewrite rules. legacy_redirects accepts an array of {from,to} pairs (e.g. [{"from":"/masters/","to":"/luthiers/"}]) — supports exact + prefix-with-tail matching at template_redirect.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'enabled'             => array( 'type' => 'integer' ),
+                    'archive_slug'        => array( 'type' => 'string', 'description' => 'URL slug for the CPT archive — luthiers / chefs / artists / etc.' ),
+                    'singular_label'      => array( 'type' => 'string' ),
+                    'plural_label'        => array( 'type' => 'string' ),
+                    'menu_icon'           => array( 'type' => 'string', 'description' => 'Dashicons class, e.g. dashicons-store' ),
+                    'entity_type'         => array( 'type' => 'string', 'description' => 'Schema.org entity: organization | person | localbusiness' ),
+                    'default_occupation'  => array( 'type' => 'string' ),
+                    'with_front'          => array( 'type' => 'integer' ),
+                    'archive_enabled'     => array( 'type' => 'integer' ),
+                    'show_location'       => array( 'type' => 'integer' ),
+                    'show_specialty'      => array( 'type' => 'integer' ),
+                    'show_years'          => array( 'type' => 'integer' ),
+                    'show_quote'          => array( 'type' => 'integer' ),
+                    'social_facebook'     => array( 'type' => 'integer' ),
+                    'social_instagram'    => array( 'type' => 'integer' ),
+                    'social_youtube'      => array( 'type' => 'integer' ),
+                    'social_soundcloud'   => array( 'type' => 'integer' ),
+                    'social_linkedin'     => array( 'type' => 'integer' ),
+                    'social_x'            => array( 'type' => 'integer' ),
+                    'social_behance'      => array( 'type' => 'integer' ),
+                    'social_website'      => array( 'type' => 'integer' ),
+                    'legacy_redirects'    => array(
+                        'type'        => 'array',
+                        'items'       => array(
+                            'type'       => 'object',
+                            'properties' => array(
+                                'from' => array( 'type' => 'string', 'description' => 'Old path, e.g. /masters/' ),
+                                'to'   => array( 'type' => 'string', 'description' => 'New URL or path, e.g. /luthiers/' ),
+                            ),
+                        ),
+                        'description' => 'Legacy URL redirect pairs (301)',
+                    ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Vendor Settings Write', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/vendors/settings' );
+            $request->set_body_params( $args );
+            $resp = LuwiPress_Vendors::get_instance()->rest_update_settings( $request );
+            return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'vendor_list', array(
+            'description' => 'List all Vendor (CPT) entries with their profile meta (location, specialty, years, social links). Useful for confirming what is published before generating an /<archive>/ index page or wiring the vendor-grid widget.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'limit'   => array( 'type' => 'integer', 'description' => 'Max entries (default 50, max 200)' ),
+                    'orderby' => array( 'type' => 'string',  'description' => 'menu_order | date | title (default menu_order)' ),
+                    'order'   => array( 'type' => 'string',  'description' => 'ASC | DESC (default ASC)' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Vendor List', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/vendors' );
+            $request->set_query_params( $args );
+            $resp = LuwiPress_Vendors::get_instance()->rest_list( $request );
+            return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'vendor_get', array(
+            'description' => 'Read one Vendor entry — full profile, all meta, and the auto-built Schema.org Person / Organization / LocalBusiness JSON-LD preview (with sameAs verified social URLs).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'id' => array( 'type' => 'integer', 'description' => 'Vendor post ID' ),
+                ),
+                'required' => array( 'id' ),
+            ),
+            'annotations' => array( 'title' => 'Vendor Get', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/vendors/' . absint( $args['id'] ) );
+            $request->set_url_params( array( 'id' => absint( $args['id'] ) ) );
+            $resp = LuwiPress_Vendors::get_instance()->rest_get_one( $request );
+            return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'vendor_meta_set', array(
+            'description' => 'Update profile meta on a single Vendor — location, specialty, years_active, social URLs (facebook, instagram, youtube, soundcloud, linkedin, x, behance, website), quote, occupation. Partial: only keys present in payload are written. URLs sanitized via esc_url_raw; quote runs through wp_kses_post.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'id'         => array( 'type' => 'integer' ),
+                    'location'   => array( 'type' => 'string' ),
+                    'occupation' => array( 'type' => 'string' ),
+                    'specialty'  => array( 'type' => 'string' ),
+                    'years'      => array( 'type' => 'integer' ),
+                    'quote'      => array( 'type' => 'string' ),
+                    'facebook'   => array( 'type' => 'string' ),
+                    'instagram'  => array( 'type' => 'string' ),
+                    'youtube'    => array( 'type' => 'string' ),
+                    'soundcloud' => array( 'type' => 'string' ),
+                    'linkedin'   => array( 'type' => 'string' ),
+                    'x'          => array( 'type' => 'string' ),
+                    'behance'    => array( 'type' => 'string' ),
+                    'website'    => array( 'type' => 'string' ),
+                ),
+                'required' => array( 'id' ),
+            ),
+            'annotations' => array( 'title' => 'Vendor Meta Write', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $id = absint( $args['id'] );
+            unset( $args['id'] );
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/vendors/' . $id . '/meta' );
+            $request->set_url_params( array( 'id' => $id ) );
+            $request->set_body_params( $args );
+            $resp = LuwiPress_Vendors::get_instance()->rest_set_meta( $request );
+            return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'vendor_flush_rewrite', array(
+            'description' => 'Manually flush WP rewrite rules after changing the Vendors archive slug. Normally handled automatically on settings change — use this only when a URL is stuck on the old slug.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Vendor Rewrite Flush', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $resp = LuwiPress_Vendors::get_instance()->rest_flush_rewrite();
+            return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
         } );
     }
 

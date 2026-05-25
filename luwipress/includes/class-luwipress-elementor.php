@@ -236,6 +236,27 @@ class LuwiPress_Elementor {
         'lwp-reading-progress' => array(),
         'lwp-load-more'      => array( 'label_template' ),
         'lwp-404-hero'       => array( 'big_number', 'eyebrow', 'heading', 'lead', 'search_placeholder', 'cta1_label', 'cta2_label' ),
+        // 1.9.0 — dynamic post widgets (Pro Theme Builder-free replacements). Content
+        // pulled from the current post via WP core (the_title/the_content/post_thumbnail),
+        // so they have no widget-level translatable text fields — translation happens
+        // at the post level via WPML/Polylang.
+        'lwp-post-title'          => array(),
+        'lwp-post-content'        => array(),
+        'lwp-post-featured-image' => array(),
+        // 1.9.0 — dynamic WC widgets Tier 1 (Pro WC widget replacements). Content
+        // pulled from the current product via WC core. Only label fields are
+        // translatable at the widget level; product data flows through WPML's
+        // product translation layer.
+        'lwp-wc-title'            => array(),
+        'lwp-wc-price'            => array(),
+        'lwp-wc-rating'           => array(),
+        'lwp-wc-short-desc'       => array(),
+        'lwp-wc-meta'             => array( 'sku_label', 'categories_label', 'tags_label' ),
+        // 1.9.0 — dynamic WC widgets Tier 2/3
+        'lwp-wc-gallery'          => array(),
+        'lwp-wc-related'          => array( 'heading' ),
+        'lwp-wc-add-to-cart'      => array( 'quantity_label' ),
+        'lwp-wc-tabs'             => array(),
     );
 
     /**
@@ -2927,15 +2948,9 @@ class LuwiPress_Elementor {
         $clean = array_values( array_filter( array_map( 'sanitize_text_field', $conditions ) ) );
         update_post_meta( $template_id, '_elementor_conditions', $clean );
 
-        // Also trigger Elementor's conditions cache rebuild if available
-        if ( class_exists( '\\ElementorPro\\Modules\\ThemeBuilder\\Classes\\Conditions_Cache' ) ) {
-            try {
-                \ElementorPro\Modules\ThemeBuilder\Classes\Conditions_Cache::clear();
-            } catch ( \Throwable $e ) {
-                // graceful — log but don't fail the request
-                LuwiPress_Logger::log( 'Conditions_Cache::clear failed: ' . $e->getMessage(), 'warning' );
-            }
-        }
+        // Pro-free by design: do not call into Elementor Pro's Conditions_Cache.
+        // Template conditions are persisted as meta; the standard Elementor template
+        // resolution chain picks them up on next request.
 
         LuwiPress_Logger::log( sprintf(
             'Template conditions updated: #%d %s',

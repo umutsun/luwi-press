@@ -49,8 +49,12 @@ function animateCounter(el, target, suffix) {
 // time during Phase B for no incremental data win. Phase B now only carries
 // design_audit + order_analytics so it can finish well under the 45s
 // watchdog even on large catalogs.
-var KG_PHASE_A_SECTIONS = 'products,categories,translation,store,posts,pages,plugins,taxonomy,crm,opportunities';
-var KG_PHASE_B_SECTIONS = 'design_audit,order_analytics';
+var KG_PHASE_A_SECTIONS = 'products,categories,translation,store,posts,pages,plugins,taxonomy,crm,opportunities,vendors';
+// vendors lives in Phase A because the vendor→product `made_by` edges need
+// the product_nodes built in the same request. Customers is Phase B (it's
+// privacy-gated + opt-in, so the wc_order_stats aggregation only fires when
+// the operator has explicitly opted in via luwipress_kg_show_customer_details).
+var KG_PHASE_B_SECTIONS = 'design_audit,order_analytics,customers';
 var KG_ALL_SECTIONS     = KG_PHASE_A_SECTIONS + ',' + KG_PHASE_B_SECTIONS;
 
 function fetchGraphSections(sections, forceFresh, cb) {
@@ -268,6 +272,8 @@ function buildGraph(data, viewFilter) {
 	var postNodes     = (data.nodes && data.nodes.posts) ? data.nodes.posts : [];
 	var pageNodes     = (data.nodes && data.nodes.pages) ? data.nodes.pages : [];
 	var segmentNodes  = (data.nodes && data.nodes.customer_segments) ? data.nodes.customer_segments : [];
+	var vendorNodes   = (data.nodes && data.nodes.vendors) ? data.nodes.vendors : [];
+	var customerNodes = (data.nodes && data.nodes.customers) ? data.nodes.customers : [];
 	var graphEdges    = data.edges || [];
 
 	// Apply preset filter (before view filter so empty views surface as empty)
@@ -280,18 +286,34 @@ function buildGraph(data, viewFilter) {
 		postNodes = [];
 		pageNodes = [];
 		segmentNodes = [];
+		vendorNodes = [];
+		customerNodes = [];
 	} else if (viewFilter === 'page') {
 		productNodes = [];
 		categoryNodes = [];
 		postNodes = [];
 		languageNodes = [];
 		segmentNodes = [];
+		vendorNodes = [];
+		customerNodes = [];
 	} else if (viewFilter === 'customer') {
 		productNodes = [];
 		categoryNodes = [];
 		postNodes = [];
 		pageNodes = [];
 		languageNodes = [];
+		vendorNodes = [];
+		// customerNodes stays — rendered alongside segments (top spenders attached to their segments)
+	} else if (viewFilter === 'vendor') {
+		// Vendor view shows vendor nodes + their attributed products as satellites.
+		// Keep productNodes so the made_by edges resolve to real product targets;
+		// other categories are hidden to keep the visual focused.
+		postNodes = [];
+		pageNodes = [];
+		categoryNodes = [];
+		languageNodes = [];
+		segmentNodes = [];
+		customerNodes = [];
 	} else if (viewFilter === 'post') {
 		productNodes = [];
 		categoryNodes = [];
@@ -533,6 +555,60 @@ function buildGraph(data, viewFilter) {
 			// Orphan (top-level) page — attach to the virtual hub so the force
 			// simulation gives it structure instead of letting it drift alone.
 			edges.push({ source: 'page:' + p.id, target: pageHubId, type: 'member_of' });
+		}
+	});
+
+	// Vendor nodes — radius scales with product_count (more attributed
+	// products → bigger circle). Color tint by E-E-A-T score so weak vendor
+	// profiles (no socials, no bio, no image) stand out as warning hue.
+	var vendorHubId = null;
+	if (viewFilter === 'vendor' && vendorNodes.length > 0) {
+		vendorHubId = 'vendor_hub';
+		var vHub = {
+			id: vendorHubId,
+			type: 'vendor_hub',
+			label: 'Vendors (' + vendorNodes.length + ')',
+			radius: 22,
+			score: 0,
+			_hub: true
+		};
+		nodes.push(vHub);
+		nodeMap[vendorHubId] = vHub;
+	}
+	(vendorNodes).forEach(function(v) {
+		var r = 8 + Math.min((v.product_count || 0), 10); // 8..18 depending on attribution count
+		var node = {
+			id: v.id,
+			type: 'vendor',
+			label: v.name,
+			radius: r,
+			score: v.eat_score || 0,
+			data: v
+		};
+		nodes.push(node);
+		nodeMap[node.id] = node;
+		if (vendorHubId) {
+			edges.push({ source: node.id, target: vendorHubId, type: 'member_of' });
+		}
+	});
+
+	// Customer nodes — only present when the privacy gate is open. Each top
+	// customer attaches to its lifecycle segment so the cohort grouping stays
+	// composable.
+	(customerNodes).forEach(function(c) {
+		var node = {
+			id: c.id,
+			type: 'customer',
+			label: c.display + ' (' + (c.order_count || 0) + ')',
+			radius: 8 + Math.min((c.order_count || 0), 8),
+			score: c.total_spent || 0,
+			data: c
+		};
+		nodes.push(node);
+		nodeMap[node.id] = node;
+		var segTarget = 'segment_' + (c.segment || 'unknown');
+		if (nodeMap[segTarget]) {
+			edges.push({ source: node.id, target: segTarget, type: 'belongs_to_segment' });
 		}
 	});
 

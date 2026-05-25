@@ -54,10 +54,11 @@ class LuwiPress_Knowledge_Graph {
 		// `save_post_<type>` (not generic save_post) so the hook only fires
 		// for post types we actually index. Avoids hot-loop invalidation from
 		// noisy types (revisions, _luwipress_token_log, oembed_cache, …).
-		add_action( 'save_post_product', array( $this, 'maybe_invalidate_on_save_post' ), 10, 3 );
-		add_action( 'save_post_post',    array( $this, 'maybe_invalidate_on_save_post' ), 10, 3 );
-		add_action( 'save_post_page',    array( $this, 'maybe_invalidate_on_save_post' ), 10, 3 );
-		add_action( 'delete_post',       array( $this, 'maybe_invalidate_on_delete_post' ), 10, 1 );
+		add_action( 'save_post_product',   array( $this, 'maybe_invalidate_on_save_post' ), 10, 3 );
+		add_action( 'save_post_post',      array( $this, 'maybe_invalidate_on_save_post' ), 10, 3 );
+		add_action( 'save_post_page',      array( $this, 'maybe_invalidate_on_save_post' ), 10, 3 );
+		add_action( 'save_post_lwp_vendor', array( $this, 'maybe_invalidate_on_save_post' ), 10, 3 );
+		add_action( 'delete_post',         array( $this, 'maybe_invalidate_on_delete_post' ), 10, 1 );
 
 		// Terms only fire for taxonomies we actually surface in the graph.
 		add_action( 'created_product_cat', array( $this, 'invalidate_cache' ) );
@@ -102,7 +103,7 @@ class LuwiPress_Knowledge_Graph {
 		if ( ! $post ) {
 			return;
 		}
-		if ( ! in_array( $post->post_type, array( 'product', 'post', 'page' ), true ) ) {
+		if ( ! in_array( $post->post_type, array( 'product', 'post', 'page', 'lwp_vendor' ), true ) ) {
 			return;
 		}
 		$this->invalidate_cache();
@@ -387,7 +388,7 @@ class LuwiPress_Knowledge_Graph {
 		if ( empty( $section_param ) ) {
 			$section_param = $request->get_param( 'sections' );
 		}
-		$all_sections  = array( 'products', 'categories', 'translation', 'seo', 'aeo', 'crm', 'store', 'plugins', 'taxonomy', 'environment', 'opportunities', 'posts', 'pages', 'content_taxonomy', 'media_inventory', 'menus', 'product_attributes', 'authors', 'order_analytics', 'design_audit' );
+		$all_sections  = array( 'products', 'categories', 'translation', 'seo', 'aeo', 'crm', 'store', 'plugins', 'taxonomy', 'environment', 'opportunities', 'posts', 'pages', 'content_taxonomy', 'media_inventory', 'menus', 'product_attributes', 'authors', 'order_analytics', 'design_audit', 'vendors', 'customers' );
 		$sections      = $section_param ? array_intersect( array_map( 'trim', explode( ',', $section_param ) ), $all_sections ) : $all_sections;
 
 		// Check cache
@@ -557,6 +558,36 @@ class LuwiPress_Knowledge_Graph {
 			$response['nodes']['design_audit'] = $this->build_design_audit_nodes();
 		}
 
+		// Vendors (3.5.2+) — `lwp_vendor` CPT nodes + `product → vendor` made_by
+		// edges. Surfaces the supply-side x-ray: who makes the things you sell,
+		// how strong their E-E-A-T payload is, and which products are still
+		// missing attribution (orphan).
+		if ( in_array( 'vendors', $sections, true ) && class_exists( 'LuwiPress_Vendors' ) ) {
+			$vendor_data = $this->build_vendor_nodes( $product_nodes );
+			$response['nodes']['vendors'] = $vendor_data['nodes'];
+			if ( ! empty( $vendor_data['edges'] ) ) {
+				$edges = array_merge( $edges, $vendor_data['edges'] );
+			}
+		}
+
+		// Customers (3.5.2+) — individual top-N customers by lifetime spend.
+		// Privacy-gated via `luwipress_kg_show_customer_details` option (default
+		// off). Names are auto-masked to initials unless `luwipress_kg_customer_names_full`
+		// is also true. Always paired with `customer:X → segment:Y` edges so the
+		// CRM rollup still composes when the operator opens the privacy gate.
+		if ( in_array( 'customers', $sections, true ) ) {
+			$customer_data = $this->build_customer_nodes();
+			if ( ! empty( $customer_data['nodes'] ) ) {
+				$response['nodes']['customers'] = $customer_data['nodes'];
+			}
+			if ( ! empty( $customer_data['edges'] ) ) {
+				$edges = array_merge( $edges, $customer_data['edges'] );
+			}
+			if ( isset( $customer_data['privacy_mode'] ) ) {
+				$response['meta']['customer_privacy_mode'] = $customer_data['privacy_mode'];
+			}
+		}
+
 		// Post/page edges
 		if ( in_array( 'posts', $sections, true ) && ! empty( $response['nodes']['posts'] ) ) {
 			$edges = array_merge( $edges, $this->build_post_edges( $response['nodes']['posts'] ) );
@@ -596,6 +627,12 @@ class LuwiPress_Knowledge_Graph {
 		}
 		if ( in_array( 'authors', $sections, true ) && ! empty( $response['nodes']['authors'] ) ) {
 			$response['summary']['total_authors'] = count( $response['nodes']['authors'] );
+		}
+		if ( in_array( 'vendors', $sections, true ) && ! empty( $response['nodes']['vendors'] ) ) {
+			$response['summary']['total_vendors'] = count( $response['nodes']['vendors'] );
+		}
+		if ( in_array( 'customers', $sections, true ) && ! empty( $response['nodes']['customers'] ) ) {
+			$response['summary']['total_customers'] = count( $response['nodes']['customers'] );
 		}
 
 		$response['meta']['execution_time_ms'] = round( ( microtime( true ) - $start ) * 1000, 1 );
@@ -1314,6 +1351,335 @@ class LuwiPress_Knowledge_Graph {
 		}
 
 		return $nodes;
+	}
+
+	// ─── VENDORS (3.5.2+) ───────────────────────────────────────────────
+	//
+	// Reads the `lwp_vendor` CPT (LuwiPress_Vendors module) and emits one
+	// node per published vendor + one `product:X → vendor:Y` edge per
+	// attribution from the `_lwp_vendor_ids` JSON meta on the product.
+	//
+	// Each node carries:
+	//   - id / type / name / archive_url / slug
+	//   - location / specialty / occupation / entity_type
+	//   - social_count (how many of the 8 fields are filled)
+	//   - has_quote / has_image (thumb id)
+	//   - product_count (back-reference, populated from product nodes)
+	//   - eat_score (0-100, weighted social + bio + image + location signals)
+	//
+	// $product_nodes is passed in (already built earlier when sections
+	// include 'products' / 'categories' / 'translation' / 'seo' / 'aeo' /
+	// 'plugins' / 'opportunities'). If the operator requested ONLY
+	// `vendors`, $product_nodes is empty — we still emit vendor nodes but
+	// product attribution edges are skipped, and product_count falls
+	// back to a direct meta query.
+	private function build_vendor_nodes( $product_nodes = array() ) {
+		if ( ! class_exists( 'LuwiPress_Vendors' ) ) {
+			return array( 'nodes' => array(), 'edges' => array() );
+		}
+
+		$post_type = LuwiPress_Vendors::POST_TYPE;
+		$query     = new \WP_Query( array(
+			'post_type'      => $post_type,
+			'post_status'    => 'publish',
+			'posts_per_page' => 500,
+			'orderby'        => 'menu_order title',
+			'order'          => 'ASC',
+			'no_found_rows'  => true,
+		) );
+
+		if ( ! $query->have_posts() ) {
+			return array( 'nodes' => array(), 'edges' => array() );
+		}
+
+		// One pass over META_KEYS to bulk-load profile + social fields per vendor.
+		$meta_keys      = LuwiPress_Vendors::META_KEYS;
+		$social_keys    = array( 'facebook', 'instagram', 'youtube', 'soundcloud', 'linkedin', 'x', 'behance', 'website' );
+		$entity_setting = (string) LuwiPress_Vendors::get_setting( 'entity_type', 'organization' );
+
+		// Build vendor→product back-references either from product_nodes (if
+		// products were already loaded this request) or via a direct meta query
+		// when this is a vendors-only call.
+		$vendor_product_counts = array();
+		$attribution_edges     = array();
+
+		if ( ! empty( $product_nodes ) ) {
+			foreach ( $product_nodes as $p ) {
+				$vendor_ids = $this->extract_vendor_ids_from_product( $p['id'] );
+				foreach ( $vendor_ids as $vid ) {
+					$vendor_product_counts[ $vid ] = ( $vendor_product_counts[ $vid ] ?? 0 ) + 1;
+					$attribution_edges[] = array(
+						'source' => 'product:' . $p['id'],
+						'target' => 'vendor:' . $vid,
+						'type'   => 'made_by',
+					);
+				}
+			}
+		} else {
+			// Vendors-only call — single bulk query for product→vendor counts.
+			$vendor_product_counts = $this->load_vendor_product_counts();
+		}
+
+		$nodes = array();
+		foreach ( $query->posts as $post ) {
+			$meta_raw = get_post_meta( $post->ID );
+
+			$social_count = 0;
+			$socials      = array();
+			foreach ( $social_keys as $key ) {
+				$mk    = $meta_keys[ $key ];
+				$value = isset( $meta_raw[ $mk ][0] ) ? trim( (string) $meta_raw[ $mk ][0] ) : '';
+				if ( $value !== '' ) {
+					$social_count++;
+					$socials[ $key ] = $value;
+				}
+			}
+
+			$location  = isset( $meta_raw[ $meta_keys['location'] ][0] )   ? (string) $meta_raw[ $meta_keys['location'] ][0]   : '';
+			$specialty = isset( $meta_raw[ $meta_keys['specialty'] ][0] )  ? (string) $meta_raw[ $meta_keys['specialty'] ][0]  : '';
+			$occupation = isset( $meta_raw[ $meta_keys['occupation'] ][0] ) ? (string) $meta_raw[ $meta_keys['occupation'] ][0] : '';
+			$years     = isset( $meta_raw[ $meta_keys['years'] ][0] )      ? (int) $meta_raw[ $meta_keys['years'] ][0]         : 0;
+			$quote     = isset( $meta_raw[ $meta_keys['quote'] ][0] )      ? (string) $meta_raw[ $meta_keys['quote'] ][0]      : '';
+
+			$thumb_id     = (int) get_post_thumbnail_id( $post->ID );
+			$has_image    = $thumb_id > 0;
+			$has_bio      = strlen( wp_strip_all_tags( $post->post_content ) ) >= 80;
+			$product_count = (int) ( $vendor_product_counts[ $post->ID ] ?? 0 );
+
+			// E-E-A-T weighted score (0-100):
+			//   social_count    : up to 32 (4 per social, capped at 8)
+			//   has_image       : 14
+			//   has_bio (80+ ch): 14
+			//   location filled : 8
+			//   specialty filled: 8
+			//   years filled    : 6
+			//   quote filled    : 6
+			//   product_count>0 : 12 (anchor: vendor is actually attributed)
+			$eat = min( 32, $social_count * 4 )
+			     + ( $has_image       ? 14 : 0 )
+			     + ( $has_bio         ? 14 : 0 )
+			     + ( $location  !== '' ? 8 : 0 )
+			     + ( $specialty !== '' ? 8 : 0 )
+			     + ( $years      > 0   ? 6 : 0 )
+			     + ( $quote     !== '' ? 6 : 0 )
+			     + ( $product_count > 0 ? 12 : 0 );
+
+			$nodes[] = array(
+				'id'             => 'vendor:' . $post->ID,
+				'type'           => 'vendor',
+				'post_id'        => $post->ID,
+				'name'           => get_the_title( $post ),
+				'slug'           => $post->post_name,
+				'archive_url'    => get_permalink( $post ),
+				'entity_type'    => $entity_setting,
+				'location'       => $location,
+				'specialty'      => $specialty,
+				'occupation'     => $occupation,
+				'years_active'   => $years,
+				'has_quote'      => $quote !== '',
+				'has_image'      => $has_image,
+				'has_bio'        => $has_bio,
+				'social_count'   => $social_count,
+				'socials'        => $socials,
+				'product_count'  => $product_count,
+				'eat_score'      => $eat,
+				'edit_url'       => admin_url( 'post.php?post=' . $post->ID . '&action=edit' ),
+			);
+		}
+
+		// Sort: highest product_count first, then eat_score desc — operators
+		// see their busiest, most-credentialed vendors at the top.
+		usort( $nodes, function ( $a, $b ) {
+			if ( $a['product_count'] !== $b['product_count'] ) {
+				return $b['product_count'] <=> $a['product_count'];
+			}
+			return $b['eat_score'] <=> $a['eat_score'];
+		} );
+
+		return array( 'nodes' => $nodes, 'edges' => $attribution_edges );
+	}
+
+	// Read `_lwp_vendor_ids` JSON meta from a single product. Returns int[].
+	private function extract_vendor_ids_from_product( $product_id ) {
+		if ( ! class_exists( 'LuwiPress_Vendors' ) ) {
+			return array();
+		}
+		$raw = get_post_meta( $product_id, LuwiPress_Vendors::PRODUCT_VENDORS_META, true );
+		if ( ! is_string( $raw ) || $raw === '' ) {
+			return array();
+		}
+		$decoded = json_decode( $raw, true );
+		if ( ! is_array( $decoded ) ) {
+			return array();
+		}
+		return array_values( array_filter( array_map( 'absint', $decoded ) ) );
+	}
+
+	// Bulk count of product→vendor attributions. Used when KG is called with
+	// `sections=vendors` only (no product_nodes available). One direct meta
+	// query instead of N gets, keyed by vendor_id → count.
+	private function load_vendor_product_counts() {
+		global $wpdb;
+		if ( ! class_exists( 'LuwiPress_Vendors' ) ) {
+			return array();
+		}
+		$meta_key = LuwiPress_Vendors::PRODUCT_VENDORS_META;
+		$rows = $wpdb->get_col( $wpdb->prepare(
+			"SELECT pm.meta_value
+			   FROM {$wpdb->postmeta} pm
+			   JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+			  WHERE pm.meta_key = %s
+			    AND p.post_type = 'product'
+			    AND p.post_status = 'publish'",
+			$meta_key
+		) );
+
+		$counts = array();
+		foreach ( $rows as $raw ) {
+			$decoded = json_decode( (string) $raw, true );
+			if ( ! is_array( $decoded ) ) {
+				continue;
+			}
+			foreach ( $decoded as $vid ) {
+				$vid = absint( $vid );
+				if ( $vid > 0 ) {
+					$counts[ $vid ] = ( $counts[ $vid ] ?? 0 ) + 1;
+				}
+			}
+		}
+		return $counts;
+	}
+
+	// ─── CUSTOMERS — individual nodes, privacy-gated (3.5.2+) ───────────
+	//
+	// Default-OFF behavior: returns empty `nodes` array + `privacy_mode='gated'`
+	// in the response meta so the JS layer can render a "Enable customer detail"
+	// CTA instead of an empty list. When the operator opts in via the
+	// `luwipress_kg_show_customer_details` option, this method returns the top N
+	// customers (default 50, max 200) by lifetime spend.
+	//
+	// Names are MASKED by default ("J***" instead of "John Doe") so the
+	// rendered graph stays GDPR-defensible. A second flag
+	// `luwipress_kg_customer_names_full` flips names back to full. The graph
+	// JSON never includes the raw email address — only the WP user ID, masked
+	// display name, segment, order_count, total_spent, last_order_date.
+	private function build_customer_nodes() {
+		$enabled = (bool) get_option( 'luwipress_kg_show_customer_details', false );
+		if ( ! $enabled ) {
+			return array(
+				'nodes'        => array(),
+				'edges'        => array(),
+				'privacy_mode' => 'gated',
+			);
+		}
+		if ( ! function_exists( 'wc_get_orders' ) ) {
+			return array(
+				'nodes'        => array(),
+				'edges'        => array(),
+				'privacy_mode' => 'wc_missing',
+			);
+		}
+
+		$limit = absint( get_option( 'luwipress_kg_customer_limit', 50 ) );
+		if ( $limit < 1 )   { $limit = 50;  }
+		if ( $limit > 200 ) { $limit = 200; }
+
+		$mask_names = ! (bool) get_option( 'luwipress_kg_customer_names_full', false );
+
+		global $wpdb;
+		// Aggregate via order stats. HPOS-aware: wc_orders + wc_order_stats
+		// when present, else falls back to legacy posts table.
+		$has_hpos_stats = ! empty( $wpdb->get_var( $wpdb->prepare(
+			"SHOW TABLES LIKE %s",
+			$wpdb->prefix . 'wc_order_stats'
+		) ) );
+
+		if ( $has_hpos_stats ) {
+			$rows = $wpdb->get_results( $wpdb->prepare(
+				"SELECT customer_id, COUNT(*) AS order_count,
+				        SUM(net_total) AS total_spent,
+				        MAX(date_created) AS last_order
+				   FROM {$wpdb->prefix}wc_order_stats
+				  WHERE status IN ('wc-completed','wc-processing','completed','processing')
+				    AND customer_id > 0
+			   GROUP BY customer_id
+			   ORDER BY total_spent DESC
+				  LIMIT %d",
+				$limit
+			) );
+		} else {
+			$rows = array();
+		}
+
+		if ( empty( $rows ) ) {
+			return array(
+				'nodes'        => array(),
+				'edges'        => array(),
+				'privacy_mode' => 'enabled_empty',
+			);
+		}
+
+		$nodes = array();
+		$edges = array();
+		foreach ( $rows as $r ) {
+			$user_id = absint( $r->customer_id );
+			$user    = $user_id ? get_userdata( $user_id ) : false;
+			if ( ! $user ) {
+				continue;
+			}
+
+			$display = $user->display_name ?: $user->user_login;
+			if ( $mask_names ) {
+				$display = $this->mask_customer_name( $display );
+			}
+
+			$segment = get_user_meta( $user_id, '_luwipress_crm_segment', true );
+			$segment = is_string( $segment ) && $segment !== '' ? $segment : 'unknown';
+
+			$nodes[] = array(
+				'id'              => 'customer:' . $user_id,
+				'type'            => 'customer',
+				'user_id'         => $user_id,
+				'display'         => $display,
+				'name_masked'     => $mask_names,
+				'order_count'     => (int) $r->order_count,
+				'total_spent'     => round( (float) $r->total_spent, 2 ),
+				'last_order_date' => $r->last_order ? mysql2date( 'Y-m-d', $r->last_order ) : '',
+				'segment'         => $segment,
+				'edit_url'        => admin_url( 'user-edit.php?user_id=' . $user_id ),
+			);
+
+			if ( 'unknown' !== $segment ) {
+				$edges[] = array(
+					'source' => 'customer:' . $user_id,
+					'target' => 'segment_' . $segment,
+					'type'   => 'belongs_to_segment',
+				);
+			}
+		}
+
+		return array(
+			'nodes'        => $nodes,
+			'edges'        => $edges,
+			'privacy_mode' => 'enabled',
+		);
+	}
+
+	// Mask a display name down to first letter + asterisks per word. "John Doe"
+	// → "J*** D**". Preserves segment composability for grouping while hiding PII.
+	private function mask_customer_name( $name ) {
+		$parts = preg_split( '/\s+/', trim( (string) $name ) );
+		if ( empty( $parts ) ) {
+			return 'Customer';
+		}
+		$out = array();
+		foreach ( $parts as $p ) {
+			if ( $p === '' ) { continue; }
+			$first = mb_substr( $p, 0, 1 );
+			$rest  = max( 0, mb_strlen( $p ) - 1 );
+			$out[] = $first . str_repeat( '*', min( 6, $rest ) );
+		}
+		return implode( ' ', $out );
 	}
 
 	// ─── EDGES ──────────────────────────────────────────────────────────

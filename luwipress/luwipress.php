@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.4.6
+ * Version: 3.5.2
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.4.6');
+define('LUWIPRESS_VERSION', '3.5.2');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -228,6 +228,16 @@ class LuwiPress {
         // emitter; replaces 80%+ of chrome-devtools-mcp round-trips for SEO
         // and rendering audits.
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-frontend-inspector.php';
+
+        // Vendors CPT — generic E-E-A-T maker/atelier/team profile system (3.5.2+).
+        // Per-site configurable: music store → "Luthiers", restaurant → "Chefs",
+        // gallery → "Artists", agency → "Team". Emits Schema.org Person /
+        // Organization / LocalBusiness JSON-LD via the Schema Registry,
+        // including verified social URLs in `sameAs` for strong vendor /
+        // author identity signals. Product → vendor attribution via the
+        // `_lwp_vendor_ids` meta key feeds Schema.org `manufacturer`.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-vendors.php';
+        LuwiPress_Vendors::get_instance();
 
     }
 
