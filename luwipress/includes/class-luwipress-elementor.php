@@ -192,6 +192,50 @@ class LuwiPress_Elementor {
         'animated-headline' => array( 'before_text', 'highlighted_text', 'after_text', 'rotating_text' ),
         // ElementsKit widgets
         'elementskit-heading' => array( 'ekit_heading_title', 'ekit_heading_sub_title', 'ekit_heading_extra_title', 'ekit_heading_description' ),
+        // LuwiPress Gold theme widgets (3.4.3+)
+        'lwp-section-head'   => array( 'eyebrow', 'heading', 'cta_label' ),
+        'lwp-hero-split'     => array( 'eyebrow', 'kicker', 'heading', 'body', 'cta_label', 'quote', 'quote_name', 'quote_role' ),
+        'lwp-story-split'    => array( 'card_eyebrow', 'card_title', 'card_sub', 'eyebrow', 'heading', 'lead', 'cta_label' ),
+        'lwp-timeline'       => array( 'eyebrow', 'heading' ),
+        'lwp-master-profile' => array( 'name', 'location', 'specialty', 'fallback_initial' ),
+        'lwp-info-bar'       => array(),
+        'lwp-category-grid'  => array(),
+        'lwp-master-grid'    => array( 'eyebrow', 'heading' ),
+        'lwp-editorial-grid' => array( 'heading', 'eyebrow' ),
+        'lwp-newsletter'     => array( 'eyebrow', 'heading', 'sub', 'button_text', 'success_message' ),
+        'lwp-faq'            => array( 'eyebrow', 'heading' ),
+        'lwp-cta-banner'     => array( 'eyebrow', 'heading', 'body', 'button_text' ),
+        'lwp-testimonials'   => array( 'eyebrow', 'heading' ),
+        'lwp-youtube-channel'=> array( 'eyebrow', 'heading', 'sub' ),
+        'lwp-instagram-channel' => array( 'eyebrow', 'heading', 'sub' ),
+        'lwp-process-steps'  => array( 'eyebrow', 'heading' ),
+        'lwp-featured-product' => array( 'eyebrow', 'heading', 'cta_label' ),
+        'lwp-featured-strip' => array(),
+        'lwp-countdown'      => array( 'heading', 'sub', 'cta_label' ),
+        'lwp-ai-search'      => array( 'placeholder', 'cta_label' ),
+        'lwp-megabar'        => array(),
+        'lwp-stat-counter'   => array(),
+        'lwp-trust-badges'   => array(),
+        // 1.7.37 — header / footer chrome widgets
+        'lwp-topbar'         => array(),
+        'lwp-logo'           => array( 'text' ),
+        'lwp-header-actions' => array( 'cta_label' ),
+        'lwp-search-overlay' => array( 'eyebrow', 'placeholder', 'mobile_drawer_title' ),
+        'lwp-footer-brand'   => array( 'logo_text', 'tagline', 'phone', 'email', 'address' ),
+        'lwp-footer-column'  => array( 'heading' ),
+        'lwp-footer-bottom'  => array( 'copyright', 'pay_label' ),
+        // 1.7.38 — shop / single-product widgets
+        'lwp-shop-filters'   => array( 'label_category', 'label_price', 'label_stock', 'apply_label', 'clear_label' ),
+        'lwp-shop-toolbar'   => array( 'count_template' ),
+        'lwp-spec-list'      => array(),
+        'lwp-perks-list'     => array(),
+        // 1.8.0 — journal / 404 widgets
+        'lwp-featured-post'  => array( 'cta_label' ),
+        'lwp-byline-card'    => array( 'manual_name', 'manual_role', 'manual_date' ),
+        'lwp-pullquote'      => array( 'quote', 'attribution' ),
+        'lwp-reading-progress' => array(),
+        'lwp-load-more'      => array( 'label_template' ),
+        'lwp-404-hero'       => array( 'big_number', 'eyebrow', 'heading', 'lead', 'search_placeholder', 'cta1_label', 'cta2_label' ),
     );
 
     /**
@@ -203,6 +247,32 @@ class LuwiPress_Elementor {
         'toggle'    => array( 'items_key' => 'tabs', 'fields' => array( 'tab_title', 'tab_content' ) ),
         'icon-list' => array( 'items_key' => 'icon_list', 'fields' => array( 'text' ) ),
         'price-table' => array( 'items_key' => 'features_list', 'fields' => array( 'item_text' ) ),
+        // LuwiPress Gold theme widget repeaters (3.4.3+)
+        'lwp-timeline'       => array( 'items_key' => 'rows',     'fields' => array( 'year', 'title', 'body' ) ),
+        'lwp-info-bar'       => array( 'items_key' => 'items',    'fields' => array( 'label', 'sub' ) ),
+        'lwp-category-grid'  => array( 'items_key' => 'items',    'fields' => array( 'title', 'sub_label' ) ),
+        'lwp-master-grid'    => array( 'items_key' => 'items',    'fields' => array( 'name', 'location', 'specialty' ) ),
+        'lwp-editorial-grid' => array( 'items_key' => 'items',    'fields' => array( 'title', 'eyebrow', 'excerpt' ) ),
+        'lwp-hero-split'     => array( 'items_key' => 'stats',    'fields' => array( 'value', 'label' ) ),
+        'lwp-section-head'   => array( 'items_key' => 'pills',    'fields' => array( 'label' ) ),
+        'lwp-story-split'    => array( 'items_key' => 'bullets',  'fields' => array( 'title', 'body' ) ),
+        'lwp-faq'            => array( 'items_key' => 'items',    'fields' => array( 'question', 'answer' ) ),
+        'lwp-testimonials'   => array( 'items_key' => 'items',    'fields' => array( 'name', 'role', 'quote' ) ),
+        'lwp-process-steps'  => array( 'items_key' => 'steps',    'fields' => array( 'title', 'body' ) ),
+        'lwp-youtube-channel'=> array( 'items_key' => 'videos',   'fields' => array( 'title' ) ),
+        'lwp-instagram-channel' => array( 'items_key' => 'items', 'fields' => array( 'caption' ) ),
+        'lwp-trust-badges'   => array( 'items_key' => 'badges',   'fields' => array( 'label' ) ),
+        'lwp-stat-counter'   => array( 'items_key' => 'stats',    'fields' => array( 'label', 'suffix', 'prefix' ) ),
+        // 1.7.37 — header / footer chrome widgets
+        'lwp-topbar'         => array( 'items_key' => 'left_items',  'fields' => array( 'text' ) ),
+        'lwp-search-overlay' => array( 'items_key' => 'suggest_blocks', 'fields' => array( 'label', 'chips' ) ),
+        'lwp-footer-column'  => array( 'items_key' => 'links',       'fields' => array( 'label' ) ),
+        'lwp-footer-bottom'  => array( 'items_key' => 'legal_links', 'fields' => array( 'label' ) ),
+        // 1.7.38 — shop / single-product widget repeaters
+        'lwp-shop-filters'   => array( 'items_key' => 'custom_blocks', 'fields' => array( 'heading' ) ),
+        'lwp-spec-list'      => array( 'items_key' => 'rows',          'fields' => array( 'label', 'value' ) ),
+        'lwp-perks-list'     => array( 'items_key' => 'perks',         'fields' => array( 'strong', 'body' ) ),
+        // 1.8.0 — none of the new widgets have translatable repeaters beyond their top-level fields
     );
 
     /**
@@ -630,6 +700,38 @@ class LuwiPress_Elementor {
         register_rest_route( $ns, '/elementor/apply-template', array(
             'methods'             => 'POST',
             'callback'            => array( $this, 'rest_apply_template' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+
+        /* ─── FR suite (3.4.2): bulk read / css read / image / advanced / schema / diff ─── */
+        register_rest_route( $ns, '/elementor/widgets-bulk', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_get_widgets_bulk' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+        register_rest_route( $ns, '/elementor/custom-css-get', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'rest_get_custom_css' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+        register_rest_route( $ns, '/elementor/widget-schema', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'rest_get_widget_schema' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+        register_rest_route( $ns, '/elementor/widget-image', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_set_widget_image' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+        register_rest_route( $ns, '/elementor/widget-advanced', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_set_widget_advanced' ),
+            'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+        ) );
+        register_rest_route( $ns, '/elementor/snapshot-diff', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'rest_snapshot_diff' ),
             'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
         ) );
     }
@@ -5820,6 +5922,568 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
             'angle_pair_warning' => $angle_pairs > 0 ? 'Candidate contains <...> pairs. wp_strip_all_tags may eat content between them at write time.' : null,
             'savings_candidates' => $candidates,
         ) );
+    }
+
+    /* ───── FR-suite: bulk read / custom-css read / image / advanced / schema / diff ───── */
+
+    /**
+     * FR 1: Read multiple Elementor widgets in a single call.
+     *
+     * @param int   $post_id     Post ID.
+     * @param array $element_ids Array of element IDs to fetch.
+     * @return array|WP_Error    {found: {id => widget}, missing: [id, ...]} OR WP_Error
+     */
+    public function get_widgets_bulk( $post_id, array $element_ids ) {
+        $tree = $this->get_widget_tree( $post_id );
+        if ( is_wp_error( $tree ) ) {
+            return $tree;
+        }
+        $by_id = array();
+        foreach ( $tree as $el ) {
+            $by_id[ $el['id'] ] = $el;
+        }
+        $found   = array();
+        $missing = array();
+        foreach ( $element_ids as $eid ) {
+            $eid = sanitize_text_field( $eid );
+            if ( isset( $by_id[ $eid ] ) ) {
+                $found[ $eid ] = $by_id[ $eid ];
+            } else {
+                $missing[] = $eid;
+            }
+        }
+        return array(
+            'post_id' => intval( $post_id ),
+            'found'   => $found,
+            'missing' => $missing,
+            'count'   => count( $found ),
+        );
+    }
+
+    /**
+     * FR 2: Read element-level or page-level custom CSS.
+     *
+     * @param int    $post_id    Post ID.
+     * @param string $element_id Optional element ID. If empty, returns page-level CSS.
+     * @return array|WP_Error
+     */
+    public function get_custom_css( $post_id, $element_id = '' ) {
+        if ( $element_id === '' ) {
+            $page_settings = get_post_meta( $post_id, '_elementor_page_settings', true );
+            $css = is_array( $page_settings ) ? ( $page_settings['custom_css'] ?? '' ) : '';
+            return array(
+                'post_id' => intval( $post_id ),
+                'scope'   => 'page',
+                'css'     => (string) $css,
+                'length'  => strlen( (string) $css ),
+            );
+        }
+        $data = $this->get_elementor_data( $post_id );
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+        $found_css = null;
+        $this->walk_elements( $data, function ( $element ) use ( $element_id, &$found_css ) {
+            if ( ( $element['id'] ?? '' ) === $element_id ) {
+                $found_css = $element['settings']['custom_css'] ?? '';
+            }
+        } );
+        if ( $found_css === null ) {
+            return new WP_Error( 'element_not_found', 'Element not found: ' . $element_id, array( 'status' => 404 ) );
+        }
+        return array(
+            'post_id'    => intval( $post_id ),
+            'scope'      => 'element',
+            'element_id' => $element_id,
+            'css'        => (string) $found_css,
+            'length'     => strlen( (string) $found_css ),
+        );
+    }
+
+    /**
+     * FR 3: Reflect an Elementor widget's settings schema.
+     *
+     * @param string $widget_type Widget type slug (e.g. 'heading', 'lwp-section-head').
+     * @return array|WP_Error
+     */
+    public function get_widget_schema( $widget_type ) {
+        if ( ! class_exists( '\Elementor\Plugin' ) ) {
+            return new WP_Error( 'elementor_inactive', 'Elementor is not active', array( 'status' => 503 ) );
+        }
+        $widget_type = sanitize_text_field( $widget_type );
+        $widget_obj  = \Elementor\Plugin::$instance->widgets_manager->get_widget_types( $widget_type );
+        if ( ! $widget_obj ) {
+            return new WP_Error( 'widget_not_found', 'Widget type not registered: ' . $widget_type, array( 'status' => 404 ) );
+        }
+        $controls = $widget_obj->get_controls();
+        $fields   = array();
+        $sections = array();
+        $current_section = '';
+        // Elementor Controls_Manager::SECTION = 'section', REPEATER = 'repeater'.
+        // Use string equivalents so PHPStan does not require the external class.
+        $type_section  = 'section';
+        $type_repeater = 'repeater';
+        foreach ( $controls as $key => $ctrl ) {
+            $type = $ctrl['type'] ?? '';
+            if ( $type === $type_section ) {
+                $current_section = $ctrl['label'] ?? $key;
+                $sections[ $key ] = array(
+                    'label' => $current_section,
+                    'tab'   => $ctrl['tab'] ?? 'content',
+                );
+                continue;
+            }
+            $field = array(
+                'key'     => $key,
+                'type'    => $type,
+                'label'   => $ctrl['label'] ?? '',
+                'default' => $ctrl['default'] ?? null,
+                'section' => $current_section,
+                'tab'     => $ctrl['tab'] ?? 'content',
+            );
+            if ( ! empty( $ctrl['options'] ) ) {
+                $field['options'] = $ctrl['options'];
+            }
+            if ( isset( $ctrl['required'] ) ) {
+                $field['required'] = (bool) $ctrl['required'];
+            }
+            if ( isset( $ctrl['description'] ) ) {
+                $field['description'] = $ctrl['description'];
+            }
+            // Repeater introspection: expose nested control fields too.
+            if ( $type === $type_repeater && ! empty( $ctrl['fields'] ) ) {
+                $field['repeater_fields'] = array();
+                foreach ( $ctrl['fields'] as $sub_key => $sub_ctrl ) {
+                    $field['repeater_fields'][] = array(
+                        'key'     => $sub_key,
+                        'type'    => $sub_ctrl['type'] ?? '',
+                        'label'   => $sub_ctrl['label'] ?? '',
+                        'default' => $sub_ctrl['default'] ?? null,
+                    );
+                }
+            }
+            $fields[] = $field;
+        }
+        return array(
+            'widget_type' => $widget_type,
+            'widget_name' => method_exists( $widget_obj, 'get_title' ) ? $widget_obj->get_title() : $widget_type,
+            'categories'  => method_exists( $widget_obj, 'get_categories' ) ? $widget_obj->get_categories() : array(),
+            'fields'      => $fields,
+            'sections'    => $sections,
+            'field_count' => count( $fields ),
+        );
+    }
+
+    /**
+     * FR 5: Set image on a widget — handles MEDIA control structure {url, id, alt, size, link}.
+     *
+     * @param int    $post_id    Post ID.
+     * @param string $element_id Widget ID.
+     * @param array  $args       {url?, attachment_id?, alt?, size?, link?, image_field?}
+     * @return array|WP_Error
+     */
+    public function set_widget_image( $post_id, $element_id, array $args ) {
+        $data = $this->get_elementor_data( $post_id );
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+        $field = sanitize_text_field( $args['image_field'] ?? 'image' );
+        $attachment_id = isset( $args['attachment_id'] ) ? intval( $args['attachment_id'] ) : 0;
+        $url = $args['url'] ?? '';
+        $alt = $args['alt'] ?? null;
+        $size = sanitize_text_field( $args['size'] ?? '' );
+        $link = $args['link'] ?? null;
+
+        // Resolve URL from attachment_id when provided
+        if ( $attachment_id && ! $url ) {
+            $url = wp_get_attachment_url( $attachment_id );
+            if ( ! $url ) {
+                return new WP_Error( 'attachment_not_found', 'Attachment ID not found: ' . $attachment_id, array( 'status' => 404 ) );
+            }
+        }
+        if ( ! $url && ! $attachment_id ) {
+            return new WP_Error( 'missing_image', 'Either url or attachment_id required', array( 'status' => 400 ) );
+        }
+
+        $found = false;
+        $widget_type_seen = '';
+        $data = $this->walk_elements_modify( $data, function ( &$element ) use ( $element_id, $field, $url, $attachment_id, $alt, $size, $link, &$found, &$widget_type_seen ) {
+            if ( ( $element['id'] ?? '' ) !== $element_id ) {
+                return;
+            }
+            $found = true;
+            $widget_type_seen = $element['widgetType'] ?? '';
+            if ( ! isset( $element['settings'] ) || ! is_array( $element['settings'] ) ) {
+                $element['settings'] = array();
+            }
+            $image_setting = isset( $element['settings'][ $field ] ) && is_array( $element['settings'][ $field ] )
+                ? $element['settings'][ $field ]
+                : array();
+            $image_setting['url'] = esc_url_raw( $url );
+            if ( $attachment_id ) {
+                $image_setting['id'] = intval( $attachment_id );
+            }
+            if ( $alt !== null ) {
+                $image_setting['alt'] = sanitize_text_field( $alt );
+            }
+            if ( $size ) {
+                $image_setting['size'] = $size;
+            }
+            $element['settings'][ $field ] = $image_setting;
+            if ( $link !== null && is_array( $link ) ) {
+                $element['settings'][ 'link' ] = array(
+                    'url'         => esc_url_raw( $link['url'] ?? '' ),
+                    'is_external' => ! empty( $link['is_external'] ),
+                    'nofollow'    => ! empty( $link['nofollow'] ),
+                );
+            }
+            // Persist alt to attachment when both provided (best-effort)
+            if ( $attachment_id && $alt !== null && $alt !== '' ) {
+                update_post_meta( $attachment_id, '_wp_attachment_image_alt', sanitize_text_field( $alt ) );
+            }
+        } );
+        if ( ! $found ) {
+            return new WP_Error( 'element_not_found', 'Element not found: ' . $element_id, array( 'status' => 404 ) );
+        }
+        $saved = $this->save_elementor_data( $post_id, $data );
+        if ( is_wp_error( $saved ) ) {
+            return $saved;
+        }
+        return array(
+            'status'        => 'updated',
+            'post_id'       => intval( $post_id ),
+            'element_id'    => $element_id,
+            'widget_type'   => $widget_type_seen,
+            'field'         => $field,
+            'url'           => $url,
+            'attachment_id' => $attachment_id,
+        );
+    }
+
+    /**
+     * FR 6: Write Elementor "Advanced" tab fields (css_classes, css_id, motion, z-index, attributes).
+     *
+     * Whitelist: only known advanced keys allowed.
+     *
+     * @param int    $post_id    Post ID.
+     * @param string $element_id Element ID.
+     * @param array  $advanced   Allowed keys: css_classes, custom_css_classes, css_id, _element_id,
+     *                            _animation, _animation_delay, motion_fx_motion_fx_scrolling,
+     *                            _z_index, _attributes, hide_desktop, hide_tablet, hide_mobile.
+     * @return array|WP_Error
+     */
+    public function set_widget_advanced( $post_id, $element_id, array $advanced ) {
+        $data = $this->get_elementor_data( $post_id );
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+        // Whitelist of Elementor advanced-tab setting keys (internal Elementor naming).
+        $whitelist = array(
+            'css_classes', 'custom_css_classes', '_css_classes',
+            '_element_id', 'css_id',
+            '_animation', '_animation_delay',
+            'motion_fx_motion_fx_scrolling', 'motion_fx_motion_fx_mouse',
+            '_z_index',
+            '_attributes',
+            'hide_desktop', 'hide_tablet', 'hide_mobile',
+            '_position', '_offset_orientation_h', '_offset_orientation_v',
+            '_offset_x', '_offset_y',
+        );
+
+        // Aliases — friendly names → Elementor internal keys
+        $aliases = array(
+            'class'      => 'css_classes',
+            'classes'    => 'css_classes',
+            'id'         => '_element_id',
+            'animation'  => '_animation',
+            'animation_delay' => '_animation_delay',
+            'z_index'    => '_z_index',
+            'z-index'    => '_z_index',
+            'attributes' => '_attributes',
+        );
+
+        $found = false;
+        $applied = array();
+        $rejected = array();
+        $data = $this->walk_elements_modify( $data, function ( &$element ) use ( $element_id, $advanced, $whitelist, $aliases, &$found, &$applied, &$rejected ) {
+            if ( ( $element['id'] ?? '' ) !== $element_id ) {
+                return;
+            }
+            $found = true;
+            if ( ! isset( $element['settings'] ) || ! is_array( $element['settings'] ) ) {
+                $element['settings'] = array();
+            }
+            foreach ( $advanced as $k => $v ) {
+                $key = isset( $aliases[ $k ] ) ? $aliases[ $k ] : $k;
+                if ( ! in_array( $key, $whitelist, true ) ) {
+                    $rejected[ $k ] = 'key not in advanced-tab whitelist';
+                    continue;
+                }
+                if ( $key === 'css_classes' || $key === 'custom_css_classes' || $key === '_css_classes' ) {
+                    $element['settings'][ $key ] = sanitize_text_field( $v );
+                } elseif ( $key === '_attributes' ) {
+                    // _attributes is a string in Elementor — "key|value, key2|value2"
+                    $element['settings'][ $key ] = wp_kses_post( $v );
+                } elseif ( is_numeric( $v ) ) {
+                    $element['settings'][ $key ] = $v;
+                } elseif ( is_array( $v ) ) {
+                    $element['settings'][ $key ] = $v;
+                } else {
+                    $element['settings'][ $key ] = sanitize_text_field( (string) $v );
+                }
+                $applied[ $key ] = $element['settings'][ $key ];
+            }
+        } );
+        if ( ! $found ) {
+            return new WP_Error( 'element_not_found', 'Element not found: ' . $element_id, array( 'status' => 404 ) );
+        }
+        $saved = $this->save_elementor_data( $post_id, $data );
+        if ( is_wp_error( $saved ) ) {
+            return $saved;
+        }
+        return array(
+            'status'     => 'updated',
+            'post_id'    => intval( $post_id ),
+            'element_id' => $element_id,
+            'applied'    => $applied,
+            'rejected'   => $rejected,
+        );
+    }
+
+    /**
+     * FR 7: Diff two snapshots (or one snapshot vs current).
+     *
+     * @param int    $post_id     Post ID.
+     * @param string $snapshot_a  Snapshot ID (the "before" / baseline).
+     * @param string $snapshot_b  Snapshot ID for "after" — if empty, compares against current.
+     * @return array|WP_Error
+     */
+    public function snapshot_diff( $post_id, $snapshot_a, $snapshot_b = '' ) {
+        $snapshots = get_post_meta( $post_id, '_luwipress_elementor_snapshots', true );
+        if ( ! is_array( $snapshots ) ) {
+            $snapshots = array();
+        }
+        // Snapshots use 'id' key (NOT 'snapshot_id'); payload is in 'data_b64' (base64-v1)
+        // for new snapshots OR legacy 'data' (raw JSON string) for pre-3.1.42-hotfix3.
+        $find_snapshot = function( $sid ) use ( $snapshots ) {
+            foreach ( $snapshots as $s ) {
+                if ( ( $s['id'] ?? $s['snapshot_id'] ?? '' ) === $sid ) {
+                    return $s;
+                }
+            }
+            return null;
+        };
+        $decode_snapshot_payload = function( $snap ) {
+            // Prefer base64-encoded payload (slash-safe).
+            if ( ! empty( $snap['data_b64'] ) ) {
+                $raw = base64_decode( $snap['data_b64'], true );
+                if ( is_string( $raw ) ) {
+                    $decoded = json_decode( $raw, true );
+                    if ( is_array( $decoded ) ) return $decoded;
+                }
+            }
+            // Legacy raw-JSON payload fallback.
+            if ( isset( $snap['data'] ) ) {
+                if ( is_array( $snap['data'] ) ) return $snap['data'];
+                if ( is_string( $snap['data'] ) ) {
+                    $decoded = json_decode( $snap['data'], true );
+                    if ( is_array( $decoded ) ) return $decoded;
+                    // Try unslashing (Elementor stores with extra slashes sometimes)
+                    $decoded = json_decode( wp_unslash( $snap['data'] ), true );
+                    if ( is_array( $decoded ) ) return $decoded;
+                }
+            }
+            return array();
+        };
+
+        $snap_a = $find_snapshot( $snapshot_a );
+        if ( ! $snap_a ) {
+            return new WP_Error( 'snapshot_not_found', 'Snapshot A not found: ' . $snapshot_a, array( 'status' => 404 ) );
+        }
+        $data_a = $decode_snapshot_payload( $snap_a );
+
+        if ( $snapshot_b ) {
+            $snap_b = $find_snapshot( $snapshot_b );
+            if ( ! $snap_b ) {
+                return new WP_Error( 'snapshot_not_found', 'Snapshot B not found: ' . $snapshot_b, array( 'status' => 404 ) );
+            }
+            $data_b  = $decode_snapshot_payload( $snap_b );
+            $b_label = $snapshot_b;
+        } else {
+            $current = $this->get_elementor_data( $post_id );
+            if ( is_wp_error( $current ) ) {
+                return $current;
+            }
+            $data_b  = $current;
+            $b_label = 'current';
+        }
+
+        // Flatten both trees to {id => {widget_type, settings_hash, settings}}
+        $flatten = function( $tree ) {
+            $out = array();
+            $walker = function( $nodes ) use ( &$walker, &$out ) {
+                if ( ! is_array( $nodes ) ) return;
+                foreach ( $nodes as $node ) {
+                    if ( ! is_array( $node ) ) continue;
+                    $id = $node['id'] ?? '';
+                    if ( $id !== '' ) {
+                        $settings_json = isset( $node['settings'] ) ? wp_json_encode( $node['settings'] ) : '{}';
+                        $out[ $id ] = array(
+                            'el_type'       => $node['elType'] ?? '',
+                            'widget_type'   => $node['widgetType'] ?? '',
+                            'settings_hash' => md5( $settings_json ?: '' ),
+                            'settings'      => $node['settings'] ?? array(),
+                        );
+                    }
+                    if ( isset( $node['elements'] ) ) {
+                        $walker( $node['elements'] );
+                    }
+                }
+            };
+            $walker( $tree );
+            return $out;
+        };
+
+        $flat_a = $flatten( $data_a );
+        $flat_b = $flatten( $data_b );
+
+        $added    = array();
+        $removed  = array();
+        $modified = array();
+        foreach ( $flat_b as $id => $b_el ) {
+            if ( ! isset( $flat_a[ $id ] ) ) {
+                $added[] = array( 'id' => $id, 'widget_type' => $b_el['widget_type'], 'el_type' => $b_el['el_type'] );
+            } elseif ( $flat_a[ $id ]['settings_hash'] !== $b_el['settings_hash'] ) {
+                $diffs = array();
+                $a_set = $flat_a[ $id ]['settings'];
+                $b_set = $b_el['settings'];
+                $all_keys = array_unique( array_merge( array_keys( $a_set ), array_keys( $b_set ) ) );
+                foreach ( $all_keys as $k ) {
+                    $av = $a_set[ $k ] ?? null;
+                    $bv = $b_set[ $k ] ?? null;
+                    if ( $av !== $bv ) {
+                        $diffs[] = array(
+                            'field'  => $k,
+                            'before' => is_scalar( $av ) ? $av : wp_json_encode( $av ),
+                            'after'  => is_scalar( $bv ) ? $bv : wp_json_encode( $bv ),
+                        );
+                    }
+                }
+                $modified[] = array(
+                    'id'          => $id,
+                    'widget_type' => $b_el['widget_type'],
+                    'el_type'     => $b_el['el_type'],
+                    'changes'     => $diffs,
+                );
+            }
+        }
+        foreach ( $flat_a as $id => $a_el ) {
+            if ( ! isset( $flat_b[ $id ] ) ) {
+                $removed[] = array( 'id' => $id, 'widget_type' => $a_el['widget_type'], 'el_type' => $a_el['el_type'] );
+            }
+        }
+
+        return array(
+            'post_id'        => intval( $post_id ),
+            'snapshot_a'     => $snapshot_a,
+            'snapshot_b'     => $b_label,
+            'a_element_count' => count( $flat_a ),
+            'b_element_count' => count( $flat_b ),
+            'added'          => $added,
+            'removed'        => $removed,
+            'modified'       => $modified,
+            'summary'        => array(
+                'added'    => count( $added ),
+                'removed'  => count( $removed ),
+                'modified' => count( $modified ),
+            ),
+        );
+    }
+
+    /* ───── FR REST handlers ───── */
+
+    public function rest_get_widgets_bulk( $request ) {
+        $post_id = intval( $request->get_param( 'post_id' ) );
+        $ids     = $request->get_param( 'element_ids' );
+        if ( ! is_array( $ids ) ) {
+            return new WP_Error( 'invalid_params', 'element_ids must be an array', array( 'status' => 400 ) );
+        }
+        $result = $this->get_widgets_bulk( $post_id, $ids );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+        return rest_ensure_response( $result );
+    }
+
+    public function rest_get_custom_css( $request ) {
+        $post_id    = intval( $request->get_param( 'post_id' ) );
+        $element_id = sanitize_text_field( $request->get_param( 'element_id' ) ?? '' );
+        $result = $this->get_custom_css( $post_id, $element_id );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+        return rest_ensure_response( $result );
+    }
+
+    public function rest_get_widget_schema( $request ) {
+        $widget_type = sanitize_text_field( $request->get_param( 'widget_type' ) ?? '' );
+        if ( ! $widget_type ) {
+            return new WP_Error( 'missing_params', 'widget_type required', array( 'status' => 400 ) );
+        }
+        $result = $this->get_widget_schema( $widget_type );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+        return rest_ensure_response( $result );
+    }
+
+    public function rest_set_widget_image( $request ) {
+        $post_id    = intval( $request->get_param( 'post_id' ) );
+        $element_id = sanitize_text_field( $request->get_param( 'element_id' ) ?? '' );
+        $args = array(
+            'url'           => $request->get_param( 'url' ) ?? '',
+            'attachment_id' => intval( $request->get_param( 'attachment_id' ) ?? 0 ),
+            'alt'           => $request->get_param( 'alt' ),
+            'size'          => $request->get_param( 'size' ) ?? '',
+            'link'          => $request->get_param( 'link' ),
+            'image_field'   => $request->get_param( 'image_field' ) ?? 'image',
+        );
+        if ( ! $post_id || ! $element_id ) {
+            return new WP_Error( 'missing_params', 'post_id + element_id required', array( 'status' => 400 ) );
+        }
+        $result = $this->set_widget_image( $post_id, $element_id, $args );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+        return rest_ensure_response( $result );
+    }
+
+    public function rest_set_widget_advanced( $request ) {
+        $post_id    = intval( $request->get_param( 'post_id' ) );
+        $element_id = sanitize_text_field( $request->get_param( 'element_id' ) ?? '' );
+        $advanced   = $request->get_param( 'advanced' );
+        if ( ! $post_id || ! $element_id || ! is_array( $advanced ) ) {
+            return new WP_Error( 'missing_params', 'post_id, element_id, advanced (object) required', array( 'status' => 400 ) );
+        }
+        $result = $this->set_widget_advanced( $post_id, $element_id, $advanced );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+        return rest_ensure_response( $result );
+    }
+
+    public function rest_snapshot_diff( $request ) {
+        $post_id    = intval( $request->get_param( 'post_id' ) );
+        $snapshot_a = sanitize_text_field( $request->get_param( 'snapshot_a' ) ?? '' );
+        $snapshot_b = sanitize_text_field( $request->get_param( 'snapshot_b' ) ?? '' );
+        if ( ! $post_id || ! $snapshot_a ) {
+            return new WP_Error( 'missing_params', 'post_id + snapshot_a required', array( 'status' => 400 ) );
+        }
+        $result = $this->snapshot_diff( $post_id, $snapshot_a, $snapshot_b );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+        return rest_ensure_response( $result );
     }
 
     /* ──────────────────── Static Helpers ─────────────────────────────── */

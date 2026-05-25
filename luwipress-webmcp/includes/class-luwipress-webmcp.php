@@ -5066,6 +5066,241 @@ class LuwiPress_WebMCP {
             }
             return $data;
         } );
+
+        /* ════════════════════════════════════════════════════════════════
+         *  FR SUITE (3.4.2): bulk read / css read / image / advanced / schema / diff / find-replace
+         * ════════════════════════════════════════════════════════════════ */
+
+        // FR 1 — bulk widget read
+        $this->register_tool( 'elementor_get_widgets_bulk', array(
+            'description' => 'Read multiple Elementor widgets in a single round-trip. Returns full widget tree entries (settings, text, style summary) for each requested element_id. Use this instead of N separate elementor_get_widget calls when auditing or syncing many widgets on one page.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'     => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                    'element_ids' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Array of Elementor element IDs to fetch (required)' ),
+                ),
+                'required'   => array( 'post_id', 'element_ids' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Bulk Read Elementor Widgets',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            $ids  = is_array( $args['element_ids'] ?? null ) ? $args['element_ids'] : array();
+            $res  = $elem->get_widgets_bulk( intval( $args['post_id'] ), $ids );
+            if ( is_wp_error( $res ) ) {
+                return array( 'error' => $res->get_error_message() );
+            }
+            return $res;
+        } );
+
+        // FR 2 — read custom CSS (element or page level)
+        $this->register_tool( 'elementor_get_custom_css', array(
+            'description' => 'Read element-level OR page-level Elementor custom CSS. Pass element_id for element-level (custom_css setting), omit for page-level (read from _elementor_page_settings.custom_css meta). Use BEFORE elementor_custom_css set to avoid blind overwrite.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                    'element_id' => array( 'type' => 'string', 'description' => 'Element ID for element-level CSS, OR omit for page-level CSS' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Read Elementor Custom CSS',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            $res  = $elem->get_custom_css( intval( $args['post_id'] ), sanitize_text_field( $args['element_id'] ?? '' ) );
+            if ( is_wp_error( $res ) ) {
+                return array( 'error' => $res->get_error_message() );
+            }
+            return $res;
+        } );
+
+        // FR 3 — widget schema introspection
+        $this->register_tool( 'elementor_widget_schema', array(
+            'description' => 'Get the settings schema for an Elementor widget type via reflection. Returns the full control list: field key, type (TEXT, TEXTAREA, MEDIA, REPEATER, SELECT, etc.), label, default value, options (for SELECT), and tab (content/style/advanced). Use BEFORE elementor_add_widget to construct a fully-configured settings object in one call.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'widget_type' => array( 'type' => 'string', 'description' => 'Widget type slug (e.g. "heading", "text-editor", "lwp-section-head", "lwp-timeline")' ),
+                ),
+                'required'   => array( 'widget_type' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Inspect Widget Schema',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            $res  = $elem->get_widget_schema( sanitize_text_field( $args['widget_type'] ) );
+            if ( is_wp_error( $res ) ) {
+                return array( 'error' => $res->get_error_message() );
+            }
+            return $res;
+        } );
+
+        // FR 4 — find-replace MCP wrapper (REST already exists)
+        $this->register_tool( 'elementor_replace_text', array(
+            'description' => 'Bulk text find-replace across one or many Elementor pages. Supports dry_run mode (preview which widgets would change), regex mode, scope=text|styles|both. Mirrors POST /elementor/find-replace REST endpoint. Snapshots are NOT taken automatically — caller should run elementor_snapshot first if rollback may be needed.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_ids'  => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Array of post IDs to scan' ),
+                    'post_type' => array( 'type' => 'string', 'description' => 'Post type filter (alternative to post_ids — scans all posts of this type)' ),
+                    'find'      => array( 'type' => 'string', 'description' => 'Text or regex pattern to find (required)' ),
+                    'replace'   => array( 'type' => 'string', 'description' => 'Replacement text (required, can be empty string)' ),
+                    'scope'     => array( 'type' => 'string', 'enum' => array( 'text', 'styles', 'both' ), 'description' => 'Where to search — default "text"' ),
+                    'is_regex'  => array( 'type' => 'boolean', 'description' => 'If true, find is interpreted as regex pattern' ),
+                    'dry_run'   => array( 'type' => 'boolean', 'description' => 'If true, preview without saving' ),
+                    'style_key' => array( 'type' => 'string', 'description' => 'When scope=styles, limit to a specific style key' ),
+                ),
+                'required'   => array( 'find', 'replace' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Find and Replace Text Across Pages',
+                'readOnlyHint'    => false,
+                'destructiveHint' => true,
+                'idempotentHint'  => false,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'WP_REST_Request' ) ) {
+                return array( 'error' => 'REST API not loaded' );
+            }
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/elementor/find-replace' );
+            foreach ( array( 'post_ids', 'post_type', 'find', 'replace', 'scope', 'is_regex', 'dry_run', 'style_key' ) as $k ) {
+                if ( array_key_exists( $k, $args ) ) {
+                    $request->set_param( $k, $args[ $k ] );
+                }
+            }
+            $elem = LuwiPress_Elementor::get_instance();
+            $res  = $elem->rest_find_replace( $request );
+            if ( is_wp_error( $res ) ) {
+                return array( 'error' => $res->get_error_message() );
+            }
+            return $res instanceof WP_REST_Response ? $res->get_data() : $res;
+        } );
+
+        // FR 5 — set widget image
+        $this->register_tool( 'elementor_set_widget_image', array(
+            'description' => 'Set image on a MEDIA control of an Elementor widget. Pass attachment_id (preferred — resolves URL automatically) OR raw url. Supports alt, size, link override. image_field defaults to "image" (the standard MEDIA setting key); use "background_image" for section/column backgrounds.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'       => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                    'element_id'    => array( 'type' => 'string', 'description' => 'Elementor element ID (required)' ),
+                    'attachment_id' => array( 'type' => 'integer', 'description' => 'WP attachment ID — recommended (resolves URL via wp_get_attachment_url)' ),
+                    'url'           => array( 'type' => 'string', 'description' => 'Raw image URL (alternative to attachment_id)' ),
+                    'alt'           => array( 'type' => 'string', 'description' => 'Alt text — also persists to attachment _wp_attachment_image_alt meta' ),
+                    'size'          => array( 'type' => 'string', 'description' => 'Image size: thumbnail|medium|large|full|custom' ),
+                    'image_field'   => array( 'type' => 'string', 'description' => 'Settings key for the MEDIA control — default "image"' ),
+                    'link'          => array( 'type' => 'object', 'description' => '{url, is_external?, nofollow?} — sets widget link override' ),
+                ),
+                'required'   => array( 'post_id', 'element_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Set Widget Image',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            $res  = $elem->set_widget_image(
+                intval( $args['post_id'] ),
+                sanitize_text_field( $args['element_id'] ),
+                array(
+                    'attachment_id' => intval( $args['attachment_id'] ?? 0 ),
+                    'url'           => $args['url'] ?? '',
+                    'alt'           => $args['alt'] ?? null,
+                    'size'          => $args['size'] ?? '',
+                    'image_field'   => $args['image_field'] ?? 'image',
+                    'link'          => $args['link'] ?? null,
+                )
+            );
+            if ( is_wp_error( $res ) ) {
+                return array( 'error' => $res->get_error_message() );
+            }
+            return $res;
+        } );
+
+        // FR 6 — set advanced tab fields
+        $this->register_tool( 'elementor_set_advanced', array(
+            'description' => 'Write Elementor "Advanced" tab fields: css_classes, css_id (HTML id), animation, animation_delay, z_index, attributes (key|value comma-sep), hide_desktop/tablet/mobile. Whitelist-enforced. Friendly aliases: "class"|"classes" -> css_classes, "id" -> _element_id. Use this to attach theme-CSS-hook classes (e.g. lwp-pcard) to existing widgets without rebuilding them.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                    'element_id' => array( 'type' => 'string', 'description' => 'Elementor element ID (required)' ),
+                    'advanced'   => array(
+                        'type'        => 'object',
+                        'description' => 'Advanced-tab fields: {"css_classes": "lwp-pcard lwp-pcard--featured", "css_id": "my-section", "z_index": 5, "_animation": "fadeIn", "_animation_delay": 200, "hide_mobile": "hidden-mobile"}',
+                    ),
+                ),
+                'required'   => array( 'post_id', 'element_id', 'advanced' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Set Element Advanced Settings',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            $advanced = is_array( $args['advanced'] ?? null ) ? $args['advanced'] : array();
+            $res = $elem->set_widget_advanced(
+                intval( $args['post_id'] ),
+                sanitize_text_field( $args['element_id'] ),
+                $advanced
+            );
+            if ( is_wp_error( $res ) ) {
+                return array( 'error' => $res->get_error_message() );
+            }
+            return $res;
+        } );
+
+        // FR 7 — snapshot diff
+        $this->register_tool( 'elementor_snapshot_diff', array(
+            'description' => 'Compute the diff between two snapshots, OR between one snapshot and the current state (omit snapshot_b). Returns {added, removed, modified} with per-element widget_type + per-field before/after values. Use BEFORE elementor_rollback to preview what reverting would change.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'    => array( 'type' => 'integer', 'description' => 'WordPress post/page ID (required)' ),
+                    'snapshot_a' => array( 'type' => 'string', 'description' => 'Snapshot ID for the "baseline" / before state (required)' ),
+                    'snapshot_b' => array( 'type' => 'string', 'description' => 'Optional snapshot ID for "after" — omit to compare against current state' ),
+                ),
+                'required'   => array( 'post_id', 'snapshot_a' ),
+            ),
+            'annotations' => array(
+                'title'          => 'Diff Elementor Snapshots',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $elem = LuwiPress_Elementor::get_instance();
+            $res  = $elem->snapshot_diff(
+                intval( $args['post_id'] ),
+                sanitize_text_field( $args['snapshot_a'] ),
+                sanitize_text_field( $args['snapshot_b'] ?? '' )
+            );
+            if ( is_wp_error( $res ) ) {
+                return array( 'error' => $res->get_error_message() );
+            }
+            return $res;
+        } );
     }
 
     /* ═══════════════════════════════════════════════════════════════════
