@@ -257,6 +257,8 @@ class LuwiPress_Elementor {
         'lwp-wc-related'          => array( 'heading' ),
         'lwp-wc-add-to-cart'      => array( 'quantity_label' ),
         'lwp-wc-tabs'             => array(),
+        // 1.10.2+ curated product grid (Pro-free [products] shortcode replacement)
+        'lwp-product-grid'        => array( 'heading' ),
     );
 
     /**
