@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.5.2
+Stable tag: 3.5.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.5.3 — Vendor-FR-016 fix wave (bidirectional vendor↔product render robustness) =
+* **Vendor-FR-016 root cause + fix.** Vendors module's `_lwp_vendor_ids` product meta was previously written through different paths producing TWO incompatible JSON shapes: the canonical save handler emitted `["123"]` (quoted strings, what `LuwiPress_Vendors::save_product_vendor` writes), while direct seed scripts + raw MCP meta_set calls produced `[123]` (integers, no quotes). The vendor profile template's LIKE query used `sprintf( '"%d"', $vendor_id )` which only matched the quoted shape — so vendors seeded via third-party scripts had `product_count > 0` in the Knowledge Graph but rendered empty "work grids" on their profile pages (Tapadum's Feramis Aktas hit this with 4 attributed products that never showed up). **Three-part fix:** (1) `register_post_meta` registration for `_lwp_vendor_ids` on the `product` post type with a new `normalize_product_vendor_ids` sanitize_callback that accepts ANY shape (JSON / comma-list / array / single integer) and normalizes to canonical `["123","456"]` — every future write through update_post_meta, REST, MCP, wp-cli, or third-party hooks gets normalized. (2) Companion theme query (`single-lwp_vendor.php` + `class-master-grid.php`) switched from LIKE to REGEXP with JSON-array-element-aware boundaries (`(\[|,)\s*"?<id>"?\s*(,|\])`) so both formats match AND `36633` doesn't false-positive against `366331`. (3) One-time idempotent migration `maybe_migrate_vendor_ids_format` runs on `init` p20 (skips AJAX/cron/REST), walks every product with the meta, and re-saves through the sanitize callback — pre-existing integer-format data normalizes automatically on next page load after upgrade. Flag stored in `luwipress_vendor_ids_normalized` option so subsequent loads no-op.
+* **Knowledge Graph `made_by` edge fix.** When `/knowledge-graph?sections=vendors` was called without `products` in the same request, the `build_vendor_nodes` method used `load_vendor_product_counts` which produced correct `product_count` per vendor but returned ZERO `made_by` edges — so the KG vendor view rendered isolated nodes instead of the supply graph. New helper `load_vendor_product_counts_with_edges` runs ONE bulk DB query that returns BOTH the counts AND the edge list, so the vendors-only KG call now returns a complete supply graph topology.
+* **`lwp-product-grid` translation registry entry.** New theme widget added in luwipress-gold 1.10.2 (`heading` field) gets a slot in `LuwiPress_Elementor::TRANSLATABLE_WIDGETS` so the WPML translation pipeline picks up the heading text on multilingual stores.
 
 = 3.5.2 — Vendors module (E-E-A-T author/maker CPT) + Knowledge Graph vendor + customer x-ray =
 * **NEW `LuwiPress_Vendors` module** — generic vendor/maker/atelier/team CPT (`lwp_vendor`) with E-E-A-T trust signals. One module, many verticals: a music store calls them "Luthiers", a restaurant "Chefs", a gallery "Artists", an agency "Team". Each site picks the right vocabulary via Settings (singular_label / plural_label / archive_slug). Entity type toggleable per site — `organization` (atelier), `person` (individual maestro / author) or `localbusiness` (physical store). Verified social URLs (Facebook, Instagram, YouTube, SoundCloud, LinkedIn, X, Behance, Website) flow into the Schema.org JSON-LD `sameAs` array via the Schema Registry, giving Google a strong author/vendor identity signal. WooCommerce integration: meta box on the product edit screen attaches vendors via `_lwp_vendor_ids` JSON meta, PDP "Made by" line, Schema.org `manufacturer` (or `author` when entity_type=person) injected into the WC Product schema.

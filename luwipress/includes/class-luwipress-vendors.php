@@ -143,8 +143,37 @@ class LuwiPress_Vendors {
 		add_action( 'add_meta_boxes', array( $this, 'add_product_vendor_metabox' ) );
 		add_action( 'save_post_product', array( $this, 'save_product_vendor' ), 10, 2 );
 
+		// Register the product→vendor attribution meta so it has a sanitize
+		// pass on EVERY write — direct update_post_meta, REST, MCP meta_set,
+		// wp-cli, third-party seed scripts. Normalizes the JSON payload to the
+		// canonical ["<id>","<id>"] quoted-string form so downstream LIKE/REGEXP
+		// queries built around the quoted shape don't silently miss integer-
+		// shaped (`[123]`) writes from external callers (closes the Tapadum
+		// FR-016 Feramis-render miss where direct seed writes produced
+		// `[36633]` and the template's `"%d"` LIKE pattern didn't match).
+		register_post_meta(
+			'product',
+			self::PRODUCT_VENDORS_META,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => false,
+				'description'       => 'LuwiPress Vendors — attributed vendor post IDs (JSON array of strings).',
+				'sanitize_callback' => array( $this, 'normalize_product_vendor_ids' ),
+				'auth_callback'     => function () {
+					return current_user_can( 'edit_posts' );
+				},
+			)
+		);
+
 		// PDP frontend: render "Made by" line in the product summary.
 		add_action( 'woocommerce_single_product_summary', array( $this, 'render_product_vendor_line' ), 25 );
+
+		// One-time data migration — normalize any pre-existing `_lwp_vendor_ids`
+		// meta values that were written outside the canonical save path
+		// (direct DB writes, third-party seed scripts, MCP meta_set with raw
+		// integer arrays). Idempotent; flag stored in wp_options.
+		add_action( 'init', array( $this, 'maybe_migrate_vendor_ids_format' ), 20 );
 
 		// Product Schema.org: inject manufacturer / author linking to vendor URL.
 		add_filter( 'woocommerce_structured_data_product', array( $this, 'enrich_product_schema_with_vendor' ), 10, 2 );
@@ -245,6 +274,109 @@ class LuwiPress_Vendors {
 		}
 		// Stored as JSON string-encoded array so meta_query LIKE matches survive.
 		update_post_meta( $post_id, self::PRODUCT_VENDORS_META, wp_json_encode( array_map( 'strval', $valid ) ) );
+	}
+
+	/**
+	 * One-time normalization sweep of pre-existing `_lwp_vendor_ids` meta.
+	 *
+	 * Runs once per site (gated by `luwipress_vendor_ids_normalized` option).
+	 * Walks every product carrying the meta and re-writes it through the
+	 * canonical sanitize callback so integer-shaped JSON (`[123]`) becomes
+	 * the quoted-string canonical form (`["123"]`). Idempotent — flag is set
+	 * after the first successful sweep, so subsequent page loads skip the
+	 * work.
+	 *
+	 * Closes the Tapadum FR-016 Feramis-render miss where direct seed writes
+	 * produced unquoted integer JSON that downstream queries couldn't match.
+	 */
+	public function maybe_migrate_vendor_ids_format() {
+		if ( get_option( 'luwipress_vendor_ids_normalized', false ) ) {
+			return;
+		}
+		// Avoid running during AJAX / cron / REST sub-requests — only on real
+		// WP page loads where we have time and a stable hookchain.
+		if ( wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT pm.post_id, pm.meta_value
+			   FROM {$wpdb->postmeta} pm
+			   JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+			  WHERE pm.meta_key = %s
+			    AND p.post_type = 'product'
+			    AND p.post_status = 'publish'",
+			self::PRODUCT_VENDORS_META
+		) );
+
+		$touched = 0;
+		foreach ( $rows as $row ) {
+			$normalized = $this->normalize_product_vendor_ids( $row->meta_value );
+			if ( $normalized !== (string) $row->meta_value ) {
+				update_post_meta( (int) $row->post_id, self::PRODUCT_VENDORS_META, $normalized );
+				$touched++;
+			}
+		}
+
+		update_option( 'luwipress_vendor_ids_normalized', current_time( 'c' ) );
+		if ( $touched > 0 && class_exists( 'LuwiPress_Logger' ) ) {
+			LuwiPress_Logger::log( sprintf( 'Vendors module: normalized _lwp_vendor_ids on %d products to canonical quoted-string JSON.', $touched ), 'info' );
+		}
+	}
+
+	/**
+	 * Sanitize-callback for the `_lwp_vendor_ids` product meta.
+	 *
+	 * Accepts: a JSON-encoded array (string), a comma-separated list (string),
+	 * an actual array, or empty. Always returns either an empty string or a
+	 * canonical `["123","456"]` JSON string with absint'd, deduped, validated
+	 * vendor IDs. This is the single source of truth for the meta format so
+	 * downstream LIKE/REGEXP queries can rely on the quoted-string shape.
+	 *
+	 * @param mixed $value Incoming meta value (any shape).
+	 * @return string Normalized JSON string or empty.
+	 */
+	public function normalize_product_vendor_ids( $value ) {
+		// Already an array — normalize directly.
+		if ( is_array( $value ) ) {
+			$ids = $value;
+		} elseif ( is_string( $value ) ) {
+			$trimmed = trim( $value );
+			if ( $trimmed === '' ) {
+				return '';
+			}
+			// Try JSON first (covers both `["1","2"]` and `[1,2]`).
+			$decoded = json_decode( $trimmed, true );
+			if ( is_array( $decoded ) ) {
+				$ids = $decoded;
+			} else {
+				// Fall back to comma / space separated.
+				$ids = preg_split( '/[\s,]+/', $trimmed );
+			}
+		} elseif ( is_numeric( $value ) ) {
+			$ids = array( $value );
+		} else {
+			return '';
+		}
+
+		// Validate each entry against actual published lwp_vendor posts.
+		$valid = array();
+		foreach ( (array) $ids as $id ) {
+			$id = absint( $id );
+			if ( $id <= 0 ) {
+				continue;
+			}
+			$post = get_post( $id );
+			if ( $post && $post->post_type === self::POST_TYPE && $post->post_status === 'publish' ) {
+				$valid[] = (string) $id;
+			}
+		}
+		$valid = array_values( array_unique( $valid ) );
+		if ( empty( $valid ) ) {
+			return '';
+		}
+		return wp_json_encode( $valid );
 	}
 
 	/**

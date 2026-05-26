@@ -1416,8 +1416,16 @@ class LuwiPress_Knowledge_Graph {
 				}
 			}
 		} else {
-			// Vendors-only call — single bulk query for product→vendor counts.
-			$vendor_product_counts = $this->load_vendor_product_counts();
+			// Vendors-only call — single bulk query for product→vendor counts AND
+			// emit the matching `made_by` edges so callers requesting only the
+			// `vendors` section still get the supply-graph topology (target
+			// product nodes will resolve into real nodes when the client later
+			// loads the products section, otherwise they remain as dangling
+			// references the graph engine can render as halo dots — better
+			// signal than zero edges).
+			$bulk = $this->load_vendor_product_counts_with_edges();
+			$vendor_product_counts = $bulk['counts'];
+			$attribution_edges     = $bulk['edges'];
 		}
 
 		$nodes = array();
@@ -1515,17 +1523,20 @@ class LuwiPress_Knowledge_Graph {
 		return array_values( array_filter( array_map( 'absint', $decoded ) ) );
 	}
 
-	// Bulk count of product→vendor attributions. Used when KG is called with
-	// `sections=vendors` only (no product_nodes available). One direct meta
-	// query instead of N gets, keyed by vendor_id → count.
-	private function load_vendor_product_counts() {
+	// Bulk count + edges of product→vendor attributions. Used when KG is
+	// called with `sections=vendors` only (no product_nodes available). One
+	// direct meta query instead of N gets; emits both the counts map AND the
+	// made_by edge list so the vendors section returns a complete supply
+	// graph topology without needing the products section in the same call.
+	private function load_vendor_product_counts_with_edges() {
 		global $wpdb;
 		if ( ! class_exists( 'LuwiPress_Vendors' ) ) {
-			return array();
+			return array( 'counts' => array(), 'edges' => array() );
 		}
 		$meta_key = LuwiPress_Vendors::PRODUCT_VENDORS_META;
-		$rows = $wpdb->get_col( $wpdb->prepare(
-			"SELECT pm.meta_value
+		// IMPORTANT: pull `post_id` alongside `meta_value` so we can emit edges.
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT pm.post_id, pm.meta_value
 			   FROM {$wpdb->postmeta} pm
 			   JOIN {$wpdb->posts} p ON p.ID = pm.post_id
 			  WHERE pm.meta_key = %s
@@ -1535,19 +1546,27 @@ class LuwiPress_Knowledge_Graph {
 		) );
 
 		$counts = array();
-		foreach ( $rows as $raw ) {
-			$decoded = json_decode( (string) $raw, true );
+		$edges  = array();
+		foreach ( $rows as $row ) {
+			$product_id = (int) $row->post_id;
+			$decoded    = json_decode( (string) $row->meta_value, true );
 			if ( ! is_array( $decoded ) ) {
 				continue;
 			}
 			foreach ( $decoded as $vid ) {
 				$vid = absint( $vid );
-				if ( $vid > 0 ) {
-					$counts[ $vid ] = ( $counts[ $vid ] ?? 0 ) + 1;
+				if ( $vid <= 0 ) {
+					continue;
 				}
+				$counts[ $vid ] = ( $counts[ $vid ] ?? 0 ) + 1;
+				$edges[] = array(
+					'source' => 'product:' . $product_id,
+					'target' => 'vendor:' . $vid,
+					'type'   => 'made_by',
+				);
 			}
 		}
-		return $counts;
+		return array( 'counts' => $counts, 'edges' => $edges );
 	}
 
 	// ─── CUSTOMERS — individual nodes, privacy-gated (3.5.2+) ───────────
