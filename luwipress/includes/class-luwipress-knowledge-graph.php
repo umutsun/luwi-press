@@ -1856,10 +1856,20 @@ class LuwiPress_Knowledge_Graph {
 
 		// Content Health Score — pillar-weighted composite (3.5.4+). Surfaces
 		// to the JS hero so the score the operator sees is the same one the
-		// settings tab configures. JS still owns its legacy fallback formula
-		// for the moment; if `health_score.overall` is present it wins.
+		// settings tab configures. Read the existing transient only — never
+		// trigger a fresh compute from this path: KG + Health Score caches
+		// bust on the same save_post hooks, so a cold KG rebuild would also
+		// pay for the 6-pillar scan (Reflection-heavy Brand Voice pass + 8-9
+		// schema count queries + up to 3000 get_post() round-trips) inside
+		// the user-facing request. JS owns the documented fallback formula;
+		// the hero degrades gracefully when this field is missing. A cron
+		// warmer (luwipress_health_warm_cache, hourly) repopulates the
+		// transient out-of-band so subsequent KG cold-reads find it ready.
 		if ( class_exists( 'LuwiPress_Health_Score' ) ) {
-			$summary['health_score'] = LuwiPress_Health_Score::get_instance()->compute();
+			$hs_cached = get_transient( LuwiPress_Health_Score::CACHE_KEY );
+			if ( is_array( $hs_cached ) && isset( $hs_cached['overall'] ) ) {
+				$summary['health_score'] = $hs_cached;
+			}
 		}
 
 		return $summary;

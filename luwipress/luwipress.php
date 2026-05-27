@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.5.5
+ * Version: 3.5.6
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.5.5');
+define('LUWIPRESS_VERSION', '3.5.6');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -163,6 +163,7 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-aeo.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-translation.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-translation-sync.php';
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-taxonomy-editor.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-content-scheduler.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-internal-linker.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-review-analytics.php';
@@ -295,6 +296,13 @@ class LuwiPress {
      */
     public function deactivate() {
         wp_clear_scheduled_hook( 'luwipress_daily_cleanup' );
+
+        // Modules with their own cron hooks unschedule via static deactivate
+        // helpers. Add new module hooks here as they ship.
+        if ( class_exists( 'LuwiPress_Health_Score' ) ) {
+            LuwiPress_Health_Score::deactivate();
+        }
+
         flush_rewrite_rules();
         LuwiPress_Logger::log('Plugin deactivated', 'info');
     }
@@ -357,6 +365,7 @@ class LuwiPress {
         LuwiPress_Content_Audit::get_instance();
         LuwiPress_Health_Score::get_instance();
         LuwiPress_FAQ_Editor::get_instance();
+        LuwiPress_Taxonomy_Editor::get_instance();
         LuwiPress_Frontend_Inspector::get_instance();
 
         // Elementor integration (only if Elementor is active)
@@ -532,6 +541,79 @@ class LuwiPress {
             );
         }
 
+        // Multi-language Taxonomy Editor (3.5.6+) — matrix UI to edit
+        // term name / description / SEO meta across every active language
+        // in one screen. Bulk save fan-outs through the 3.5.5 taxonomy
+        // SEO meta bulk handler + WPML-aware term update path.
+        if ( class_exists( 'LuwiPress_Taxonomy_Editor' ) ) {
+            add_submenu_page(
+                'luwipress',
+                __( 'Taxonomy Editor', 'luwipress' ),
+                __( 'Taxonomy Editor', 'luwipress' ),
+                'manage_options',
+                'luwipress-taxonomy-editor',
+                array( $this, 'taxonomy_editor_page' )
+            );
+        }
+
+        // Image Alt Bulk (3.5.6+) — Media Library scan + bulk alt-text
+        // editor. Closes the "set alt on 200 product images one at a time"
+        // gap for non-WebMCP customers. Backend: POST /media/alt-bulk.
+        add_submenu_page(
+            'luwipress',
+            __( 'Image Alt Bulk', 'luwipress' ),
+            __( 'Image Alt Bulk', 'luwipress' ),
+            'manage_options',
+            'luwipress-image-alt-bulk',
+            array( $this, 'image_alt_bulk_page' )
+        );
+
+        // Vendors (3.5.6+) — settings UI for the generic Vendor/Maker/
+        // Atelier CPT module. CPT itself uses native WP admin; this page
+        // is the surrounding config shell (slug, labels, social toggles,
+        // legacy redirects). Always registered (module is core; admin
+        // page renders an empty state if module isn't initialised).
+        if ( class_exists( 'LuwiPress_Vendors' ) ) {
+            add_submenu_page(
+                'luwipress',
+                __( 'Vendors', 'luwipress' ),
+                __( 'Vendors', 'luwipress' ),
+                'manage_options',
+                'luwipress-vendors',
+                array( $this, 'vendors_page' )
+            );
+        }
+
+        // Schema Picker (3.5.6+) — operator UI for the seven non-FAQ
+        // Schema Registry types (HowTo / Speakable / LocalBusiness /
+        // Service / Course / Review / AggregateRating). FAQ has its own
+        // metabox; ItemList is auto-generated on category archives.
+        if ( class_exists( 'LuwiPress_Schema_Registry' ) ) {
+            add_submenu_page(
+                'luwipress',
+                __( 'Schema Picker', 'luwipress' ),
+                __( 'Schema Picker', 'luwipress' ),
+                'manage_options',
+                'luwipress-schema-picker',
+                array( $this, 'schema_picker_page' )
+            );
+        }
+
+        // Slug Resolver (3.5.6+) — admin UI over the six-pass page→
+        // product_cat redirect engine. Critical pre-DNS-swap verification
+        // surface: paste swap-day slugs, confirm each resolves correctly,
+        // override any false matches before the swap goes live.
+        if ( class_exists( 'LuwiPress_Slug_Resolver' ) ) {
+            add_submenu_page(
+                'luwipress',
+                __( 'Slug Resolver', 'luwipress' ),
+                __( 'Slug Resolver', 'luwipress' ),
+                'manage_options',
+                'luwipress-slug-resolver',
+                array( $this, 'slug_resolver_page' )
+            );
+        }
+
     }
     
     /**
@@ -603,6 +685,41 @@ class LuwiPress {
      */
     public function schema_preview_page() {
         include LUWIPRESS_PLUGIN_DIR . 'admin/schema-preview-page.php';
+    }
+
+    /**
+     * Multi-language Taxonomy Editor admin page (3.5.6+).
+     */
+    public function taxonomy_editor_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/taxonomy-editor-page.php';
+    }
+
+    /**
+     * Image Alt Bulk admin page (3.5.6+).
+     */
+    public function image_alt_bulk_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/image-alt-bulk-page.php';
+    }
+
+    /**
+     * Vendors admin page (3.5.6+).
+     */
+    public function vendors_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/vendors-page.php';
+    }
+
+    /**
+     * Schema Picker admin page (3.5.6+).
+     */
+    public function schema_picker_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/schema-picker-page.php';
+    }
+
+    /**
+     * Slug Resolver admin page (3.5.6+).
+     */
+    public function slug_resolver_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/slug-resolver-page.php';
     }
 
     /**

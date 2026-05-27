@@ -45,36 +45,49 @@ if ( class_exists( 'LuwiPress_Schema_Registry' ) ) {
 
 // Quick-pick URLs — homepage, first product, first product category — so
 // the operator can run a preview in one click on the first visit.
-$quick_urls = array();
-$quick_urls[] = array(
-	'label' => __( 'Homepage', 'luwipress' ),
-	'url'   => home_url( '/' ),
-);
-if ( post_type_exists( 'product' ) ) {
-	$recent_products = get_posts( array(
-		'post_type'      => 'product',
-		'post_status'    => 'publish',
-		'posts_per_page' => 1,
-		'orderby'        => 'date',
-		'order'          => 'DESC',
-	) );
-	if ( ! empty( $recent_products ) ) {
-		$quick_urls[] = array(
-			'label' => __( 'Latest product', 'luwipress' ) . ' — ' . get_the_title( $recent_products[0] ),
-			'url'   => get_permalink( $recent_products[0] ),
-		);
+//
+// 3.5.6+: cached in a 6h transient so repeated admin pageviews don't keep
+// querying `get_posts` + `get_terms(hide_empty=true)` (the latter triggers
+// term-count subqueries even for `number=1`). Busted automatically when
+// products / categories change because the same `save_post_product` and
+// `created/edit/delete_product_cat` hooks the KG already listens on will
+// fire `clean_term_cache` etc. — we use a short TTL instead of registering
+// a dedicated invalidator since this is purely a UI affordance.
+$quick_urls = get_transient( 'luwipress_schema_preview_quick_urls' );
+if ( false === $quick_urls ) {
+	$quick_urls = array();
+	$quick_urls[] = array(
+		'label' => __( 'Homepage', 'luwipress' ),
+		'url'   => home_url( '/' ),
+	);
+	if ( post_type_exists( 'product' ) ) {
+		$recent_products = get_posts( array(
+			'post_type'      => 'product',
+			'post_status'    => 'publish',
+			'posts_per_page' => 1,
+			'orderby'        => 'date',
+			'order'          => 'DESC',
+			'no_found_rows'  => true,
+		) );
+		if ( ! empty( $recent_products ) ) {
+			$quick_urls[] = array(
+				'label' => __( 'Latest product', 'luwipress' ) . ' — ' . get_the_title( $recent_products[0] ),
+				'url'   => get_permalink( $recent_products[0] ),
+			);
+		}
+		$recent_cats = get_terms( array(
+			'taxonomy'   => 'product_cat',
+			'hide_empty' => true,
+			'number'     => 1,
+		) );
+		if ( ! empty( $recent_cats ) && ! is_wp_error( $recent_cats ) ) {
+			$quick_urls[] = array(
+				'label' => __( 'Product category', 'luwipress' ) . ' — ' . $recent_cats[0]->name,
+				'url'   => get_term_link( $recent_cats[0] ),
+			);
+		}
 	}
-	$recent_cats = get_terms( array(
-		'taxonomy'   => 'product_cat',
-		'hide_empty' => true,
-		'number'     => 1,
-	) );
-	if ( ! empty( $recent_cats ) && ! is_wp_error( $recent_cats ) ) {
-		$quick_urls[] = array(
-			'label' => __( 'Product category', 'luwipress' ) . ' — ' . $recent_cats[0]->name,
-			'url'   => get_term_link( $recent_cats[0] ),
-		);
-	}
+	set_transient( 'luwipress_schema_preview_quick_urls', $quick_urls, 6 * HOUR_IN_SECONDS );
 }
 ?>
 <div class="wrap luwipress-schema-preview">

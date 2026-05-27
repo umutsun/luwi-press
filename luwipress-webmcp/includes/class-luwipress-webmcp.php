@@ -8336,13 +8336,14 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'vendor_list', array(
-            'description' => 'List all Vendor (CPT) entries with their profile meta (location, specialty, years, social links). Useful for confirming what is published before generating an /<archive>/ index page or wiring the vendor-grid widget.',
+            'description' => 'List all Vendor (CPT) entries with their profile meta (location, specialty, years, social links) and any attached vendor_group terms. Useful for confirming what is published before generating an /<archive>/ index page or wiring the vendor-grid widget. Filter by group with the `group` arg to scope the list to one vertical (e.g. "team" vs "luthiers" on the same site).',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
                     'limit'   => array( 'type' => 'integer', 'description' => 'Max entries (default 50, max 200)' ),
                     'orderby' => array( 'type' => 'string',  'description' => 'menu_order | date | title (default menu_order)' ),
                     'order'   => array( 'type' => 'string',  'description' => 'ASC | DESC (default ASC)' ),
+                    'group'   => array( 'type' => 'string',  'description' => 'Vendor group slug, term ID, or comma-separated list (e.g. "team" or "luthiers,team"). Omit to return every vendor regardless of group.' ),
                 ),
             ),
             'annotations' => array( 'title' => 'Vendor List', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),

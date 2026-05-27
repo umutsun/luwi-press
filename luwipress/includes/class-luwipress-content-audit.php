@@ -310,8 +310,15 @@ class LuwiPress_Content_Audit {
 	/**
 	 * Pull text to scan, tagged with severity per GMC sensitivity.
 	 * Returns array of field_name => ['text' => string, 'severity' => string].
+	 *
+	 * Public (3.5.6+) so the Health Score Brand Voice pillar can call it
+	 * directly instead of going through ReflectionMethod — sequential
+	 * Reflection lookups inside a 200-post loop were measurably slowing
+	 * cold compute() (~100x slower than direct call per invocation, with
+	 * 3 reflections per post). The method is side-effect-free; promoting
+	 * it costs nothing and frees the hot path.
 	 */
-	private function collect_fields( $post, $scope ) {
+	public function collect_fields( $post, $scope ) {
 		$fields = array();
 
 		if ( 'body' !== $scope ) {
@@ -382,33 +389,101 @@ class LuwiPress_Content_Audit {
 	 * negative lookbehind/lookahead on \p{L}\p{N} so Turkish (ı/ş/ğ) and
 	 * Latin-with-diacritics match cleanly without false positives inside
 	 * compound words.
+	 *
+	 * Public (3.5.6+) — see note on collect_fields(). Direct method call
+	 * from Health Score::measure_brand_voice() replaces a Reflection
+	 * round-trip per phrase scan.
 	 */
-	private function find_phrases( $text, $phrases ) {
+	public function find_phrases( $text, $phrases ) {
 		$results = array();
 		if ( '' === $text || empty( $phrases ) ) {
 			return $results;
 		}
 
-		foreach ( $phrases as $phrase ) {
-			$phrase_trim = trim( $phrase );
-			if ( '' === $phrase_trim ) {
-				continue;
-			}
-			$pattern = '/(?<![\p{L}\p{N}])' . preg_quote( $phrase_trim, '/' ) . '(?![\p{L}\p{N}])/iu';
-			if ( preg_match_all( $pattern, $text, $matches, PREG_OFFSET_CAPTURE ) ) {
-				foreach ( $matches[0] as $hit ) {
-					$results[] = array(
-						'phrase'  => $phrase_trim,
-						'context' => $this->build_context( $text, $hit[1], strlen( $hit[0] ) ),
-						'offset'  => $hit[1],
-					);
-					if ( count( $results ) >= 50 ) {
-						return $results; // hard cap per field — keep payload sane
-					}
-				}
+		// 3.5.6+: compile a single alternation pattern per unique phrase list
+		// and cache it. The previous shape compiled one pattern PER PHRASE
+		// PER POST PER FIELD — on a 100-post audit with 140 phrases × 5
+		// fields that was ~70k preg_quote+preg_match_all cycles. Now: one
+		// compile per unique phrase list (banks are stable per session), one
+		// preg_match_all per field, with the matched phrase recovered by
+		// case-insensitive lookup against the original phrase array.
+		$compiled = $this->compile_phrase_pattern( $phrases );
+		if ( null === $compiled ) {
+			return $results;
+		}
+
+		if ( ! preg_match_all( $compiled['pattern'], $text, $matches, PREG_OFFSET_CAPTURE ) ) {
+			return $results;
+		}
+
+		$lookup = $compiled['lookup']; // lowercased-phrase => canonical phrase
+		foreach ( $matches[0] as $hit ) {
+			$raw     = $hit[0];
+			$key     = function_exists( 'mb_strtolower' ) ? mb_strtolower( $raw, 'UTF-8' ) : strtolower( $raw );
+			$canon   = $lookup[ $key ] ?? $raw;
+			$results[] = array(
+				'phrase'  => $canon,
+				'context' => $this->build_context( $text, $hit[1], strlen( $raw ) ),
+				'offset'  => $hit[1],
+			);
+			if ( count( $results ) >= 50 ) {
+				return $results; // hard cap per field — keep payload sane
 			}
 		}
 		return $results;
+	}
+
+	/**
+	 * Compile a list of phrases into a single Unicode-aware alternation
+	 * pattern with a side-table that maps lowercased matched text back to
+	 * the canonical phrase as written in the bank. Cached per-process by
+	 * the phrase-list signature so the bank doesn't recompile on every
+	 * audit call.
+	 *
+	 * @param string[] $phrases
+	 * @return array{pattern:string,lookup:array<string,string>}|null
+	 */
+	private function compile_phrase_pattern( $phrases ) {
+		static $cache = array();
+
+		// Normalise + dedupe the input first so two callers with the same
+		// banks share a cache slot regardless of order.
+		$normalised = array();
+		foreach ( $phrases as $p ) {
+			$p = trim( (string) $p );
+			if ( '' === $p ) {
+				continue;
+			}
+			$normalised[] = $p;
+		}
+		if ( empty( $normalised ) ) {
+			return null;
+		}
+		sort( $normalised );
+		$normalised = array_values( array_unique( $normalised ) );
+
+		$signature = md5( implode( '|', $normalised ) );
+		if ( isset( $cache[ $signature ] ) ) {
+			return $cache[ $signature ];
+		}
+
+		// Build a lookup that maps the LOWERCASED phrase back to its
+		// canonical (bank-original) form so callers receive the phrase
+		// as it appears in the bank, not the casing the source text used.
+		$lookup = array();
+		$quoted = array();
+		foreach ( $normalised as $p ) {
+			$key = function_exists( 'mb_strtolower' ) ? mb_strtolower( $p, 'UTF-8' ) : strtolower( $p );
+			$lookup[ $key ] = $p;
+			$quoted[]       = preg_quote( $p, '/' );
+		}
+
+		$pattern = '/(?<![\p{L}\p{N}])(?:' . implode( '|', $quoted ) . ')(?![\p{L}\p{N}])/iu';
+		$cache[ $signature ] = array(
+			'pattern' => $pattern,
+			'lookup'  => $lookup,
+		);
+		return $cache[ $signature ];
 	}
 
 	private function build_context( $text, $offset, $len ) {
@@ -427,7 +502,14 @@ class LuwiPress_Content_Audit {
 
 	// ─── LANGUAGE DETECT ───────────────────────────────────────────────
 
-	private function detect_post_language( $post_id ) {
+	/**
+	 * Resolve a post's language code via WPML, Polylang, or site locale.
+	 *
+	 * Public (3.5.6+) — see note on collect_fields(). Direct method call
+	 * from Health Score::measure_brand_voice() replaces a Reflection
+	 * round-trip per scanned post.
+	 */
+	public function detect_post_language( $post_id ) {
 		// WPML
 		if ( has_filter( 'wpml_post_language_details' ) ) {
 			$info = apply_filters( 'wpml_post_language_details', null, $post_id );

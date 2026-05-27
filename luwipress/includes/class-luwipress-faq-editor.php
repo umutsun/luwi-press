@@ -275,12 +275,17 @@ class LuwiPress_FAQ_Editor {
 			update_post_meta( $post_id, self::META_UPDATED, current_time( 'c' ) );
 		}
 
-		// 6. Cache invalidations — keep AEO coverage + Health Score in
-		// sync. Both are cheap deletes (transient + custom transient).
+		// 6. Cache invalidations — only ones not covered by other listeners.
+		// AEO coverage transient: nobody else clears it for FAQ writes, so
+		// keep this explicit. Health Score: has its own save_post_<type>
+		// p20 listener (see class-luwipress-health-score.php::__construct),
+		// so the invalidate happens automatically when this save_post runs.
+		// Net change vs 3.5.5: one redundant delete_transient saved per FAQ
+		// save (the Health Score one).
+		// Plugin Detector purge_post_cache: keep — it bridges to the page-
+		// cache plugin (Rocket / LiteSpeed) which WP's automatic save_post
+		// → clean_post_cache does NOT cover.
 		delete_transient( 'luwipress_aeo_coverage' );
-		if ( class_exists( 'LuwiPress_Health_Score' ) ) {
-			LuwiPress_Health_Score::get_instance()->invalidate_cache();
-		}
 		if ( class_exists( 'LuwiPress_Plugin_Detector' ) ) {
 			LuwiPress_Plugin_Detector::get_instance()->purge_post_cache( $post_id );
 		}

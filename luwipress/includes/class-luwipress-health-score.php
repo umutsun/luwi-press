@@ -29,6 +29,7 @@ class LuwiPress_Health_Score {
 	const OPTION_PILLARS = 'luwipress_health_pillars';
 	const CACHE_KEY      = 'luwipress_health_score_cache';
 	const CACHE_TTL      = 900; // 15 minutes
+	const CRON_HOOK      = 'luwipress_health_warm_cache';
 
 	private static $instance = null;
 
@@ -195,6 +196,34 @@ class LuwiPress_Health_Score {
 
 		// REST surface for the settings tab and external consumers.
 		add_action( 'rest_api_init', array( $this, 'register_endpoints' ) );
+
+		// Out-of-band cache warmer (3.5.6+) — the KG hot path no longer
+		// triggers compute() on cold reads (see class-luwipress-knowledge-
+		// graph.php::build_summary), so the transient now refills here
+		// instead. Hourly tick: skip if already warm.
+		add_action( self::CRON_HOOK, array( $this, 'cron_warm_cache' ) );
+		if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
+			wp_schedule_event( time() + 600, 'hourly', self::CRON_HOOK );
+		}
+	}
+
+	public static function deactivate() {
+		$ts = wp_next_scheduled( self::CRON_HOOK );
+		if ( $ts ) {
+			wp_unschedule_event( $ts, self::CRON_HOOK );
+		}
+	}
+
+	/**
+	 * Hourly tick: if the cached score is missing, recompute it. Cheap when
+	 * already warm (single get_transient + return). Keeps the next KG cold
+	 * read from paying the 6-pillar bill in the user-facing request.
+	 */
+	public function cron_warm_cache() {
+		if ( false !== get_transient( self::CACHE_KEY ) ) {
+			return;
+		}
+		$this->compute( true );
 	}
 
 	/**
@@ -686,19 +715,46 @@ class LuwiPress_Health_Score {
 		$active  = 0;
 		$details = array();
 
+		// Build the meta_key → type_key map so we can run ONE grouped query
+		// across every registered type's meta_key. Previously this was an
+		// N+1 over the postmeta table (8-9 sequential COUNT(*) queries),
+		// painful on cold KG rebuilds where Health Score also has cold cache.
+		$key_to_type = array();
 		foreach ( $types as $type_key => $type_def ) {
 			$meta_key = $type_def['meta_key'] ?? '';
 			if ( empty( $meta_key ) ) {
 				continue;
 			}
+			$key_to_type[ $meta_key ] = $type_key;
+			$details[ $type_key ]     = 0;
+		}
+
+		if ( ! empty( $key_to_type ) ) {
 			global $wpdb;
-			$count = (int) $wpdb->get_var( $wpdb->prepare(
-				"SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value <> ''",
-				$meta_key
-			) );
-			$details[ $type_key ] = $count;
-			if ( $count > 0 ) {
-				$active++;
+			$keys         = array_keys( $key_to_type );
+			$placeholders = implode( ',', array_fill( 0, count( $keys ), '%s' ) );
+			$rows         = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT meta_key, COUNT(*) AS c
+					 FROM {$wpdb->postmeta}
+					 WHERE meta_key IN ($placeholders)
+					   AND meta_value <> ''
+					 GROUP BY meta_key",
+					$keys
+				)
+			);
+			if ( is_array( $rows ) ) {
+				foreach ( $rows as $r ) {
+					if ( ! isset( $key_to_type[ $r->meta_key ] ) ) {
+						continue;
+					}
+					$type_key            = $key_to_type[ $r->meta_key ];
+					$count               = (int) $r->c;
+					$details[ $type_key ] = $count;
+					if ( $count > 0 ) {
+						$active++;
+					}
+				}
 			}
 		}
 
@@ -723,16 +779,29 @@ class LuwiPress_Health_Score {
 		global $wpdb;
 		$known = array( '_luwipress_faq', '_luwipress_howto', '_luwipress_speakable' );
 
-		$active = 0;
-		$details = array();
-		foreach ( $known as $meta_key ) {
-			$count = (int) $wpdb->get_var( $wpdb->prepare(
-				"SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value <> ''",
-				$meta_key
-			) );
-			$details[ $meta_key ] = $count;
-			if ( $count > 0 ) {
-				$active++;
+		// Single grouped query, same pattern as measure_schema_coverage()
+		// since 3.5.6 — closes the N+1 even on the legacy fallback path.
+		$placeholders = implode( ',', array_fill( 0, count( $known ), '%s' ) );
+		$rows         = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT meta_key, COUNT(*) AS c
+				 FROM {$wpdb->postmeta}
+				 WHERE meta_key IN ($placeholders)
+				   AND meta_value <> ''
+				 GROUP BY meta_key",
+				$known
+			)
+		);
+
+		$active  = 0;
+		$details = array_fill_keys( $known, 0 );
+		if ( is_array( $rows ) ) {
+			foreach ( $rows as $r ) {
+				$count                  = (int) $r->c;
+				$details[ $r->meta_key ] = $count;
+				if ( $count > 0 ) {
+					$active++;
+				}
 			}
 		}
 
@@ -793,6 +862,11 @@ class LuwiPress_Health_Score {
 				'details' => array( 'reason' => 'no_content_to_sample' ),
 			);
 		}
+
+		// Prime the post object cache once for the whole sample so the
+		// per-post get_post() calls below hit cache instead of round-tripping
+		// to the DB. 200 posts × 1 cache miss → 1 batched cache prime.
+		_prime_post_caches( $post_ids, true, false );
 
 		$bank = $audit->get_phrase_bank();
 
@@ -900,6 +974,12 @@ class LuwiPress_Health_Score {
 				continue;
 			}
 
+			// Prime the post cache for this CPT's batch — closes the N+1
+			// get_post() round-trip pattern inside the word-count loop.
+			// 1000 ids per CPT × 3 CPTs = 3 batched primes instead of 3000
+			// DB hits on cold cache.
+			_prime_post_caches( $ids, false, false );
+
 			$total = count( $ids );
 			$thin  = 0;
 			$band_count = 0;
@@ -982,38 +1062,38 @@ class LuwiPress_Health_Score {
 
 	/**
 	 * Helper for measure_brand_voice — runs the phrase finder against a
-	 * single post's scannable fields. Reflectively calls the audit module's
-	 * private helpers because surfacing them as public API risks a wider
-	 * contract than this pillar needs.
+	 * single post's scannable fields.
+	 *
+	 * 3.5.6+: direct method calls. The audit module's helpers
+	 * (`detect_post_language`, `collect_fields`, `find_phrases`) are public
+	 * since 3.5.6 specifically so this hot loop doesn't pay ~3 Reflection
+	 * round-trips per scanned post. We still guard via method_exists so a
+	 * mid-rollout install (Content Audit upgraded, Health Score upgraded
+	 * separately) doesn't fatal — the guard short-circuits cleanly to a
+	 * zero-findings result instead.
 	 */
 	private function scan_post_for_phrases( $post, $bank, $audit ) {
-		$lang = '';
-		if ( method_exists( $audit, 'detect_post_language' ) ) {
-			$ref = new ReflectionMethod( $audit, 'detect_post_language' );
-			$ref->setAccessible( true );
-			$lang = $ref->invoke( $audit, $post->ID );
-		}
+		$lang    = method_exists( $audit, 'detect_post_language' )
+			? (string) $audit->detect_post_language( $post->ID )
+			: '';
 		$phrases = isset( $bank[ $lang ] ) ? $bank[ $lang ] : ( $bank['en'] ?? array() );
 
-		$fields = array();
-		if ( method_exists( $audit, 'collect_fields' ) ) {
-			$ref = new ReflectionMethod( $audit, 'collect_fields' );
-			$ref->setAccessible( true );
-			$fields = $ref->invoke( $audit, $post, 'all' );
+		$fields = method_exists( $audit, 'collect_fields' )
+			? $audit->collect_fields( $post, 'all' )
+			: array();
+
+		if ( ! method_exists( $audit, 'find_phrases' ) || empty( $fields ) ) {
+			return array();
 		}
 
 		$findings = array();
-		if ( method_exists( $audit, 'find_phrases' ) ) {
-			$ref = new ReflectionMethod( $audit, 'find_phrases' );
-			$ref->setAccessible( true );
-			foreach ( $fields as $field_name => $field_data ) {
-				$matches = $ref->invoke( $audit, $field_data['text'], $phrases );
-				foreach ( $matches as $m ) {
-					$findings[] = array(
-						'phrase' => $m['phrase'],
-						'field'  => $field_name,
-					);
-				}
+		foreach ( $fields as $field_name => $field_data ) {
+			$matches = $audit->find_phrases( $field_data['text'], $phrases );
+			foreach ( $matches as $m ) {
+				$findings[] = array(
+					'phrase' => $m['phrase'],
+					'field'  => $field_name,
+				);
 			}
 		}
 		return $findings;

@@ -41,8 +41,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class LuwiPress_Vendors {
 
-	const POST_TYPE     = 'lwp_vendor';
-	const OPTION_PREFIX = 'luwipress_vendors_';
+	const POST_TYPE      = 'lwp_vendor';
+	const TAXONOMY_GROUP = 'lwp_vendor_group';
+	const OPTION_PREFIX  = 'luwipress_vendors_';
 
 	/**
 	 * Default config. Each value lives under
@@ -555,6 +556,46 @@ class LuwiPress_Vendors {
 		);
 
 		register_post_type( self::POST_TYPE, apply_filters( 'luwipress_vendors_cpt_args', $args ) );
+
+		// Vendor groups (3.5.7+) — one site can run multiple personnel
+		// verticals side-by-side (e.g. "Luthiers" who make products +
+		// "Team" who run the storefront). The CPT stays single — we
+		// only add a flat, tag-style taxonomy so the same vendor pool
+		// can be partitioned into named groups without doubling the
+		// data model. Theme widgets + REST query both filter by this
+		// taxonomy term to render a focused subset.
+		$group_args = array(
+			'labels'            => array(
+				'name'              => __( 'Vendor Groups', 'luwipress' ),
+				'singular_name'     => __( 'Vendor Group', 'luwipress' ),
+				'all_items'         => __( 'All Groups', 'luwipress' ),
+				'edit_item'         => __( 'Edit Group', 'luwipress' ),
+				'view_item'         => __( 'View Group', 'luwipress' ),
+				'update_item'       => __( 'Update Group', 'luwipress' ),
+				'add_new_item'      => __( 'Add New Group', 'luwipress' ),
+				'new_item_name'     => __( 'New Group', 'luwipress' ),
+				'menu_name'         => __( 'Groups', 'luwipress' ),
+				'search_items'      => __( 'Search Groups', 'luwipress' ),
+				'not_found'         => __( 'No groups found.', 'luwipress' ),
+			),
+			'public'            => true,
+			'show_ui'           => true,
+			'show_admin_column' => true,
+			'show_in_nav_menus' => true,
+			'show_in_rest'      => true,
+			'rest_base'         => 'vendor-groups',
+			'hierarchical'      => false, // tag-style; flat is enough for partitioning
+			'rewrite'           => array(
+				'slug'         => $slug . '/group',
+				'with_front'   => $with_front,
+				'hierarchical' => false,
+			),
+		);
+		register_taxonomy(
+			self::TAXONOMY_GROUP,
+			array( self::POST_TYPE ),
+			apply_filters( 'luwipress_vendor_group_taxonomy_args', $group_args )
+		);
 	}
 
 	public function register_meta_fields() {
@@ -628,6 +669,7 @@ class LuwiPress_Vendors {
 				'limit'   => array( 'type' => 'integer', 'default' => 50, 'minimum' => 1, 'maximum' => 200 ),
 				'orderby' => array( 'type' => 'string',  'default' => 'menu_order' ),
 				'order'   => array( 'type' => 'string',  'default' => 'ASC' ),
+				'group'   => array( 'type' => 'string',  'default' => '' ),
 			),
 		) );
 
@@ -719,14 +761,37 @@ class LuwiPress_Vendors {
 		$limit   = (int) $req->get_param( 'limit' );
 		$orderby = sanitize_key( $req->get_param( 'orderby' ) );
 		$order   = strtoupper( sanitize_key( $req->get_param( 'order' ) ) ) === 'DESC' ? 'DESC' : 'ASC';
+		$group   = $req->get_param( 'group' );
 
-		$q = new WP_Query( array(
+		$args = array(
 			'post_type'      => self::POST_TYPE,
 			'posts_per_page' => $limit,
 			'post_status'    => 'publish',
 			'orderby'        => $orderby,
 			'order'          => $order,
-		) );
+		);
+
+		// Vendor group filter (3.5.7+) — accepts term slug, term ID, or
+		// comma-separated list of either. Lets callers pull just the
+		// "Team" subset, just "Luthiers", etc. without an N+1 fetch.
+		if ( ! empty( $group ) ) {
+			$terms_in = array_filter( array_map( 'trim', explode( ',', (string) $group ) ) );
+			if ( ! empty( $terms_in ) ) {
+				$field = ctype_digit( (string) $terms_in[0] ) ? 'term_id' : 'slug';
+				if ( $field === 'term_id' ) {
+					$terms_in = array_map( 'absint', $terms_in );
+				}
+				$args['tax_query'] = array(
+					array(
+						'taxonomy' => self::TAXONOMY_GROUP,
+						'field'    => $field,
+						'terms'    => $terms_in,
+					),
+				);
+			}
+		}
+
+		$q = new WP_Query( $args );
 
 		$out = array();
 		foreach ( $q->posts as $p ) {
@@ -789,6 +854,22 @@ class LuwiPress_Vendors {
 		foreach ( self::META_KEYS as $short => $meta_key ) {
 			$meta[ $short ] = get_post_meta( $p->ID, $meta_key, true );
 		}
+
+		// Vendor groups (3.5.7+) — emit each attached term as
+		// {slug, name} pairs so UIs can render filter pills + widgets
+		// can route by slug without a second round trip.
+		$group_terms = get_the_terms( $p->ID, self::TAXONOMY_GROUP );
+		$groups      = array();
+		if ( is_array( $group_terms ) ) {
+			foreach ( $group_terms as $t ) {
+				$groups[] = array(
+					'term_id' => (int) $t->term_id,
+					'slug'    => $t->slug,
+					'name'    => $t->name,
+				);
+			}
+		}
+
 		return array(
 			'id'        => $p->ID,
 			'title'     => get_the_title( $p ),
@@ -797,6 +878,7 @@ class LuwiPress_Vendors {
 			'excerpt'   => $p->post_excerpt,
 			'image'     => get_the_post_thumbnail_url( $p, 'large' ) ?: '',
 			'meta'      => $meta,
+			'groups'    => $groups,
 		);
 	}
 

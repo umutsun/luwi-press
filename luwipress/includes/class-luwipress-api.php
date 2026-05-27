@@ -188,6 +188,24 @@ class LuwiPress_API {
             ),
         ) );
 
+        // Bulk attachment alt-text writer (3.5.6+) — sibling of
+        // /taxonomy/seo-meta-bulk. Collapses N alt-text edits into a single
+        // round trip so the Image Alt Bulk admin page can save 50+ rows
+        // without rate-limit thrash. Each row carries its attachment_id
+        // plus the new alt string; missing-alt rows are skipped silently.
+        register_rest_route( 'luwipress/v1', '/media/alt-bulk', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'handle_bulk_media_alt' ),
+            'permission_callback' => array( $this, 'check_admin_permission' ),
+            'args'                => array(
+                'rows' => array(
+                    'required'    => true,
+                    'type'        => 'array',
+                    'description' => 'Array of { attachment_id, alt_text }. Up to 500 rows per request.',
+                ),
+            ),
+        ) );
+
         // WordPress 7.0 Connectors migration — preview which legacy API keys
         // can be moved into native WP Connectors (no writes happen here).
         register_rest_route( 'luwipress/v1', '/connectors/migrate-preview', array(
@@ -1448,6 +1466,72 @@ class LuwiPress_API {
         }
 
         LuwiPress_Logger::log( 'Bulk taxonomy SEO meta update', 'info', array(
+            'applied' => $applied,
+            'skipped' => $skipped,
+            'errors'  => count( $errors ),
+        ) );
+
+        return rest_ensure_response( array(
+            'success'    => true,
+            'applied'    => $applied,
+            'skipped'    => $skipped,
+            'error_rows' => array_slice( $errors, 0, 20 ),
+            'total'      => count( $rows ),
+        ) );
+    }
+
+    /**
+     * POST /media/alt-bulk — Apply alt-text updates to N attachments in a
+     * single call. Powers the Image Alt Bulk admin page.
+     *
+     * Body: { rows: [ { attachment_id, alt_text }, ... ] }
+     * Cap: 500 rows per request. Empty / null alt_text values DELETE the
+     * meta (operator may want to clear a placeholder) — distinct from the
+     * "field omitted = leave alone" semantics of the taxonomy bulk handler
+     * because alt is single-field per row and the operator's intent is
+     * unambiguous.
+     *
+     * @since 3.5.6
+     */
+    public function handle_bulk_media_alt( $request ) {
+        $rows = $request->get_param( 'rows' );
+        if ( ! is_array( $rows ) || empty( $rows ) ) {
+            return new WP_Error( 'no_rows', 'rows array is required', array( 'status' => 400 ) );
+        }
+        if ( count( $rows ) > 500 ) {
+            return new WP_Error( 'too_many_rows', 'Max 500 rows per request; split and retry.', array( 'status' => 400 ) );
+        }
+
+        $applied = 0;
+        $skipped = 0;
+        $errors  = array();
+
+        foreach ( $rows as $i => $row ) {
+            $id = isset( $row['attachment_id'] ) ? absint( $row['attachment_id'] ) : 0;
+            if ( ! $id ) {
+                $errors[] = array( 'row' => $i, 'error' => 'missing_attachment_id' );
+                $skipped++;
+                continue;
+            }
+            $post = get_post( $id );
+            if ( ! $post || $post->post_type !== 'attachment' ) {
+                $errors[] = array( 'row' => $i, 'attachment_id' => $id, 'error' => 'not_attachment' );
+                $skipped++;
+                continue;
+            }
+
+            // Empty/null clears the meta entirely; non-empty stores
+            // sanitized plain text (alt text never carries HTML).
+            $alt = array_key_exists( 'alt_text', $row ) ? $row['alt_text'] : null;
+            if ( $alt === null || $alt === '' ) {
+                delete_post_meta( $id, '_wp_attachment_image_alt' );
+            } else {
+                update_post_meta( $id, '_wp_attachment_image_alt', sanitize_text_field( (string) $alt ) );
+            }
+            $applied++;
+        }
+
+        LuwiPress_Logger::log( 'Bulk media alt-text update', 'info', array(
             'applied' => $applied,
             'skipped' => $skipped,
             'errors'  => count( $errors ),
