@@ -977,8 +977,23 @@ if ( $is_wpml ) {
 		$sync_settings_resp = LuwiPress_Translation_Sync::get_instance()->rest_settings_get( new WP_REST_Request( 'GET', '/luwipress/v1/translation/sync-settings' ) );
 		$sync_settings      = $sync_settings_resp instanceof WP_REST_Response ? $sync_settings_resp->get_data() : array();
 		$last_audit         = $sync_settings['last_audit'] ?? null;
+		// Auto-open + scroll-to when the page lands with `?tab=sync-audit`
+		// (e.g. from the LuwiPress → Translation Sync submenu deep-link
+		// registered in 3.5.4). Keeps the discoverability hoist working
+		// without forcing a separate page or duplicate menu entry.
+		$auto_open_sync = ( isset( $_GET['tab'] ) && 'sync-audit' === sanitize_key( $_GET['tab'] ) );
 	?>
-	<details class="tm-sync-audit" id="luwipress-sync-audit">
+	<details class="tm-sync-audit" id="luwipress-sync-audit"<?php echo $auto_open_sync ? ' open' : ''; ?>>
+		<?php if ( $auto_open_sync ) : ?>
+			<script>
+			document.addEventListener('DOMContentLoaded', function () {
+				var el = document.getElementById('luwipress-sync-audit');
+				if (el && el.scrollIntoView) {
+					el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+				}
+			});
+			</script>
+		<?php endif; ?>
 		<summary class="tm-sync-summary">
 			<span class="dashicons dashicons-admin-site-alt2"></span>
 			<span class="tm-sync-summary-label"><?php esc_html_e( 'Translation Sync Audit', 'luwipress' ); ?></span>

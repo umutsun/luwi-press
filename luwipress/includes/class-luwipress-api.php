@@ -169,6 +169,25 @@ class LuwiPress_API {
             ),
         ) );
 
+        // Bulk taxonomy term SEO meta — sibling of /seo/meta-bulk for
+        // taxonomy terms. Powers the multi-language category sweep workflow
+        // (52 categories × 4 languages × 3 fields = 624 writes collapsed
+        // into a single REST call). Each row carries its own resolved
+        // term_id, so WPML/Polylang siblings are passed in pre-resolved by
+        // the client — keeps the endpoint translation-plugin-agnostic.
+        register_rest_route( 'luwipress/v1', '/taxonomy/seo-meta-bulk', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'handle_bulk_taxonomy_seo_meta' ),
+            'permission_callback' => array( $this, 'check_admin_permission' ),
+            'args'                => array(
+                'rows' => array(
+                    'required'    => true,
+                    'type'        => 'array',
+                    'description' => 'Array of { term_id, taxonomy, title?, description?, focus_keyword? }. Missing fields leave existing values untouched.',
+                ),
+            ),
+        ) );
+
         // WordPress 7.0 Connectors migration — preview which legacy API keys
         // can be moved into native WP Connectors (no writes happen here).
         register_rest_route( 'luwipress/v1', '/connectors/migrate-preview', array(
@@ -1326,6 +1345,109 @@ class LuwiPress_API {
         }
 
         LuwiPress_Logger::log( 'Bulk SEO meta update', 'info', array(
+            'applied' => $applied,
+            'skipped' => $skipped,
+            'errors'  => count( $errors ),
+        ) );
+
+        return rest_ensure_response( array(
+            'success'    => true,
+            'applied'    => $applied,
+            'skipped'    => $skipped,
+            'error_rows' => array_slice( $errors, 0, 20 ),
+            'total'      => count( $rows ),
+        ) );
+    }
+
+    /**
+     * POST /taxonomy/seo-meta-bulk — Apply Rank Math SEO meta updates to N
+     * taxonomy terms in a single call.
+     *
+     * Body: { rows: [ { term_id, taxonomy, title?, description?, focus_keyword? }, ... ] }
+     * Cap: 500 rows per request. Mirrors handle_bulk_seo_meta() for posts.
+     *
+     * WPML/Polylang note: each language is a separate term_id — the caller
+     * resolves siblings via wpml_term_translation_get and passes one row
+     * per (term, language) pair. The endpoint stays plugin-agnostic.
+     *
+     * Sanitization mirrors taxonomy_meta_set (WebMCP): description-shaped
+     * keys go through wp_kses_post (HTML allowed), title/focus through
+     * sanitize_text_field.
+     *
+     * @since 3.5.4
+     */
+    public function handle_bulk_taxonomy_seo_meta( $request ) {
+        $rows = $request->get_param( 'rows' );
+        if ( ! is_array( $rows ) || empty( $rows ) ) {
+            return new WP_Error( 'no_rows', 'rows array is required', array( 'status' => 400 ) );
+        }
+        if ( count( $rows ) > 500 ) {
+            return new WP_Error( 'too_many_rows', 'Max 500 rows per request; split and retry.', array( 'status' => 400 ) );
+        }
+
+        $applied = 0;
+        $skipped = 0;
+        $errors  = array();
+
+        // Key map — what we accept on the wire vs. the Rank Math meta key
+        // we actually write. Keeps the bulk API symmetric with the posts
+        // version (title/description/focus_keyword) without leaking the
+        // rank_math_* prefix to clients.
+        $key_map = array(
+            'title'         => 'rank_math_title',
+            'description'   => 'rank_math_description',
+            'focus_keyword' => 'rank_math_focus_keyword',
+        );
+
+        foreach ( $rows as $i => $row ) {
+            $term_id  = isset( $row['term_id'] )  ? absint( $row['term_id'] ) : 0;
+            $taxonomy = isset( $row['taxonomy'] ) ? sanitize_key( $row['taxonomy'] ) : '';
+
+            if ( ! $term_id || ! $taxonomy ) {
+                $errors[] = array( 'row' => $i, 'error' => 'missing_term_id_or_taxonomy' );
+                $skipped++;
+                continue;
+            }
+            if ( ! taxonomy_exists( $taxonomy ) ) {
+                $errors[] = array( 'row' => $i, 'term_id' => $term_id, 'taxonomy' => $taxonomy, 'error' => 'unknown_taxonomy' );
+                $skipped++;
+                continue;
+            }
+            $term = get_term( $term_id, $taxonomy );
+            if ( ! $term || is_wp_error( $term ) ) {
+                $errors[] = array( 'row' => $i, 'term_id' => $term_id, 'taxonomy' => $taxonomy, 'error' => 'term_not_found' );
+                $skipped++;
+                continue;
+            }
+
+            $writes = 0;
+            foreach ( $key_map as $input_key => $meta_key ) {
+                if ( ! array_key_exists( $input_key, $row ) ) {
+                    continue; // missing field — leave existing value untouched
+                }
+                $raw_value = $row[ $input_key ];
+                if ( '' === $raw_value || null === $raw_value ) {
+                    continue;
+                }
+                // Description preserves HTML (operator may include <strong>
+                // emphasis); title and focus keyword are plain text.
+                if ( 'description' === $input_key ) {
+                    $value = wp_kses_post( $raw_value );
+                } else {
+                    $value = sanitize_text_field( $raw_value );
+                }
+                update_term_meta( $term_id, $meta_key, $value );
+                $writes++;
+            }
+
+            if ( $writes > 0 ) {
+                $applied++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        LuwiPress_Logger::log( 'Bulk taxonomy SEO meta update', 'info', array(
             'applied' => $applied,
             'skipped' => $skipped,
             'errors'  => count( $errors ),

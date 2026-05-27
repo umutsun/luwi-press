@@ -1854,6 +1854,14 @@ class LuwiPress_Knowledge_Graph {
 		// to one write per day (keyed by Y-m-d) so hot callers don't spam.
 		$summary['trend'] = $this->update_and_get_summary_trend( $summary );
 
+		// Content Health Score — pillar-weighted composite (3.5.4+). Surfaces
+		// to the JS hero so the score the operator sees is the same one the
+		// settings tab configures. JS still owns its legacy fallback formula
+		// for the moment; if `health_score.overall` is present it wins.
+		if ( class_exists( 'LuwiPress_Health_Score' ) ) {
+			$summary['health_score'] = LuwiPress_Health_Score::get_instance()->compute();
+		}
+
 		return $summary;
 	}
 

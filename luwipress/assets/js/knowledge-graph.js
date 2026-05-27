@@ -1889,27 +1889,54 @@ function renderStoreHealthHero(stats, summary) {
 	var subtitleEl = document.getElementById('kg-hero-subtitle');
 	if (!pill || !scoreEl || !barEl) return;
 
-	// Translation coverage: average across target languages only (primary = 100%).
-	var transCov = summary.translation_coverage || {};
-	var transVals = Object.keys(transCov).map(function(k){ return Number(transCov[k]) || 0; });
-	var transAvg = transVals.length > 0 ? transVals.reduce(function(a,b){return a+b;}, 0) / transVals.length : null;
+	// Pillar-weighted composite from the PHP Health Score module (3.5.4+).
+	// When present, this is the canonical score — it's the same one the
+	// Settings → Content Health tab configures and the Action Queue uses
+	// to surface fix cards. The legacy hardcoded formula below stays as
+	// the fallback for any backend that hasn't surfaced health_score yet.
+	var score = null;
+	var parts = [];
+	var hs = summary && summary.health_score;
+	if (hs && typeof hs.overall === 'number' && Array.isArray(hs.pillars)) {
+		score = Math.round(hs.overall);
+		parts = hs.pillars
+			.filter(function(p) {
+				return p && p.enabled !== false
+					&& typeof p.value === 'number'
+					&& !isNaN(p.value);
+			})
+			.map(function(p) {
+				return {
+					key: p.key,
+					label: p.label || p.key,
+					value: p.value,
+					weight: p.weight || 1
+				};
+			});
+	}
 
-	// Weight table — higher weight = bigger contribution to overall health.
-	// null values drop out; remaining weights are renormalised so missing
-	// dimensions (e.g. no Elementor) don't artificially punish the score.
-	var parts = [
-		{ key: 'seo',        label: 'SEO',          value: stats.seo_coverage,        weight: 2 },
-		{ key: 'enrichment', label: 'Enrichment',   value: stats.enrichment_coverage, weight: 2 },
-		{ key: 'translation',label: 'Translation',  value: transAvg,                  weight: 1 },
-		{ key: 'taxonomy',   label: 'Taxonomy',     value: stats.taxonomy_coverage,   weight: 1 },
-		{ key: 'design',     label: 'Design',       value: stats.design_health,       weight: 1 },
-		{ key: 'media',      label: 'Media',        value: stats.media_health,        weight: 1 },
-		{ key: 'plugins',    label: 'Plugins',      value: stats.plugin_readiness,    weight: 1 }
-	].filter(function(p) { return p.value !== null && p.value !== undefined && !isNaN(p.value); });
+	if (score === null) {
+		// Translation coverage: average across target languages only (primary = 100%).
+		var transCov = summary.translation_coverage || {};
+		var transVals = Object.keys(transCov).map(function(k){ return Number(transCov[k]) || 0; });
+		var transAvg = transVals.length > 0 ? transVals.reduce(function(a,b){return a+b;}, 0) / transVals.length : null;
 
-	var totalWeight = parts.reduce(function(a,p){ return a + p.weight; }, 0);
-	var weightedSum = parts.reduce(function(a,p){ return a + (p.value * p.weight); }, 0);
-	var score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+		// Legacy fallback formula — kept verbatim so the hero never goes
+		// blank on a site running an older Health Score module.
+		parts = [
+			{ key: 'seo',        label: 'SEO',          value: stats.seo_coverage,        weight: 2 },
+			{ key: 'enrichment', label: 'Enrichment',   value: stats.enrichment_coverage, weight: 2 },
+			{ key: 'translation',label: 'Translation',  value: transAvg,                  weight: 1 },
+			{ key: 'taxonomy',   label: 'Taxonomy',     value: stats.taxonomy_coverage,   weight: 1 },
+			{ key: 'design',     label: 'Design',       value: stats.design_health,       weight: 1 },
+			{ key: 'media',      label: 'Media',        value: stats.media_health,        weight: 1 },
+			{ key: 'plugins',    label: 'Plugins',      value: stats.plugin_readiness,    weight: 1 }
+		].filter(function(p) { return p.value !== null && p.value !== undefined && !isNaN(p.value); });
+
+		var totalWeight = parts.reduce(function(a,p){ return a + p.weight; }, 0);
+		var weightedSum = parts.reduce(function(a,p){ return a + (p.value * p.weight); }, 0);
+		score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+	}
 
 	// Colour band: ≥80 green, ≥50 amber, else red. Matches the kg-h-* system used everywhere.
 	scoreEl.classList.remove('kg-h-good','kg-h-warn','kg-h-bad');

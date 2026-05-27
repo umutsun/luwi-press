@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.5.3
+ * Version: 3.5.5
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.5.3');
+define('LUWIPRESS_VERSION', '3.5.5');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -223,6 +223,21 @@ class LuwiPress {
         // bank (en/tr/fr/it/es) with per-language WPML/Polylang detection.
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-content-audit.php';
 
+        // Content Health Score — pillar-weighted store quality composite
+        // that drives the KG Store Health hero, Action Queue cards, and
+        // achievement badges (3.5.4+). Settings → Content Health tab
+        // configures per-pillar weights, targets, and action thresholds.
+        // Loaded AFTER Content Audit so the brand-voice pillar can call
+        // its phrase scanner without ordering surprises.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-health-score.php';
+
+        // FAQ Tab Editor — inline metabox for editing `_luwipress_faq`
+        // post meta directly from the post edit screen (3.5.5+). Closes
+        // the biggest non-WebMCP UI gap: until now FAQ rows were only
+        // writable through MCP / REST or AI generation. The metabox
+        // mounts on product, post, page (filter-extensible).
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-faq-editor.php';
+
         // Frontend Inspector — fetch live URL + dump head / content / meta /
         // schema scopes (3.4.1+). Composes with Schema Registry's diagnostic
         // emitter; replaces 80%+ of chrome-devtools-mcp round-trips for SEO
@@ -340,6 +355,8 @@ class LuwiPress {
         LuwiPress_Cookie_Consent::get_instance();
         LuwiPress_Bot_Shield::get_instance();
         LuwiPress_Content_Audit::get_instance();
+        LuwiPress_Health_Score::get_instance();
+        LuwiPress_FAQ_Editor::get_instance();
         LuwiPress_Frontend_Inspector::get_instance();
 
         // Elementor integration (only if Elementor is active)
@@ -470,6 +487,51 @@ class LuwiPress {
             array( $this, 'cookies_page' )
         );
 
+        // Content Audit (3.5.4+) — unified UI surface over the promotional
+        // phrase audit (3.4.1) + AI-tell scanner (3.5.4) + per-CPT word
+        // count compliance (3.5.4). Drives the Brand Voice + Content Depth
+        // pillars of the Content Health score that non-WebMCP customers see
+        // in the KG dashboard.
+        add_submenu_page(
+            'luwipress',
+            __( 'Content Audit', 'luwipress' ),
+            __( 'Content Audit', 'luwipress' ),
+            'manage_options',
+            'luwipress-content-audit',
+            array( $this, 'content_audit_page' )
+        );
+
+        // Schema Preview (3.5.4+) — wraps the Frontend Inspector
+        // (`/frontend/render-dump`) for cache-bypass JSON-LD inspection.
+        // Operator-facing alternative to chrome-devtools-mcp round-trips.
+        add_submenu_page(
+            'luwipress',
+            __( 'Schema Preview', 'luwipress' ),
+            __( 'Schema Preview', 'luwipress' ),
+            'manage_options',
+            'luwipress-schema-preview',
+            array( $this, 'schema_preview_page' )
+        );
+
+        // Translation Sync Audit discoverability (3.5.4+) — the sync-audit
+        // module renders inside the existing Translations page
+        // (`luwipress-translations`, registered by LuwiPress_Translation).
+        // `add_submenu_page` slugs cannot carry URL fragments, so we add
+        // a slug with a `?tab=sync-audit` query param via a small
+        // dispatcher callback that simply redirects. Keeps the audit one
+        // click from the main menu without duplicating the Translations
+        // page or fighting the existing module's registration.
+        if ( class_exists( 'LuwiPress_Translation_Sync' ) ) {
+            add_submenu_page(
+                'luwipress',
+                __( 'Translation Sync', 'luwipress' ),
+                __( 'Translation Sync', 'luwipress' ),
+                'manage_options',
+                'luwipress-translation-sync',
+                array( $this, 'translation_sync_redirect' )
+            );
+        }
+
     }
     
     /**
@@ -521,6 +583,53 @@ class LuwiPress {
      */
     public function cookies_page() {
         include LUWIPRESS_PLUGIN_DIR . 'admin/cookies-page.php';
+    }
+
+    /**
+     * Content Audit page (3.5.4+) — unified surface over promotional phrase
+     * audit + AI-tell scanner + per-CPT word count compliance. The page
+     * reads the same Health Score pillar values the KG dashboard uses, so
+     * fixes here update the operator's visible Store Health score.
+     */
+    public function content_audit_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/content-audit-page.php';
+    }
+
+    /**
+     * Schema Preview page (3.5.4+) — wraps the Frontend Inspector for
+     * cache-bypass JSON-LD inspection. Lists Schema Registry types,
+     * fetches any live URL, extracts JSON-LD blocks, and offers a 1-click
+     * handoff to Google's Rich Results Test.
+     */
+    public function schema_preview_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/schema-preview-page.php';
+    }
+
+    /**
+     * Translation Sync deep-link callback (3.5.4+) — bounces to the
+     * existing Translations page with `tab=sync-audit` so the operator
+     * lands directly on the sync-audit panel. The Translations page
+     * itself is registered by LuwiPress_Translation::add_submenu; this
+     * callback only fires when WP routes the deep-link slug to us.
+     */
+    public function translation_sync_redirect() {
+        $target = add_query_arg(
+            array(
+                'page' => 'luwipress-translations',
+                'tab'  => 'sync-audit',
+            ),
+            admin_url( 'admin.php' )
+        );
+        if ( ! headers_sent() ) {
+            wp_safe_redirect( $target );
+            exit;
+        }
+        // Fallback for environments where headers already went out — render
+        // a tiny meta-refresh + link so the operator still lands on target.
+        ?>
+        <meta http-equiv="refresh" content="0; url=<?php echo esc_attr( $target ); ?>">
+        <p><a href="<?php echo esc_url( $target ); ?>"><?php esc_html_e( 'Open Translation Sync Audit', 'luwipress' ); ?></a></p>
+        <?php
     }
 
     /**

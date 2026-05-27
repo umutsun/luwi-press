@@ -259,6 +259,8 @@ class LuwiPress_Elementor {
         'lwp-wc-tabs'             => array(),
         // 1.10.2+ curated product grid (Pro-free [products] shortcode replacement)
         'lwp-product-grid'        => array( 'heading' ),
+        // 1.10.3+ Contact CTA card (WhatsApp/Telegram auto-pulled from chat settings)
+        'lwp-contact-cta'         => array( 'heading', 'lead', 'email', 'address_line', 'cta_label' ),
     );
 
     /**

@@ -1,0 +1,169 @@
+/**
+ * LuwiPress FAQ Editor — metabox styles.
+ *
+ * No design-token deps (the metabox renders inside core WP admin where
+ * theme tokens aren't reliably available). All values are inline so the
+ * editor renders consistently whether the user is on the classic editor,
+ * Gutenberg, or a custom admin theme.
+ */
+
+.lwp-faq-editor {
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────── */
+
+.lwp-faq-editor__header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 8px;
+	flex-wrap: wrap;
+}
+
+.lwp-faq-editor__pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 4px 10px;
+	border-radius: 999px;
+	color: #fff;
+	font-weight: 600;
+	font-size: 12px;
+	line-height: 1.4;
+	text-transform: uppercase;
+	letter-spacing: 0.4px;
+}
+
+.lwp-faq-editor__count {
+	color: #666;
+	font-size: 12px;
+}
+
+/* ─── Rows ───────────────────────────────────────────────────────── */
+
+.lwp-faq-editor__rows {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 12px;
+}
+
+.lwp-faq-editor__row {
+	background: #f9fafb;
+	border: 1px solid #dcdcde;
+	border-radius: 6px;
+	padding: 10px 12px;
+}
+
+.lwp-faq-editor__row-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.lwp-faq-editor__row-num {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	background: #2271b1;
+	color: #fff;
+	border-radius: 999px;
+	font-weight: 600;
+	font-size: 11px;
+}
+
+.lwp-faq-editor__row-actions {
+	display: inline-flex;
+	gap: 4px;
+}
+
+.lwp-faq-editor__row-actions .button-link-delete:hover {
+	color: #c33;
+	border-color: #c33;
+}
+
+.lwp-faq-editor__question {
+	width: 100%;
+	margin-bottom: 6px;
+	font-weight: 600;
+}
+
+.lwp-faq-editor__answer {
+	width: 100%;
+	min-height: 70px;
+	font-family: inherit;
+	resize: vertical;
+}
+
+.lwp-faq-editor__row-meta {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 4px;
+	font-size: 11px;
+	color: #999;
+}
+
+.lwp-faq-editor__wc[data-band="good"] { color: #2c7a2c; }
+.lwp-faq-editor__wc[data-band="warn"] { color: #a86b00; }
+.lwp-faq-editor__wc[data-band="bad"]  { color: #c33;    }
+
+/* ─── Actions ────────────────────────────────────────────────────── */
+
+.lwp-faq-editor__actions {
+	margin-top: 12px;
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.lwp-faq-editor__actions .button {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+/* AI button gets a gold tint so it stands apart from the standard Add row.
+   Using brand-aligned colour without depending on theme tokens. */
+.lwp-faq-editor__ai {
+	background: #b08930;
+	border-color: #8d6d24;
+	color: #fff;
+}
+.lwp-faq-editor__ai:hover,
+.lwp-faq-editor__ai:focus {
+	background: #8d6d24;
+	border-color: #6b5119;
+	color: #fff;
+}
+.lwp-faq-editor__ai:disabled {
+	background: #ccc;
+	border-color: #aaa;
+	color: #666;
+	cursor: not-allowed;
+}
+
+/* ─── Status bar ────────────────────────────────────────────────── */
+
+.lwp-faq-editor__status {
+	padding: 8px 12px;
+	border-radius: 4px;
+	font-size: 12px;
+	line-height: 1.5;
+}
+.lwp-faq-editor__status[data-band="info"] { background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
+.lwp-faq-editor__status[data-band="good"] { background: #e8f5e9; color: #2c7a2c; border: 1px solid #c8e6c9; }
+.lwp-faq-editor__status[data-band="warn"] { background: #fff3cd; color: #a86b00; border: 1px solid #ffe082; }
+.lwp-faq-editor__status[data-band="bad"]  { background: #fde0e0; color: #c33;    border: 1px solid #f5b5b5; }
+
+/* ─── Responsive squeeze ─────────────────────────────────────────── */
+
+@media (max-width: 782px) {
+	.lwp-faq-editor__actions { flex-direction: column; align-items: stretch; }
+	.lwp-faq-editor__actions .button { justify-content: center; }
+}

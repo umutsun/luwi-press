@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.34
+Stable tag: 1.0.35
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.35 — Bulk taxonomy SEO meta tool (paired with core 3.5.5) =
+* **NEW `taxonomy_seo_meta_bulk`** — bulk write Rank Math / Yoast / AIOSEO / SEOPress meta on up to 500 taxonomy terms in a single MCP call. Mirrors the post-side `seo_meta_bulk`. Each row carries `{term_id, taxonomy, title?, description?, focus_keyword?}` (any combination of fields). Unblocks the multi-language taxonomy editor work in core 3.5.5 — a 52-category × 4-language × 3-field sweep that previously needed 624 sequential `taxonomy_meta_set` calls now ships in one batch. Routes through the core `LuwiPress_API::write_taxonomy_seo_meta_bulk` handler, which itself dispatches through the Plugin Detector's SEO writer (so the active SEO plugin's actual meta keys are used).
 
 = 1.0.34 — Vendors module MCP tools (paired with core 3.5.2) =
 * **6 NEW MCP tools** for the new `LuwiPress_Vendors` core module — generic vendor / maker / atelier / team CPT with E-E-A-T trust signals:

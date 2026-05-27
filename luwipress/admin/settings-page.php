@@ -107,6 +107,28 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 	update_option( 'luwipress_enrich_meta_desc_max', max( 120, min( 200, absint( $_POST['luwipress_enrich_meta_desc_max'] ?? 160 ) ) ) );
 	update_option( 'luwipress_enrich_meta_desc_cta', sanitize_text_field( wp_unslash( $_POST['luwipress_enrich_meta_desc_cta'] ?? '' ) ) );
 
+	// Per-CPT word count target bands (3.5.4+) — drives the Content
+	// Depth Health Score pillar and the Content Audit "Word Count" tab.
+	// Posted as nested array keyed by CPT slug; only known CPT keys
+	// are persisted to keep the option clean.
+	if ( isset( $_POST['luwipress_word_count_targets'] ) && is_array( $_POST['luwipress_word_count_targets'] ) && class_exists( 'LuwiPress_Health_Score' ) ) {
+		$raw_bands = $_POST['luwipress_word_count_targets'];
+		$defaults  = LuwiPress_Health_Score::default_word_count_targets();
+		$persist   = array();
+		foreach ( $defaults as $cpt => $row ) {
+			if ( ! isset( $raw_bands[ $cpt ] ) || ! is_array( $raw_bands[ $cpt ] ) ) {
+				continue;
+			}
+			$persist[ $cpt ] = array(
+				'min'    => max( 0, min( 10000, (int) ( $raw_bands[ $cpt ]['min']    ?? $row['min'] ) ) ),
+				'target' => max( 0, min( 10000, (int) ( $raw_bands[ $cpt ]['target'] ?? $row['target'] ) ) ),
+				'max'    => max( 0, min( 10000, (int) ( $raw_bands[ $cpt ]['max']    ?? $row['max'] ) ) ),
+			);
+		}
+		update_option( 'luwipress_word_count_targets', $persist, false );
+		LuwiPress_Health_Score::get_instance()->invalidate_cache();
+	}
+
 	// Translation
 	update_option( 'luwipress_hreflang_mode', sanitize_text_field( $_POST['luwipress_hreflang_mode'] ?? 'auto' ) );
 	$languages  = sanitize_text_field( $_POST['luwipress_translation_languages_text'] ?? '' );
@@ -147,6 +169,39 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 	update_option( 'luwipress_ip_whitelist', sanitize_text_field( $_POST['luwipress_ip_whitelist'] ?? '' ) );
 	if ( ! empty( $_POST['luwipress_regenerate_hmac'] ) ) {
 		LuwiPress_HMAC::ensure_secret( true );
+	}
+
+	// Content Health pillar overrides (3.5.4+). Posted as nested array keyed
+	// by pillar key. Empty checkbox → enabled=false (browsers don't send
+	// unchecked checkboxes, so the key is absent rather than "0").
+	if ( isset( $_POST['luwipress_health_pillars'] ) && class_exists( 'LuwiPress_Health_Score' ) ) {
+		$raw = (array) $_POST['luwipress_health_pillars'];
+		// Translate the form shape into the API shape — every pillar gets
+		// an `enabled` boolean explicitly so unchecked boxes are persisted.
+		$normalized = array();
+		$health     = LuwiPress_Health_Score::get_instance();
+		foreach ( $health->get_pillars() as $pkey => $_pdef ) {
+			$row = isset( $raw[ $pkey ] ) && is_array( $raw[ $pkey ] ) ? $raw[ $pkey ] : array();
+			$normalized[ $pkey ] = array(
+				'enabled'          => ! empty( $row['enabled'] ),
+				'weight'           => isset( $row['weight'] )           ? (int) $row['weight']           : null,
+				'target'           => isset( $row['target'] )           ? (int) $row['target']           : null,
+				'action_threshold' => isset( $row['action_threshold'] ) ? (int) $row['action_threshold'] : null,
+			);
+			// Strip null entries so we don't overwrite stored values with null.
+			foreach ( $normalized[ $pkey ] as $k => $v ) {
+				if ( $v === null ) {
+					unset( $normalized[ $pkey ][ $k ] );
+				}
+			}
+		}
+		$health->save_pillar_overrides( $normalized );
+	}
+
+	// Reset request — also handled inside the save flow so the operator can
+	// hit "Reset to defaults" without bouncing through the REST endpoint.
+	if ( ! empty( $_POST['luwipress_health_reset'] ) && class_exists( 'LuwiPress_Health_Score' ) ) {
+		LuwiPress_Health_Score::get_instance()->reset_pillars();
 	}
 
 	echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Settings saved.', 'luwipress' ) . '</p></div>';
@@ -233,6 +288,9 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		</a>
 		<a href="?page=luwipress-settings&tab=bot" class="nav-tab <?php echo 'bot' === $active_tab ? 'nav-tab-active' : ''; ?>">
 			<span class="dashicons dashicons-shield"></span> <?php esc_html_e( 'Bot', 'luwipress' ); ?>
+		</a>
+		<a href="?page=luwipress-settings&tab=content-health" class="nav-tab <?php echo 'content-health' === $active_tab ? 'nav-tab-active' : ''; ?>">
+			<span class="dashicons dashicons-chart-area"></span> <?php esc_html_e( 'Content Health', 'luwipress' ); ?>
 		</a>
 		<?php
 		/**
@@ -1208,6 +1266,59 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					</tr>
 				</table>
 			</div>
+
+			<?php if ( class_exists( 'LuwiPress_Health_Score' ) ) :
+				$wc_targets = LuwiPress_Health_Score::get_word_count_targets();
+			?>
+			<div class="luwipress-card">
+				<h3><?php esc_html_e( 'Word Count Targets (per content type)', 'luwipress' ); ?></h3>
+				<p class="description">
+					<?php esc_html_e( 'Drives the Content Depth pillar of the Content Health score and the Content Audit → Word Count tab. Posts whose body falls within [min, max] count as on-band; below min is thin, above max is bloat.', 'luwipress' ); ?>
+				</p>
+				<table class="widefat striped" style="margin-top:8px;max-width:780px;">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Content type', 'luwipress' ); ?></th>
+							<th style="width:110px;"><?php esc_html_e( 'Min', 'luwipress' ); ?></th>
+							<th style="width:110px;"><?php esc_html_e( 'Target', 'luwipress' ); ?></th>
+							<th style="width:110px;"><?php esc_html_e( 'Max', 'luwipress' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $wc_targets as $cpt => $band ) : ?>
+							<tr>
+								<td>
+									<strong><?php echo esc_html( $band['label'] ); ?></strong><br>
+									<code style="font-size:11px;color:#666;"><?php echo esc_html( $cpt ); ?></code>
+								</td>
+								<td>
+									<input type="number" min="0" max="10000" step="50"
+										name="luwipress_word_count_targets[<?php echo esc_attr( $cpt ); ?>][min]"
+										value="<?php echo esc_attr( $band['min'] ); ?>"
+										style="width:90px;" />
+								</td>
+								<td>
+									<input type="number" min="0" max="10000" step="50"
+										name="luwipress_word_count_targets[<?php echo esc_attr( $cpt ); ?>][target]"
+										value="<?php echo esc_attr( $band['target'] ); ?>"
+										style="width:90px;" />
+								</td>
+								<td>
+									<input type="number" min="0" max="10000" step="50"
+										name="luwipress_word_count_targets[<?php echo esc_attr( $cpt ); ?>][max]"
+										value="<?php echo esc_attr( $band['max'] ); ?>"
+										style="width:90px;" />
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+				<p class="description" style="margin-top:8px;">
+					<?php esc_html_e( 'Reference bands (Tapadum SEO writing guide §1.10): Product 500-650-800, Blog post 1200-1500-2200, Static page 300-400-600. Per-vertical defaults can be filtered via', 'luwipress' ); ?>
+					<code>luwipress_word_count_targets</code>.
+				</p>
+			</div>
+			<?php endif; ?>
 		</div>
 
 		<!-- TRANSLATION -->
@@ -1734,6 +1845,146 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			</div>
 		</div>
 		<?php endif; /* bot tab guard */ ?>
+
+		<!-- CONTENT HEALTH -->
+		<div class="luwipress-tab-content <?php echo 'content-health' === $active_tab ? 'tab-active' : ''; ?>" id="tab-content-health">
+			<?php
+			$health_ready = class_exists( 'LuwiPress_Health_Score' );
+			if ( $health_ready ) :
+				$health         = LuwiPress_Health_Score::get_instance();
+				$health_pillars = $health->get_pillars();
+				$health_score   = $health->compute();
+				$overall        = isset( $health_score['overall'] ) ? (int) $health_score['overall'] : 0;
+				$overall_band   = $overall >= 80 ? 'good' : ( $overall >= 50 ? 'warn' : 'bad' );
+				$measured_index = array();
+				foreach ( ( $health_score['pillars'] ?? array() ) as $mp ) {
+					if ( isset( $mp['key'] ) ) {
+						$measured_index[ $mp['key'] ] = $mp;
+					}
+				}
+			endif;
+			?>
+
+			<div class="luwipress-card">
+				<h2><?php esc_html_e( 'Content Health Score', 'luwipress' ); ?></h2>
+				<p class="description">
+					<?php esc_html_e( 'A single 0-100 number that summarises store content quality. Configure how much each pillar contributes below — the KG Store Health hero, Action Queue cards, and achievement badges all read from this rubric.', 'luwipress' ); ?>
+				</p>
+
+				<?php if ( ! $health_ready ) : ?>
+					<p><em><?php esc_html_e( 'Health Score module not loaded. Reload after upgrade.', 'luwipress' ); ?></em></p>
+				<?php else : ?>
+
+					<!-- Live score preview -->
+					<div class="luwipress-health-preview" style="display:flex;align-items:center;gap:24px;padding:16px;border:1px solid #ddd;border-radius:8px;margin:12px 0;background:#fafafa;">
+						<div style="text-align:center;min-width:120px;">
+							<div style="font-size:48px;font-weight:700;line-height:1;color:<?php echo $overall_band === 'good' ? '#2c7a2c' : ( $overall_band === 'warn' ? '#a86b00' : '#c33'); ?>;">
+								<?php echo (int) $overall; ?><span style="font-size:18px;color:#999;font-weight:400;">%</span>
+							</div>
+							<div style="font-size:12px;color:#666;margin-top:4px;">
+								<?php echo esc_html( $overall_band === 'good' ? __( 'Healthy', 'luwipress' ) : ( $overall_band === 'warn' ? __( 'Needs work', 'luwipress' ) : __( 'Critical', 'luwipress' ) ) ); ?>
+							</div>
+						</div>
+						<div style="flex:1;">
+							<p style="margin:0 0 8px 0;font-size:13px;color:#444;">
+								<?php
+								/* translators: %s = ISO date of last compute */
+								printf(
+									esc_html__( 'Last computed: %s. Cached for 15 minutes; saving below recalculates immediately.', 'luwipress' ),
+									esc_html( ! empty( $health_score['computed_at'] ) ? wp_date( 'Y-m-d H:i', (int) $health_score['computed_at'] ) : '—' )
+								);
+								?>
+							</p>
+							<div style="display:flex;flex-wrap:wrap;gap:6px;">
+								<?php foreach ( ( $health_score['pillars'] ?? array() ) as $mp ) :
+									if ( ! is_array( $mp ) || empty( $mp['key'] ) ) continue;
+									if ( $mp['value'] === null ) continue;
+									$band = $mp['status'] ?? 'warn';
+									$bcolor = $band === 'good' ? '#2c7a2c' : ( $band === 'warn' ? '#a86b00' : '#c33' );
+									?>
+									<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:#fff;border:1px solid #ddd;border-radius:999px;font-size:12px;">
+										<strong><?php echo esc_html( $mp['label'] ); ?></strong>
+										<span style="color:<?php echo esc_attr( $bcolor ); ?>;font-weight:600;"><?php echo (int) round( (float) $mp['value'] ); ?>%</span>
+									</span>
+								<?php endforeach; ?>
+							</div>
+						</div>
+					</div>
+
+					<!-- Pillar configuration table -->
+					<table class="widefat striped" style="margin-top:12px;">
+						<thead>
+							<tr>
+								<th style="width:24px;"></th>
+								<th><?php esc_html_e( 'Pillar', 'luwipress' ); ?></th>
+								<th style="width:80px;text-align:center;"><?php esc_html_e( 'Current', 'luwipress' ); ?></th>
+								<th style="width:120px;"><?php esc_html_e( 'Weight (%)', 'luwipress' ); ?></th>
+								<th style="width:120px;"><?php esc_html_e( 'Target (%)', 'luwipress' ); ?></th>
+								<th style="width:160px;"><?php esc_html_e( 'Action threshold (%)', 'luwipress' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $health_pillars as $pkey => $pdef ) :
+								$measured = $measured_index[ $pkey ] ?? null;
+								$current  = ( $measured && $measured['value'] !== null ) ? (int) round( (float) $measured['value'] ) : null;
+								$cband    = $measured['status'] ?? 'n_a';
+								$ccolor   = $cband === 'good' ? '#2c7a2c' : ( $cband === 'warn' ? '#a86b00' : ( $cband === 'bad' ? '#c33' : '#999' ) );
+								?>
+								<tr>
+									<td>
+										<input type="checkbox"
+											name="luwipress_health_pillars[<?php echo esc_attr( $pkey ); ?>][enabled]"
+											value="1"
+											<?php checked( ! empty( $pdef['enabled'] ) ); ?> />
+									</td>
+									<td>
+										<strong><?php echo esc_html( $pdef['label'] ); ?></strong><br>
+										<span class="description" style="font-size:12px;color:#666;"><?php echo esc_html( $pdef['description'] ); ?></span>
+									</td>
+									<td style="text-align:center;">
+										<?php if ( $current !== null ) : ?>
+											<span style="color:<?php echo esc_attr( $ccolor ); ?>;font-weight:600;"><?php echo (int) $current; ?>%</span>
+										<?php else : ?>
+											<span style="color:#999;">—</span>
+										<?php endif; ?>
+									</td>
+									<td>
+										<input type="number" min="0" max="100" step="1"
+											name="luwipress_health_pillars[<?php echo esc_attr( $pkey ); ?>][weight]"
+											value="<?php echo esc_attr( $pdef['weight'] ); ?>"
+											style="width:80px;" />
+									</td>
+									<td>
+										<input type="number" min="0" max="100" step="1"
+											name="luwipress_health_pillars[<?php echo esc_attr( $pkey ); ?>][target]"
+											value="<?php echo esc_attr( $pdef['target'] ); ?>"
+											style="width:80px;" />
+									</td>
+									<td>
+										<input type="number" min="0" max="100" step="1"
+											name="luwipress_health_pillars[<?php echo esc_attr( $pkey ); ?>][action_threshold]"
+											value="<?php echo esc_attr( $pdef['action_threshold'] ); ?>"
+											style="width:80px;" />
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+
+					<p class="description" style="margin-top:12px;">
+						<?php esc_html_e( 'Weights are relative — they get renormalised when computing the overall score. Disabling a pillar removes it from the formula entirely. Target = good tier (badge gold). Action threshold = below this surfaces an Action Queue card.', 'luwipress' ); ?>
+					</p>
+
+					<p style="margin-top:16px;">
+						<label style="display:inline-flex;align-items:center;gap:6px;color:#c33;">
+							<input type="checkbox" name="luwipress_health_reset" value="1" />
+							<?php esc_html_e( 'Reset all pillar overrides to defaults on save', 'luwipress' ); ?>
+						</label>
+					</p>
+
+				<?php endif; ?>
+			</div>
+		</div>
 
 		<?php
 		/**

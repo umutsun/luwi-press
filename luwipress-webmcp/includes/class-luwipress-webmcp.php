@@ -1405,6 +1405,64 @@ class LuwiPress_WebMCP {
             }
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
+
+        // ─── taxonomy_seo_meta_bulk (1.0.35+) ────────────────────────
+        // Sibling of seo_meta_bulk for taxonomy terms — Rank Math title /
+        // description / focus_keyword written to up to 500 terms per call.
+        // Unblocks the Multi-language Taxonomy Editor (52 categories × 4
+        // languages × 3 fields = 624 sequential taxonomy_meta_set calls
+        // collapsed into one). WPML/Polylang siblings are resolved by the
+        // caller (via wpml_term_translation_get); each (term, language)
+        // pair is one row carrying its own term_id.
+        $this->register_tool( 'taxonomy_seo_meta_bulk', array(
+            'description' => 'Bulk-write Rank Math SEO meta (title, description, focus keyword) to up to 500 taxonomy terms in a single call. Each row is { term_id, taxonomy, title?, description?, focus_keyword? }; missing fields leave existing values untouched. Returns { applied, skipped, error_rows, total }. WPML/Polylang: each language is a separate term_id — caller resolves siblings (wpml_term_translation_get) and passes one row per (term, language) pair.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'rows' => array(
+                        'type'        => 'array',
+                        'description' => 'Up to 500 rows, each: { term_id (required), taxonomy (required), title?, description?, focus_keyword? }.',
+                        'items'       => array(
+                            'type'       => 'object',
+                            'properties' => array(
+                                'term_id'       => array( 'type' => 'integer', 'description' => 'Term ID (required per row).' ),
+                                'taxonomy'      => array( 'type' => 'string',  'description' => 'Taxonomy slug — e.g. product_cat (required per row).' ),
+                                'title'         => array( 'type' => 'string',  'description' => 'SEO meta title (rank_math_title).' ),
+                                'description'   => array( 'type' => 'string',  'description' => 'SEO meta description (rank_math_description; HTML preserved).' ),
+                                'focus_keyword' => array( 'type' => 'string',  'description' => 'Focus keyword (rank_math_focus_keyword).' ),
+                            ),
+                            'required' => array( 'term_id', 'taxonomy' ),
+                        ),
+                    ),
+                ),
+                'required' => array( 'rows' ),
+            ),
+            'annotations' => array(
+                'title'            => 'Bulk Write Taxonomy SEO Meta',
+                'readOnlyHint'     => false,
+                'idempotentHint'   => true,
+                'openWorldHint'    => false,
+            ),
+        ), function ( $args ) {
+            $rows = isset( $args['rows'] ) && is_array( $args['rows'] ) ? $args['rows'] : array();
+            if ( empty( $rows ) ) {
+                return array( 'error' => 'no_rows', 'message' => 'rows array is required (each: { term_id, taxonomy, title?, description?, focus_keyword? }).' );
+            }
+            if ( count( $rows ) > 500 ) {
+                return array( 'error' => 'too_many_rows', 'message' => 'Max 500 rows per request; split and retry.', 'submitted' => count( $rows ) );
+            }
+            $api     = LuwiPress_API::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/taxonomy/seo-meta-bulk' );
+            $request->set_param( 'rows', $rows );
+            $data = $api->handle_bulk_taxonomy_seo_meta( $request );
+            if ( is_wp_error( $data ) ) {
+                return array(
+                    'error'   => $data->get_error_code(),
+                    'message' => $data->get_error_message(),
+                );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
     }
 
     /* ───────────────────── AEO Tools ───────────────────────────────── */
