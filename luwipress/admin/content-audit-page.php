@@ -46,14 +46,26 @@ $rest_base   = esc_url_raw( rest_url( 'luwipress/v1/' ) );
 $rest_nonce  = wp_create_nonce( 'wp_rest' );
 
 // Health Score snapshot — shown in the page hero so the operator sees
-// the score numbers the audits below feed into. Computed (cached) once.
+// the score numbers the audits below feed into.
+//
+// 3.5.6+: read the cached score only. compute() on every admin pageview
+// could block for seconds on a cold cache (6-pillar scan over up to 1000
+// posts). Hourly cron warmer (LuwiPress_Health_Score::cron_warm_cache)
+// refills the transient out-of-band so the hero is virtually always
+// pre-warmed. If we DO land on a cold cache, the hero falls back to "—"
+// placeholders and the operator's first audit click below seeds it.
 $brand_voice   = null;
 $content_depth = null;
+$hs_cold       = false;
 if ( class_exists( 'LuwiPress_Health_Score' ) ) {
-	$snap = LuwiPress_Health_Score::get_instance()->compute();
-	foreach ( $snap['pillars'] ?? array() as $p ) {
-		if ( ( $p['key'] ?? '' ) === 'brand_voice' )   { $brand_voice   = $p; }
-		if ( ( $p['key'] ?? '' ) === 'content_depth' ) { $content_depth = $p; }
+	$snap = get_transient( LuwiPress_Health_Score::CACHE_KEY );
+	if ( is_array( $snap ) && ! empty( $snap['pillars'] ) ) {
+		foreach ( $snap['pillars'] as $p ) {
+			if ( ( $p['key'] ?? '' ) === 'brand_voice' )   { $brand_voice   = $p; }
+			if ( ( $p['key'] ?? '' ) === 'content_depth' ) { $content_depth = $p; }
+		}
+	} else {
+		$hs_cold = true;
 	}
 }
 
@@ -110,6 +122,40 @@ $wc_targets = class_exists( 'LuwiPress_Health_Score' )
 		);
 		?>
 	</div>
+
+	<?php if ( $hs_cold ) : ?>
+		<p class="description lwp-hs-cold-notice" style="margin-top:8px;font-style:italic;color:#a86b00;">
+			<?php esc_html_e( 'Health Score cache is cold — hero values will populate after the next hourly cron tick. Click below to recompute now.', 'luwipress' ); ?>
+			<button type="button" class="button button-small" id="lwp-hs-recompute" style="margin-left:8px;">
+				<?php esc_html_e( 'Recompute now', 'luwipress' ); ?>
+			</button>
+			<span id="lwp-hs-recompute-status" style="margin-left:8px;color:#666;"></span>
+		</p>
+		<script>
+			(function () {
+				var btn = document.getElementById('lwp-hs-recompute');
+				if (!btn) return;
+				btn.addEventListener('click', function () {
+					var statusEl = document.getElementById('lwp-hs-recompute-status');
+					btn.disabled = true;
+					if (statusEl) statusEl.textContent = '⏳ <?php echo esc_js( __( 'Computing…', 'luwipress' ) ); ?>';
+					fetch(<?php echo wp_json_encode( $rest_base . 'health/score?force=true' ); ?>, {
+						headers: { 'X-WP-Nonce': <?php echo wp_json_encode( $rest_nonce ); ?>, 'Accept': 'application/json' },
+						credentials: 'same-origin'
+					})
+						.then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+						.then(function () {
+							if (statusEl) statusEl.textContent = '✓ <?php echo esc_js( __( 'Done — reloading…', 'luwipress' ) ); ?>';
+							setTimeout(function () { window.location.reload(); }, 700);
+						})
+						.catch(function (err) {
+							if (statusEl) { statusEl.textContent = '✗ ' + err.message; statusEl.style.color = '#c33'; }
+							btn.disabled = false;
+						});
+				});
+			})();
+		</script>
+	<?php endif; ?>
 
 	<!-- Tab nav -->
 	<nav class="nav-tab-wrapper luwipress-tabs" style="margin-top:12px;">
