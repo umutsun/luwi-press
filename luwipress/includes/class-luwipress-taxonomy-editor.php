@@ -178,9 +178,7 @@ class LuwiPress_Taxonomy_Editor {
 				}
 			}
 		} elseif ( 'polylang' === $plugin && function_exists( 'pll_languages_list' ) ) {
-			$lang_objs = function_exists( 'pll_languages_list' )
-				? pll_languages_list( array( 'fields' => '' ) )
-				: array();
+			$lang_objs = pll_languages_list( array( 'fields' => '' ) );
 			if ( is_array( $lang_objs ) ) {
 				foreach ( $lang_objs as $obj ) {
 					$code  = is_object( $obj ) ? ( property_exists( $obj, 'slug' ) ? $obj->slug : '' ) : '';

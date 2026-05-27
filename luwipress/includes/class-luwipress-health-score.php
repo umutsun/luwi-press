@@ -758,6 +758,11 @@ class LuwiPress_Health_Score {
 			}
 		}
 
+		// Defensive zero guard — $total can legitimately be 0 if every
+		// registered type lacks a meta_key (filter-driven edge case).
+		// PHPStan narrows count() of a populated array to int<1, max>;
+		// runtime can still hit zero so we keep the guard.
+		// @phpstan-ignore-next-line greater.alwaysTrue
 		$value = $total > 0 ? ( $active / $total ) * 100 : 0;
 
 		return array(
@@ -1004,6 +1009,9 @@ class LuwiPress_Health_Score {
 				}
 			}
 
+			// PHPStan narrows count() to int<1, max>; runtime can hit 0
+			// when get_posts returns no rows for a CPT.
+			// @phpstan-ignore-next-line greater.alwaysTrue
 			$share = $total > 0 ? ( $band_count / $total ) * 100 : 0;
 			$on_band_share[] = $share;
 			$per_cpt[ $cpt ] = array(

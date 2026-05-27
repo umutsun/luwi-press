@@ -1294,19 +1294,19 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 								<td>
 									<input type="number" min="0" max="10000" step="50"
 										name="luwipress_word_count_targets[<?php echo esc_attr( $cpt ); ?>][min]"
-										value="<?php echo esc_attr( $band['min'] ); ?>"
+										value="<?php echo esc_attr( (string) $band['min'] ); ?>"
 										style="width:90px;" />
 								</td>
 								<td>
 									<input type="number" min="0" max="10000" step="50"
 										name="luwipress_word_count_targets[<?php echo esc_attr( $cpt ); ?>][target]"
-										value="<?php echo esc_attr( $band['target'] ); ?>"
+										value="<?php echo esc_attr( (string) $band['target'] ); ?>"
 										style="width:90px;" />
 								</td>
 								<td>
 									<input type="number" min="0" max="10000" step="50"
 										name="luwipress_word_count_targets[<?php echo esc_attr( $cpt ); ?>][max]"
-										value="<?php echo esc_attr( $band['max'] ); ?>"
+										value="<?php echo esc_attr( (string) $band['max'] ); ?>"
 										style="width:90px;" />
 								</td>
 							</tr>

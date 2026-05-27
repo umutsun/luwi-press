@@ -74,12 +74,12 @@ $last_build    = is_array( $diag['last_build'] ?? null ) ? $diag['last_build'] :
 		</div>
 		<div style="flex:1;min-width:180px;">
 			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Map size', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( $map_size ); ?></div>
+			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( (string) $map_size ); ?></div>
 			<div style="color:#666;font-size:12px;margin-top:4px;"><?php esc_html_e( 'auto-discovered slug → target', 'luwipress' ); ?></div>
 		</div>
 		<div style="flex:1;min-width:180px;">
 			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Overrides', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( $override_size ); ?></div>
+			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( (string) $override_size ); ?></div>
 			<div style="color:#666;font-size:12px;margin-top:4px;"><?php esc_html_e( 'manual operator rules', 'luwipress' ); ?></div>
 		</div>
 		<div style="flex:1;min-width:180px;">

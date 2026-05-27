@@ -134,7 +134,7 @@ $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), adm
 			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;">
 				<?php
 				$cov = $total_all > 0 ? round( ( $total_has_alt / $total_all ) * 100 ) : 0;
-				echo esc_html( $cov ) . '%';
+				echo esc_html( (string) $cov ) . '%';
 				?>
 			</div>
 		</div>
@@ -191,7 +191,7 @@ $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), adm
 					?>
 				</td></tr>
 				<?php else : foreach ( $items as $it ) : ?>
-				<tr data-id="<?php echo esc_attr( $it['id'] ); ?>">
+				<tr data-id="<?php echo esc_attr( (string) $it['id'] ); ?>">
 					<td>
 						<?php if ( $it['thumb'] ) : ?>
 						<a href="<?php echo esc_url( wp_get_attachment_url( $it['id'] ) ); ?>" target="_blank" rel="noopener">

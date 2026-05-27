@@ -85,7 +85,7 @@ $profile_fields = array(
 	<div class="luwipress-card" style="display:flex;gap:24px;flex-wrap:wrap;align-items:stretch;">
 		<div style="flex:1;min-width:160px;">
 			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Published vendors', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( $published ); ?></div>
+			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( (string) $published ); ?></div>
 			<?php if ( $drafts > 0 ) : ?>
 			<div style="color:#a86b00;font-size:12px;margin-top:4px;"><?php echo esc_html( sprintf( /* translators: %d count */ __( '+ %d draft', 'luwipress' ), $drafts ) ); ?></div>
 			<?php endif; ?>

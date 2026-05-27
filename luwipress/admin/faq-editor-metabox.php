@@ -24,6 +24,15 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
+// Defensive defaults — PHPStan can't introspect render_metabox()'s
+// extract()-style variable provisioning, so we restate the contract here.
+// At runtime LuwiPress_FAQ_Editor::render_metabox() always provides these.
+$post_id        = isset( $post_id )        ? (int) $post_id        : 0;
+$rows           = isset( $rows ) && is_array( $rows ) ? $rows       : array();
+$status         = isset( $status ) && is_array( $status ) ? $status : array( 'status' => 'empty', 'label' => '', 'updated' => '' );
+$is_wc_product  = ! empty( $is_wc_product );
+$schema_preview = isset( $schema_preview ) ? (string) $schema_preview : '';
+
 $status_color = array(
 	'empty'      => '#999',
 	'manual'     => '#2c7a2c',
