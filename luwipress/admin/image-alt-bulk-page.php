@@ -109,79 +109,95 @@ foreach ( $q->posts as $att ) {
 $total_pages = max( 1, (int) $q->max_num_pages );
 $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), admin_url( 'admin.php' ) );
 ?>
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-image-alt-bulk">
+<?php endif; ?>
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<h1><span class="dashicons dashicons-format-image"></span> <?php esc_html_e( 'Image Alt Bulk', 'luwipress' ); ?></h1>
-	<p class="description" style="max-width:820px;">
+	<?php endif; ?>
+	<p class="lp-page-intro">
 		<?php esc_html_e( 'Scan every image in your Media Library, fill in alt text inline, and save 50+ rows in one click. Missing-alt images are highlighted on first load. Use the "From parent title" button to fast-fill alt with the post/product title.', 'luwipress' ); ?>
 	</p>
 
 	<!-- Hero stat row -->
-	<div class="luwipress-card" style="display:flex;gap:24px;flex-wrap:wrap;align-items:stretch;">
-		<div style="flex:1;min-width:160px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Total images', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( number_format_i18n( $total_all ) ); ?></div>
+	<?php $cov = $total_all > 0 ? round( ( $total_has_alt / $total_all ) * 100 ) : 0; ?>
+	<div class="lp-stat-row lwp-ab-stats">
+		<div class="lp-stat lp-stat--info">
+			<div class="lp-stat-label"><?php esc_html_e( 'Total images', 'luwipress' ); ?></div>
+			<div class="lp-stat-value"><?php echo esc_html( number_format_i18n( $total_all ) ); ?></div>
 		</div>
-		<div style="flex:1;min-width:160px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Missing alt', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:<?php echo $total_missing > 0 ? '#c33' : '#2c7a2c'; ?>;margin-top:4px;"><?php echo esc_html( number_format_i18n( $total_missing ) ); ?></div>
+		<div class="lp-stat <?php echo $total_missing > 0 ? 'lp-stat--error' : 'lp-stat--success'; ?>">
+			<div class="lp-stat-label"><?php esc_html_e( 'Missing alt', 'luwipress' ); ?></div>
+			<div class="lp-stat-value <?php echo $total_missing > 0 ? 'lp-stat-value--error' : 'lp-stat-value--success'; ?>">
+				<?php echo esc_html( number_format_i18n( $total_missing ) ); ?>
+			</div>
 		</div>
-		<div style="flex:1;min-width:160px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Has alt', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( number_format_i18n( $total_has_alt ) ); ?></div>
+		<div class="lp-stat lp-stat--success">
+			<div class="lp-stat-label"><?php esc_html_e( 'Has alt', 'luwipress' ); ?></div>
+			<div class="lp-stat-value"><?php echo esc_html( number_format_i18n( $total_has_alt ) ); ?></div>
 		</div>
-		<div style="flex:1;min-width:160px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Coverage', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;">
-				<?php
-				$cov = $total_all > 0 ? round( ( $total_has_alt / $total_all ) * 100 ) : 0;
-				echo esc_html( (string) $cov ) . '%';
-				?>
+		<div class="lp-stat <?php echo $cov >= 80 ? 'lp-stat--success' : ( $cov >= 50 ? 'lp-stat--warning' : 'lp-stat--error' ); ?>">
+			<div class="lp-stat-label"><?php esc_html_e( 'Coverage', 'luwipress' ); ?></div>
+			<div class="lp-stat-value <?php echo $cov >= 80 ? 'lp-stat-value--success' : ( $cov >= 50 ? 'lp-stat-value--warning' : 'lp-stat-value--error' ); ?>">
+				<?php echo esc_html( (string) $cov ); ?>%
 			</div>
 		</div>
 	</div>
 
 	<!-- Filter + search toolbar -->
-	<div class="luwipress-card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-		<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>" style="display:flex;gap:6px;align-items:center;flex:1;flex-wrap:wrap;">
+	<div class="luwipress-card lwp-ab-toolbar">
+		<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>" class="lwp-ab-filter-form">
 			<input type="hidden" name="page" value="luwipress-image-alt-bulk">
 			<input type="hidden" name="filter" value="<?php echo esc_attr( $filter ); ?>">
-			<div style="display:inline-flex;gap:4px;">
-				<a class="button <?php echo $filter === 'missing' ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'filter' => 'missing', 's' => $search ), $base_url ) ); ?>">
-					<?php esc_html_e( 'Missing', 'luwipress' ); ?> <span class="count" style="opacity:0.6;">(<?php echo esc_html( number_format_i18n( $total_missing ) ); ?>)</span>
+			<div class="lwp-ab-filter-pills">
+				<a class="lp-btn lp-btn--sm <?php echo $filter === 'missing' ? 'lp-btn--primary' : 'lp-btn--outline'; ?>"
+				   href="<?php echo esc_url( add_query_arg( array( 'filter' => 'missing', 's' => $search ), $base_url ) ); ?>">
+					<?php esc_html_e( 'Missing', 'luwipress' ); ?>
+					<span class="lwp-ab-filter-count">(<?php echo esc_html( number_format_i18n( $total_missing ) ); ?>)</span>
 				</a>
-				<a class="button <?php echo $filter === 'has_alt' ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'filter' => 'has_alt', 's' => $search ), $base_url ) ); ?>">
-					<?php esc_html_e( 'Has alt', 'luwipress' ); ?> <span class="count" style="opacity:0.6;">(<?php echo esc_html( number_format_i18n( $total_has_alt ) ); ?>)</span>
+				<a class="lp-btn lp-btn--sm <?php echo $filter === 'has_alt' ? 'lp-btn--primary' : 'lp-btn--outline'; ?>"
+				   href="<?php echo esc_url( add_query_arg( array( 'filter' => 'has_alt', 's' => $search ), $base_url ) ); ?>">
+					<?php esc_html_e( 'Has alt', 'luwipress' ); ?>
+					<span class="lwp-ab-filter-count">(<?php echo esc_html( number_format_i18n( $total_has_alt ) ); ?>)</span>
 				</a>
-				<a class="button <?php echo $filter === 'all' ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'filter' => 'all', 's' => $search ), $base_url ) ); ?>">
-					<?php esc_html_e( 'All', 'luwipress' ); ?> <span class="count" style="opacity:0.6;">(<?php echo esc_html( number_format_i18n( $total_all ) ); ?>)</span>
+				<a class="lp-btn lp-btn--sm <?php echo $filter === 'all' ? 'lp-btn--primary' : 'lp-btn--outline'; ?>"
+				   href="<?php echo esc_url( add_query_arg( array( 'filter' => 'all', 's' => $search ), $base_url ) ); ?>">
+					<?php esc_html_e( 'All', 'luwipress' ); ?>
+					<span class="lwp-ab-filter-count">(<?php echo esc_html( number_format_i18n( $total_all ) ); ?>)</span>
 				</a>
 			</div>
-			<input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="<?php esc_attr_e( 'Search filename / title…', 'luwipress' ); ?>" class="regular-text">
-			<button type="submit" class="button"><?php esc_html_e( 'Filter', 'luwipress' ); ?></button>
+			<input type="search" name="s" value="<?php echo esc_attr( $search ); ?>"
+			       placeholder="<?php esc_attr_e( 'Search filename / title…', 'luwipress' ); ?>"
+			       class="lp-form-input lwp-ab-search">
+			<button type="submit" class="lp-btn lp-btn--outline">
+				<span class="dashicons dashicons-filter" aria-hidden="true"></span>
+				<?php esc_html_e( 'Filter', 'luwipress' ); ?>
+			</button>
 		</form>
-		<div style="display:flex;gap:8px;align-items:center;">
-			<span id="lwp-alt-dirty-count" style="color:#666;font-size:13px;"><?php esc_html_e( '0 unsaved', 'luwipress' ); ?></span>
-			<button type="button" class="button button-primary button-hero" id="lwp-alt-save-all" disabled>
-				<span class="dashicons dashicons-saved" style="line-height:1.6;"></span>
+		<div class="lwp-ab-save-row">
+			<span id="lwp-alt-dirty-count" class="lp-form-hint"><?php esc_html_e( '0 unsaved', 'luwipress' ); ?></span>
+			<button type="button" class="lp-btn lp-btn--primary lp-btn--lg" id="lwp-alt-save-all" disabled>
+				<span class="dashicons dashicons-saved" aria-hidden="true"></span>
 				<?php esc_html_e( 'Save all changes', 'luwipress' ); ?>
 			</button>
 		</div>
 	</div>
 
 	<!-- Bulk table -->
-	<div class="luwipress-card" style="padding:0;">
-		<table class="wp-list-table widefat striped" id="lwp-alt-table">
+	<div class="luwipress-card lwp-ab-table-card">
+		<table class="wp-list-table widefat striped lwp-ab-table" id="lwp-alt-table">
 			<thead>
 				<tr>
-					<th style="width:90px;"><?php esc_html_e( 'Image', 'luwipress' ); ?></th>
-					<th style="width:30%;"><?php esc_html_e( 'File / Title', 'luwipress' ); ?></th>
-					<th style="width:20%;"><?php esc_html_e( 'Attached to', 'luwipress' ); ?></th>
+					<th class="lwp-ab-col-img"><?php esc_html_e( 'Image', 'luwipress' ); ?></th>
+					<th class="lwp-ab-col-file"><?php esc_html_e( 'File / Title', 'luwipress' ); ?></th>
+					<th class="lwp-ab-col-parent"><?php esc_html_e( 'Attached to', 'luwipress' ); ?></th>
 					<th><?php esc_html_e( 'Alt text', 'luwipress' ); ?></th>
 				</tr>
 			</thead>
 			<tbody>
 				<?php if ( empty( $items ) ) : ?>
-				<tr><td colspan="4" style="text-align:center;color:#999;font-style:italic;padding:32px;">
+				<tr><td colspan="4" class="lwp-ab-empty">
 					<?php
 					if ( $filter === 'missing' ) {
 						esc_html_e( 'Nothing missing alt text — every image is covered.', 'luwipress' );
@@ -195,35 +211,39 @@ $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), adm
 					<td>
 						<?php if ( $it['thumb'] ) : ?>
 						<a href="<?php echo esc_url( wp_get_attachment_url( $it['id'] ) ); ?>" target="_blank" rel="noopener">
-							<img src="<?php echo esc_url( $it['thumb'] ); ?>" alt="" style="max-width:80px;max-height:80px;border:1px solid #ddd;border-radius:4px;">
+							<img src="<?php echo esc_url( $it['thumb'] ); ?>" alt="" class="lwp-ab-thumb">
 						</a>
 						<?php else : ?>
-						<span style="color:#999;">—</span>
+						<span class="lwp-ab-no-thumb">—</span>
 						<?php endif; ?>
 					</td>
 					<td>
-						<strong style="display:block;"><?php echo esc_html( $it['title'] ?: $it['filename'] ); ?></strong>
-						<code style="font-size:11px;color:#666;display:block;margin-top:2px;"><?php echo esc_html( $it['filename'] ); ?></code>
-						<a href="<?php echo esc_url( admin_url( 'post.php?post=' . $it['id'] . '&action=edit' ) ); ?>" style="font-size:11px;"><?php esc_html_e( 'Open in Media Library →', 'luwipress' ); ?></a>
+						<strong class="lwp-ab-title"><?php echo esc_html( $it['title'] ?: $it['filename'] ); ?></strong>
+						<code class="lwp-ab-filename"><?php echo esc_html( $it['filename'] ); ?></code>
+						<a href="<?php echo esc_url( admin_url( 'post.php?post=' . $it['id'] . '&action=edit' ) ); ?>" class="lwp-ab-media-link">
+							<?php esc_html_e( 'Open in Media Library →', 'luwipress' ); ?>
+						</a>
 					</td>
 					<td>
 						<?php if ( $it['parent_id'] && $it['parent_edit'] ) : ?>
 						<a href="<?php echo esc_url( $it['parent_edit'] ); ?>"><?php echo esc_html( $it['parent_title'] ?: ( '#' . $it['parent_id'] ) ); ?></a>
-						<button type="button" class="button button-small lwp-alt-from-parent" data-parent-title="<?php echo esc_attr( $it['parent_title'] ); ?>" style="display:block;margin-top:4px;">
+						<button type="button" class="lp-btn lp-btn--ghost lp-btn--sm lwp-alt-from-parent" data-parent-title="<?php echo esc_attr( $it['parent_title'] ); ?>">
 							<?php esc_html_e( 'Use parent title', 'luwipress' ); ?>
 						</button>
 						<?php else : ?>
-						<span style="color:#999;font-size:12px;font-style:italic;"><?php esc_html_e( '(unattached)', 'luwipress' ); ?></span>
+						<span class="lwp-ab-unattached"><?php esc_html_e( '(unattached)', 'luwipress' ); ?></span>
 						<?php endif; ?>
 					</td>
 					<td>
-						<textarea class="lwp-alt-input" rows="2" style="width:100%;font-family:inherit;font-size:13px;" placeholder="<?php esc_attr_e( 'Describe what the image shows (one short sentence)…', 'luwipress' ); ?>" data-original="<?php echo esc_attr( $it['alt'] ); ?>"><?php echo esc_textarea( $it['alt'] ); ?></textarea>
-						<div class="lwp-alt-meta" style="font-size:11px;color:#999;margin-top:2px;display:flex;justify-content:space-between;">
+						<textarea class="lp-form-textarea lwp-alt-input" rows="2"
+						          placeholder="<?php esc_attr_e( 'Describe what the image shows (one short sentence)…', 'luwipress' ); ?>"
+						          data-original="<?php echo esc_attr( $it['alt'] ); ?>"><?php echo esc_textarea( $it['alt'] ); ?></textarea>
+						<div class="lwp-alt-meta">
 							<span class="lwp-alt-length">
 								<?php
 								$len = strlen( $it['alt'] );
 								if ( $len === 0 ) {
-									echo '<span style="color:#c33;font-weight:600;">' . esc_html__( 'Empty', 'luwipress' ) . '</span>';
+									echo '<span class="lwp-ab-empty-flag">' . esc_html__( 'Empty', 'luwipress' ) . '</span>';
 								} else {
 									echo esc_html( sprintf( /* translators: %d characters */ __( '%d chars', 'luwipress' ), $len ) );
 								}
@@ -242,32 +262,125 @@ $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), adm
 	<?php if ( $total_pages > 1 ) :
 		$pag_base = add_query_arg( array( 'filter' => $filter, 's' => $search ), $base_url );
 	?>
-	<div class="luwipress-card" style="display:flex;justify-content:space-between;align-items:center;">
-		<span><?php echo esc_html( sprintf( /* translators: %d page count */ __( 'Page %1$d of %2$d', 'luwipress' ), $paged, $total_pages ) ); ?></span>
-		<div>
+	<div class="luwipress-card lwp-ab-pagination">
+		<span class="lp-form-hint"><?php echo esc_html( sprintf( /* translators: %d page count */ __( 'Page %1$d of %2$d', 'luwipress' ), $paged, $total_pages ) ); ?></span>
+		<div class="lp-btn-row">
 			<?php if ( $paged > 1 ) : ?>
-				<a class="button" href="<?php echo esc_url( add_query_arg( 'paged', $paged - 1, $pag_base ) ); ?>">← <?php esc_html_e( 'Previous', 'luwipress' ); ?></a>
+				<a class="lp-btn lp-btn--outline" href="<?php echo esc_url( add_query_arg( 'paged', $paged - 1, $pag_base ) ); ?>">
+					<span class="dashicons dashicons-arrow-left-alt2" aria-hidden="true"></span>
+					<?php esc_html_e( 'Previous', 'luwipress' ); ?>
+				</a>
 			<?php endif; ?>
 			<?php if ( $paged < $total_pages ) : ?>
-				<a class="button" href="<?php echo esc_url( add_query_arg( 'paged', $paged + 1, $pag_base ) ); ?>"><?php esc_html_e( 'Next', 'luwipress' ); ?> →</a>
+				<a class="lp-btn lp-btn--outline" href="<?php echo esc_url( add_query_arg( 'paged', $paged + 1, $pag_base ) ); ?>">
+					<?php esc_html_e( 'Next', 'luwipress' ); ?>
+					<span class="dashicons dashicons-arrow-right-alt2" aria-hidden="true"></span>
+				</a>
 			<?php endif; ?>
 		</div>
 	</div>
 	<?php endif; ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>
 
 <style>
-.luwipress-image-alt-bulk .luwipress-card {
-	background:#fff;border:1px solid #ddd;border-radius:6px;padding:14px 18px;margin:16px 0;
+.lwp-ab-stats { margin: 0 0 16px; }
+
+.lwp-ab-toolbar {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	flex-wrap: wrap;
 }
-.luwipress-image-alt-bulk .luwipress-card h2 { margin-top:0;font-size:17px; }
-.luwipress-image-alt-bulk tr.dirty { background:#fffbe6; }
-.luwipress-image-alt-bulk tr.saved-ok { background:#e9f5e9; transition:background 1s; }
-.luwipress-image-alt-bulk tr.saved-fail { background:#fde2e2; }
-.luwipress-image-alt-bulk .lwp-alt-status { font-weight:600; }
-.luwipress-image-alt-bulk .lwp-alt-status.dirty { color:#a86b00; }
-.luwipress-image-alt-bulk .lwp-alt-status.saved { color:#2c7a2c; }
-.luwipress-image-alt-bulk .lwp-alt-status.failed { color:#c33; }
+.lwp-ab-filter-form {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex: 1;
+	flex-wrap: wrap;
+}
+.lwp-ab-filter-pills {
+	display: inline-flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.lwp-ab-filter-count {
+	opacity: 0.7;
+	margin-left: 4px;
+	font-weight: 400;
+}
+.lwp-ab-search { width: 240px; }
+.lwp-ab-save-row {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+
+.lwp-ab-table-card { padding: 0; }
+.lwp-ab-table { margin: 0; }
+.lwp-ab-table .lwp-ab-col-img    { width: 90px; }
+.lwp-ab-table .lwp-ab-col-file   { width: 30%; }
+.lwp-ab-table .lwp-ab-col-parent { width: 20%; }
+.lwp-ab-empty {
+	text-align: center;
+	color: var(--lp-text-secondary);
+	font-style: italic;
+	padding: 32px;
+}
+.lwp-ab-thumb {
+	max-width: 80px;
+	max-height: 80px;
+	border: 1px solid var(--lp-border);
+	border-radius: 4px;
+}
+.lwp-ab-no-thumb { color: var(--lp-text-secondary); }
+.lwp-ab-title { display: block; color: var(--lp-text); }
+.lwp-ab-filename {
+	font-size: 11px;
+	color: var(--lp-text-secondary);
+	display: block;
+	margin-top: 2px;
+	background: transparent;
+	padding: 0;
+}
+.lwp-ab-media-link { font-size: 11px; }
+.lwp-ab-unattached {
+	color: var(--lp-text-secondary);
+	font-size: 12px;
+	font-style: italic;
+}
+.lwp-alt-from-parent { display: block; margin-top: 4px; }
+
+.lwp-alt-input { min-height: 56px; }
+.lwp-alt-meta {
+	font-size: 11px;
+	color: var(--lp-text-secondary);
+	margin-top: 4px;
+	display: flex;
+	justify-content: space-between;
+}
+.lwp-ab-empty-flag { color: var(--lp-error); font-weight: 600; }
+
+.lwp-ab-pagination {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
+/* Row state colours — all token-driven for dark mode + brand override. */
+.luwipress-image-alt-bulk tr.dirty,
+.luwipress-hub-content tr.dirty       { background: var(--lp-warning-bg); }
+.luwipress-image-alt-bulk tr.saved-ok,
+.luwipress-hub-content tr.saved-ok    { background: var(--lp-success-bg); transition: background 1s; }
+.luwipress-image-alt-bulk tr.saved-fail,
+.luwipress-hub-content tr.saved-fail  { background: var(--lp-error-bg); }
+.lwp-alt-status { font-weight: 600; }
+.lwp-alt-status.dirty  { color: var(--lp-warning); }
+.lwp-alt-status.saved  { color: var(--lp-success); }
+.lwp-alt-status.failed { color: var(--lp-error); }
 </style>
 
 <script>

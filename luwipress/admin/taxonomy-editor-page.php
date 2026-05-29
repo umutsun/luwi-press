@@ -46,8 +46,12 @@ if ( class_exists( 'LuwiPress_Taxonomy_Editor' ) ) {
 $default_taxonomy = ! empty( $taxonomies ) ? $taxonomies[0]['slug'] : 'category';
 $requested_tax    = isset( $_GET['taxonomy'] ) ? sanitize_key( $_GET['taxonomy'] ) : $default_taxonomy;
 ?>
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-tax-editor">
+<?php endif; ?>
 
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<div class="lp-header">
 		<div class="lp-header__inner">
 			<h1 class="lp-header__title">
@@ -84,6 +88,7 @@ $requested_tax    = isset( $_GET['taxonomy'] ) ? sanitize_key( $_GET['taxonomy']
 			</div>
 		</div>
 	</div>
+	<?php endif; ?>
 
 	<div class="lwp-tx-toolbar luwipress-card">
 		<div class="lwp-tx-toolbar__left">
@@ -132,4 +137,6 @@ $requested_tax    = isset( $_GET['taxonomy'] ) ? sanitize_key( $_GET['taxonomy']
 		</p>
 	</div>
 
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>

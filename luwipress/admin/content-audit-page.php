@@ -75,41 +75,52 @@ $wc_targets = class_exists( 'LuwiPress_Health_Score' )
 	: array();
 
 ?>
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-content-audit">
+<?php endif; ?>
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<h1><span class="dashicons dashicons-search"></span> <?php esc_html_e( 'Content Audit', 'luwipress' ); ?></h1>
-	<p class="description" style="max-width:780px;">
+	<?php endif; ?>
+	<p class="lp-page-intro">
 		<?php esc_html_e( 'Catch promotional phrases that trigger GMC disapproval, stock LLM phrasings that 2024+ Helpful Content Update flags, and content that falls outside your per-type word count target. Each tab runs against your live content and surfaces 1-click fix paths.', 'luwipress' ); ?>
 	</p>
 
-	<!-- Hero score row — what changes if you fix the findings below -->
-	<div class="luwipress-card" style="display:flex;gap:24px;flex-wrap:wrap;align-items:stretch;">
-		<?php
-		$band_color = function( $status ) {
-			switch ( $status ) {
-				case 'good': return '#2c7a2c';
-				case 'warn': return '#a86b00';
-				case 'bad':  return '#c33';
-				default:     return '#999';
-			}
-		};
+	<!-- Hero score row — Brand Voice + Content Depth pillars, design-token accent. -->
+	<?php
+	$status_class = function ( $status ) {
+		switch ( $status ) {
+			case 'good': return 'lp-stat--success';
+			case 'warn': return 'lp-stat--warning';
+			case 'bad':  return 'lp-stat--error';
+			default:     return 'lp-stat--muted';
+		}
+	};
+	$value_class = function ( $status ) {
+		switch ( $status ) {
+			case 'good': return 'lp-stat-value--success';
+			case 'warn': return 'lp-stat-value--warning';
+			case 'bad':  return 'lp-stat-value--error';
+			default:     return '';
+		}
+	};
 
-		$render_pillar_card = function( $p, $title, $hint ) use ( $band_color ) {
-			$val   = ( $p && isset( $p['value'] ) && $p['value'] !== null ) ? round( (float) $p['value'] ) : null;
-			$color = $band_color( $p['status'] ?? 'n_a' );
-			?>
-			<div style="flex:1 1 280px;padding:12px 14px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;">
-				<div style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#666;">
-					<?php echo esc_html( $title ); ?>
-				</div>
-				<div style="font-size:36px;font-weight:700;line-height:1.1;color:<?php echo esc_attr( $color ); ?>;margin-top:4px;">
-					<?php echo $val === null ? '—' : (int) $val; ?><span style="font-size:14px;color:#999;font-weight:400;">%</span>
-				</div>
-				<div style="font-size:12px;color:#666;margin-top:6px;line-height:1.4;">
-					<?php echo esc_html( $hint ); ?>
-				</div>
+	$render_pillar_card = function ( $p, $title, $hint ) use ( $status_class, $value_class ) {
+		$val    = ( $p && isset( $p['value'] ) && $p['value'] !== null ) ? round( (float) $p['value'] ) : null;
+		$status = $p['status'] ?? 'n_a';
+		?>
+		<div class="lp-stat <?php echo esc_attr( $status_class( $status ) ); ?> lwp-ca-pillar">
+			<div class="lp-stat-label"><?php echo esc_html( $title ); ?></div>
+			<div class="lp-stat-value <?php echo esc_attr( $value_class( $status ) ); ?> lwp-ca-pillar-value">
+				<?php echo $val === null ? '—' : (int) $val; ?><span class="lwp-ca-pillar-unit">%</span>
 			</div>
-			<?php
-		};
+			<div class="lp-stat-caption"><?php echo esc_html( $hint ); ?></div>
+		</div>
+		<?php
+	};
+	?>
+	<div class="lp-stat-row lwp-ca-pillars">
+		<?php
 		$render_pillar_card(
 			$brand_voice,
 			__( 'Brand Voice Compliance', 'luwipress' ),
@@ -124,13 +135,19 @@ $wc_targets = class_exists( 'LuwiPress_Health_Score' )
 	</div>
 
 	<?php if ( $hs_cold ) : ?>
-		<p class="description lwp-hs-cold-notice" style="margin-top:8px;font-style:italic;color:#a86b00;">
-			<?php esc_html_e( 'Health Score cache is cold — hero values will populate after the next hourly cron tick. Click below to recompute now.', 'luwipress' ); ?>
-			<button type="button" class="button button-small" id="lwp-hs-recompute" style="margin-left:8px;">
-				<?php esc_html_e( 'Recompute now', 'luwipress' ); ?>
-			</button>
-			<span id="lwp-hs-recompute-status" style="margin-left:8px;color:#666;"></span>
-		</p>
+		<div class="luwipress-card luwipress-card--warning lwp-hs-cold-notice">
+			<p style="margin:0;">
+				<span class="dashicons dashicons-clock" aria-hidden="true"></span>
+				<?php esc_html_e( 'Health Score cache is cold — hero values will populate after the next hourly cron tick. Click below to recompute now.', 'luwipress' ); ?>
+			</p>
+			<div class="lp-btn-row" style="margin-top:10px;">
+				<button type="button" class="lp-btn lp-btn--outline lp-btn--sm" id="lwp-hs-recompute">
+					<span class="dashicons dashicons-update" aria-hidden="true"></span>
+					<?php esc_html_e( 'Recompute now', 'luwipress' ); ?>
+				</button>
+				<span id="lwp-hs-recompute-status" class="lp-form-hint"></span>
+			</div>
+		</div>
 		<script>
 			(function () {
 				var btn = document.getElementById('lwp-hs-recompute');
@@ -157,108 +174,157 @@ $wc_targets = class_exists( 'LuwiPress_Health_Score' )
 		</script>
 	<?php endif; ?>
 
-	<!-- Tab nav -->
-	<nav class="nav-tab-wrapper luwipress-tabs" style="margin-top:12px;">
-		<a href="?page=luwipress-content-audit&tab=promotional" class="nav-tab <?php echo 'promotional' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-warning"></span> <?php esc_html_e( 'Promotional Phrases', 'luwipress' ); ?>
+	<!-- Sub-tab nav — design-token strip identical to .lp-hub-tabs but
+	     scoped to this page. URL preserved when rendered inside the
+	     Content hub (page=luwipress-content&tab=audit&sub=...). -->
+	<?php
+	// Build the URL for each sub-tab, preserving the outer hub context
+	// when this page is rendered inside `luwipress-content`.
+	$ca_tab_url = function ( $sub ) use ( $luwipress_hub_mode ) {
+		if ( $luwipress_hub_mode ) {
+			return add_query_arg(
+				array( 'page' => 'luwipress-content', 'tab' => 'audit', 'sub' => $sub ),
+				admin_url( 'admin.php' )
+			);
+		}
+		return add_query_arg(
+			array( 'page' => 'luwipress-content-audit', 'tab' => $sub ),
+			admin_url( 'admin.php' )
+		);
+	};
+	?>
+	<nav class="lp-hub-tabs lwp-ca-subtabs" role="tablist" aria-label="<?php esc_attr_e( 'Content audit sub-sections', 'luwipress' ); ?>">
+		<a href="<?php echo esc_url( $ca_tab_url( 'promotional' ) ); ?>"
+		   class="lp-hub-tab <?php echo 'promotional' === $active_tab ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo 'promotional' === $active_tab ? 'true' : 'false'; ?>">
+			<span class="dashicons dashicons-warning"></span>
+			<span><?php esc_html_e( 'Promotional Phrases', 'luwipress' ); ?></span>
 		</a>
-		<a href="?page=luwipress-content-audit&tab=ai-tell" class="nav-tab <?php echo 'ai-tell' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-format-quote"></span> <?php esc_html_e( 'AI-Tells', 'luwipress' ); ?>
+		<a href="<?php echo esc_url( $ca_tab_url( 'ai-tell' ) ); ?>"
+		   class="lp-hub-tab <?php echo 'ai-tell' === $active_tab ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo 'ai-tell' === $active_tab ? 'true' : 'false'; ?>">
+			<span class="dashicons dashicons-format-quote"></span>
+			<span><?php esc_html_e( 'AI-Tells', 'luwipress' ); ?></span>
 		</a>
-		<a href="?page=luwipress-content-audit&tab=word-count" class="nav-tab <?php echo 'word-count' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-text"></span> <?php esc_html_e( 'Word Count', 'luwipress' ); ?>
+		<a href="<?php echo esc_url( $ca_tab_url( 'word-count' ) ); ?>"
+		   class="lp-hub-tab <?php echo 'word-count' === $active_tab ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo 'word-count' === $active_tab ? 'true' : 'false'; ?>">
+			<span class="dashicons dashicons-text"></span>
+			<span><?php esc_html_e( 'Word Count', 'luwipress' ); ?></span>
 		</a>
 	</nav>
 
 	<!-- PROMOTIONAL PHRASES TAB -->
-	<div class="luwipress-tab-content <?php echo 'promotional' === $active_tab ? 'tab-active' : ''; ?>" id="tab-promotional" <?php if ( 'promotional' !== $active_tab ) echo 'hidden'; ?>>
-		<div class="luwipress-card">
+	<div class="luwipress-tab-content lwp-ca-tab-body <?php echo 'promotional' === $active_tab ? 'tab-active' : ''; ?>"
+	     id="tab-promotional" <?php if ( 'promotional' !== $active_tab ) echo 'hidden'; ?>>
+		<div class="luwipress-card luwipress-card--warning">
 			<h2><?php esc_html_e( 'Promotional Phrase Audit', 'luwipress' ); ?></h2>
-			<p class="description">
+			<p class="lp-form-hint">
 				<?php esc_html_e( 'Scans for GMC-prohibited urgency / sale-pressure phrases ("free shipping", "best price", "limited time", "today only", etc.) across product title, meta title, meta description, excerpt and body. High-severity findings in meta will trigger Google Merchant Center disapproval; medium in title; low in body (flagged for editorial sweep).', 'luwipress' ); ?>
 			</p>
 
-			<form class="lwp-audit-form" data-audit-kind="promotional">
-				<label><?php esc_html_e( 'Post type', 'luwipress' ); ?>
-					<select name="post_type">
-						<option value="product"<?php selected( 'product', 'product' ); ?>>product</option>
+			<form class="lwp-audit-form lwp-ca-form" data-audit-kind="promotional">
+				<div class="lp-form-row lwp-ca-form-field">
+					<label class="lp-form-label" for="lwp-ca-promo-type"><?php esc_html_e( 'Post type', 'luwipress' ); ?></label>
+					<select class="lp-form-select" id="lwp-ca-promo-type" name="post_type">
+						<option value="product" selected>product</option>
 						<option value="post">post</option>
 						<option value="page">page</option>
 					</select>
-				</label>
-				<label><?php esc_html_e( 'Scope', 'luwipress' ); ?>
-					<select name="scope">
+				</div>
+				<div class="lp-form-row lwp-ca-form-field">
+					<label class="lp-form-label" for="lwp-ca-promo-scope"><?php esc_html_e( 'Scope', 'luwipress' ); ?></label>
+					<select class="lp-form-select" id="lwp-ca-promo-scope" name="scope">
 						<option value="all"><?php esc_html_e( 'All (meta + body)', 'luwipress' ); ?></option>
 						<option value="meta"><?php esc_html_e( 'Meta only', 'luwipress' ); ?></option>
 						<option value="body"><?php esc_html_e( 'Body only', 'luwipress' ); ?></option>
 					</select>
-				</label>
-				<label><?php esc_html_e( 'Limit', 'luwipress' ); ?>
-					<input type="number" name="limit" value="100" min="1" max="500" />
-				</label>
-				<button type="submit" class="button button-primary"><span class="dashicons dashicons-search"></span> <?php esc_html_e( 'Run scan', 'luwipress' ); ?></button>
+				</div>
+				<div class="lp-form-row lwp-ca-form-field">
+					<label class="lp-form-label" for="lwp-ca-promo-limit"><?php esc_html_e( 'Limit', 'luwipress' ); ?></label>
+					<input class="lp-form-input" id="lwp-ca-promo-limit" type="number" name="limit" value="100" min="1" max="500" />
+				</div>
+				<div class="lp-form-row lwp-ca-form-submit">
+					<button type="submit" class="lp-btn lp-btn--primary">
+						<span class="dashicons dashicons-search" aria-hidden="true"></span>
+						<?php esc_html_e( 'Run scan', 'luwipress' ); ?>
+					</button>
+				</div>
 			</form>
 
-			<div class="lwp-audit-status" data-kind="promotional" style="margin-top:12px;color:#666;font-size:13px;"></div>
-			<div class="lwp-audit-results" data-kind="promotional" style="margin-top:12px;"></div>
+			<div class="lwp-audit-status lwp-ca-status" data-kind="promotional"></div>
+			<div class="lwp-audit-results lwp-ca-results" data-kind="promotional"></div>
 		</div>
 	</div>
 
 	<!-- AI-TELLS TAB -->
-	<div class="luwipress-tab-content <?php echo 'ai-tell' === $active_tab ? 'tab-active' : ''; ?>" id="tab-ai-tell" <?php if ( 'ai-tell' !== $active_tab ) echo 'hidden'; ?>>
-		<div class="luwipress-card">
+	<div class="luwipress-tab-content lwp-ca-tab-body <?php echo 'ai-tell' === $active_tab ? 'tab-active' : ''; ?>"
+	     id="tab-ai-tell" <?php if ( 'ai-tell' !== $active_tab ) echo 'hidden'; ?>>
+		<div class="luwipress-card luwipress-card--info">
 			<h2><?php esc_html_e( 'AI-Tell Scanner', 'luwipress' ); ?></h2>
-			<p class="description">
+			<p class="lp-form-hint">
 				<?php esc_html_e( 'Surfaces stock LLM phrasings — "In the world of...", "stands as one of the most...", "In conclusion,", "Unleash your creativity" — that 2024+ Helpful Content Update flags as machine-generated boilerplate. All findings are editorial soft-flags; rewrite by hand for proprietary voice, or rerun your enrichment workflow with a tighter prompt.', 'luwipress' ); ?>
 			</p>
 
-			<form class="lwp-audit-form" data-audit-kind="ai-tell">
-				<label><?php esc_html_e( 'Post type', 'luwipress' ); ?>
-					<select name="post_type">
+			<form class="lwp-audit-form lwp-ca-form" data-audit-kind="ai-tell">
+				<div class="lp-form-row lwp-ca-form-field">
+					<label class="lp-form-label" for="lwp-ca-ait-type"><?php esc_html_e( 'Post type', 'luwipress' ); ?></label>
+					<select class="lp-form-select" id="lwp-ca-ait-type" name="post_type">
 						<option value="post" selected>post</option>
 						<option value="product">product</option>
 						<option value="page">page</option>
 					</select>
-				</label>
-				<label><?php esc_html_e( 'Scope', 'luwipress' ); ?>
-					<select name="scope">
+				</div>
+				<div class="lp-form-row lwp-ca-form-field">
+					<label class="lp-form-label" for="lwp-ca-ait-scope"><?php esc_html_e( 'Scope', 'luwipress' ); ?></label>
+					<select class="lp-form-select" id="lwp-ca-ait-scope" name="scope">
 						<option value="all"><?php esc_html_e( 'All (meta + body)', 'luwipress' ); ?></option>
 						<option value="meta"><?php esc_html_e( 'Meta only', 'luwipress' ); ?></option>
 						<option value="body"><?php esc_html_e( 'Body only', 'luwipress' ); ?></option>
 					</select>
-				</label>
-				<label><?php esc_html_e( 'Limit', 'luwipress' ); ?>
-					<input type="number" name="limit" value="100" min="1" max="500" />
-				</label>
-				<button type="submit" class="button button-primary"><span class="dashicons dashicons-search"></span> <?php esc_html_e( 'Run scan', 'luwipress' ); ?></button>
+				</div>
+				<div class="lp-form-row lwp-ca-form-field">
+					<label class="lp-form-label" for="lwp-ca-ait-limit"><?php esc_html_e( 'Limit', 'luwipress' ); ?></label>
+					<input class="lp-form-input" id="lwp-ca-ait-limit" type="number" name="limit" value="100" min="1" max="500" />
+				</div>
+				<div class="lp-form-row lwp-ca-form-submit">
+					<button type="submit" class="lp-btn lp-btn--primary">
+						<span class="dashicons dashicons-search" aria-hidden="true"></span>
+						<?php esc_html_e( 'Run scan', 'luwipress' ); ?>
+					</button>
+				</div>
 			</form>
 
-			<div class="lwp-audit-status" data-kind="ai-tell" style="margin-top:12px;color:#666;font-size:13px;"></div>
-			<div class="lwp-audit-results" data-kind="ai-tell" style="margin-top:12px;"></div>
+			<div class="lwp-audit-status lwp-ca-status" data-kind="ai-tell"></div>
+			<div class="lwp-audit-results lwp-ca-results" data-kind="ai-tell"></div>
 		</div>
 	</div>
 
 	<!-- WORD COUNT TAB -->
-	<div class="luwipress-tab-content <?php echo 'word-count' === $active_tab ? 'tab-active' : ''; ?>" id="tab-word-count" <?php if ( 'word-count' !== $active_tab ) echo 'hidden'; ?>>
-		<div class="luwipress-card">
+	<div class="luwipress-tab-content lwp-ca-tab-body <?php echo 'word-count' === $active_tab ? 'tab-active' : ''; ?>"
+	     id="tab-word-count" <?php if ( 'word-count' !== $active_tab ) echo 'hidden'; ?>>
+		<div class="luwipress-card luwipress-card--primary">
 			<h2><?php esc_html_e( 'Word Count Audit', 'luwipress' ); ?></h2>
-			<p class="description">
+			<p class="lp-form-hint">
 				<?php esc_html_e( 'Per-CPT word count compliance — share of published content within the [min, max] target band configured in Settings → AI Content. Below min = thin (action priority), above max = bloat (informational).', 'luwipress' ); ?>
 			</p>
 
 			<?php if ( $content_depth && ! empty( $content_depth['details']['per_cpt'] ) ) :
 				$per_cpt = $content_depth['details']['per_cpt'];
 			?>
-			<table class="widefat striped" style="margin-top:12px;">
+			<table class="widefat striped lwp-ca-wc-table">
 				<thead>
 					<tr>
 						<th><?php esc_html_e( 'Content type', 'luwipress' ); ?></th>
-						<th style="text-align:right;width:100px;"><?php esc_html_e( 'Total', 'luwipress' ); ?></th>
-						<th style="text-align:right;width:100px;color:#2c7a2c;"><?php esc_html_e( 'On band', 'luwipress' ); ?></th>
-						<th style="text-align:right;width:100px;color:#c33;"><?php esc_html_e( 'Thin', 'luwipress' ); ?></th>
-						<th style="text-align:right;width:100px;color:#a86b00;"><?php esc_html_e( 'Bloat', 'luwipress' ); ?></th>
-						<th style="text-align:right;width:100px;"><?php esc_html_e( '% Band', 'luwipress' ); ?></th>
-						<th style="width:160px;"><?php esc_html_e( 'Target band', 'luwipress' ); ?></th>
+						<th class="lwp-ca-num"><?php esc_html_e( 'Total', 'luwipress' ); ?></th>
+						<th class="lwp-ca-num lwp-ca-h--success"><?php esc_html_e( 'On band', 'luwipress' ); ?></th>
+						<th class="lwp-ca-num lwp-ca-h--error"><?php esc_html_e( 'Thin', 'luwipress' ); ?></th>
+						<th class="lwp-ca-num lwp-ca-h--warning"><?php esc_html_e( 'Bloat', 'luwipress' ); ?></th>
+						<th class="lwp-ca-num"><?php esc_html_e( '% Band', 'luwipress' ); ?></th>
+						<th class="lwp-ca-band"><?php esc_html_e( 'Target band', 'luwipress' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -267,22 +333,23 @@ $wc_targets = class_exists( 'LuwiPress_Health_Score' )
 						if ( ! $row || ! empty( $row['skipped'] ) ) {
 							continue;
 						}
-						$share = isset( $row['pct_band'] ) ? (float) $row['pct_band'] : 0;
-						$share_color = $share >= 85 ? '#2c7a2c' : ( $share >= 70 ? '#a86b00' : '#c33' );
+						$share       = isset( $row['pct_band'] ) ? (float) $row['pct_band'] : 0;
+						$share_class = $share >= 85 ? 'lwp-ca-c--success' : ( $share >= 70 ? 'lwp-ca-c--warning' : 'lwp-ca-c--error' );
+						$thin_strong = ! empty( $row['thin'] ) ? ' lwp-ca-strong' : '';
 					?>
 					<tr>
 						<td>
 							<strong><?php echo esc_html( $band['label'] ); ?></strong>
-							<br><code style="font-size:11px;color:#666;"><?php echo esc_html( $cpt ); ?></code>
+							<br><code class="lwp-ca-cpt-code"><?php echo esc_html( $cpt ); ?></code>
 						</td>
-						<td style="text-align:right;"><?php echo (int) ( $row['total'] ?? 0 ); ?></td>
-						<td style="text-align:right;color:#2c7a2c;"><?php echo (int) ( $row['on_band'] ?? 0 ); ?></td>
-						<td style="text-align:right;color:#c33;font-weight:<?php echo ! empty( $row['thin'] ) ? '600' : '400'; ?>;"><?php echo (int) ( $row['thin'] ?? 0 ); ?></td>
-						<td style="text-align:right;color:#a86b00;"><?php echo (int) ( $row['bloat'] ?? 0 ); ?></td>
-						<td style="text-align:right;font-weight:600;color:<?php echo esc_attr( $share_color ); ?>;">
+						<td class="lwp-ca-num"><?php echo (int) ( $row['total'] ?? 0 ); ?></td>
+						<td class="lwp-ca-num lwp-ca-c--success"><?php echo (int) ( $row['on_band'] ?? 0 ); ?></td>
+						<td class="lwp-ca-num lwp-ca-c--error<?php echo esc_attr( $thin_strong ); ?>"><?php echo (int) ( $row['thin'] ?? 0 ); ?></td>
+						<td class="lwp-ca-num lwp-ca-c--warning"><?php echo (int) ( $row['bloat'] ?? 0 ); ?></td>
+						<td class="lwp-ca-num lwp-ca-strong <?php echo esc_attr( $share_class ); ?>">
 							<?php echo number_format( $share, 1 ); ?>%
 						</td>
-						<td style="font-size:12px;color:#666;">
+						<td class="lwp-ca-band">
 							<?php echo (int) $band['min']; ?> – <strong><?php echo (int) $band['target']; ?></strong> – <?php echo (int) $band['max']; ?>
 						</td>
 					</tr>
@@ -300,35 +367,35 @@ $wc_targets = class_exists( 'LuwiPress_Health_Score' )
 			}
 			if ( $any_thin ) :
 			?>
-				<h3 style="margin-top:24px;"><?php esc_html_e( 'Thin content — action queue', 'luwipress' ); ?></h3>
-				<p class="description"><?php esc_html_e( 'Posts below the min word count for their type. Highest-priority cleanup target (Helpful Content Update penalises thin content site-wide).', 'luwipress' ); ?></p>
+				<h3 class="lp-section-title lwp-ca-section-title"><?php esc_html_e( 'Thin content — action queue', 'luwipress' ); ?></h3>
+				<p class="lp-form-hint"><?php esc_html_e( 'Posts below the min word count for their type. Highest-priority cleanup target (Helpful Content Update penalises thin content site-wide).', 'luwipress' ); ?></p>
 				<?php foreach ( $per_cpt as $cpt => $row ) :
 					if ( empty( $row['thin_ids'] ) ) {
 						continue;
 					}
 					$band = $row['band'] ?? array( 'min' => 0, 'label' => $cpt );
 				?>
-				<details style="margin-top:8px;background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px 12px;">
-					<summary style="cursor:pointer;font-weight:600;">
+				<details class="lwp-ca-thin-group">
+					<summary>
 						<?php echo esc_html( $band['label'] ); ?>
-						<span style="color:#c33;">— <?php echo (int) count( $row['thin_ids'] ); ?> <?php esc_html_e( 'posts under', 'luwipress' ); ?> <?php echo (int) $band['min']; ?> <?php esc_html_e( 'words', 'luwipress' ); ?></span>
+						<span class="lwp-ca-c--error">— <?php echo (int) count( $row['thin_ids'] ); ?> <?php esc_html_e( 'posts under', 'luwipress' ); ?> <?php echo (int) $band['min']; ?> <?php esc_html_e( 'words', 'luwipress' ); ?></span>
 					</summary>
-					<table class="widefat striped" style="margin-top:8px;">
+					<table class="widefat striped lwp-ca-thin-table">
 						<thead>
 							<tr>
 								<th><?php esc_html_e( 'Title', 'luwipress' ); ?></th>
-								<th style="width:120px;text-align:right;"><?php esc_html_e( 'Words', 'luwipress' ); ?></th>
-								<th style="width:80px;"><?php esc_html_e( 'Edit', 'luwipress' ); ?></th>
+								<th class="lwp-ca-num"><?php esc_html_e( 'Words', 'luwipress' ); ?></th>
+								<th class="lwp-ca-edit"><?php esc_html_e( 'Edit', 'luwipress' ); ?></th>
 							</tr>
 						</thead>
 						<tbody>
 							<?php foreach ( $row['thin_ids'] as $entry ) : ?>
 								<tr>
 									<td><?php echo esc_html( $entry['title'] ); ?></td>
-									<td style="text-align:right;font-weight:600;color:#c33;"><?php echo (int) $entry['word_count']; ?></td>
+									<td class="lwp-ca-num lwp-ca-strong lwp-ca-c--error"><?php echo (int) $entry['word_count']; ?></td>
 									<td>
-										<a href="<?php echo esc_url( get_edit_post_link( $entry['post_id'] ) ); ?>" class="button button-small">
-											<span class="dashicons dashicons-edit" style="font-size:14px;line-height:1.5;"></span>
+										<a href="<?php echo esc_url( get_edit_post_link( $entry['post_id'] ) ); ?>" class="lp-btn lp-btn--ghost lp-btn--sm">
+											<span class="dashicons dashicons-edit" aria-hidden="true"></span>
 										</a>
 									</td>
 								</tr>
@@ -340,17 +407,83 @@ $wc_targets = class_exists( 'LuwiPress_Health_Score' )
 			<?php endif; ?>
 
 			<?php else : ?>
-				<p><em><?php esc_html_e( 'Health Score not loaded or no content measured yet. Reload after publishing some content.', 'luwipress' ); ?></em></p>
+				<p class="lp-form-hint"><em><?php esc_html_e( 'Health Score not loaded or no content measured yet. Reload after publishing some content.', 'luwipress' ); ?></em></p>
 			<?php endif; ?>
 
-			<p style="margin-top:16px;">
-				<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-settings&tab=ai' ) ); ?>">
-					<span class="dashicons dashicons-admin-settings"></span> <?php esc_html_e( 'Edit word count targets', 'luwipress' ); ?>
+			<div class="lp-btn-row lwp-ca-settings-link">
+				<a class="lp-btn lp-btn--outline" href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-settings&tab=ai' ) ); ?>">
+					<span class="dashicons dashicons-admin-settings" aria-hidden="true"></span>
+					<?php esc_html_e( 'Edit word count targets', 'luwipress' ); ?>
 				</a>
-			</p>
+			</div>
 		</div>
 	</div>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>
+
+<style>
+/* Page-local layout helpers — colour + typography all flow through
+   `--lp-*` tokens so dark mode + brand theming stay consistent. */
+.lwp-ca-pillars { margin: 0 0 16px; }
+.lwp-ca-pillar-value { font-size: 36px; }
+.lwp-ca-pillar-unit  { font-size: 14px; color: var(--lp-text-secondary); font-weight: 400; }
+
+.lwp-hs-cold-notice { margin: 0 0 20px; }
+.lwp-hs-cold-notice .dashicons { color: var(--lp-warning); }
+
+.lwp-ca-subtabs { margin-top: 16px; margin-bottom: 18px; }
+
+.lwp-ca-tab-body { margin-top: 0; }
+
+/* Form row inside an audit card — flex layout with labels on top,
+   submit aligned to bottom. */
+.lwp-ca-form {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	margin: 14px 0 0;
+}
+.lwp-ca-form-field { min-width: 180px; margin: 0; }
+.lwp-ca-form-submit { margin: 0; align-self: flex-end; }
+.lwp-ca-status,
+.lwp-ca-results { margin-top: 12px; font-size: 13px; color: var(--lp-text-secondary); }
+
+/* Word-count audit table — numeric columns right-aligned, semantic
+   header tints + body cell tints all via tokens. */
+.lwp-ca-wc-table { margin-top: 12px; }
+.lwp-ca-wc-table .lwp-ca-num   { text-align: right; width: 100px; }
+.lwp-ca-wc-table .lwp-ca-band  { width: 160px; font-size: 12px; color: var(--lp-text-secondary); }
+.lwp-ca-h--success { color: var(--lp-success); }
+.lwp-ca-h--warning { color: var(--lp-warning); }
+.lwp-ca-h--error   { color: var(--lp-error); }
+.lwp-ca-c--success { color: var(--lp-success); }
+.lwp-ca-c--warning { color: var(--lp-warning); }
+.lwp-ca-c--error   { color: var(--lp-error); }
+.lwp-ca-strong     { font-weight: 600; }
+.lwp-ca-cpt-code   { font-size: 11px; color: var(--lp-text-secondary); }
+
+/* Thin-content drilldown */
+.lwp-ca-section-title { margin-top: 24px; }
+.lwp-ca-thin-group {
+	margin-top: 8px;
+	background: var(--lp-surface);
+	border: 1px solid var(--lp-border);
+	border-radius: 6px;
+	padding: 10px 14px;
+}
+.lwp-ca-thin-group > summary {
+	cursor: pointer;
+	font-weight: 600;
+	color: var(--lp-text);
+}
+.lwp-ca-thin-table { margin-top: 8px; }
+.lwp-ca-thin-table .lwp-ca-num  { width: 120px; }
+.lwp-ca-thin-table .lwp-ca-edit { width: 60px; }
+
+.lwp-ca-settings-link { margin-top: 16px; }
+</style>
 
 <script>
 (function () {

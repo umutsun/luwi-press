@@ -751,6 +751,7 @@ class LuwiPress_WebMCP {
             'meta'             => 'register_meta_tools',
             'search'           => 'register_search_tools',
             'attribution'      => 'register_attribution_tools',
+            'ucp'              => 'register_ucp_tools',
             'vendors'          => 'register_vendors_tools',
         );
 
@@ -8264,6 +8265,327 @@ class LuwiPress_WebMCP {
         ), function () {
             return LuwiPress_ACP_Attribution::get_instance()->test_dispatch();
         } );
+    }
+
+    /* ───── UCP Tools — Google Universal Commerce Protocol (3.5.9+) ────── */
+
+    private function register_ucp_tools() {
+        if ( ! class_exists( 'LuwiPress_UCP' ) ) {
+            return;
+        }
+
+        $this->register_tool( 'ucp_settings_get', array(
+            'description' => 'Read Google UCP (Universal Commerce Protocol) store settings — enabled/sandbox flags, return policy, customer-support info, feed format. No secrets.',
+            'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+            'annotations' => array(
+                'title'          => 'UCP Settings',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function () {
+            return LuwiPress_UCP::get_instance()->get_settings();
+        } );
+
+        $this->register_tool( 'ucp_settings_set', array(
+            'description' => 'Update UCP store settings (partial — only present keys touched). Keep sandbox=true until Google validates. Configure return policy + support before flagging products.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'enabled'                 => array( 'type' => 'boolean', 'description' => 'Master on/off' ),
+                    'sandbox'                 => array( 'type' => 'boolean', 'description' => 'Validate against Google sandbox (no live checkout)' ),
+                    'merchant_of_record'      => array( 'type' => 'boolean', 'description' => 'Merchant stays Merchant of Record (UCP default true)' ),
+                    'default_native_commerce' => array( 'type' => 'boolean', 'description' => 'New products eligible by default' ),
+                    'return_cost'             => array( 'type' => 'string', 'description' => 'Return cost label, e.g. "Free" or "9.90 USD"' ),
+                    'return_window_days'      => array( 'type' => 'integer', 'description' => 'Return window in days' ),
+                    'return_policy_url'       => array( 'type' => 'string', 'description' => 'Full return policy URL' ),
+                    'support_email'           => array( 'type' => 'string', 'description' => 'Customer support email' ),
+                    'support_phone'           => array( 'type' => 'string', 'description' => 'Customer support phone' ),
+                    'support_url'             => array( 'type' => 'string', 'description' => 'Customer support URL' ),
+                    'support_hours'           => array( 'type' => 'string', 'description' => 'Support hours text' ),
+                    'feed_format'             => array( 'type' => 'string', 'description' => 'Default supplemental feed format: json | csv | xml' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Update UCP Settings',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            return LuwiPress_UCP::get_instance()->save_settings( (array) $args );
+        } );
+
+        $this->register_tool( 'ucp_eligibility_report', array(
+            'description' => 'UCP eligibility coverage: total products, native_commerce-flagged count, sampled eligibility + missing-attribute breakdown, return/support readiness, detected feed plugin.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'sample' => array( 'type' => 'integer', 'description' => 'Products to deep-validate for the breakdown (default 100, max 500)' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'          => 'UCP Eligibility Report',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $sample = absint( $args['sample'] ?? 100 );
+            return LuwiPress_UCP::get_instance()->get_eligibility_report( $sample ?: 100 );
+        } );
+
+        $this->register_tool( 'ucp_product_profile', array(
+            'description' => 'Read the UCP profile for one product: native_commerce flag + source, mapped merchant_item_id, consumer_notice, resolved commerce attributes, validation warnings, eligibility verdict.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'product_id' => array( 'type' => 'integer', 'description' => 'WooCommerce product ID' ),
+                ),
+                'required'   => array( 'product_id' ),
+            ),
+            'annotations' => array(
+                'title'          => 'UCP Product Profile',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $profile = LuwiPress_UCP::get_instance()->get_product_profile( absint( $args['product_id'] ?? 0 ) );
+            if ( is_wp_error( $profile ) ) {
+                return array( 'error' => $profile->get_error_message() );
+            }
+            return $profile;
+        } );
+
+        $this->register_tool( 'ucp_product_set', array(
+            'description' => 'Set UCP product meta (partial). Flag native_commerce to make a product eligible for the UCP Buy button, map a merchant_item_id, or attach a consumer_notice (regulatory warning). Returns the fresh profile.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'product_id'       => array( 'type' => 'integer', 'description' => 'WooCommerce product ID' ),
+                    'native_commerce'  => array( 'type' => 'boolean', 'description' => 'Eligible for UCP checkout' ),
+                    'merchant_item_id' => array( 'type' => 'string', 'description' => 'Checkout-API id mapping (blank = use product ID)' ),
+                    'consumer_notice'  => array( 'type' => 'string', 'description' => 'Regulatory warning text (blank = none)' ),
+                ),
+                'required'   => array( 'product_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Set UCP Product Meta',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            $pid     = absint( $args['product_id'] ?? 0 );
+            $profile = LuwiPress_UCP::get_instance()->set_product_meta( $pid, (array) $args );
+            if ( is_wp_error( $profile ) ) {
+                return array( 'error' => $profile->get_error_message() );
+            }
+            return $profile;
+        } );
+
+        $this->register_tool( 'ucp_feed_preview', array(
+            'description' => 'Preview the UCP supplemental feed rows (id + native_commerce + consumer_notice) that overlay the primary Merchant Center feed. include=eligible (default) or all.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'include' => array( 'type' => 'string', 'description' => 'eligible (default) | all' ),
+                    'limit'   => array( 'type' => 'integer', 'description' => 'Max rows (default 1000, max 5000)' ),
+                ),
+            ),
+            'annotations' => array(
+                'title'          => 'UCP Feed Preview',
+                'readOnlyHint'   => true,
+                'idempotentHint' => true,
+                'openWorldHint'  => false,
+            ),
+        ), function ( $args ) {
+            $rows = LuwiPress_UCP::get_instance()->build_feed_rows(
+                (string) ( $args['include'] ?? 'eligible' ),
+                absint( $args['limit'] ?? 1000 ) ?: 1000
+            );
+            return array( 'count' => count( $rows ), 'products' => $rows );
+        } );
+
+        // ── UCP Native Checkout (phase 2) ── these are WRITE tools, so the
+        // autonomous agentic loop (readOnly-only) never auto-invokes them;
+        // they are operator / explicit-agent surfaces. `complete` creates a
+        // real pending order in live mode (sandbox simulates).
+        if ( class_exists( 'LuwiPress_UCP_Checkout' ) ) {
+
+            $this->register_tool( 'ucp_checkout_session_create', array(
+                'description' => 'Create a UCP checkout session from items. Backed by a WooCommerce draft order so totals/tax are authoritative. items: [{product_id|merchant_item_id, quantity}]. Honours sandbox (default from settings).',
+                'inputSchema' => array(
+                    'type'       => 'object',
+                    'properties' => array(
+                        'items'           => array( 'type' => 'array', 'description' => 'Line items: [{product_id|merchant_item_id, quantity}]' ),
+                        'sandbox'         => array( 'type' => 'boolean', 'description' => 'Override sandbox flag for this session' ),
+                        'idempotency_key' => array( 'type' => 'string', 'description' => 'Reuse an open session on retry' ),
+                    ),
+                    'required'   => array( 'items' ),
+                ),
+                'annotations' => array(
+                    'title'           => 'UCP Create Checkout Session',
+                    'readOnlyHint'    => false,
+                    'destructiveHint' => false,
+                    'idempotentHint'  => false,
+                    'openWorldHint'   => false,
+                ),
+            ), function ( $args ) {
+                $res = LuwiPress_UCP_Checkout::get_instance()->create_session( (array) $args );
+                return is_wp_error( $res ) ? array( 'error' => $res->get_error_message() ) : $res;
+            } );
+
+            $this->register_tool( 'ucp_checkout_session_get', array(
+                'description' => 'Read a UCP checkout session: line items, authoritative totals, shipping options, status.',
+                'inputSchema' => array(
+                    'type'       => 'object',
+                    'properties' => array( 'session_id' => array( 'type' => 'string' ) ),
+                    'required'   => array( 'session_id' ),
+                ),
+                'annotations' => array(
+                    'title'          => 'UCP Get Checkout Session',
+                    'readOnlyHint'   => true,
+                    'idempotentHint' => true,
+                    'openWorldHint'  => false,
+                ),
+            ), function ( $args ) {
+                $res = LuwiPress_UCP_Checkout::get_instance()->get_session( (string) ( $args['session_id'] ?? '' ) );
+                return is_wp_error( $res ) ? array( 'error' => $res->get_error_message() ) : $res;
+            } );
+
+            $this->register_tool( 'ucp_checkout_session_update', array(
+                'description' => 'Update a UCP checkout session: set shipping/billing address (drives tax + shipping rates), select a shipping rate, or change items. Returns recomputed totals + shipping_options.',
+                'inputSchema' => array(
+                    'type'       => 'object',
+                    'properties' => array(
+                        'session_id'        => array( 'type' => 'string' ),
+                        'shipping_address'  => array( 'type' => 'object', 'description' => 'Flat address: first_name,last_name,address_1,city,state,postcode,country,…' ),
+                        'billing_address'   => array( 'type' => 'object', 'description' => 'Optional separate billing address' ),
+                        'selected_shipping' => array( 'type' => 'string', 'description' => 'Chosen shipping rate id from shipping_options' ),
+                        'items'             => array( 'type' => 'array', 'description' => 'Optional replacement line items' ),
+                    ),
+                    'required'   => array( 'session_id' ),
+                ),
+                'annotations' => array(
+                    'title'           => 'UCP Update Checkout Session',
+                    'readOnlyHint'    => false,
+                    'destructiveHint' => false,
+                    'idempotentHint'  => true,
+                    'openWorldHint'   => false,
+                ),
+            ), function ( $args ) {
+                $sid = (string) ( $args['session_id'] ?? '' );
+                $res = LuwiPress_UCP_Checkout::get_instance()->update_session( $sid, (array) $args );
+                return is_wp_error( $res ) ? array( 'error' => $res->get_error_message() ) : $res;
+            } );
+
+            $this->register_tool( 'ucp_checkout_session_complete', array(
+                'description' => 'Complete a UCP checkout session. Sandbox: simulated success, no payable order. Live: transitions the draft into a pending WooCommerce order (payment captured by the processor / AP2 mandate). Idempotent — replays return the existing order. Optionally accepts ap2_cart_mandate.',
+                'inputSchema' => array(
+                    'type'       => 'object',
+                    'properties' => array(
+                        'session_id'       => array( 'type' => 'string' ),
+                        'buyer'            => array( 'type' => 'object', 'description' => '{email, phone, name}' ),
+                        'billing_address'  => array( 'type' => 'object' ),
+                        'shipping_address' => array( 'type' => 'object' ),
+                        'ap2_cart_mandate' => array( 'type' => 'object', 'description' => 'Optional AP2 Cart Mandate to verify + attach (phase 3)' ),
+                    ),
+                    'required'   => array( 'session_id' ),
+                ),
+                'annotations' => array(
+                    'title'           => 'UCP Complete Checkout',
+                    'readOnlyHint'    => false,
+                    'destructiveHint' => false,
+                    'idempotentHint'  => true,
+                    'openWorldHint'   => false,
+                ),
+            ), function ( $args ) {
+                $sid = (string) ( $args['session_id'] ?? '' );
+                $res = LuwiPress_UCP_Checkout::get_instance()->complete_session( $sid, (array) $args );
+                return is_wp_error( $res ) ? array( 'error' => $res->get_error_message() ) : $res;
+            } );
+        }
+
+        // ── AP2 — Agent Payments Protocol mandate audit trail (phase 3) ──
+        if ( class_exists( 'LuwiPress_AP2' ) ) {
+
+            $this->register_tool( 'ap2_settings_get', array(
+                'description' => 'Read AP2 (Agent Payments Protocol) settings — enabled, require_verification (strict mode), amount_match, issuer allowlist.',
+                'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+                'annotations' => array( 'title' => 'AP2 Settings', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+            ), function () {
+                return LuwiPress_AP2::get_instance()->get_settings();
+            } );
+
+            $this->register_tool( 'ap2_settings_set', array(
+                'description' => 'Update AP2 settings (partial). require_verification=true makes an unverified mandate or amount mismatch abort checkout completion (strict mode).',
+                'inputSchema' => array(
+                    'type'       => 'object',
+                    'properties' => array(
+                        'enabled'              => array( 'type' => 'boolean' ),
+                        'require_verification' => array( 'type' => 'boolean', 'description' => 'Strict: abort on unverified / amount mismatch' ),
+                        'amount_match'         => array( 'type' => 'boolean', 'description' => 'Enforce Cart Mandate total == order total' ),
+                        'issuer_jwks_url'      => array( 'type' => 'string', 'description' => 'Optional JWKS URL for a future signature verifier' ),
+                        'allowed_issuers'      => array( 'type' => 'string', 'description' => 'Comma-separated issuer allowlist' ),
+                    ),
+                ),
+                'annotations' => array( 'title' => 'Update AP2 Settings', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+            ), function ( $args ) {
+                return LuwiPress_AP2::get_instance()->save_settings( (array) $args );
+            } );
+
+            $this->register_tool( 'ap2_mandate_verify', array(
+                'description' => 'Diagnostic: verify a mandate object (structure, expiry, issuer allowlist, pluggable signature check) and extract its committed amount + currency. Does not mutate anything.',
+                'inputSchema' => array(
+                    'type'       => 'object',
+                    'properties' => array(
+                        'mandate' => array( 'type' => 'object', 'description' => 'The mandate (Cart or Intent) to inspect' ),
+                        'context' => array( 'type' => 'object', 'description' => 'Optional {kind, order_id}' ),
+                    ),
+                    'required'   => array( 'mandate' ),
+                ),
+                'annotations' => array( 'title' => 'AP2 Verify Mandate', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+            ), function ( $args ) {
+                $mandate = $args['mandate'] ?? null;
+                if ( empty( $mandate ) ) {
+                    return array( 'error' => 'mandate is required' );
+                }
+                $ctx     = isset( $args['context'] ) && is_array( $args['context'] ) ? $args['context'] : array();
+                $verdict = LuwiPress_AP2::get_instance()->verify_mandate( $mandate, $ctx );
+                list( $amount, $currency ) = LuwiPress_AP2::get_instance()->extract_mandate_amount( $mandate );
+                $verdict['extracted_amount']   = $amount;
+                $verdict['extracted_currency'] = $currency;
+                return $verdict;
+            } );
+
+            $this->register_tool( 'ap2_transaction_get', array(
+                'description' => 'Read the AP2 mandate chain (Intent → Cart), verification verdict, and amount-match for a WooCommerce order.',
+                'inputSchema' => array(
+                    'type'       => 'object',
+                    'properties' => array( 'order_id' => array( 'type' => 'integer' ) ),
+                    'required'   => array( 'order_id' ),
+                ),
+                'annotations' => array( 'title' => 'AP2 Transaction', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+            ), function ( $args ) {
+                $res = LuwiPress_AP2::get_instance()->get_transaction( absint( $args['order_id'] ?? 0 ) );
+                return is_wp_error( $res ) ? array( 'error' => $res->get_error_message() ) : $res;
+            } );
+
+            $this->register_tool( 'ap2_log_recent', array(
+                'description' => 'Recent AP2 mandate verification verdicts (order_id, status, issuer, amount_match) for monitoring.',
+                'inputSchema' => array(
+                    'type'       => 'object',
+                    'properties' => array( 'limit' => array( 'type' => 'integer', 'description' => 'Max entries (default 50, max 100)' ) ),
+                ),
+                'annotations' => array( 'title' => 'AP2 Audit Log', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+            ), function ( $args ) {
+                return array( 'entries' => LuwiPress_AP2::get_instance()->get_log( absint( $args['limit'] ?? 50 ) ?: 50 ) );
+            } );
+        }
     }
 
     /* ───────────────────── Vendor Tools (3.5.2+) ─────────────────────── */

@@ -68,6 +68,7 @@ $category_labels = array(
 	'review'      => array( 'Review Analytics', 'dashicons-star-filled', '#eab308' ),
 	'linker'      => array( 'Internal Linking', 'dashicons-admin-links', '#06b6d4' ),
 	'knowledge'   => array( 'Knowledge Graph', 'dashicons-networking', '#10b981' ),
+	'ucp'         => array( 'Agentic Commerce (UCP)', 'dashicons-cart', '#0d9488' ),
 );
 ?>
 

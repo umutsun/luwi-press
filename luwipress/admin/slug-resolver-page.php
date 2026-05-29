@@ -54,58 +54,85 @@ $polylang      = ! empty( $diag['polylang_active'] );
 $wc            = ! empty( $diag['wc_active'] );
 $last_build    = is_array( $diag['last_build'] ?? null ) ? $diag['last_build'] : array();
 ?>
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-slug-resolver">
+<?php endif; ?>
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<h1><span class="dashicons dashicons-randomize"></span> <?php esc_html_e( 'Slug Resolver', 'luwipress' ); ?></h1>
-	<p class="description" style="max-width:820px;">
-		<?php esc_html_e( 'Auto-redirects legacy `/<hub>/` page URLs to their matching `/product-category/<hub>/` archive using six discovery passes (exact / cross-language / fuzzy / Levenshtein-1 / menu-parent / ancestor fallback). Critical before a DNS swap so visitors and Google land on the live archive, not a stale editorial page.', 'luwipress' ); ?>
+	<?php endif; ?>
+	<p class="lp-page-intro">
+		<?php esc_html_e( 'Auto-redirects legacy /<hub>/ page URLs to their matching /product-category/<hub>/ archive using six discovery passes (exact / cross-language / fuzzy / Levenshtein-1 / menu-parent / ancestor fallback). Critical before a DNS swap so visitors and Google land on the live archive, not a stale editorial page.', 'luwipress' ); ?>
 	</p>
 
-	<!-- Status hero -->
-	<div class="luwipress-card" style="display:flex;gap:24px;flex-wrap:wrap;align-items:stretch;">
-		<div style="flex:1;min-width:180px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Status', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:<?php echo $enabled ? '#2c7a2c' : '#c33'; ?>;margin-top:4px;">
-				<?php echo $enabled ? esc_html__( 'Enabled', 'luwipress' ) : esc_html__( 'Disabled', 'luwipress' ); ?>
+	<!-- Status hero — 4-stat row + action column, design-token only -->
+	<div class="lwp-sr-status-shell">
+		<div class="lp-stat-row lwp-sr-status-grid">
+			<div class="lp-stat <?php echo $enabled ? 'lp-stat--success' : 'lp-stat--error'; ?>">
+				<div class="lp-stat-label"><?php esc_html_e( 'Status', 'luwipress' ); ?></div>
+				<div class="lp-stat-value <?php echo $enabled ? 'lp-stat-value--success' : 'lp-stat-value--error'; ?>">
+					<?php echo $enabled ? esc_html__( 'Enabled', 'luwipress' ) : esc_html__( 'Disabled', 'luwipress' ); ?>
+				</div>
+				<label class="lp-switch" style="margin-top:10px;">
+					<input type="checkbox" id="lwp-sr-enabled" <?php checked( $enabled ); ?>>
+					<span class="lp-switch-track" aria-hidden="true"></span>
+					<span><?php esc_html_e( 'Toggle resolver', 'luwipress' ); ?></span>
+				</label>
 			</div>
-			<label style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;cursor:pointer;">
-				<input type="checkbox" id="lwp-sr-enabled" <?php checked( $enabled ); ?>>
-				<span><?php esc_html_e( 'Toggle resolver', 'luwipress' ); ?></span>
-			</label>
-		</div>
-		<div style="flex:1;min-width:180px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Map size', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( (string) $map_size ); ?></div>
-			<div style="color:#666;font-size:12px;margin-top:4px;"><?php esc_html_e( 'auto-discovered slug → target', 'luwipress' ); ?></div>
-		</div>
-		<div style="flex:1;min-width:180px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Overrides', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( (string) $override_size ); ?></div>
-			<div style="color:#666;font-size:12px;margin-top:4px;"><?php esc_html_e( 'manual operator rules', 'luwipress' ); ?></div>
-		</div>
-		<div style="flex:1;min-width:180px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Environment', 'luwipress' ); ?></div>
-			<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;font-size:12px;">
-				<span><?php echo $hook_attached ? '<span style="color:#2c7a2c;">●</span>' : '<span style="color:#c33;">●</span>'; ?> <?php esc_html_e( 'template_redirect hook', 'luwipress' ); ?></span>
-				<span><?php echo $wc ? '<span style="color:#2c7a2c;">●</span>' : '<span style="color:#999;">●</span>'; ?> WooCommerce</span>
-				<span><?php echo $wpml ? '<span style="color:#2c7a2c;">●</span>' : '<span style="color:#999;">●</span>'; ?> WPML</span>
-				<span><?php echo $polylang ? '<span style="color:#2c7a2c;">●</span>' : '<span style="color:#999;">●</span>'; ?> Polylang</span>
-				<?php if ( $p1_callbacks > 1 ) : ?>
-				<span style="color:#a86b00;" title="<?php esc_attr_e( 'Another plugin or theme is also hooked at template_redirect priority 1 — verify no conflict.', 'luwipress' ); ?>">
-					<span style="color:#a86b00;">●</span> <?php echo esc_html( sprintf( /* translators: %d count of callbacks */ __( '%d callbacks at p1', 'luwipress' ), $p1_callbacks ) ); ?>
-				</span>
-				<?php endif; ?>
+
+			<div class="lp-stat lp-stat--info">
+				<div class="lp-stat-label"><?php esc_html_e( 'Map size', 'luwipress' ); ?></div>
+				<div class="lp-stat-value"><?php echo esc_html( (string) $map_size ); ?></div>
+				<div class="lp-stat-caption"><?php esc_html_e( 'auto-discovered slug → target', 'luwipress' ); ?></div>
+			</div>
+
+			<div class="lp-stat lp-stat--muted">
+				<div class="lp-stat-label"><?php esc_html_e( 'Overrides', 'luwipress' ); ?></div>
+				<div class="lp-stat-value"><?php echo esc_html( (string) $override_size ); ?></div>
+				<div class="lp-stat-caption"><?php esc_html_e( 'manual operator rules', 'luwipress' ); ?></div>
+			</div>
+
+			<div class="lp-stat">
+				<div class="lp-stat-label"><?php esc_html_e( 'Environment', 'luwipress' ); ?></div>
+				<div class="lp-stat-list">
+					<span class="lp-stat-list-item">
+						<span class="lp-dot <?php echo $hook_attached ? 'lp-dot--success' : 'lp-dot--error'; ?>"></span>
+						<?php esc_html_e( 'template_redirect hook', 'luwipress' ); ?>
+					</span>
+					<span class="lp-stat-list-item">
+						<span class="lp-dot <?php echo $wc ? 'lp-dot--success' : 'lp-dot--muted'; ?>"></span>
+						WooCommerce
+					</span>
+					<span class="lp-stat-list-item">
+						<span class="lp-dot <?php echo $wpml ? 'lp-dot--success' : 'lp-dot--muted'; ?>"></span>
+						WPML
+					</span>
+					<span class="lp-stat-list-item">
+						<span class="lp-dot <?php echo $polylang ? 'lp-dot--success' : 'lp-dot--muted'; ?>"></span>
+						Polylang
+					</span>
+					<?php if ( $p1_callbacks > 1 ) : ?>
+					<span class="lp-stat-list-item lwp-sr-warn"
+					      title="<?php esc_attr_e( 'Another plugin or theme is also hooked at template_redirect priority 1 — verify no conflict.', 'luwipress' ); ?>">
+						<span class="lp-dot lp-dot--warning"></span>
+						<?php echo esc_html( sprintf( /* translators: %d count of callbacks */ __( '%d callbacks at p1', 'luwipress' ), $p1_callbacks ) ); ?>
+					</span>
+					<?php endif; ?>
+				</div>
 			</div>
 		</div>
-		<div style="flex:0 0 auto;align-self:center;display:flex;flex-direction:column;gap:6px;">
-			<button class="button button-primary" id="lwp-sr-rebuild">
-				<span class="dashicons dashicons-update" style="line-height:1.6;"></span>
+
+		<div class="lwp-sr-status-actions">
+			<button class="lp-btn lp-btn--primary" id="lwp-sr-rebuild">
+				<span class="dashicons dashicons-update" aria-hidden="true"></span>
 				<?php esc_html_e( 'Force rebuild', 'luwipress' ); ?>
 			</button>
-			<button class="button" id="lwp-sr-refresh-diag">
+			<button class="lp-btn lp-btn--outline" id="lwp-sr-refresh-diag">
+				<span class="dashicons dashicons-controls-repeat" aria-hidden="true"></span>
 				<?php esc_html_e( 'Refresh diag', 'luwipress' ); ?>
 			</button>
 			<?php if ( ! empty( $last_build['time'] ) ) : ?>
-			<div style="font-size:11px;color:#888;text-align:center;">
+			<div class="lwp-sr-build-time">
 				<?php
 				$ago = human_time_diff( (int) $last_build['time'], current_time( 'timestamp' ) );
 				/* translators: %s human-readable time difference */
@@ -116,32 +143,36 @@ $last_build    = is_array( $diag['last_build'] ?? null ) ? $diag['last_build'] :
 		</div>
 	</div>
 
-	<!-- Probe form — pre-swap verification: paste a list of swap-day slugs,
-	     confirm every one resolves to the expected archive. -->
-	<div class="luwipress-card">
-		<h2><?php esc_html_e( 'Probe slugs', 'luwipress' ); ?></h2>
-		<p class="description"><?php esc_html_e( 'Paste any slugs (one per line, or comma-separated) to verify each one resolves before swap day. Probe runs the same six-pass discovery the live redirect uses.', 'luwipress' ); ?></p>
-		<textarea id="lwp-sr-probe-input" rows="3" style="width:100%;font-family:monospace;font-size:13px;" placeholder="percussions&#10;duduk&#10;ney&#10;santur"></textarea>
-		<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
-			<button class="button button-primary" id="lwp-sr-probe-go">
-				<span class="dashicons dashicons-search" style="line-height:1.6;"></span>
+	<!-- Probe form — pre-swap verification -->
+	<div class="luwipress-card luwipress-card--primary">
+		<h2><span class="dashicons dashicons-search" aria-hidden="true"></span> <?php esc_html_e( 'Probe slugs', 'luwipress' ); ?></h2>
+		<p class="lp-form-hint"><?php esc_html_e( 'Paste any slugs (one per line, or comma-separated) to verify each one resolves before swap day. Probe runs the same six-pass discovery the live redirect uses.', 'luwipress' ); ?></p>
+		<div class="lp-form-row">
+			<textarea id="lwp-sr-probe-input" class="lp-form-textarea" rows="3"
+			          placeholder="percussions&#10;duduk&#10;ney&#10;santur"></textarea>
+		</div>
+		<div class="lp-btn-row">
+			<button class="lp-btn lp-btn--primary" id="lwp-sr-probe-go">
+				<span class="dashicons dashicons-search" aria-hidden="true"></span>
 				<?php esc_html_e( 'Probe', 'luwipress' ); ?>
 			</button>
-			<span id="lwp-sr-probe-status" style="color:#666;font-size:13px;"></span>
+			<span id="lwp-sr-probe-status" class="lp-form-hint"></span>
 		</div>
-		<div id="lwp-sr-probe-results" style="margin-top:12px;"></div>
+		<div id="lwp-sr-probe-results" class="lwp-sr-probe-results"></div>
 	</div>
 
 	<!-- Map table -->
 	<div class="luwipress-card">
-		<h2 style="display:flex;align-items:center;gap:10px;">
-			<?php esc_html_e( 'Composed redirect map', 'luwipress' ); ?>
-			<input type="search" id="lwp-sr-map-filter" placeholder="<?php esc_attr_e( 'Filter slugs…', 'luwipress' ); ?>" class="regular-text" style="flex:1;max-width:260px;font-size:13px;">
-		</h2>
-		<p class="description">
-			<?php esc_html_e( 'Slug → resolved target. Overrides win over auto-discovery. `true` means "auto-redirect to /product-category/<slug>/". `false` means "do not redirect".', 'luwipress' ); ?>
+		<div class="lwp-sr-card-head">
+			<h2><?php esc_html_e( 'Composed redirect map', 'luwipress' ); ?></h2>
+			<input type="search" id="lwp-sr-map-filter"
+			       class="lp-form-input lwp-sr-filter"
+			       placeholder="<?php esc_attr_e( 'Filter slugs…', 'luwipress' ); ?>">
+		</div>
+		<p class="lp-form-hint">
+			<?php esc_html_e( 'Slug → resolved target. Overrides win over auto-discovery. true means "auto-redirect to /product-category/<slug>/". false means "do not redirect".', 'luwipress' ); ?>
 		</p>
-		<div id="lwp-sr-map-status" style="color:#666;font-size:13px;margin-bottom:8px;"><?php esc_html_e( 'Loading map…', 'luwipress' ); ?></div>
+		<div id="lwp-sr-map-status" class="lp-form-hint lwp-sr-map-status"><?php esc_html_e( 'Loading map…', 'luwipress' ); ?></div>
 		<table class="wp-list-table widefat striped" id="lwp-sr-map-table">
 			<thead>
 				<tr>
@@ -151,57 +182,111 @@ $last_build    = is_array( $diag['last_build'] ?? null ) ? $diag['last_build'] :
 					<th style="width:160px;"><?php esc_html_e( 'Actions', 'luwipress' ); ?></th>
 				</tr>
 			</thead>
-			<tbody><tr><td colspan="4" style="color:#999;font-style:italic;"><?php esc_html_e( 'Loading…', 'luwipress' ); ?></td></tr></tbody>
+			<tbody><tr><td colspan="4" class="lwp-sr-empty"><?php esc_html_e( 'Loading…', 'luwipress' ); ?></td></tr></tbody>
 		</table>
 	</div>
 
 	<!-- Add override -->
-	<div class="luwipress-card">
-		<h2><?php esc_html_e( 'Add manual override', 'luwipress' ); ?></h2>
-		<p class="description">
+	<div class="luwipress-card luwipress-card--muted">
+		<h2><span class="dashicons dashicons-plus-alt2" aria-hidden="true"></span> <?php esc_html_e( 'Add manual override', 'luwipress' ); ?></h2>
+		<p class="lp-form-hint">
 			<?php esc_html_e( 'Use this when the auto-discovery picks the wrong target, or for legacy slugs not in the live site map (e.g. retired URLs you still want to 301).', 'luwipress' ); ?>
 		</p>
-		<form id="lwp-sr-override-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-			<div>
-				<label style="display:block;font-size:11px;text-transform:uppercase;color:#666;letter-spacing:1px;"><?php esc_html_e( 'Slug', 'luwipress' ); ?></label>
-				<input type="text" id="lwp-sr-override-slug" placeholder="kemence-de-la-mer-noire" class="regular-text" style="font-family:monospace;" required>
+		<form id="lwp-sr-override-form" class="lwp-sr-override-form">
+			<div class="lp-form-row lwp-sr-override-field">
+				<label class="lp-form-label" for="lwp-sr-override-slug"><?php esc_html_e( 'Slug', 'luwipress' ); ?></label>
+				<input type="text" id="lwp-sr-override-slug" class="lp-form-input"
+				       placeholder="kemence-de-la-mer-noire" required>
 			</div>
-			<div>
-				<label style="display:block;font-size:11px;text-transform:uppercase;color:#666;letter-spacing:1px;"><?php esc_html_e( 'Target', 'luwipress' ); ?></label>
-				<select id="lwp-sr-override-type">
+			<div class="lp-form-row lwp-sr-override-field">
+				<label class="lp-form-label" for="lwp-sr-override-type"><?php esc_html_e( 'Target type', 'luwipress' ); ?></label>
+				<select id="lwp-sr-override-type" class="lp-form-select">
 					<option value="term_id"><?php esc_html_e( 'Term ID', 'luwipress' ); ?></option>
 					<option value="url"><?php esc_html_e( 'URL or path', 'luwipress' ); ?></option>
 					<option value="true"><?php esc_html_e( 'Auto (true)', 'luwipress' ); ?></option>
 					<option value="false"><?php esc_html_e( 'Suppress (false)', 'luwipress' ); ?></option>
 				</select>
 			</div>
-			<div style="flex:1;min-width:240px;">
-				<label style="display:block;font-size:11px;text-transform:uppercase;color:#666;letter-spacing:1px;"><?php esc_html_e( 'Value', 'luwipress' ); ?></label>
-				<input type="text" id="lwp-sr-override-value" placeholder="27 or /product-category/bowed/" class="regular-text" style="width:100%;font-family:monospace;">
+			<div class="lp-form-row lwp-sr-override-field lwp-sr-override-field--grow">
+				<label class="lp-form-label" for="lwp-sr-override-value"><?php esc_html_e( 'Value', 'luwipress' ); ?></label>
+				<input type="text" id="lwp-sr-override-value" class="lp-form-input"
+				       placeholder="27 or /product-category/bowed/">
 			</div>
-			<div>
-				<button type="submit" class="button button-primary">
+			<div class="lp-form-row lwp-sr-override-submit">
+				<button type="submit" class="lp-btn lp-btn--primary">
+					<span class="dashicons dashicons-saved" aria-hidden="true"></span>
 					<?php esc_html_e( 'Save override', 'luwipress' ); ?>
 				</button>
 			</div>
 		</form>
-		<div id="lwp-sr-override-status" style="margin-top:8px;color:#666;font-size:13px;"></div>
+		<div id="lwp-sr-override-status" class="lp-form-hint lwp-sr-override-status"></div>
 	</div>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>
 
 <style>
-.luwipress-slug-resolver .luwipress-card {
-	background: #fff;
-	border: 1px solid #ddd;
-	border-radius: 6px;
-	padding: 16px 20px;
-	margin: 16px 0;
+/* Page-local layout helpers. Colour + typography all flow through `--lp-*`
+   tokens (no hex literals) so dark mode + brand theming "just works". */
+.luwipress-slug-resolver { /* fallback when rendered standalone */ }
+
+.lwp-sr-status-shell {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 16px;
+	align-items: stretch;
+	margin: 0 0 20px;
 }
-.luwipress-slug-resolver .luwipress-card h2 {
-	margin-top: 0;
-	font-size: 17px;
+.lwp-sr-status-grid { margin: 0; }
+.lwp-sr-status-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	justify-content: center;
+	padding: 4px 0;
 }
-.luwipress-slug-resolver .lwp-sr-target-badge {
+.lwp-sr-build-time {
+	font-size: 11px;
+	color: var(--lp-text-secondary);
+	text-align: center;
+	margin-top: 4px;
+}
+
+.lwp-sr-card-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-bottom: 4px;
+}
+.lwp-sr-card-head h2 { margin: 0; flex: 1 1 auto; }
+.lwp-sr-filter { max-width: 280px; }
+
+.lwp-sr-map-status { margin-bottom: 8px; }
+.lwp-sr-probe-results { margin-top: 14px; }
+
+.lwp-sr-empty {
+	color: var(--lp-text-secondary);
+	font-style: italic;
+}
+
+/* Override-form: responsive flex row, each field stays vertical (label on
+   top of input), submit aligns to the bottom of the row. */
+.lwp-sr-override-form {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	margin: 8px 0 0;
+}
+.lwp-sr-override-field { min-width: 200px; margin: 0; }
+.lwp-sr-override-field--grow { flex: 1 1 240px; }
+.lwp-sr-override-submit { margin: 0; align-self: flex-end; }
+.lwp-sr-override-status { margin-top: 8px; }
+
+/* Source / target badges in the map table — semantic tints from the
+   admin token palette so they stay readable in dark mode. */
+.lwp-sr-target-badge {
 	display: inline-block;
 	padding: 2px 8px;
 	border-radius: 4px;
@@ -209,12 +294,19 @@ $last_build    = is_array( $diag['last_build'] ?? null ) ? $diag['last_build'] :
 	font-weight: 600;
 	margin-right: 4px;
 }
-.luwipress-slug-resolver .lwp-sr-badge-auto    { background:#e0f0ff;color:#0070b5; }
-.luwipress-slug-resolver .lwp-sr-badge-override{ background:#fff3d6;color:#a86b00; }
-.luwipress-slug-resolver .lwp-sr-badge-suppress{ background:#fde2e2;color:#a52a2a; }
-.luwipress-slug-resolver .lwp-sr-badge-term    { background:#e9f5e9;color:#2c7a2c; }
-.luwipress-slug-resolver .lwp-sr-badge-url     { background:#eee;color:#444; }
-.luwipress-slug-resolver code { font-size:12px; }
+.lwp-sr-badge-auto     { background: var(--lp-primary-50);  color: var(--lp-primary); }
+.lwp-sr-badge-override { background: var(--lp-warning-bg);  color: var(--lp-warning); }
+.lwp-sr-badge-suppress { background: var(--lp-error-bg);    color: var(--lp-error); }
+.lwp-sr-badge-term     { background: var(--lp-success-bg);  color: var(--lp-success); }
+.lwp-sr-badge-url      { background: var(--lp-gray-100);    color: var(--lp-gray-dark); }
+
+.luwipress-slug-resolver code,
+.luwipress-hub-site code { font-size: 12px; }
+
+@media (max-width: 900px) {
+	.lwp-sr-status-shell { grid-template-columns: 1fr; }
+	.lwp-sr-status-actions { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; }
+}
 </style>
 
 <script>

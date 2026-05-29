@@ -42,10 +42,18 @@ if ( $page_slug === 'luwipress-bot-accounts' ) {
 } elseif ( $page_slug === 'luwipress-bot-shield' ) {
 	$default = 'shield';
 }
-$active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : $default;
-if ( ! in_array( $active_tab, array( 'overview', 'accounts', 'shield' ), true ) ) {
-	$active_tab = 'overview';
+// Sub-tab selection — 3.5.7+ this page can render inside the Site hub
+// (`?page=luwipress-site&tab=bot-defense&sub=...`) so we read `sub` first
+// and fall back to the standalone `tab` parameter for direct deep links.
+$lwp_bd_sub_raw = '';
+if ( isset( $_GET['sub'] ) ) {
+	$lwp_bd_sub_raw = sanitize_key( wp_unslash( $_GET['sub'] ) );
+} elseif ( isset( $_GET['tab'] ) ) {
+	$lwp_bd_sub_raw = sanitize_key( wp_unslash( $_GET['tab'] ) );
 }
+$active_tab = in_array( $lwp_bd_sub_raw, array( 'overview', 'accounts', 'shield' ), true )
+	? $lwp_bd_sub_raw
+	: $default;
 
 // All configuration moved to the main Settings page (Bot sub-tab) so operators
 // have a single place to tune everything.
@@ -73,12 +81,29 @@ $state_class = function ( $count, $warn = 10, $err = 100 ) {
 	return 'stat-success';
 };
 
-$tab_url = function ( $tab ) {
-	return add_query_arg( array( 'page' => 'luwipress-bot-defense', 'tab' => $tab ), admin_url( 'admin.php' ) );
+// Hub-aware tab URL builder — when rendered inside the Site hub, links must
+// use ?page=luwipress-site&tab=bot-defense&sub=... so the operator stays on
+// the same outer screen instead of bouncing through the legacy compat slug.
+$lwp_bd_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' );
+$tab_url = function ( $tab ) use ( $lwp_bd_hub_mode ) {
+	if ( $lwp_bd_hub_mode ) {
+		return add_query_arg(
+			array( 'page' => 'luwipress-site', 'tab' => 'bot-defense', 'sub' => $tab ),
+			admin_url( 'admin.php' )
+		);
+	}
+	return add_query_arg(
+		array( 'page' => 'luwipress-bot-defense', 'tab' => $tab ),
+		admin_url( 'admin.php' )
+	);
 };
 ?>
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-admin luwipress-dashboard luwipress-bot-defense-page">
+<?php endif; ?>
 
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<div class="lp-header">
 		<div class="lp-header-left">
 			<h1 class="lp-title">
@@ -120,25 +145,32 @@ $tab_url = function ( $tab ) {
 			</a>
 		</div>
 	</div>
+	<?php endif; ?>
 
-	<nav class="nav-tab-wrapper luwipress-tabs">
+	<nav class="lp-hub-tabs lwp-bd-subtabs" role="tablist" aria-label="<?php esc_attr_e( 'Bot defense sections', 'luwipress' ); ?>">
 		<a href="<?php echo esc_url( $tab_url( 'overview' ) ); ?>"
-		   class="nav-tab <?php echo $active_tab === 'overview' ? 'nav-tab-active' : ''; ?>">
+		   class="lp-hub-tab <?php echo $active_tab === 'overview' ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo $active_tab === 'overview' ? 'true' : 'false'; ?>">
 			<span class="dashicons dashicons-chart-bar"></span>
-			<?php esc_html_e( 'Overview', 'luwipress' ); ?>
+			<span><?php esc_html_e( 'Overview', 'luwipress' ); ?></span>
 		</a>
 		<a href="<?php echo esc_url( $tab_url( 'accounts' ) ); ?>"
-		   class="nav-tab <?php echo $active_tab === 'accounts' ? 'nav-tab-active' : ''; ?>">
+		   class="lp-hub-tab <?php echo $active_tab === 'accounts' ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo $active_tab === 'accounts' ? 'true' : 'false'; ?>">
 			<span class="dashicons dashicons-admin-users"></span>
-			<?php esc_html_e( 'Accounts', 'luwipress' ); ?>
+			<span><?php esc_html_e( 'Accounts', 'luwipress' ); ?></span>
 		</a>
 		<a href="<?php echo esc_url( $tab_url( 'shield' ) ); ?>"
-		   class="nav-tab <?php echo $active_tab === 'shield' ? 'nav-tab-active' : ''; ?>">
+		   class="lp-hub-tab <?php echo $active_tab === 'shield' ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo $active_tab === 'shield' ? 'true' : 'false'; ?>">
 			<span class="dashicons dashicons-shield"></span>
-			<?php esc_html_e( 'Shield', 'luwipress' ); ?>
+			<span><?php esc_html_e( 'Shield', 'luwipress' ); ?></span>
 		</a>
 		<a href="<?php echo esc_url( $settings_url ); ?>"
-		   class="nav-tab"
+		   class="lp-hub-tab lwp-bd-settings-link"
 		   title="<?php esc_attr_e( 'All bot settings live under the main Settings page', 'luwipress' ); ?>">
 			<span class="dashicons dashicons-admin-generic"></span>
 			<?php esc_html_e( 'Settings', 'luwipress' ); ?>
@@ -549,7 +581,9 @@ $tab_url = function ( $tab ) {
 
 	<?php endif; ?>
 
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>
 
 <script>
 (function () {

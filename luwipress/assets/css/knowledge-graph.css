@@ -507,16 +507,16 @@
 .kg-batch-chip-completed  { background: rgba(34, 197, 94, 0.15); color: #15803d; }
 .kg-batch-chip-failed     { background: rgba(220, 38, 38, 0.15); color: #b91c1c; }
 
-/* N/A stat card (when a metric doesn't apply — e.g. design audit without Elementor) */
+/* N/A stat card (3.5.8+) — when a metric doesn't apply (e.g. design audit
+   without Elementor, vendor count when Vendors module is dormant), hide
+   the card outright. Pre-3.5.8 we rendered an "N/A" placeholder at 55%
+   opacity which read as broken-but-visible to operators; the dashboard
+   now stays tight by collapsing the slot entirely. The legacy `kg-stat-na`
+   visual style remains so any path that wants to show the placeholder
+   instead can flip `display:none` off via an inline style. */
 .kg-stat-disabled {
-    opacity: 0.55;
-    cursor: default !important;
+    display: none !important;
 }
-.kg-stat-disabled:hover {
-    transform: none !important;
-    box-shadow: none !important;
-}
-.kg-stat-disabled .kg-stat-cue { display: none; }
 .kg-stat-na {
     font-size: 18px !important;
     color: var(--lp-text-muted);

@@ -5794,3 +5794,738 @@ body.luwipress_page_luwipress-scheduler #wpbody-content > .updated:not(.luwipres
     .lp-secondary-key-row { flex-wrap: wrap; }
     .lp-secondary-key-vendor { min-width: auto; }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   HUB PAGE — header, intro, tab strip, body  (3.5.7+, refined 3.5.8)
+
+   Hub pages (Content / Site / Settings) get a compacted variant of
+   the Dashboard's lp-header so the strip + body stay tightly
+   coupled, and a polished tab strip with a glowing active indicator
+   that reads as design-token modern, not WP classic. Pre-3.5.8 the
+   tab strip was a flat underline; 3.5.8 adds a soft accent fill on
+   the active tab and a tighter rhythm so spacing reads even from
+   header through the first content card.
+   ───────────────────────────────────────────────────────────────── */
+
+/* Hub variant of lp-header — Dashboard's header carries a status ribbon
+   + 12-card stat row below it, so the gradient bg + 24px padding read
+   as part of an intentional hero. Hubs are just a strip → tabs →
+   content, so the same padding looks bulky. Tighten it inside .luwipress-hub
+   without touching the Dashboard / KG / Settings cases that genuinely
+   want the larger chrome. */
+.luwipress-hub .lp-header {
+    padding: 14px 20px;
+    margin-bottom: 0;
+    background: linear-gradient(135deg, var(--lp-primary-50), var(--lp-surface) 65%);
+    border-radius: 10px;
+    box-shadow: var(--lp-shadow-sm);
+    animation: none;
+}
+.luwipress-hub .lp-title { font-size: 20px; gap: 10px; }
+.luwipress-hub .lp-logo  { width: 26px; height: 26px; }
+
+/* Intro paragraph immediately under the hub header. Pre-3.5.8 had no
+   spacing rules of its own — 3.5.8 gives it a tight bottom rhythm
+   that lines up with the tab strip's top edge. */
+.lp-hub-intro {
+    margin: 10px 2px 0;
+    color: var(--lp-text-secondary);
+    font-size: 13px;
+    line-height: 1.55;
+    max-width: 880px;
+}
+
+/* Tab strip — borrows the Knowledge Graph view-switch + preset-pill
+   language: every tab is its own outline-button shape (border +
+   radius + soft shadow), the active one fills solid `--lp-primary`
+   with white text, hover lifts the inactive tabs. Container itself
+   carries no chrome; the strip reads as a row of independent
+   controls, not a contained nav bar. This is what the operator's
+   eye already trusts from KG, ported to every hub page. */
+.lp-hub-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 18px 0 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+.lp-hub-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    min-height: 38px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--lp-text);
+    text-decoration: none;
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 8px;
+    box-shadow: var(--lp-shadow-sm);
+    white-space: nowrap;
+    transition: color 160ms ease, background 160ms ease,
+                border-color 160ms ease, transform 160ms ease,
+                box-shadow 160ms ease;
+}
+.lp-hub-tab:hover {
+    border-color: var(--lp-primary);
+    color: var(--lp-primary);
+    transform: translateY(-1px);
+    box-shadow: var(--lp-shadow-md);
+}
+.lp-hub-tab:focus,
+.lp-hub-tab:focus-visible {
+    outline: 2px solid var(--lp-primary-100);
+    outline-offset: 1px;
+}
+.lp-hub-tab--active {
+    background: var(--lp-primary);
+    color: #fff;
+    border-color: var(--lp-primary);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.30);
+}
+.lp-hub-tab--active:hover {
+    background: var(--lp-primary-dark);
+    border-color: var(--lp-primary-dark);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.40);
+}
+.lp-hub-tab .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 1;
+    flex: 0 0 auto;
+    opacity: 0.9;
+}
+
+/* Tab badge — token-driven counts beside a tab label. */
+.lp-hub-tab-badge {
+    display: inline-block;
+    min-width: 18px;
+    padding: 1px 6px;
+    margin-left: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 9px;
+    background: var(--lp-gray-100);
+    color: var(--lp-text-secondary);
+}
+.lp-hub-tab--active .lp-hub-tab-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+}
+.lp-hub-tab-badge.is-warning { background: var(--lp-warning-bg); color: var(--lp-warning); }
+.lp-hub-tab-badge.is-error   { background: var(--lp-error-bg);   color: var(--lp-error); }
+.lp-hub-tab-badge.is-success { background: var(--lp-success-bg); color: var(--lp-success); }
+
+/* Hub body — owns the vertical rhythm between every section card so
+   pages stop looking ad-hoc. First child sits flush against the tab
+   strip; siblings get 16 px between them; section titles tighten the
+   gap to the next card so labels feel attached. */
+.lp-hub-body {
+    margin-top: 0;
+}
+.lp-hub-body > .luwipress-card,
+.lp-hub-body > .lp-stat-row,
+.lp-hub-body > .luwipress-stat-grid,
+.lp-hub-body > details.luwipress-card,
+.lp-hub-body > nav.lp-hub-tabs {
+    margin-top: 0;
+    margin-bottom: 18px;
+}
+.lp-hub-body > .luwipress-card:last-child,
+.lp-hub-body > .lp-stat-row:last-child,
+.lp-hub-body > .luwipress-stat-grid:last-child {
+    margin-bottom: 0;
+}
+/* Page-level intro paragraph inside a tab body — typically the first
+   element each refactored page emits. Pulls it tight to the strip
+   without losing breathing room. */
+.lp-hub-body > .lp-page-intro:first-child {
+    margin-top: 0;
+}
+.lp-hub-body > .lp-page-intro {
+    margin-bottom: 18px;
+}
+/* Sub-tab strip (Cookie Consent settings/log/policy, Bot Defense
+   overview/accounts/shield, Content Audit phrase/ai-tell/word-count)
+   sits inside a tab body — keep its top margin tight to the page-intro. */
+.lp-hub-body .lp-hub-tabs {
+    margin-top: 14px;
+    margin-bottom: 18px;
+}
+
+/* Sub-tab variant — sits inside a tab body, so it reads as one notch
+   smaller and lighter than the outer KG-style button row. Pill-shaped,
+   ghost background, primary tint on active rather than the full
+   solid-fill the outer strip uses. Parent → child hierarchy stays
+   obvious without needing extra chrome. */
+.lwp-ca-subtabs,
+.lwp-cookies-subtabs,
+.lwp-bd-subtabs,
+.lwp-theme-subtabs {
+    gap: 4px;
+    margin: 14px 0 18px;
+}
+.lwp-ca-subtabs .lp-hub-tab,
+.lwp-cookies-subtabs .lp-hub-tab,
+.lwp-bd-subtabs .lp-hub-tab,
+.lwp-theme-subtabs .lp-hub-tab {
+    padding: 7px 14px;
+    min-height: 32px;
+    font-size: 12.5px;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--lp-text-secondary);
+}
+.lwp-ca-subtabs .lp-hub-tab:hover,
+.lwp-cookies-subtabs .lp-hub-tab:hover,
+.lwp-bd-subtabs .lp-hub-tab:hover,
+.lwp-theme-subtabs .lp-hub-tab:hover {
+    background: var(--lp-surface-hover);
+    color: var(--lp-text);
+    border-color: var(--lp-border);
+    transform: none;
+    box-shadow: none;
+}
+.lwp-ca-subtabs .lp-hub-tab--active,
+.lwp-cookies-subtabs .lp-hub-tab--active,
+.lwp-bd-subtabs .lp-hub-tab--active,
+.lwp-theme-subtabs .lp-hub-tab--active {
+    background: var(--lp-primary-50);
+    color: var(--lp-primary);
+    border-color: var(--lp-primary-100);
+    box-shadow: none;
+}
+.lwp-ca-subtabs .lp-hub-tab--active:hover,
+.lwp-cookies-subtabs .lp-hub-tab--active:hover,
+.lwp-bd-subtabs .lp-hub-tab--active:hover,
+.lwp-theme-subtabs .lp-hub-tab--active:hover {
+    background: var(--lp-primary-50);
+    color: var(--lp-primary-dark);
+    border-color: var(--lp-primary);
+    transform: none;
+    box-shadow: none;
+}
+.lwp-ca-subtabs .lp-hub-tab-badge,
+.lwp-cookies-subtabs .lp-hub-tab-badge,
+.lwp-bd-subtabs .lp-hub-tab-badge,
+.lwp-theme-subtabs .lp-hub-tab-badge {
+    background: var(--lp-gray-100);
+    color: var(--lp-text-secondary);
+}
+.lwp-ca-subtabs .lp-hub-tab--active .lp-hub-tab-badge,
+.lwp-cookies-subtabs .lp-hub-tab--active .lp-hub-tab-badge,
+.lwp-bd-subtabs .lp-hub-tab--active .lp-hub-tab-badge,
+.lwp-theme-subtabs .lp-hub-tab--active .lp-hub-tab-badge {
+    background: var(--lp-primary);
+    color: #fff;
+}
+
+@media (max-width: 782px) {
+    .luwipress-hub .lp-header { padding: 12px 14px; }
+    .luwipress-hub .lp-title { font-size: 18px; }
+    .lp-hub-tabs { padding: 3px; gap: 1px; }
+    .lp-hub-tab { padding: 8px 12px; font-size: 12px; }
+}
+
+/* WP's `.wrap` element adds 10px top margin to its first child — kills
+   the rhythm we set above. Reset just inside our hubs. */
+.luwipress-hub.wrap > .lp-header { margin-top: 8px; }
+
+/* ─────────────────────────────────────────────────────────────────
+   TABLES — modern token-driven styling  (3.5.8+)
+
+   WP core's `.wp-list-table.widefat` is the table workhorse on every
+   admin page — Slug Resolver redirect map, Vendors roster, Image Alt
+   bulk, Content Audit thin-content drilldown, Theme tools list. WP
+   default is a flat grey-on-white with hairline borders that reads
+   as 2012 admin. 3.5.8 swaps in the same `--lp-*` token grammar
+   the rest of the chrome uses: clean radius, soft inner shadow, row
+   hover lift, sticky header on overflow, semantic-accent row tints
+   that match the .luwipress-card variants.
+
+   Scoped to LuwiPress containers (`.luwipress-hub`, `.luwipress-card`,
+   and the legacy `.luwipress-*` page wraps) so WP core list tables
+   (Posts, Pages, Users) keep their native styling.
+   ───────────────────────────────────────────────────────────────── */
+.luwipress-hub .wp-list-table.widefat,
+.luwipress-card .wp-list-table.widefat,
+[class*="luwipress-"].wrap .wp-list-table.widefat {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--lp-shadow-sm);
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 4px;
+}
+
+/* Header row — uppercase micro labels in a subtle surface tint. */
+.luwipress-hub .wp-list-table.widefat thead th,
+.luwipress-card .wp-list-table.widefat thead th,
+[class*="luwipress-"].wrap .wp-list-table.widefat thead th {
+    background: var(--lp-surface-secondary);
+    color: var(--lp-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--lp-border);
+    border-top: 0;
+    border-right: 0;
+    border-left: 0;
+    text-shadow: none;
+    box-shadow: none;
+}
+
+/* Body cells — token colour + comfy padding. */
+.luwipress-hub .wp-list-table.widefat tbody td,
+.luwipress-card .wp-list-table.widefat tbody td,
+[class*="luwipress-"].wrap .wp-list-table.widefat tbody td {
+    padding: 12px 14px;
+    color: var(--lp-text);
+    font-size: 13px;
+    border-top: 1px solid var(--lp-border);
+    background: transparent;
+}
+.luwipress-hub .wp-list-table.widefat tbody tr:first-child td,
+.luwipress-card .wp-list-table.widefat tbody tr:first-child td,
+[class*="luwipress-"].wrap .wp-list-table.widefat tbody tr:first-child td {
+    border-top: 0;
+}
+
+/* Zebra striping — token rather than WP's flat grey. */
+.luwipress-hub .wp-list-table.widefat.striped tbody tr:nth-child(even),
+.luwipress-card .wp-list-table.widefat.striped tbody tr:nth-child(even),
+[class*="luwipress-"].wrap .wp-list-table.widefat.striped tbody tr:nth-child(even) {
+    background: var(--lp-surface-secondary);
+}
+
+/* Hover state — subtle accent lift, no transform jump (matches stat cards). */
+.luwipress-hub .wp-list-table.widefat tbody tr:hover,
+.luwipress-card .wp-list-table.widefat tbody tr:hover,
+[class*="luwipress-"].wrap .wp-list-table.widefat tbody tr:hover {
+    background: var(--lp-primary-50);
+}
+
+/* Footer (if used) mirrors thead. */
+.luwipress-hub .wp-list-table.widefat tfoot th,
+.luwipress-card .wp-list-table.widefat tfoot th,
+[class*="luwipress-"].wrap .wp-list-table.widefat tfoot th {
+    background: var(--lp-surface-secondary);
+    color: var(--lp-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 11px 14px;
+    border-top: 1px solid var(--lp-border);
+}
+
+/* Code + small text inside cells stays legible. */
+.luwipress-hub .wp-list-table.widefat tbody td code,
+.luwipress-card .wp-list-table.widefat tbody td code,
+[class*="luwipress-"].wrap .wp-list-table.widefat tbody td code {
+    background: var(--lp-gray-100);
+    color: var(--lp-text);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11.5px;
+}
+
+/* Sub-table inside a <details> drilldown (Content Audit thin-content
+   action queue) — sit flush so it reads as a continuation of the
+   parent group's body, not as its own card. */
+.luwipress-hub details > .wp-list-table.widefat,
+.luwipress-card details > .wp-list-table.widefat,
+[class*="luwipress-"].wrap details > .wp-list-table.widefat {
+    box-shadow: none;
+    border-radius: 6px;
+    margin-top: 10px;
+}
+
+/* Compact density modifier — opt-in via `.lp-table--compact` on the
+   table element. Tighter padding for long lists (Image Alt Bulk,
+   Vendor roster, Composed redirect map). */
+.wp-list-table.widefat.lp-table--compact tbody td,
+.wp-list-table.widefat.lp-table--compact thead th,
+.wp-list-table.widefat.lp-table--compact tfoot th {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+/* Semantic row-state tints — page JS toggles `.is-success / .is-warning
+   / .is-error` on a row to communicate save outcome / validation. */
+.luwipress-hub .wp-list-table.widefat tbody tr.is-success,
+.luwipress-card .wp-list-table.widefat tbody tr.is-success,
+[class*="luwipress-"].wrap .wp-list-table.widefat tbody tr.is-success {
+    background: var(--lp-success-bg);
+}
+.luwipress-hub .wp-list-table.widefat tbody tr.is-warning,
+.luwipress-card .wp-list-table.widefat tbody tr.is-warning,
+[class*="luwipress-"].wrap .wp-list-table.widefat tbody tr.is-warning {
+    background: var(--lp-warning-bg);
+}
+.luwipress-hub .wp-list-table.widefat tbody tr.is-error,
+.luwipress-card .wp-list-table.widefat tbody tr.is-error,
+[class*="luwipress-"].wrap .wp-list-table.widefat tbody tr.is-error {
+    background: var(--lp-error-bg);
+}
+
+/* `.widefat` (without `wp-list-table`) appears in some legacy admin
+   contexts (Theme tools list). Match the modernised style. */
+.luwipress-hub > table.widefat,
+.luwipress-hub .lp-hub-body > table.widefat,
+[class*="luwipress-"].wrap > table.widefat {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--lp-shadow-sm);
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   BUTTONS  (3.5.7+)
+
+   Promoted from KG's `.kg-btn` so every admin page renders the same
+   button shape, hover lift, and focus ring. Three intent variants:
+   `--primary` (call-to-action, fills with --lp-primary), `--outline`
+   (secondary, transparent on rest), `--danger` (destructive). All
+   variants inherit the same height + radius + padding so rows of
+   mixed-intent buttons align cleanly.
+   ───────────────────────────────────────────────────────────────── */
+.lp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    min-height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--lp-border);
+    background: var(--lp-surface);
+    color: var(--lp-text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 160ms ease, color 160ms ease, border-color 160ms ease,
+                transform 160ms ease, box-shadow 160ms ease;
+    box-shadow: var(--lp-shadow-sm);
+}
+.lp-btn:hover {
+    border-color: var(--lp-primary);
+    color: var(--lp-primary);
+    transform: translateY(-1px);
+    box-shadow: var(--lp-shadow-md);
+}
+.lp-btn:focus,
+.lp-btn:focus-visible {
+    outline: 2px solid var(--lp-primary-100);
+    outline-offset: 1px;
+}
+.lp-btn:active { transform: translateY(0); box-shadow: var(--lp-shadow-sm); }
+.lp-btn:disabled,
+.lp-btn[disabled] {
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none !important;
+    box-shadow: var(--lp-shadow-sm) !important;
+}
+.lp-btn:disabled:hover,
+.lp-btn[disabled]:hover {
+    border-color: var(--lp-border);
+    color: var(--lp-text);
+}
+.lp-btn .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 1;
+}
+
+.lp-btn--primary {
+    background: var(--lp-primary);
+    color: #fff;
+    border-color: var(--lp-primary);
+}
+.lp-btn--primary:hover {
+    background: var(--lp-primary-dark);
+    border-color: var(--lp-primary-dark);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.30);
+}
+
+.lp-btn--outline {
+    background: transparent;
+    color: var(--lp-text-secondary);
+    border-color: var(--lp-border);
+}
+.lp-btn--outline:hover {
+    background: var(--lp-surface-hover);
+    color: var(--lp-text);
+}
+
+.lp-btn--ghost {
+    background: transparent;
+    color: var(--lp-text-secondary);
+    border-color: transparent;
+    box-shadow: none;
+}
+.lp-btn--ghost:hover {
+    background: var(--lp-surface-hover);
+    color: var(--lp-text);
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.lp-btn--danger {
+    background: var(--lp-surface);
+    color: var(--lp-error);
+    border-color: var(--lp-error);
+}
+.lp-btn--danger:hover {
+    background: var(--lp-error);
+    color: #fff;
+    border-color: var(--lp-error);
+}
+
+.lp-btn--sm { padding: 4px 10px; min-height: 28px; font-size: 12px; }
+.lp-btn--lg { padding: 12px 22px; min-height: 44px; font-size: 14px; }
+
+/* Group adjacent buttons with consistent spacing. */
+.lp-btn-row {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   STAT HERO  (3.5.7+)
+
+   Stat-card row used by hubs + tabs as the page hero. Same border-left
+   semantic accent as `.luwipress-stat-card` but tightened for inline
+   use inside tab bodies. Three intent classes:
+   `.lp-stat--neutral` (default, primary accent), `.lp-stat--success`,
+   `.lp-stat--warning`, `.lp-stat--error`, `.lp-stat--info`.
+   ───────────────────────────────────────────────────────────────── */
+.lp-stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin: 0 0 20px;
+}
+.lp-stat {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-left: 3px solid var(--lp-primary);
+    border-radius: 8px;
+    padding: 14px 16px;
+    box-shadow: var(--lp-shadow-sm);
+    transition: box-shadow 160ms ease, transform 160ms ease;
+}
+.lp-stat:hover { transform: translateY(-1px); box-shadow: var(--lp-shadow-md); }
+.lp-stat--success { border-left-color: var(--lp-success); }
+.lp-stat--warning { border-left-color: var(--lp-warning); }
+.lp-stat--error   { border-left-color: var(--lp-error); }
+.lp-stat--info    { border-left-color: var(--lp-info, var(--lp-blue)); }
+.lp-stat--muted   { border-left-color: var(--lp-gray); }
+
+.lp-stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--lp-text-secondary);
+    margin: 0 0 6px;
+}
+.lp-stat-value {
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--lp-text);
+    line-height: 1.1;
+    margin: 0;
+}
+.lp-stat-value--success { color: var(--lp-success); }
+.lp-stat-value--warning { color: var(--lp-warning); }
+.lp-stat-value--error   { color: var(--lp-error); }
+.lp-stat-caption {
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+    margin: 6px 0 0;
+}
+
+/* Vertical list inside a stat (e.g. Environment dots). */
+.lp-stat-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 4px 0 0;
+}
+.lp-stat-list-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--lp-text);
+}
+.lp-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--lp-gray);
+    flex: 0 0 auto;
+}
+.lp-dot--success { background: var(--lp-success); }
+.lp-dot--warning { background: var(--lp-warning); }
+.lp-dot--error   { background: var(--lp-error); }
+.lp-dot--info    { background: var(--lp-info, var(--lp-blue)); }
+.lp-dot--muted   { background: var(--lp-gray-light); }
+
+/* ─────────────────────────────────────────────────────────────────
+   TOGGLE SWITCH  (3.5.7+)
+
+   iOS-style switch replacement for `<input type="checkbox">` settings
+   toggles. Operator wraps `<input>` in `<label class="lp-switch">` —
+   the input itself stays focusable, the visible knob is a CSS pseudo.
+   ───────────────────────────────────────────────────────────────── */
+.lp-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    color: var(--lp-text);
+}
+.lp-switch input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+    pointer-events: none;
+}
+.lp-switch-track {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background: var(--lp-gray-300, #d1d5db);
+    border-radius: 999px;
+    transition: background 160ms ease;
+    flex: 0 0 auto;
+}
+.lp-switch-track::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    transition: transform 160ms ease;
+}
+.lp-switch input:checked ~ .lp-switch-track { background: var(--lp-primary); }
+.lp-switch input:checked ~ .lp-switch-track::after { transform: translateX(16px); }
+.lp-switch input:focus-visible ~ .lp-switch-track {
+    outline: 2px solid var(--lp-primary-100);
+    outline-offset: 2px;
+}
+.lp-switch input:disabled ~ .lp-switch-track { opacity: 0.5; cursor: not-allowed; }
+
+/* ─────────────────────────────────────────────────────────────────
+   FORM HELPERS  (3.5.7+)
+
+   Standard form-row layout for settings panels — label on top, control
+   below, hint underneath. Replaces ad-hoc `<p class="description">`
+   markup so vertical rhythm + token colours stay consistent.
+   ───────────────────────────────────────────────────────────────── */
+.lp-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 0 16px;
+}
+.lp-form-row:last-child { margin-bottom: 0; }
+.lp-form-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--lp-text);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.lp-form-hint {
+    font-size: 12px;
+    color: var(--lp-text-secondary);
+    line-height: 1.45;
+}
+.lp-form-input,
+.lp-form-textarea,
+.lp-form-select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--lp-border);
+    border-radius: 6px;
+    background: var(--lp-surface);
+    color: var(--lp-text);
+    font-size: 13px;
+    line-height: 1.4;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+    box-sizing: border-box;
+}
+.lp-form-input:focus,
+.lp-form-textarea:focus,
+.lp-form-select:focus {
+    border-color: var(--lp-primary);
+    box-shadow: 0 0 0 3px var(--lp-primary-100);
+    outline: none;
+}
+.lp-form-textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.lp-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+/* Page intro paragraph above tabs — same color as hub-intro. */
+.lp-page-intro {
+    margin: 4px 0 18px;
+    color: var(--lp-text-secondary);
+    font-size: 13px;
+    line-height: 1.55;
+    max-width: 880px;
+}
+
+/* Section divider title — small caps label above a card group. */
+.lp-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--lp-text-secondary);
+    margin: 24px 0 10px;
+}
+.lp-section-title:first-child { margin-top: 0; }

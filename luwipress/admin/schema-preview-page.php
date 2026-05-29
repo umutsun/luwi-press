@@ -90,22 +90,24 @@ if ( false === $quick_urls ) {
 	set_transient( 'luwipress_schema_preview_quick_urls', $quick_urls, 6 * HOUR_IN_SECONDS );
 }
 ?>
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-schema-preview">
+<?php endif; ?>
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<h1><span class="dashicons dashicons-code-standards"></span> <?php esc_html_e( 'Schema Preview', 'luwipress' ); ?></h1>
-	<p class="description" style="max-width:780px;">
+	<?php endif; ?>
+	<p class="lp-page-intro">
 		<?php esc_html_e( 'Fetch any live URL and inspect every JSON-LD schema block embedded in its head. Cache-bypassed so what you see is what Google would see right now. One-click handoff to Rich Results Test for validation.', 'luwipress' ); ?>
 	</p>
 
-	<!-- FAQ Editor cross-link — Schema Preview is where operators verify
-	     what's emitting; the FAQ Editor (metabox on post edit) is where
-	     they write the rows that emit. Keeping the link inline saves an
-	     extra menu hop. -->
-	<div class="luwipress-card" style="background:#fff8e7;border-color:#f5d782;">
-		<p style="margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-			<span class="dashicons dashicons-edit" style="color:#a86b00;"></span>
+	<!-- FAQ Editor cross-link -->
+	<div class="luwipress-card luwipress-card--warning lwp-spv-cta">
+		<p class="lwp-spv-cta-line">
+			<span class="dashicons dashicons-edit" aria-hidden="true"></span>
 			<strong><?php esc_html_e( 'Need to add FAQ to a product or post?', 'luwipress' ); ?></strong>
-			<?php esc_html_e( 'Edit the post — the LuwiPress FAQ metabox now ships on every product / post / page.', 'luwipress' ); ?>
-			<a class="button button-small" href="<?php echo esc_url( admin_url( 'edit.php?post_type=product' ) ); ?>">
+			<span><?php esc_html_e( 'Edit the post — the LuwiPress FAQ metabox now ships on every product / post / page.', 'luwipress' ); ?></span>
+			<a class="lp-btn lp-btn--outline lp-btn--sm" href="<?php echo esc_url( admin_url( 'edit.php?post_type=product' ) ); ?>">
 				<?php esc_html_e( 'Edit a product →', 'luwipress' ); ?>
 			</a>
 		</p>
@@ -113,17 +115,17 @@ if ( false === $quick_urls ) {
 
 	<!-- Registry overview -->
 	<?php if ( ! empty( $registered_types ) ) : ?>
-	<div class="luwipress-card">
-		<h2><?php esc_html_e( 'Schema Registry — registered types', 'luwipress' ); ?></h2>
-		<p class="description"><?php esc_html_e( 'Types LuwiPress will emit on relevant content when their meta key carries data. Use the preview below to see which ones are actually rendering on a sample URL.', 'luwipress' ); ?></p>
-		<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
+	<div class="luwipress-card luwipress-card--info">
+		<h2><span class="dashicons dashicons-list-view" aria-hidden="true"></span> <?php esc_html_e( 'Schema Registry — registered types', 'luwipress' ); ?></h2>
+		<p class="lp-form-hint"><?php esc_html_e( 'Types LuwiPress will emit on relevant content when their meta key carries data. Use the preview below to see which ones are actually rendering on a sample URL.', 'luwipress' ); ?></p>
+		<div class="lwp-spv-type-row">
 			<?php foreach ( $registered_types as $type_key => $type_def ) :
 				$label = $type_def['label'] ?? $type_key;
 			?>
-				<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:#fff;border:1px solid #ddd;border-radius:999px;font-size:12px;">
+				<span class="lp-pill pill-neutral lwp-spv-type-pill">
 					<strong><?php echo esc_html( $label ); ?></strong>
 					<?php if ( ! empty( $type_def['meta_key'] ) ) : ?>
-						<code style="font-size:11px;color:#666;background:none;"><?php echo esc_html( $type_def['meta_key'] ); ?></code>
+						<code class="lwp-spv-meta-key"><?php echo esc_html( $type_def['meta_key'] ); ?></code>
 					<?php endif; ?>
 				</span>
 			<?php endforeach; ?>
@@ -132,31 +134,84 @@ if ( false === $quick_urls ) {
 	<?php endif; ?>
 
 	<!-- Preview form -->
-	<div class="luwipress-card">
-		<h2><?php esc_html_e( 'Run preview', 'luwipress' ); ?></h2>
-		<form id="lwp-schema-preview-form" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-			<input type="url" id="lwp-schema-preview-url" name="url" class="regular-text" style="flex:1;min-width:320px;" placeholder="https://example.com/page-to-inspect/" required>
-			<button type="submit" class="button button-primary">
-				<span class="dashicons dashicons-search" style="line-height:1.6;"></span>
+	<div class="luwipress-card luwipress-card--primary">
+		<h2><span class="dashicons dashicons-search" aria-hidden="true"></span> <?php esc_html_e( 'Run preview', 'luwipress' ); ?></h2>
+		<form id="lwp-schema-preview-form" class="lwp-spv-form">
+			<input type="url" id="lwp-schema-preview-url" name="url"
+			       class="lp-form-input lwp-spv-url-input"
+			       placeholder="https://example.com/page-to-inspect/" required>
+			<button type="submit" class="lp-btn lp-btn--primary">
+				<span class="dashicons dashicons-search" aria-hidden="true"></span>
 				<?php esc_html_e( 'Inspect schema', 'luwipress' ); ?>
 			</button>
 		</form>
 
 		<?php if ( ! empty( $quick_urls ) ) : ?>
-		<p class="description" style="margin-top:10px;">
-			<?php esc_html_e( 'Quick targets:', 'luwipress' ); ?>
+		<div class="lwp-spv-quick">
+			<span class="lp-form-hint lwp-spv-quick-label"><?php esc_html_e( 'Quick targets:', 'luwipress' ); ?></span>
 			<?php foreach ( $quick_urls as $q ) : ?>
-				<button type="button" class="button button-small lwp-schema-quick" data-url="<?php echo esc_attr( $q['url'] ); ?>" style="margin-right:6px;">
+				<button type="button" class="lp-btn lp-btn--outline lp-btn--sm lwp-schema-quick" data-url="<?php echo esc_attr( $q['url'] ); ?>">
 					<?php echo esc_html( $q['label'] ); ?>
 				</button>
 			<?php endforeach; ?>
-		</p>
+		</div>
 		<?php endif; ?>
 
-		<div id="lwp-schema-preview-status" style="margin-top:12px;color:#666;font-size:13px;"></div>
-		<div id="lwp-schema-preview-results" style="margin-top:12px;"></div>
+		<div id="lwp-schema-preview-status" class="lp-form-hint lwp-spv-status"></div>
+		<div id="lwp-schema-preview-results" class="lwp-spv-results"></div>
 	</div>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>
+
+<style>
+.lwp-spv-cta { padding: 14px 16px; }
+.lwp-spv-cta-line {
+	margin: 0;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	color: var(--lp-text);
+}
+.lwp-spv-cta-line .dashicons { color: var(--lp-warning); }
+.lwp-spv-cta-line a { margin-left: auto; }
+
+.lwp-spv-type-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 10px;
+}
+.lwp-spv-type-pill { padding-right: 12px; }
+.lwp-spv-meta-key {
+	font-size: 11px;
+	color: var(--lp-text-secondary);
+	background: transparent;
+	padding: 0;
+}
+
+.lwp-spv-form {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+	margin: 10px 0 0;
+}
+.lwp-spv-url-input { flex: 1; min-width: 320px; }
+
+.lwp-spv-quick {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin-top: 12px;
+}
+.lwp-spv-quick-label { margin-right: 4px; }
+
+.lwp-spv-status,
+.lwp-spv-results { margin-top: 12px; }
+</style>
 
 <script>
 (function () {

@@ -27,16 +27,28 @@ $stats    = $cc->get_stats();
 $intercept_state    = method_exists( $cc, 'get_marketing_intercept_state' ) ? $cc->get_marketing_intercept_state() : array( 'by_day' => array(), 'recent' => array(), 'total' => 0 );
 $detected_pixels    = method_exists( $cc, 'get_detected_pixel_plugins' ) ? $cc->get_detected_pixel_plugins() : array();
 
-$active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'settings';
-if ( ! in_array( $active_tab, array( 'settings', 'log', 'policy' ), true ) ) {
-	$active_tab = 'settings';
+// Sub-tab selection — 3.5.7+ this page can render inside the Site hub
+// (`?page=luwipress-site&tab=cookies&sub=...`) so we read `sub` first and
+// fall back to the standalone `tab` parameter for direct deep links.
+$lwp_cookies_sub_raw = '';
+if ( isset( $_GET['sub'] ) ) {
+	$lwp_cookies_sub_raw = sanitize_key( wp_unslash( $_GET['sub'] ) );
+} elseif ( isset( $_GET['tab'] ) ) {
+	$lwp_cookies_sub_raw = sanitize_key( wp_unslash( $_GET['tab'] ) );
 }
+$active_tab = in_array( $lwp_cookies_sub_raw, array( 'settings', 'log', 'policy' ), true )
+	? $lwp_cookies_sub_raw
+	: 'settings';
 
 $nonce     = wp_create_nonce( 'wp_rest' );
 $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 ?>
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-admin luwipress-dashboard">
+<?php endif; ?>
 
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<div class="lp-header">
 		<div class="lp-header-left">
 			<h1 class="lp-title">
@@ -59,14 +71,48 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 			</a>
 		</div>
 	</div>
+	<?php endif; ?>
 
-	<nav class="nav-tab-wrapper luwipress-tabs">
-		<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'luwipress-cookies', 'tab' => 'settings' ), admin_url( 'admin.php' ) ) ); ?>"
-		   class="nav-tab <?php echo $active_tab === 'settings' ? 'nav-tab-active' : ''; ?>"><?php esc_html_e( 'Settings', 'luwipress' ); ?></a>
-		<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'luwipress-cookies', 'tab' => 'log' ), admin_url( 'admin.php' ) ) ); ?>"
-		   class="nav-tab <?php echo $active_tab === 'log' ? 'nav-tab-active' : ''; ?>"><?php esc_html_e( 'Log', 'luwipress' ); ?></a>
-		<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'luwipress-cookies', 'tab' => 'policy' ), admin_url( 'admin.php' ) ) ); ?>"
-		   class="nav-tab <?php echo $active_tab === 'policy' ? 'nav-tab-active' : ''; ?>"><?php esc_html_e( 'AI Policy', 'luwipress' ); ?></a>
+	<?php
+	// Sub-tab URL builder — hub-aware. When this page renders inside the
+	// Site hub, links must use ?page=luwipress-site&tab=cookies&sub=...
+	// so the hub routing keeps the operator on the same outer screen
+	// instead of redirecting back through the legacy compat slug.
+	$lwp_cookies_tab_url = function ( $sub ) use ( $luwipress_hub_mode ) {
+		if ( $luwipress_hub_mode ) {
+			return add_query_arg(
+				array( 'page' => 'luwipress-site', 'tab' => 'cookies', 'sub' => $sub ),
+				admin_url( 'admin.php' )
+			);
+		}
+		return add_query_arg(
+			array( 'page' => 'luwipress-cookies', 'tab' => $sub ),
+			admin_url( 'admin.php' )
+		);
+	};
+	?>
+	<nav class="lp-hub-tabs lwp-cookies-subtabs" role="tablist" aria-label="<?php esc_attr_e( 'Cookie consent sections', 'luwipress' ); ?>">
+		<a href="<?php echo esc_url( $lwp_cookies_tab_url( 'settings' ) ); ?>"
+		   class="lp-hub-tab <?php echo $active_tab === 'settings' ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo $active_tab === 'settings' ? 'true' : 'false'; ?>">
+			<span class="dashicons dashicons-admin-settings"></span>
+			<span><?php esc_html_e( 'Settings', 'luwipress' ); ?></span>
+		</a>
+		<a href="<?php echo esc_url( $lwp_cookies_tab_url( 'log' ) ); ?>"
+		   class="lp-hub-tab <?php echo $active_tab === 'log' ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo $active_tab === 'log' ? 'true' : 'false'; ?>">
+			<span class="dashicons dashicons-list-view"></span>
+			<span><?php esc_html_e( 'Log', 'luwipress' ); ?></span>
+		</a>
+		<a href="<?php echo esc_url( $lwp_cookies_tab_url( 'policy' ) ); ?>"
+		   class="lp-hub-tab <?php echo $active_tab === 'policy' ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo $active_tab === 'policy' ? 'true' : 'false'; ?>">
+			<span class="dashicons dashicons-edit"></span>
+			<span><?php esc_html_e( 'AI Policy', 'luwipress' ); ?></span>
+		</a>
 	</nav>
 
 	<?php if ( $active_tab === 'settings' ) : ?>
@@ -273,7 +319,9 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 
 	<?php endif; ?>
 
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>
 
 <script>
 (function () {

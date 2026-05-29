@@ -222,11 +222,14 @@ class LuwiPress_Content_Scheduler {
     }
 
     /**
-     * Add submenu under LuwiPress
+     * Add submenu — 3.5.7 IA: hidden parent so the slug stays addressable
+     * (existing bookmarks / deep links / docs) but the operator-visible
+     * entry point is now Content hub → Scheduler tab
+     * (`admin.php?page=luwipress-content&tab=scheduler`).
      */
     public function add_submenu() {
         add_submenu_page(
-            'luwipress',
+            '',
             __('Content Scheduler', 'luwipress'),
             __('Content Scheduler', 'luwipress'),
             'edit_posts',

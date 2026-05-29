@@ -51,10 +51,26 @@ foreach ( $settings as $s ) {
 	$grouped_settings[ $s['group'] ][] = $s;
 }
 
-$active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'status';
-if ( ! in_array( $active_tab, array( 'status', 'tools', 'settings' ), true ) ) {
-	$active_tab = 'status';
+// Sub-tab selection — 3.5.8+ this page can render inside the Site hub
+// (`?page=luwipress-site&tab=theme&sub=...`) so we read `sub` first and
+// fall back to the standalone `tab` parameter for direct deep links.
+// Pre-3.5.8 the strip had Status / Tools / Settings; 3.5.8 merges Status
+// + Tools into a single "Overview" tab so the surface stops feeling like
+// it has two near-duplicate landing screens. Legacy `tab=status` and
+// `tab=tools` both resolve to the new `overview` so deep links + the
+// settings_url cross-link from Bot Defense don't 404.
+$lwp_theme_sub_raw = '';
+if ( isset( $_GET['sub'] ) ) {
+	$lwp_theme_sub_raw = sanitize_key( wp_unslash( $_GET['sub'] ) );
+} elseif ( isset( $_GET['tab'] ) ) {
+	$lwp_theme_sub_raw = sanitize_key( wp_unslash( $_GET['tab'] ) );
 }
+if ( in_array( $lwp_theme_sub_raw, array( 'status', 'tools' ), true ) ) {
+	$lwp_theme_sub_raw = 'overview';
+}
+$active_tab = in_array( $lwp_theme_sub_raw, array( 'overview', 'settings' ), true )
+	? $lwp_theme_sub_raw
+	: 'overview';
 
 $nonce = wp_create_nonce( 'luwipress_theme_tools' );
 
@@ -66,9 +82,13 @@ $kit_pct           = isset( $snap['kit_css']['pct_limit'] ) ? (float) $snap['kit
 $kit_state         = $kit_pct > 90 ? 'stat-error' : ( $kit_pct > 70 ? 'stat-warning' : 'stat-success' );
 $companion_state   = $is_official_companion ? 'stat-success' : ( $is_third_party ? 'stat-translation' : 'stat-warning' );
 ?>
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-admin luwipress-dashboard luwipress-theme-page">
+<?php endif; ?>
 
 	<!-- ═══ HEADER ═══ -->
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<!-- Same header chrome as the LuwiPress Dashboard — keeps the brand mark on
 	     the left and a tight pill row on the right. The Settings shortcut here
 	     points at the THEME settings tab so operators stay in context. -->
@@ -110,29 +130,45 @@ $companion_state   = $is_official_companion ? 'stat-success' : ( $is_third_party
 			</a>
 		</div>
 	</div>
+	<?php endif; ?>
 
-	<!-- ═══ TAB NAV ═══ -->
-	<nav class="nav-tab-wrapper luwipress-tabs">
-		<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'luwipress-theme', 'tab' => 'status' ), admin_url( 'admin.php' ) ) ); ?>"
-		   class="nav-tab <?php echo $active_tab === 'status' ? 'nav-tab-active' : ''; ?>">
+	<!-- ═══ TAB NAV — hub-aware URLs + Status + Tools merged into Overview ═══ -->
+	<?php
+	$lwp_theme_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' );
+	$lwp_theme_tab_url  = function ( $sub ) use ( $lwp_theme_hub_mode ) {
+		if ( $lwp_theme_hub_mode ) {
+			return add_query_arg(
+				array( 'page' => 'luwipress-site', 'tab' => 'theme', 'sub' => $sub ),
+				admin_url( 'admin.php' )
+			);
+		}
+		return add_query_arg(
+			array( 'page' => 'luwipress-theme', 'tab' => $sub ),
+			admin_url( 'admin.php' )
+		);
+	};
+	$lwp_theme_total = (int) count( $tools ) + (int) count( $settings );
+	?>
+	<nav class="lp-hub-tabs lwp-theme-subtabs" role="tablist" aria-label="<?php esc_attr_e( 'Theme bridge sections', 'luwipress' ); ?>">
+		<a href="<?php echo esc_url( $lwp_theme_tab_url( 'overview' ) ); ?>"
+		   class="lp-hub-tab <?php echo $active_tab === 'overview' ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo $active_tab === 'overview' ? 'true' : 'false'; ?>">
 			<span class="dashicons dashicons-chart-pie"></span>
-			<?php esc_html_e( 'Status', 'luwipress' ); ?>
+			<span><?php esc_html_e( 'Overview', 'luwipress' ); ?></span>
+			<?php if ( $tools ) : ?><span class="lp-hub-tab-badge"><?php echo (int) count( $tools ); ?></span><?php endif; ?>
 		</a>
-		<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'luwipress-theme', 'tab' => 'tools' ), admin_url( 'admin.php' ) ) ); ?>"
-		   class="nav-tab <?php echo $active_tab === 'tools' ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-admin-tools"></span>
-			<?php esc_html_e( 'Tools', 'luwipress' ); ?>
-			<?php if ( $tools ) : ?><span class="luwipress-tab-count"><?php echo count( $tools ); ?></span><?php endif; ?>
-		</a>
-		<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'luwipress-theme', 'tab' => 'settings' ), admin_url( 'admin.php' ) ) ); ?>"
-		   class="nav-tab <?php echo $active_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
+		<a href="<?php echo esc_url( $lwp_theme_tab_url( 'settings' ) ); ?>"
+		   class="lp-hub-tab <?php echo $active_tab === 'settings' ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo $active_tab === 'settings' ? 'true' : 'false'; ?>">
 			<span class="dashicons dashicons-admin-generic"></span>
-			<?php esc_html_e( 'Settings', 'luwipress' ); ?>
-			<?php if ( $settings ) : ?><span class="luwipress-tab-count"><?php echo count( $settings ); ?></span><?php endif; ?>
+			<span><?php esc_html_e( 'Settings', 'luwipress' ); ?></span>
+			<?php if ( $settings ) : ?><span class="lp-hub-tab-badge"><?php echo (int) count( $settings ); ?></span><?php endif; ?>
 		</a>
 	</nav>
 
-	<?php if ( $active_tab === 'status' ) : ?>
+	<?php if ( $active_tab === 'overview' ) : ?>
 
 		<!-- ═══ STAT CARDS ═══ -->
 		<!-- Mirrors the Dashboard / KG hero pattern — semantic left-border colour
@@ -245,7 +281,8 @@ $companion_state   = $is_official_companion ? 'stat-success' : ( $is_third_party
 			</div>
 		<?php endif; ?>
 
-	<?php elseif ( $active_tab === 'tools' ) : ?>
+		<!-- ═══ TOOLS — merged into Overview in 3.5.8 ═══ -->
+		<h2 class="lp-section-title"><?php esc_html_e( 'Maintenance tools', 'luwipress' ); ?></h2>
 
 		<?php if ( empty( $tools ) ) : ?>
 			<div class="luwipress-card luwipress-card--muted">
@@ -423,7 +460,9 @@ $companion_state   = $is_official_companion ? 'stat-success' : ( $is_third_party
 		<?php endif; ?>
 
 	<?php endif; ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>
 
 <style>
 	/* Page-specific chrome only — base card / pill / stat styling lives in admin.css */

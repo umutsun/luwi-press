@@ -129,72 +129,92 @@ $type_catalog = array(
 	),
 );
 ?>
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-schema-picker">
+<?php endif; ?>
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<h1><span class="dashicons dashicons-category"></span> <?php esc_html_e( 'Schema Picker', 'luwipress' ); ?></h1>
-	<p class="description" style="max-width:840px;">
+	<?php endif; ?>
+	<p class="lp-page-intro">
 		<?php esc_html_e( 'Add Schema.org JSON-LD blocks (HowTo, LocalBusiness, Service, Review, Course, AggregateRating, Speakable) to any post or term. FAQ has its own dedicated metabox on the post edit screen. ItemList auto-generates on category archives.', 'luwipress' ); ?>
 	</p>
 
 	<!-- Object selector -->
-	<div class="luwipress-card">
-		<h2><?php esc_html_e( 'Pick target', 'luwipress' ); ?></h2>
-		<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
-			<div>
-				<label for="lwp-sp-type" style="display:block;font-size:11px;text-transform:uppercase;color:#666;letter-spacing:1px;"><?php esc_html_e( 'Type', 'luwipress' ); ?></label>
-				<select id="lwp-sp-type">
+	<div class="luwipress-card luwipress-card--primary">
+		<h2><span class="dashicons dashicons-search" aria-hidden="true"></span> <?php esc_html_e( 'Pick target', 'luwipress' ); ?></h2>
+		<form class="lwp-sp-target-form" onsubmit="return false;">
+			<div class="lp-form-row lwp-sp-field">
+				<label class="lp-form-label" for="lwp-sp-type"><?php esc_html_e( 'Type', 'luwipress' ); ?></label>
+				<select class="lp-form-select" id="lwp-sp-type">
 					<option value="post"><?php esc_html_e( 'Post / Page / Product', 'luwipress' ); ?></option>
 					<option value="term"><?php esc_html_e( 'Taxonomy term', 'luwipress' ); ?></option>
 				</select>
 			</div>
-			<div style="flex:1;min-width:260px;">
-				<label for="lwp-sp-id" style="display:block;font-size:11px;text-transform:uppercase;color:#666;letter-spacing:1px;"><?php esc_html_e( 'ID', 'luwipress' ); ?></label>
-				<input type="number" id="lwp-sp-id" class="regular-text" placeholder="<?php esc_attr_e( 'Post or Term ID', 'luwipress' ); ?>" min="1" step="1" style="width:100%;">
-				<p class="description" style="margin-top:4px;font-size:12px;"><?php esc_html_e( 'Find the ID by hovering a post in WP admin lists — the URL contains post=<id>. Term ID via Products → Categories → hover.', 'luwipress' ); ?></p>
+			<div class="lp-form-row lwp-sp-field lwp-sp-field--grow">
+				<label class="lp-form-label" for="lwp-sp-id"><?php esc_html_e( 'ID', 'luwipress' ); ?></label>
+				<input class="lp-form-input" type="number" id="lwp-sp-id" placeholder="<?php esc_attr_e( 'Post or Term ID', 'luwipress' ); ?>" min="1" step="1">
+				<p class="lp-form-hint"><?php esc_html_e( 'Find the ID by hovering a post in WP admin lists — the URL contains post=<id>. Term ID via Products → Categories → hover.', 'luwipress' ); ?></p>
 			</div>
-			<div>
-				<button class="button button-primary" id="lwp-sp-load"><?php esc_html_e( 'Load schemas', 'luwipress' ); ?></button>
+			<div class="lp-form-row lwp-sp-submit">
+				<button class="lp-btn lp-btn--primary" id="lwp-sp-load">
+					<span class="dashicons dashicons-search" aria-hidden="true"></span>
+					<?php esc_html_e( 'Load schemas', 'luwipress' ); ?>
+				</button>
 			</div>
-			<div id="lwp-sp-target-info" style="flex:1 0 100%;color:#666;font-size:13px;margin-top:6px;"></div>
-		</div>
+		</form>
+		<div id="lwp-sp-target-info" class="lp-form-hint lwp-sp-target-info"></div>
 	</div>
 
 	<!-- Existing schemas -->
 	<div class="luwipress-card" id="lwp-sp-existing-card" hidden>
 		<h2><?php esc_html_e( 'Existing schemas on this target', 'luwipress' ); ?></h2>
-		<div id="lwp-sp-existing-status" style="color:#666;font-size:13px;"></div>
+		<div id="lwp-sp-existing-status" class="lp-form-hint"></div>
 		<div id="lwp-sp-existing"></div>
 	</div>
 
 	<!-- Add new -->
-	<div class="luwipress-card" id="lwp-sp-add-card" hidden>
-		<h2><?php esc_html_e( 'Add or replace schema', 'luwipress' ); ?></h2>
-		<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+	<div class="luwipress-card luwipress-card--info" id="lwp-sp-add-card" hidden>
+		<h2><span class="dashicons dashicons-plus-alt2" aria-hidden="true"></span> <?php esc_html_e( 'Add or replace schema', 'luwipress' ); ?></h2>
+		<p class="lp-form-hint"><?php esc_html_e( 'Pick a schema type to start from a starter template, edit JSON, then save.', 'luwipress' ); ?></p>
+		<div class="lwp-sp-type-row">
 			<?php foreach ( $type_catalog as $slug => $cfg ) : ?>
-			<button type="button" class="button lwp-sp-type-pick" data-slug="<?php echo esc_attr( $slug ); ?>">
+			<button type="button" class="lp-btn lp-btn--outline lwp-sp-type-pick" data-slug="<?php echo esc_attr( $slug ); ?>">
 				<?php echo esc_html( $cfg['label'] ); ?>
 			</button>
 			<?php endforeach; ?>
 		</div>
-		<div id="lwp-sp-editor" hidden>
-			<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-				<strong id="lwp-sp-editor-title" style="font-size:15px;"></strong>
-				<button type="button" class="button button-small" id="lwp-sp-reset-template"><?php esc_html_e( 'Reset to template', 'luwipress' ); ?></button>
+		<div id="lwp-sp-editor" class="lwp-sp-editor" hidden>
+			<div class="lwp-sp-editor-head">
+				<strong id="lwp-sp-editor-title" class="lwp-sp-editor-title"></strong>
+				<button type="button" class="lp-btn lp-btn--ghost lp-btn--sm" id="lwp-sp-reset-template">
+					<span class="dashicons dashicons-undo" aria-hidden="true"></span>
+					<?php esc_html_e( 'Reset to template', 'luwipress' ); ?>
+				</button>
 			</div>
-			<p id="lwp-sp-editor-help" class="description" style="margin:4px 0 8px 0;"></p>
-			<textarea id="lwp-sp-editor-json" rows="20" style="width:100%;font-family:monospace;font-size:12px;line-height:1.5;"></textarea>
-			<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
-				<button class="button button-primary" id="lwp-sp-save"><?php esc_html_e( 'Save schema', 'luwipress' ); ?></button>
-				<button class="button" id="lwp-sp-validate"><?php esc_html_e( 'Validate JSON', 'luwipress' ); ?></button>
-				<span id="lwp-sp-status" style="color:#666;font-size:13px;"></span>
+			<p id="lwp-sp-editor-help" class="lp-form-hint"></p>
+			<div class="lp-form-row">
+				<textarea id="lwp-sp-editor-json" class="lp-form-textarea lwp-sp-editor-json" rows="20"></textarea>
+			</div>
+			<div class="lp-btn-row">
+				<button class="lp-btn lp-btn--primary" id="lwp-sp-save">
+					<span class="dashicons dashicons-saved" aria-hidden="true"></span>
+					<?php esc_html_e( 'Save schema', 'luwipress' ); ?>
+				</button>
+				<button class="lp-btn lp-btn--outline" id="lwp-sp-validate">
+					<span class="dashicons dashicons-yes-alt" aria-hidden="true"></span>
+					<?php esc_html_e( 'Validate JSON', 'luwipress' ); ?>
+				</button>
+				<span id="lwp-sp-status" class="lp-form-hint"></span>
 			</div>
 		</div>
 	</div>
 
 	<!-- Reference card -->
-	<div class="luwipress-card">
-		<h2><?php esc_html_e( 'Reference', 'luwipress' ); ?></h2>
-		<p><?php esc_html_e( 'Documentation links per schema type — pin alongside the editor when filling unfamiliar fields:', 'luwipress' ); ?></p>
-		<ul style="line-height:2;">
+	<div class="luwipress-card luwipress-card--muted">
+		<h2><span class="dashicons dashicons-book" aria-hidden="true"></span> <?php esc_html_e( 'Reference', 'luwipress' ); ?></h2>
+		<p class="lp-form-hint"><?php esc_html_e( 'Documentation links per schema type — pin alongside the editor when filling unfamiliar fields:', 'luwipress' ); ?></p>
+		<ul class="lwp-sp-ref-list">
 			<li><strong>HowTo</strong> — <a href="https://schema.org/HowTo" target="_blank" rel="noopener">schema.org/HowTo</a></li>
 			<li><strong>Speakable</strong> — <a href="https://schema.org/SpeakableSpecification" target="_blank" rel="noopener">schema.org/SpeakableSpecification</a></li>
 			<li><strong>LocalBusiness</strong> — <a href="https://schema.org/LocalBusiness" target="_blank" rel="noopener">schema.org/LocalBusiness</a></li>
@@ -203,28 +223,83 @@ $type_catalog = array(
 			<li><strong>Review</strong> — <a href="https://schema.org/Review" target="_blank" rel="noopener">schema.org/Review</a></li>
 			<li><strong>AggregateRating</strong> — <a href="https://schema.org/AggregateRating" target="_blank" rel="noopener">schema.org/AggregateRating</a></li>
 		</ul>
-		<p>
+		<p class="lp-form-hint">
 			<?php esc_html_e( 'After saving, use', 'luwipress' ); ?>
-			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-schema-preview' ) ); ?>"><?php esc_html_e( 'Schema Preview', 'luwipress' ); ?></a>
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-content&tab=preview' ) ); ?>"><?php esc_html_e( 'Schema Preview', 'luwipress' ); ?></a>
 			<?php esc_html_e( 'to confirm the JSON-LD block renders on the live URL, then', 'luwipress' ); ?>
 			<a href="https://search.google.com/test/rich-results" target="_blank" rel="noopener"><?php esc_html_e( 'Google Rich Results Test', 'luwipress' ); ?></a>
 			<?php esc_html_e( 'to validate it.', 'luwipress' ); ?>
 		</p>
 	</div>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>
 
 <style>
-.luwipress-schema-picker .luwipress-card {
-	background:#fff;border:1px solid #ddd;border-radius:6px;padding:16px 20px;margin:16px 0;
+.lwp-sp-target-form {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	margin: 10px 0 0;
 }
-.luwipress-schema-picker .luwipress-card h2 { margin-top:0;font-size:17px; }
-.luwipress-schema-picker .lwp-sp-existing-row {
-	display:flex;justify-content:space-between;align-items:center;
-	padding:10px 12px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;background:#fafafa;
+.lwp-sp-field { min-width: 200px; margin: 0; }
+.lwp-sp-field--grow { flex: 1 1 280px; }
+.lwp-sp-submit { margin: 0; align-self: flex-end; }
+.lwp-sp-target-info { margin-top: 10px; }
+
+.lwp-sp-type-row {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin: 10px 0 14px;
 }
-.luwipress-schema-picker .lwp-sp-existing-row code { background:#eee;padding:2px 6px;border-radius:3px;font-size:12px; }
-.luwipress-schema-picker .lwp-sp-type-pick { font-weight:500; }
-.luwipress-schema-picker .lwp-sp-type-pick.is-active { background:#0070b5;color:#fff;border-color:#0070b5; }
+.lwp-sp-type-pick.is-active {
+	background: var(--lp-primary);
+	color: #fff;
+	border-color: var(--lp-primary);
+}
+.lwp-sp-type-pick.is-active:hover {
+	background: var(--lp-primary-dark);
+	color: #fff;
+	border-color: var(--lp-primary-dark);
+}
+
+.lwp-sp-editor { margin-top: 4px; }
+.lwp-sp-editor-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 6px;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+.lwp-sp-editor-title { font-size: 15px; color: var(--lp-text); }
+.lwp-sp-editor-json {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 12px;
+	line-height: 1.5;
+	min-height: 280px;
+}
+
+.lwp-sp-existing-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 10px 12px;
+	border: 1px solid var(--lp-border);
+	border-radius: 6px;
+	margin-bottom: 8px;
+	background: var(--lp-surface-secondary);
+}
+.lwp-sp-existing-row code {
+	background: var(--lp-gray-100);
+	padding: 2px 6px;
+	border-radius: 3px;
+	font-size: 12px;
+}
+
+.lwp-sp-ref-list { line-height: 2; margin: 6px 0 8px; }
 </style>
 
 <script>

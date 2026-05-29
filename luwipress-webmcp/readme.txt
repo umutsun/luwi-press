@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.35
+Stable tag: 1.0.36
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,11 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.36 — Agentic Commerce tools: UCP feed + native checkout + AP2 mandate (paired with core 3.6.0) =
+* **15 new tools across UCP + AP2.** UCP feed readiness: `ucp_settings_get/set`, `ucp_eligibility_report`, `ucp_product_profile`, `ucp_product_set`, `ucp_feed_preview`. UCP Native Checkout: `ucp_checkout_session_create`, `ucp_checkout_session_get`, `ucp_checkout_session_update`, `ucp_checkout_session_complete`. AP2 mandate audit trail: `ap2_settings_get/set`, `ap2_mandate_verify`, `ap2_transaction_get`, `ap2_log_recent`.
+* **Safety classification** — every read-only tool carries `readOnlyHint:true`; checkout create/update/complete and product/settings writes are write-classified (`readOnlyHint:false`), so the autonomous agent tool-calling loop (which only auto-invokes read-only tools) never places an order or mutates commerce config on its own. `ucp_checkout_session_complete` creates a real pending WooCommerce order in live mode (sandbox simulates).
+* Routes through the core `LuwiPress_UCP`, `LuwiPress_UCP_Checkout`, and `LuwiPress_AP2` modules shipped in core 3.6.0. All tools early-return (do not register) when their backing core module class is absent, so a core-only-without-commerce install simply omits them.
 
 = 1.0.35 — Bulk taxonomy SEO meta tool (paired with core 3.5.5) =
 * **NEW `taxonomy_seo_meta_bulk`** — bulk write Rank Math / Yoast / AIOSEO / SEOPress meta on up to 500 taxonomy terms in a single MCP call. Mirrors the post-side `seo_meta_bulk`. Each row carries `{term_id, taxonomy, title?, description?, focus_keyword?}` (any combination of fields). Unblocks the multi-language taxonomy editor work in core 3.5.5 — a 52-category × 4-language × 3-field sweep that previously needed 624 sequential `taxonomy_meta_set` calls now ships in one batch. Routes through the core `LuwiPress_API::write_taxonomy_seo_meta_bulk` handler, which itself dispatches through the Plugin Detector's SEO writer (so the active SEO plugin's actual meta keys are used).

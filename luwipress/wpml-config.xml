@@ -1,0 +1,28 @@
+<wpml-config>
+
+	<custom-types>
+		<custom-type translate="1">lwp_vendor</custom-type>
+	</custom-types>
+
+	<taxonomies>
+		<taxonomy translate="1">lwp_vendor_group</taxonomy>
+	</taxonomies>
+
+	<custom-fields>
+		<custom-field action="translate">_lwp_vendor_location</custom-field>
+		<custom-field action="translate">_lwp_vendor_occupation</custom-field>
+		<custom-field action="translate">_lwp_vendor_specialty</custom-field>
+		<custom-field action="translate">_lwp_vendor_quote</custom-field>
+		<custom-field action="copy">_lwp_vendor_years_active</custom-field>
+		<custom-field action="copy">_lwp_vendor_facebook</custom-field>
+		<custom-field action="copy">_lwp_vendor_instagram</custom-field>
+		<custom-field action="copy">_lwp_vendor_youtube</custom-field>
+		<custom-field action="copy">_lwp_vendor_soundcloud</custom-field>
+		<custom-field action="copy">_lwp_vendor_linkedin</custom-field>
+		<custom-field action="copy">_lwp_vendor_x</custom-field>
+		<custom-field action="copy">_lwp_vendor_behance</custom-field>
+		<custom-field action="copy">_lwp_vendor_website</custom-field>
+		<custom-field action="copy">_lwp_vendor_ids</custom-field>
+	</custom-fields>
+
+</wpml-config>

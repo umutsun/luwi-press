@@ -259,45 +259,69 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 ?>
 
 <div class="wrap luwipress-settings">
-	<h1><span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e( 'LuwiPress Settings', 'luwipress' ); ?></h1>
 
-	<nav class="nav-tab-wrapper luwipress-tabs">
-		<a href="?page=luwipress-settings&tab=connection" class="nav-tab <?php echo 'connection' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-admin-links"></span> <?php esc_html_e( 'Connection', 'luwipress' ); ?>
+	<!-- Branded header mirrors Dashboard / Knowledge Graph chrome -->
+	<div class="lp-header">
+		<div class="lp-header-left">
+			<h1 class="lp-title">
+				<img class="lp-logo" width="28" height="28"
+				     src="<?php echo esc_url( LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' ); ?>"
+				     alt="LuwiPress" />
+				<?php esc_html_e( 'Settings', 'luwipress' ); ?>
+			</h1>
+		</div>
+		<div class="lp-header-actions">
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress' ) ); ?>"
+			   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
+			   title="<?php esc_attr_e( 'Dashboard', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-dashboard"></span>
+				<span class="screen-reader-text"><?php esc_html_e( 'Dashboard', 'luwipress' ); ?></span>
+			</a>
+			<span class="lp-pill pill-neutral" title="<?php esc_attr_e( 'Plugin version', 'luwipress' ); ?>">
+				v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
+			</span>
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-usage' ) ); ?>"
+			   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
+			   title="<?php esc_attr_e( 'Usage & Logs', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-chart-bar"></span>
+				<span class="screen-reader-text"><?php esc_html_e( 'Usage & Logs', 'luwipress' ); ?></span>
+			</a>
+		</div>
+	</div>
+
+	<nav class="lp-hub-tabs lwp-settings-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Settings sections', 'luwipress' ); ?>">
+		<?php
+		$tabs_def = array(
+			'connection'     => array( 'label' => __( 'Connection', 'luwipress' ),     'icon' => 'dashicons-admin-links' ),
+			'general'        => array( 'label' => __( 'General', 'luwipress' ),        'icon' => 'dashicons-admin-settings' ),
+			'api-keys'       => array( 'label' => __( 'AI API Keys', 'luwipress' ),    'icon' => 'dashicons-admin-network' ),
+			'ai'             => array( 'label' => __( 'AI Content', 'luwipress' ),     'icon' => 'dashicons-edit-large' ),
+			'translation'    => array( 'label' => __( 'Translation', 'luwipress' ),    'icon' => 'dashicons-translation' ),
+			'crm'            => array( 'label' => __( 'CRM', 'luwipress' ),            'icon' => 'dashicons-groups' ),
+			'customer-chat'  => array( 'label' => __( 'Customer Chat', 'luwipress' ),  'icon' => 'dashicons-format-chat' ),
+			'security'       => array( 'label' => __( 'Security', 'luwipress' ),       'icon' => 'dashicons-shield-alt' ),
+			'bot'            => array( 'label' => __( 'Bot', 'luwipress' ),            'icon' => 'dashicons-shield' ),
+			'content-health' => array( 'label' => __( 'Content Health', 'luwipress' ), 'icon' => 'dashicons-chart-area' ),
+		);
+		foreach ( $tabs_def as $slug => $cfg ) :
+			$is_active = ( $slug === $active_tab );
+		?>
+		<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'luwipress-settings', 'tab' => $slug ), admin_url( 'admin.php' ) ) ); ?>"
+		   class="lp-hub-tab <?php echo $is_active ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab"
+		   aria-selected="<?php echo $is_active ? 'true' : 'false'; ?>">
+			<span class="dashicons <?php echo esc_attr( $cfg['icon'] ); ?>"></span>
+			<span><?php echo esc_html( $cfg['label'] ); ?></span>
 		</a>
-		<a href="?page=luwipress-settings&tab=general" class="nav-tab <?php echo 'general' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-admin-settings"></span> <?php esc_html_e( 'General', 'luwipress' ); ?>
-		</a>
-		<a href="?page=luwipress-settings&tab=api-keys" class="nav-tab <?php echo 'api-keys' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-admin-network"></span> <?php esc_html_e( 'AI API Keys', 'luwipress' ); ?>
-		</a>
-		<a href="?page=luwipress-settings&tab=ai" class="nav-tab <?php echo 'ai' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-edit-large"></span> <?php esc_html_e( 'AI Content', 'luwipress' ); ?>
-		</a>
-		<a href="?page=luwipress-settings&tab=translation" class="nav-tab <?php echo 'translation' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-translation"></span> <?php esc_html_e( 'Translation', 'luwipress' ); ?>
-		</a>
-		<a href="?page=luwipress-settings&tab=crm" class="nav-tab <?php echo 'crm' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-groups"></span> <?php esc_html_e( 'CRM', 'luwipress' ); ?>
-		</a>
-		<a href="?page=luwipress-settings&tab=customer-chat" class="nav-tab <?php echo 'customer-chat' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-format-chat"></span> <?php esc_html_e( 'Customer Chat', 'luwipress' ); ?>
-		</a>
-		<a href="?page=luwipress-settings&tab=security" class="nav-tab <?php echo 'security' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-shield-alt"></span> <?php esc_html_e( 'Security', 'luwipress' ); ?>
-		</a>
-		<a href="?page=luwipress-settings&tab=bot" class="nav-tab <?php echo 'bot' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-shield"></span> <?php esc_html_e( 'Bot', 'luwipress' ); ?>
-		</a>
-		<a href="?page=luwipress-settings&tab=content-health" class="nav-tab <?php echo 'content-health' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<span class="dashicons dashicons-chart-area"></span> <?php esc_html_e( 'Content Health', 'luwipress' ); ?>
-		</a>
+		<?php endforeach; ?>
 		<?php
 		/**
 		 * Companion plugins can hook this action to register their own tab nav
 		 * links inside the LuwiPress Settings page. Each hook should echo an
-		 * `<a class="nav-tab">` element. The current active tab is passed in
-		 * so the hook can apply `nav-tab-active`.
+		 * `<a class="lp-hub-tab">` element. The current active tab is passed in
+		 * so the hook can apply `lp-hub-tab--active`. (Pre-3.5.8 hooks emitting
+		 * `<a class="nav-tab">` continue to render — they just won't pick up
+		 * the new token styling without an update.)
 		 *
 		 * @param string $active_tab Currently selected tab id.
 		 * @since 3.2.4

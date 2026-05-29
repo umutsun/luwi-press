@@ -95,8 +95,14 @@ $total_items = count( $scheduled_items );
 $default_tab = $total_items > 0 ? 'queue' : 'create';
 ?>
 
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-dashboard sched-shell" data-default-tab="<?php echo esc_attr( $default_tab ); ?>">
+<?php else : ?>
+<div class="sched-shell" data-default-tab="<?php echo esc_attr( $default_tab ); ?>">
+<?php endif; ?>
 
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<!-- ─── Page header ─────────────────────────────────────── -->
 	<div class="lp-header sched-header">
 		<div class="lp-header-left">
@@ -120,6 +126,7 @@ $default_tab = $total_items > 0 ? 'queue' : 'create';
 			<?php endif; ?>
 		</div>
 	</div>
+	<?php endif; ?>
 
 	<!-- ─── Main tabs ───────────────────────────────────────── -->
 	<nav class="sched-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Content Scheduler sections', 'luwipress' ); ?>">
@@ -863,4 +870,6 @@ Topic with SEO | keywords=primary term, secondary | tone=creative</pre>
 		</div>
 	</div>
 
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>

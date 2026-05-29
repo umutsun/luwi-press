@@ -75,45 +75,55 @@ $profile_fields = array(
 	'quote'      => __( 'Featured quote', 'luwipress' ),
 );
 ?>
+<?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-vendors">
+<?php endif; ?>
+	<?php if ( ! $luwipress_hub_mode ) : ?>
 	<h1><span class="dashicons dashicons-businessperson"></span> <?php esc_html_e( 'Vendors', 'luwipress' ); ?></h1>
-	<p class="description" style="max-width:840px;">
+	<?php endif; ?>
+	<p class="lp-page-intro">
 		<?php esc_html_e( 'The Vendor CPT is a generic profile system for makers, ateliers, luthiers, chefs, artists, or whichever entity makes the things your store sells. Configure the URL slug, UI labels, Schema.org entity type, and which profile fields show on the front-end. Vendors carry verified social URLs that feed into JSON-LD sameAs — a strong E-E-A-T signal for Google.', 'luwipress' ); ?>
 	</p>
 
 	<!-- Hero summary -->
-	<div class="luwipress-card" style="display:flex;gap:24px;flex-wrap:wrap;align-items:stretch;">
-		<div style="flex:1;min-width:160px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Published vendors', 'luwipress' ); ?></div>
-			<div style="font-size:28px;font-weight:600;color:#222;margin-top:4px;"><?php echo esc_html( (string) $published ); ?></div>
-			<?php if ( $drafts > 0 ) : ?>
-			<div style="color:#a86b00;font-size:12px;margin-top:4px;"><?php echo esc_html( sprintf( /* translators: %d count */ __( '+ %d draft', 'luwipress' ), $drafts ) ); ?></div>
-			<?php endif; ?>
-		</div>
-		<div style="flex:1;min-width:160px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Archive URL', 'luwipress' ); ?></div>
-			<div style="font-size:18px;font-weight:600;color:#222;margin-top:4px;font-family:monospace;">/<?php echo esc_html( $settings['archive_slug'] ); ?>/</div>
-			<a href="<?php echo esc_url( home_url( '/' . $settings['archive_slug'] . '/' ) ); ?>" target="_blank" rel="noopener" style="font-size:12px;"><?php esc_html_e( 'Open archive →', 'luwipress' ); ?></a>
-		</div>
-		<div style="flex:1;min-width:160px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Label', 'luwipress' ); ?></div>
-			<div style="font-size:18px;font-weight:600;color:#222;margin-top:4px;">
-				<?php echo esc_html( $settings['singular_label'] ); ?> / <?php echo esc_html( $settings['plural_label'] ); ?>
+	<div class="lwp-v-hero">
+		<div class="lp-stat-row lwp-v-hero-stats">
+			<div class="lp-stat lp-stat--success">
+				<div class="lp-stat-label"><?php esc_html_e( 'Published vendors', 'luwipress' ); ?></div>
+				<div class="lp-stat-value"><?php echo esc_html( (string) $published ); ?></div>
+				<?php if ( $drafts > 0 ) : ?>
+				<div class="lp-stat-caption lwp-v-c--warning"><?php echo esc_html( sprintf( /* translators: %d count */ __( '+ %d draft', 'luwipress' ), $drafts ) ); ?></div>
+				<?php endif; ?>
+			</div>
+			<div class="lp-stat lp-stat--info">
+				<div class="lp-stat-label"><?php esc_html_e( 'Archive URL', 'luwipress' ); ?></div>
+				<div class="lp-stat-value lwp-v-archive-url">/<?php echo esc_html( $settings['archive_slug'] ); ?>/</div>
+				<a href="<?php echo esc_url( home_url( '/' . $settings['archive_slug'] . '/' ) ); ?>"
+				   target="_blank" rel="noopener" class="lwp-v-archive-link">
+					<?php esc_html_e( 'Open archive →', 'luwipress' ); ?>
+				</a>
+			</div>
+			<div class="lp-stat">
+				<div class="lp-stat-label"><?php esc_html_e( 'Label', 'luwipress' ); ?></div>
+				<div class="lp-stat-value lwp-v-label-pair">
+					<?php echo esc_html( $settings['singular_label'] ); ?> / <?php echo esc_html( $settings['plural_label'] ); ?>
+				</div>
+			</div>
+			<div class="lp-stat lp-stat--muted">
+				<div class="lp-stat-label"><?php esc_html_e( 'Schema entity', 'luwipress' ); ?></div>
+				<div class="lp-stat-value lwp-v-entity"><?php echo esc_html( $settings['entity_type'] ); ?></div>
 			</div>
 		</div>
-		<div style="flex:1;min-width:160px;">
-			<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;"><?php esc_html_e( 'Schema entity', 'luwipress' ); ?></div>
-			<div style="font-size:18px;font-weight:600;color:#222;margin-top:4px;text-transform:capitalize;">
-				<?php echo esc_html( $settings['entity_type'] ); ?>
-			</div>
-		</div>
-		<div style="flex:0 0 auto;align-self:center;display:flex;flex-direction:column;gap:6px;">
-			<a class="button button-primary" href="<?php echo esc_url( admin_url( 'edit.php?post_type=' . $post_type ) ); ?>">
-				<span class="dashicons dashicons-list-view" style="line-height:1.6;"></span>
+
+		<div class="lwp-v-hero-actions">
+			<a class="lp-btn lp-btn--primary" href="<?php echo esc_url( admin_url( 'edit.php?post_type=' . $post_type ) ); ?>">
+				<span class="dashicons dashicons-list-view" aria-hidden="true"></span>
 				<?php esc_html_e( 'Open vendor list', 'luwipress' ); ?>
 			</a>
-			<a class="button" href="<?php echo esc_url( admin_url( 'post-new.php?post_type=' . $post_type ) ); ?>">
-				<?php esc_html_e( '+ Add new vendor', 'luwipress' ); ?>
+			<a class="lp-btn lp-btn--outline" href="<?php echo esc_url( admin_url( 'post-new.php?post_type=' . $post_type ) ); ?>">
+				<span class="dashicons dashicons-plus-alt2" aria-hidden="true"></span>
+				<?php esc_html_e( 'Add new vendor', 'luwipress' ); ?>
 			</a>
 		</div>
 	</div>
@@ -255,18 +265,24 @@ $profile_fields = array(
 		</div>
 
 		<!-- Save / flush row -->
-		<div class="luwipress-card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-			<button type="submit" class="button button-primary button-hero" id="lwp-v-save"><?php esc_html_e( 'Save settings', 'luwipress' ); ?></button>
-			<button type="button" class="button" id="lwp-v-flush-rewrite"><?php esc_html_e( 'Flush rewrite rules', 'luwipress' ); ?></button>
-			<span id="lwp-v-status" style="color:#666;font-size:13px;"></span>
+		<div class="luwipress-card luwipress-card--primary lwp-v-save-row">
+			<button type="submit" class="lp-btn lp-btn--primary lp-btn--lg" id="lwp-v-save">
+				<span class="dashicons dashicons-saved" aria-hidden="true"></span>
+				<?php esc_html_e( 'Save settings', 'luwipress' ); ?>
+			</button>
+			<button type="button" class="lp-btn lp-btn--outline" id="lwp-v-flush-rewrite">
+				<span class="dashicons dashicons-controls-repeat" aria-hidden="true"></span>
+				<?php esc_html_e( 'Flush rewrite rules', 'luwipress' ); ?>
+			</button>
+			<span id="lwp-v-status" class="lp-form-hint"></span>
 		</div>
 	</form>
 
 	<!-- Vendor roster -->
-	<div class="luwipress-card">
-		<h2><?php echo esc_html( sprintf( /* translators: %s plural label */ __( '%s roster', 'luwipress' ), $settings['plural_label'] ) ); ?></h2>
-		<p class="description"><?php esc_html_e( 'Published vendors with profile-meta completeness indicators. Click any row to edit.', 'luwipress' ); ?></p>
-		<div id="lwp-v-roster-status" style="color:#666;font-size:13px;margin-bottom:8px;"><?php esc_html_e( 'Loading roster…', 'luwipress' ); ?></div>
+	<div class="luwipress-card luwipress-card--info">
+		<h2><span class="dashicons dashicons-groups" aria-hidden="true"></span> <?php echo esc_html( sprintf( /* translators: %s plural label */ __( '%s roster', 'luwipress' ), $settings['plural_label'] ) ); ?></h2>
+		<p class="lp-form-hint"><?php esc_html_e( 'Published vendors with profile-meta completeness indicators. Click any row to edit.', 'luwipress' ); ?></p>
+		<div id="lwp-v-roster-status" class="lp-form-hint lwp-v-roster-status"><?php esc_html_e( 'Loading roster…', 'luwipress' ); ?></div>
 		<table class="wp-list-table widefat striped" id="lwp-v-roster">
 			<thead>
 				<tr>
@@ -277,17 +293,62 @@ $profile_fields = array(
 					<th><?php esc_html_e( 'Actions', 'luwipress' ); ?></th>
 				</tr>
 			</thead>
-			<tbody><tr><td colspan="5" style="color:#999;font-style:italic;"><?php esc_html_e( 'Loading…', 'luwipress' ); ?></td></tr></tbody>
+			<tbody><tr><td colspan="5" class="lwp-v-empty"><?php esc_html_e( 'Loading…', 'luwipress' ); ?></td></tr></tbody>
 		</table>
 	</div>
+<?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
+<?php endif; ?>
 
 <style>
-.luwipress-vendors .luwipress-card {
-	background:#fff;border:1px solid #ddd;border-radius:6px;padding:16px 20px;margin:16px 0;
+/* Hero — stat row + action column.  */
+.lwp-v-hero {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 16px;
+	align-items: stretch;
+	margin: 0 0 20px;
 }
-.luwipress-vendors .luwipress-card h2 { margin-top:0;font-size:17px; }
-.luwipress-vendors .form-table th { width:200px; }
+.lwp-v-hero-stats { margin: 0; }
+.lwp-v-hero-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	justify-content: center;
+	padding: 4px 0;
+}
+
+.lwp-v-c--warning { color: var(--lp-warning); }
+.lwp-v-archive-url {
+	font-size: 18px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.lwp-v-archive-link {
+	font-size: 12px;
+	color: var(--lp-primary);
+	display: inline-block;
+	margin-top: 6px;
+}
+.lwp-v-label-pair { font-size: 18px; }
+.lwp-v-entity { font-size: 18px; text-transform: capitalize; }
+
+.lwp-v-save-row {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.lwp-v-roster-status { margin-bottom: 8px; }
+.lwp-v-empty { color: var(--lp-text-secondary); font-style: italic; }
+
+/* Card form layout — wp form-table widened columns and tokenised colour. */
+.luwipress-vendors .form-table th,
+.luwipress-hub-site .form-table th { width: 200px; color: var(--lp-text); }
+
+@media (max-width: 900px) {
+	.lwp-v-hero { grid-template-columns: 1fr; }
+	.lwp-v-hero-actions { flex-direction: row; flex-wrap: wrap; }
+}
 </style>
 
 <script>

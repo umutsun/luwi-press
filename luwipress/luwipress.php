@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.5.6
+ * Version: 3.6.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.5.6');
+define('LUWIPRESS_VERSION', '3.6.0');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -192,6 +192,21 @@ class LuwiPress {
         // ACP/ACS attribution bridge — server-side multi-cast for AI agent orders
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-acp-attribution.php';
 
+        // UCP (Universal Commerce Protocol) — Google's agentic-checkout standard.
+        // Phase 1: feed readiness (native_commerce / consumer_notice meta,
+        // return + support config, eligibility report, supplemental feed).
+        // Phase 2: native checkout API backed by the WC cart/order pipeline.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-ucp.php';
+
+        // UCP Native Checkout — session create/update/complete backed by WC
+        // draft orders (phase 2). Loaded after the UCP module it depends on.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-ucp-checkout.php';
+
+        // AP2 (Agent Payments Protocol) — verify + persist the Intent → Cart
+        // mandate chain as a non-repudiable order audit trail (phase 3).
+        // Composes with UCP checkout completion; pluggable signature verifier.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-ap2.php';
+
         // Theme Bridge — generic contract for LuwiPress-aware themes (3.1.48+).
         // Themes register tools + theme_mod proxies via two filters; the bridge
         // exposes them in the admin "Theme" tab, REST endpoints, and WebMCP.
@@ -272,6 +287,7 @@ class LuwiPress {
         LuwiPress_Bot_Account_Cleaner::create_table();
         LuwiPress_Cookie_Consent::create_table();
         LuwiPress_Bot_Shield::create_table();
+        LuwiPress_UCP_Checkout::create_table();
         LuwiPress_CRM_Campaigns::maybe_create_tables();
         // Marketplace listings table created by the LuwiPress Marketplace Sync
         // companion plugin's own activation hook (3.1.44+).
@@ -357,6 +373,9 @@ class LuwiPress {
         LuwiPress_Customer_Chat::get_instance();
         LuwiPress_Abilities::get_instance();
         LuwiPress_ACP_Attribution::get_instance();
+        LuwiPress_UCP::get_instance();
+        LuwiPress_UCP_Checkout::get_instance();
+        LuwiPress_AP2::get_instance();
         LuwiPress_Theme_Bridge::get_instance();
         LuwiPress_Slug_Resolver::get_instance();
         LuwiPress_Bot_Account_Cleaner::get_instance();
@@ -419,34 +438,24 @@ class LuwiPress {
             </style>';
         } );
 
-        // Rename first submenu from parent slug to "Dashboard"
+        // ─── VISIBLE SUBMENUS (7 total — IA consolidated 3.5.7) ─────
+        // Pre-3.5.7 each module shipped a flat submenu; 15+ items overflowed
+        // the WP sidebar and operator focus. The 3.5.7 IA folds related
+        // tools into two hubs (Content / Site) so the visible row stays at
+        // 7 and every tool keeps a deep-linkable URL via ?tab=. Old slugs
+        // remain as hidden redirect-only submenus below.
+
+        // 1. Dashboard (rename the auto-generated first submenu)
         add_submenu_page(
             'luwipress',
-            'Dashboard',
-            'Dashboard',
+            __( 'Dashboard', 'luwipress' ),
+            __( 'Dashboard', 'luwipress' ),
             'manage_options',
             'luwipress',
-            array($this, 'admin_page')
-        );
-        
-        add_submenu_page(
-            'luwipress',
-            'Settings',
-            'Settings',
-            'manage_options',
-            'luwipress-settings',
-            array($this, 'settings_page')
-        );
-        
-        add_submenu_page(
-            'luwipress',
-            __( 'Usage & Logs', 'luwipress' ),
-            __( 'Usage & Logs', 'luwipress' ),
-            'manage_options',
-            'luwipress-usage',
-            array($this, 'usage_page')
+            array( $this, 'admin_page' )
         );
 
+        // 2. Knowledge Graph
         add_submenu_page(
             'luwipress',
             __( 'Knowledge Graph', 'luwipress' ),
@@ -456,161 +465,133 @@ class LuwiPress {
             array( $this, 'knowledge_graph_page' )
         );
 
-        // Theme submenu — only registered when the active theme actually
-        // surfaces the companion contract (capabilities or tools or settings).
-        // No companion theme installed = no Theme tab; keeps the menu honest.
-        if ( $this->theme_companion_present() ) {
-            add_submenu_page(
-                'luwipress',
-                __( 'Theme', 'luwipress' ),
-                __( 'Theme', 'luwipress' ),
-                'manage_options',
-                'luwipress-theme',
-                array( $this, 'theme_page' )
-            );
-        }
-
-        // Bot Defense (3.2.2+) — unified surface for Bot Accounts + Bot Shield.
-        // All configuration lives under LuwiPress → Settings → Bot tab.
+        // 3. Content — hub: Health Audit / Schema / Schema Preview /
+        //    Taxonomy / Image Alt / Scheduler. Tab dispatch is server-
+        //    rendered (`?tab=` whitelist) inside content-hub-page.php.
         add_submenu_page(
             'luwipress',
-            __( 'Bot Defense', 'luwipress' ),
-            __( 'Bot Defense', 'luwipress' ),
+            __( 'Content', 'luwipress' ),
+            __( 'Content', 'luwipress' ),
             'manage_options',
-            'luwipress-bot-defense',
-            array( $this, 'bot_defense_page' )
+            'luwipress-content',
+            array( $this, 'content_hub_page' )
         );
 
-        // Back-compat: keep the old slugs as HIDDEN routes (null parent) so any
-        // existing bookmarks / MCP integrations / deep links continue resolving.
-        add_submenu_page( '', __( 'Bot Accounts', 'luwipress' ), __( 'Bot Accounts', 'luwipress' ), 'manage_options', 'luwipress-bot-accounts', array( $this, 'bot_defense_page' ) );
-        add_submenu_page( '', __( 'Bot Shield', 'luwipress' ),   __( 'Bot Shield', 'luwipress' ),   'manage_options', 'luwipress-bot-shield',   array( $this, 'bot_defense_page' ) );
+        // 4. Translations — owned by LuwiPress_Translation; left between
+        //    Content and Site in the visible row. Sync Audit panel lives
+        //    inside this page at ?tab=sync-audit (handled by the module).
 
-        // Cookie Consent (3.2.1+) — GDPR banner + consent log.
+        // 5. Site — hub: Slug Resolver / Vendors / Theme / Bot Defense /
+        //    Cookie Consent.
         add_submenu_page(
             'luwipress',
-            __( 'Cookie Consent', 'luwipress' ),
-            __( 'Cookie Consent', 'luwipress' ),
+            __( 'Site', 'luwipress' ),
+            __( 'Site', 'luwipress' ),
             'manage_options',
-            'luwipress-cookies',
-            array( $this, 'cookies_page' )
+            'luwipress-site',
+            array( $this, 'site_hub_page' )
         );
 
-        // Content Audit (3.5.4+) — unified UI surface over the promotional
-        // phrase audit (3.4.1) + AI-tell scanner (3.5.4) + per-CPT word
-        // count compliance (3.5.4). Drives the Brand Voice + Content Depth
-        // pillars of the Content Health score that non-WebMCP customers see
-        // in the KG dashboard.
+        // 6. Commerce — hub: agentic commerce (Google UCP feed readiness +
+        //    native checkout) and AP2 mandate audit trail. Distinct domain
+        //    (payments/checkout) so it earns its own hub rather than folding
+        //    into Content or Site. Tabs server-rendered via ?tab=.
         add_submenu_page(
             'luwipress',
-            __( 'Content Audit', 'luwipress' ),
-            __( 'Content Audit', 'luwipress' ),
+            __( 'Commerce', 'luwipress' ),
+            __( 'Commerce', 'luwipress' ),
             'manage_options',
-            'luwipress-content-audit',
-            array( $this, 'content_audit_page' )
+            'luwipress-commerce',
+            array( $this, 'commerce_hub_page' )
         );
 
-        // Schema Preview (3.5.4+) — wraps the Frontend Inspector
-        // (`/frontend/render-dump`) for cache-bypass JSON-LD inspection.
-        // Operator-facing alternative to chrome-devtools-mcp round-trips.
+        // 7. Settings
         add_submenu_page(
             'luwipress',
-            __( 'Schema Preview', 'luwipress' ),
-            __( 'Schema Preview', 'luwipress' ),
+            __( 'Settings', 'luwipress' ),
+            __( 'Settings', 'luwipress' ),
             'manage_options',
-            'luwipress-schema-preview',
-            array( $this, 'schema_preview_page' )
+            'luwipress-settings',
+            array( $this, 'settings_page' )
         );
 
-        // Translation Sync Audit discoverability (3.5.4+) — the sync-audit
-        // module renders inside the existing Translations page
-        // (`luwipress-translations`, registered by LuwiPress_Translation).
-        // `add_submenu_page` slugs cannot carry URL fragments, so we add
-        // a slug with a `?tab=sync-audit` query param via a small
-        // dispatcher callback that simply redirects. Keeps the audit one
-        // click from the main menu without duplicating the Translations
-        // page or fighting the existing module's registration.
-        if ( class_exists( 'LuwiPress_Translation_Sync' ) ) {
-            add_submenu_page(
-                'luwipress',
-                __( 'Translation Sync', 'luwipress' ),
-                __( 'Translation Sync', 'luwipress' ),
-                'manage_options',
-                'luwipress-translation-sync',
-                array( $this, 'translation_sync_redirect' )
-            );
-        }
-
-        // Multi-language Taxonomy Editor (3.5.6+) — matrix UI to edit
-        // term name / description / SEO meta across every active language
-        // in one screen. Bulk save fan-outs through the 3.5.5 taxonomy
-        // SEO meta bulk handler + WPML-aware term update path.
-        if ( class_exists( 'LuwiPress_Taxonomy_Editor' ) ) {
-            add_submenu_page(
-                'luwipress',
-                __( 'Taxonomy Editor', 'luwipress' ),
-                __( 'Taxonomy Editor', 'luwipress' ),
-                'manage_options',
-                'luwipress-taxonomy-editor',
-                array( $this, 'taxonomy_editor_page' )
-            );
-        }
-
-        // Image Alt Bulk (3.5.6+) — Media Library scan + bulk alt-text
-        // editor. Closes the "set alt on 200 product images one at a time"
-        // gap for non-WebMCP customers. Backend: POST /media/alt-bulk.
+        // 8. Usage & Logs
         add_submenu_page(
             'luwipress',
-            __( 'Image Alt Bulk', 'luwipress' ),
-            __( 'Image Alt Bulk', 'luwipress' ),
+            __( 'Usage & Logs', 'luwipress' ),
+            __( 'Usage & Logs', 'luwipress' ),
             'manage_options',
-            'luwipress-image-alt-bulk',
-            array( $this, 'image_alt_bulk_page' )
+            'luwipress-usage',
+            array( $this, 'usage_page' )
         );
 
-        // Vendors (3.5.6+) — settings UI for the generic Vendor/Maker/
-        // Atelier CPT module. CPT itself uses native WP admin; this page
-        // is the surrounding config shell (slug, labels, social toggles,
-        // legacy redirects). Always registered (module is core; admin
-        // page renders an empty state if module isn't initialised).
-        if ( class_exists( 'LuwiPress_Vendors' ) ) {
+        // ─── HIDDEN COMPAT SLUGS (deep-link survival) ───────────────
+        // Every pre-3.5.7 submenu slug remains addressable so existing
+        // bookmarks / WP-CLI deep links / docs / MCP integrations do not
+        // 404 after the IA consolidation. Each old slug redirects to the
+        // matching hub home with the right ?tab= parameter. Parent slug
+        // '' keeps them out of the visible sidebar.
+        $compat_redirects = array(
+            // Content hub tabs
+            'luwipress-content-audit'    => 'luwipress-content&tab=audit',
+            'luwipress-schema-picker'    => 'luwipress-content&tab=schema',
+            'luwipress-schema-preview'   => 'luwipress-content&tab=preview',
+            'luwipress-taxonomy-editor'  => 'luwipress-content&tab=taxonomy',
+            'luwipress-image-alt-bulk'   => 'luwipress-content&tab=alt',
+            // Site hub tabs
+            'luwipress-slug-resolver'    => 'luwipress-site&tab=slug-resolver',
+            'luwipress-vendors'          => 'luwipress-site&tab=vendors',
+            'luwipress-theme'            => 'luwipress-site&tab=theme',
+            'luwipress-bot-defense'      => 'luwipress-site&tab=bot-defense',
+            'luwipress-cookies'          => 'luwipress-site&tab=cookies',
+            // Translation Sync — opens the existing Translations page on
+            // its sync-audit tab so the entire surface stays in one place.
+            'luwipress-translation-sync' => 'luwipress-translations&tab=sync-audit',
+            // Bot Defense — second-generation hidden slugs (3.2.2+) also
+            // redirect to the new hub.
+            'luwipress-bot-accounts'     => 'luwipress-site&tab=bot-defense',
+            'luwipress-bot-shield'       => 'luwipress-site&tab=bot-defense',
+        );
+        foreach ( $compat_redirects as $old_slug => $target ) {
+            // Closure captures $target so each registered callback knows
+            // its own destination. wp_safe_redirect + exit is enough; the
+            // browser will land on the hub with the correct tab selected
+            // because the hub renderer reads ?tab= directly.
+            //
+            // Sub-tab forwarding (3.5.8+): pages with their own sub-tab
+            // system (Cookie Consent → Settings/Log/AI Policy, Bot Defense
+            // → Overview/Accounts/Shield/Comments, Translations Sync →
+            // sync-audit panel) emit `&tab=<sub>` on their internal links.
+            // When the redirect fires we recover that value and forward it
+            // as `&sub=<sub>` so the hub page renders the correct sub-tab
+            // on arrival instead of always landing on the default.
             add_submenu_page(
-                'luwipress',
-                __( 'Vendors', 'luwipress' ),
-                __( 'Vendors', 'luwipress' ),
+                '',
+                '',
+                '',
                 'manage_options',
-                'luwipress-vendors',
-                array( $this, 'vendors_page' )
-            );
-        }
-
-        // Schema Picker (3.5.6+) — operator UI for the seven non-FAQ
-        // Schema Registry types (HowTo / Speakable / LocalBusiness /
-        // Service / Course / Review / AggregateRating). FAQ has its own
-        // metabox; ItemList is auto-generated on category archives.
-        if ( class_exists( 'LuwiPress_Schema_Registry' ) ) {
-            add_submenu_page(
-                'luwipress',
-                __( 'Schema Picker', 'luwipress' ),
-                __( 'Schema Picker', 'luwipress' ),
-                'manage_options',
-                'luwipress-schema-picker',
-                array( $this, 'schema_picker_page' )
-            );
-        }
-
-        // Slug Resolver (3.5.6+) — admin UI over the six-pass page→
-        // product_cat redirect engine. Critical pre-DNS-swap verification
-        // surface: paste swap-day slugs, confirm each resolves correctly,
-        // override any false matches before the swap goes live.
-        if ( class_exists( 'LuwiPress_Slug_Resolver' ) ) {
-            add_submenu_page(
-                'luwipress',
-                __( 'Slug Resolver', 'luwipress' ),
-                __( 'Slug Resolver', 'luwipress' ),
-                'manage_options',
-                'luwipress-slug-resolver',
-                array( $this, 'slug_resolver_page' )
+                $old_slug,
+                function () use ( $target ) {
+                    if ( ! current_user_can( 'manage_options' ) ) {
+                        wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'luwipress' ) );
+                    }
+                    $url = admin_url( 'admin.php?page=' . $target );
+                    // phpcs:disable WordPress.Security.NonceVerification.Recommended
+                    if ( isset( $_GET['tab'] ) ) {
+                        $sub = sanitize_key( wp_unslash( $_GET['tab'] ) );
+                        if ( '' !== $sub ) {
+                            $url = add_query_arg( 'sub', $sub, $url );
+                        }
+                    } elseif ( isset( $_GET['sub'] ) ) {
+                        $sub = sanitize_key( wp_unslash( $_GET['sub'] ) );
+                        if ( '' !== $sub ) {
+                            $url = add_query_arg( 'sub', $sub, $url );
+                        }
+                    }
+                    // phpcs:enable WordPress.Security.NonceVerification.Recommended
+                    wp_safe_redirect( $url );
+                    exit;
+                }
             );
         }
 
@@ -635,6 +616,36 @@ class LuwiPress {
      */
     public function usage_page() {
         include LUWIPRESS_PLUGIN_DIR . 'admin/usage-page.php';
+    }
+
+    /**
+     * Content hub (3.5.7+) — submenu shell that renders the Health Audit
+     * / Schema / Schema Preview / Taxonomy / Image Alt / Scheduler tabs.
+     * Per-tab body content is the existing page file (e.g.
+     * `admin/content-audit-page.php`) included with LUWIPRESS_HUB_INCLUDED
+     * defined so the included page drops its outer wrap + page-level h1.
+     */
+    public function content_hub_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/content-hub-page.php';
+    }
+
+    /**
+     * Site hub (3.5.7+) — submenu shell that renders the Slug Resolver /
+     * Vendors / Theme / Bot Defense / Cookie Consent tabs. Same include
+     * pattern as the Content hub: each tab pulls its existing page file
+     * with LUWIPRESS_HUB_INCLUDED defined to suppress outer chrome.
+     */
+    public function site_hub_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/site-hub-page.php';
+    }
+
+    /**
+     * Commerce hub — agentic commerce surface. Renders the UCP feed readiness
+     * tab (phase 1), with Checkout (phase 2) and AP2 / Transactions (phase 3)
+     * tabs added as those phases ship. Server-rendered ?tab= dispatch.
+     */
+    public function commerce_hub_page() {
+        include LUWIPRESS_PLUGIN_DIR . 'admin/agentic-commerce-page.php';
     }
 
     /**
@@ -751,10 +762,14 @@ class LuwiPress {
 
     /**
      * Whether the active theme registered itself with the LuwiPress companion
-     * contract (capabilities matrix OR tools OR settings). The Theme submenu
-     * only appears when at least one of these surfaces returns content.
+     * contract (capabilities matrix OR tools OR settings). The Theme tab in
+     * the Site hub only appears when at least one of these surfaces returns
+     * content. Public since 3.5.7 because the Site hub admin page reads this
+     * via LuwiPress::get_instance() from outside the class.
+     *
+     * @return bool
      */
-    private function theme_companion_present() {
+    public function theme_companion_present() {
         $slug = get_stylesheet();
 
         $companions = apply_filters( 'luwipress_theme_companion', array() );
@@ -896,6 +911,7 @@ class LuwiPress {
             LuwiPress_Bot_Account_Cleaner::create_table();
             LuwiPress_Cookie_Consent::create_table();
             LuwiPress_Bot_Shield::create_table();
+            LuwiPress_UCP_Checkout::create_table();
             update_option( 'luwipress_db_version', LUWIPRESS_VERSION );
 
             // Auto-build BM25 index on first upgrade
