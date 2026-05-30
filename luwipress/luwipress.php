@@ -478,18 +478,8 @@ class LuwiPress {
             array( $this, 'site_hub_page' )
         );
 
-        // 6. Commerce — hub: agentic commerce (Google UCP feed readiness +
-        //    native checkout) and AP2 mandate audit trail. Distinct domain
-        //    (payments/checkout) so it earns its own hub rather than folding
-        //    into Content or Site. Tabs server-rendered via ?tab=.
-        add_submenu_page(
-            'luwipress',
-            __( 'Commerce', 'luwipress' ),
-            __( 'Commerce', 'luwipress' ),
-            'manage_options',
-            'luwipress-commerce',
-            array( $this, 'commerce_hub_page' )
-        );
+        // (Agentic Commerce hub moved to the LuwiPress Agentic companion in
+        //  core 3.6.2 — it registers its own submenu under this parent.)
 
         // 7. Settings
         add_submenu_page(

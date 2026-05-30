@@ -105,6 +105,27 @@ function luwipress_agentic_init() {
 	require_once LUWIPRESS_AGENTIC_PLUGIN_DIR . 'includes/class-luwipress-agentic.php';
 
 	LuwiPress_Agentic::get_instance();
+
+	// Agentic Commerce — Google UCP (feed + native checkout) + AP2 mandate
+	// audit trail. Moved here from core in core 3.6.2 / agentic 1.3.0 so the
+	// core stays lean. Order matters: UCP before checkout (checkout resolves
+	// UCP product meta), AP2 last (checkout composes with it via class_exists).
+	require_once LUWIPRESS_AGENTIC_PLUGIN_DIR . 'includes/class-luwipress-ucp.php';
+	require_once LUWIPRESS_AGENTIC_PLUGIN_DIR . 'includes/class-luwipress-ucp-checkout.php';
+	require_once LUWIPRESS_AGENTIC_PLUGIN_DIR . 'includes/class-luwipress-ap2.php';
+
+	LuwiPress_UCP::get_instance();
+	LuwiPress_UCP_Checkout::get_instance();
+	LuwiPress_AP2::get_instance();
+
+	// Ensure the checkout sessions table exists. Activation only fires on
+	// activate (not on a ZIP-replace update), so gate on a stored version and
+	// create/upgrade the table whenever the agentic version advances.
+	$ucp_db = get_option( 'luwipress_agentic_db_version', '0' );
+	if ( version_compare( $ucp_db, LUWIPRESS_AGENTIC_VERSION, '<' ) ) {
+		LuwiPress_UCP_Checkout::create_table();
+		update_option( 'luwipress_agentic_db_version', LUWIPRESS_AGENTIC_VERSION );
+	}
 }
 
 function luwipress_agentic_register_default_adapters( $host ) {
@@ -141,6 +162,19 @@ function luwipress_agentic_admin_menu() {
 		'luwipress-agentic',
 		'luwipress_agentic_render_admin_page'
 	);
+
+	// Agentic Commerce hub (Google UCP + AP2) — moved here from core 3.6.2.
+	// Register only when the commerce modules actually loaded.
+	if ( class_exists( 'LuwiPress_UCP' ) ) {
+		add_submenu_page(
+			'luwipress',
+			__( 'Commerce', 'luwipress-agentic' ),
+			__( 'Commerce', 'luwipress-agentic' ),
+			'manage_options',
+			'luwipress-commerce',
+			'luwipress_agentic_render_commerce_page'
+		);
+	}
 	// As of 1.1.1 the settings live as the "Agentic" tab inside the core
 	// LuwiPress Settings page. Register the old URL as a HIDDEN route so any
 	// existing bookmarks resolve — the admin_init redirect below sends them
@@ -158,6 +192,24 @@ add_action( 'admin_menu', 'luwipress_agentic_admin_menu', 20 );
 
 function luwipress_agentic_render_admin_page() {
 	include LUWIPRESS_AGENTIC_PLUGIN_DIR . 'admin/agentic-page.php';
+}
+
+/**
+ * Render the Agentic Commerce hub (UCP + AP2). Enqueues the core LuwiPress
+ * admin design system so the page speaks the same lp-header / lp-hub-tabs /
+ * luwipress-card language as the rest of the LuwiPress admin.
+ */
+function luwipress_agentic_render_commerce_page() {
+	if ( defined( 'LUWIPRESS_PLUGIN_URL' ) ) {
+		$ver = defined( 'LUWIPRESS_VERSION' ) ? LUWIPRESS_VERSION : LUWIPRESS_AGENTIC_VERSION;
+		wp_enqueue_style(
+			'luwipress-admin',
+			LUWIPRESS_PLUGIN_URL . 'assets/css/admin.css',
+			array(),
+			$ver
+		);
+	}
+	include LUWIPRESS_AGENTIC_PLUGIN_DIR . 'admin/agentic-commerce-page.php';
 }
 
 function luwipress_agentic_render_settings_page() {
