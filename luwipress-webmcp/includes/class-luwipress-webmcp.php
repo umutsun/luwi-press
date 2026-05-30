@@ -1566,11 +1566,11 @@ class LuwiPress_WebMCP {
         // ─── Schema Registry (Vendor-FR-1 + FR-013 + MCP-4, 3.4.0+) ──────
 
         $this->register_tool( 'aeo_save_schema', array(
-            'description' => 'Generic schema save — registers a JSON-LD schema for any registered type (LocalBusiness, Service, Course, Review, AggregateRating, plus FAQ/HowTo/Speakable). Works on posts OR terms. Use aeo_list_schema_types to discover available types and their allowed contexts.',
+            'description' => 'Generic schema save — registers a JSON-LD schema for any registered type (Event, LocalBusiness, Service, Course, Review, AggregateRating, plus FAQ/HowTo/Speakable). Works on posts OR terms. WPML-aware: write to each language sibling post_id for multilingual schema. Use aeo_list_schema_types to discover available types and their allowed contexts.',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
-                    'schema_type' => array( 'type' => 'string', 'description' => 'Type slug — one of: faq, howto, speakable, localbusiness, service, course, review, aggregaterating' ),
+                    'schema_type' => array( 'type' => 'string', 'description' => 'Type slug — one of: faq, howto, speakable, event, localbusiness, service, course, review, aggregaterating. For event, data = {name, startDate, endDate?, eventStatus?, eventAttendanceMode?, location:{name,address}|{url}, organizer?, description?, offers?:{price,priceCurrency,url,availability?}}.' ),
                     'object_type' => array( 'type' => 'string', 'enum' => array( 'post', 'term' ), 'description' => 'Storage object type (default: post)' ),
                     'object_id'   => array( 'type' => 'integer', 'description' => 'Post ID or Term ID (required — or use post_id / term_id aliases)' ),
                     'post_id'     => array( 'type' => 'integer', 'description' => 'Alias for object_id when object_type=post' ),

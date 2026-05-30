@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.36
+Stable tag: 1.0.37
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.37 — Event schema discoverability (paired with core 3.6.3) =
+* `aeo_save_schema` now lists **event** in its `schema_type` enum + documents the Event field shape inline, so AI agents discover the new `schema.org/Event` type (shipped in core 3.6.3) without a separate tool. No new tool — the generic schema-save path already accepts any registered type; this is a description/enum refresh + a note that the path is WPML-aware (write per language-sibling post_id).
 
 = 1.0.36 — Agentic Commerce tools: UCP feed + native checkout + AP2 mandate (paired with core 3.6.0) =
 * **15 new tools across UCP + AP2.** UCP feed readiness: `ucp_settings_get/set`, `ucp_eligibility_report`, `ucp_product_profile`, `ucp_product_set`, `ucp_feed_preview`. UCP Native Checkout: `ucp_checkout_session_create`, `ucp_checkout_session_get`, `ucp_checkout_session_update`, `ucp_checkout_session_complete`. AP2 mandate audit trail: `ap2_settings_get/set`, `ap2_mandate_verify`, `ap2_transaction_get`, `ap2_log_recent`.

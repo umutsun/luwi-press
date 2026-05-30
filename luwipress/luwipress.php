@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.6.2
+ * Version: 3.6.3
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.6.2');
+define('LUWIPRESS_VERSION', '3.6.3');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -511,7 +511,7 @@ class LuwiPress {
             // Content hub tabs
             'luwipress-content-audit'    => 'luwipress-content&tab=audit',
             'luwipress-schema-picker'    => 'luwipress-content&tab=schema',
-            'luwipress-schema-preview'   => 'luwipress-content&tab=preview',
+            'luwipress-schema-preview'   => 'luwipress-content&tab=schema', // merged into Schema tab (3.6.x)
             'luwipress-taxonomy-editor'  => 'luwipress-content&tab=taxonomy',
             'luwipress-image-alt-bulk'   => 'luwipress-content&tab=alt',
             // Site hub tabs

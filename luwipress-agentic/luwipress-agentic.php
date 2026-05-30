@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress Agentic
  * Plugin URI: https://luwi.dev/luwipress-agentic
  * Description: Agentic middleware for LuwiPress — uniform admin chat surface, pluggable agent backend, plus the Agentic Commerce hub (Google UCP feed + native checkout and AP2 payment mandates). Ships with Open Claw (oc.luwi.dev) and Hermes (hermes.luwi.dev) runtime adapters; operators pick the active backend and can point either at their own self-hosted endpoint. Requires the core LuwiPress plugin.
- * Version: 1.3.1
+ * Version: 1.3.2
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'LUWIPRESS_AGENTIC_VERSION', '1.3.1' );
+define( 'LUWIPRESS_AGENTIC_VERSION', '1.3.2' );
 define( 'LUWIPRESS_AGENTIC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LUWIPRESS_AGENTIC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'LUWIPRESS_AGENTIC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -163,11 +163,14 @@ function luwipress_agentic_admin_menu() {
 		'luwipress_agentic_render_admin_page'
 	);
 
-	// Agentic Commerce hub (Google UCP + AP2) — moved here from core 3.6.2.
-	// Register only when the commerce modules actually loaded.
+	// Agentic Commerce (Google UCP + AP2) now lives as the "Commerce" AREA
+	// inside the Agentic page (?page=luwipress-agentic&area=commerce), so it is
+	// no longer a separate visible submenu. The old slug stays registered as a
+	// HIDDEN route (parent '') so existing bookmarks / deep links still resolve
+	// to a full-page render of the Commerce hub.
 	if ( class_exists( 'LuwiPress_UCP' ) ) {
 		add_submenu_page(
-			'luwipress',
+			'',
 			__( 'Commerce', 'luwipress-agentic' ),
 			__( 'Commerce', 'luwipress-agentic' ),
 			'manage_options',

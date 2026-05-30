@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.6.2
+Stable tag: 3.6.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,12 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.6.3 — Event schema + admin UI tidy =
+* **NEW Event schema type (FR-024):** `schema.org/Event` is now a first-class built-in type in the Schema Registry — writable through `aeo_save_schema` / the Schema tab on any post (default target: a blog post). Fields: name, startDate, endDate, description, image, eventStatus, eventAttendanceMode, location (physical `Place` or, when only a URL is given, `VirtualLocation`), organizer, performer, offers (price/currency/url/availability). Short enum values are normalized to canonical schema.org URLs (e.g. `offline` → `OfflineEventAttendanceMode`, `Scheduled` → `EventScheduled`). WPML-aware exactly like FAQ — write per language-sibling `post_id` for multilingual event pages. Zero new files / hot-path load: it slots into the existing registry alongside Course/Service/Review.
+* **Content hub:** the **Schema** and **Schema Preview** tabs are now a single **Schema** tab — the JSON-LD editor (Picker) and the live URL inspector (Preview) render stacked under one tab instead of two. The old `?tab=preview` / `luwipress-schema-preview` deep links redirect to the merged tab. Content-hub tabs can now declare multiple page files via a `files[]` array.
+* **Vendors:** the Site → Vendors roster table (which duplicated the WordPress CPT list with fewer columns and empty specialty cells) is replaced by a compact panel that links to the native **Manage all <Vendors>** list table — the canonical roster that already ships WPML/Polylang language columns, SEO status, search, sort, bulk actions and pagination. Less code, no parallel half-table to keep in sync.
+* No data or REST change — purely an admin-surface consolidation toward a leaner, less scattered UI.
 
 = 3.6.2 — Agentic Commerce moved to the LuwiPress Agentic companion =
 * **Architecture:** the Agentic Commerce modules (Google UCP feed + native checkout, AP2 mandate audit trail) introduced in 3.6.0 have moved out of core into the **LuwiPress Agentic** companion plugin (1.3.0+). The core stays lean for the majority of stores that don't sell through AI agents. No feature is lost — install/activate LuwiPress Agentic 1.3.0 to keep the `LuwiPress → Commerce` hub, the `/ucp/*` and `/ap2/*` REST routes, and the `ucp_*` / `ap2_*` WebMCP tools. The WebMCP tools already guard on `class_exists`, so they register only when the companion is active.

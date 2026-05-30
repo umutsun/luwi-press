@@ -4,7 +4,7 @@ Tags: ai, agent, woocommerce, chat, automation, admin, assistant, middleware
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,6 +49,11 @@ Or just type — "how many at-risk customers do I have?", "generate a blog post 
 5. In the right-hand "Backend Runtime" panel, pick your active agent and enter the access token. Endpoints default to the hosted services; override them if you self-host.
 
 == Changelog ==
+
+= 1.3.2 — Agentic becomes a two-area hub (Agents + Commerce) =
+* **Restructure:** the standalone "Commerce" submenu is gone — Agentic Commerce now lives as the **Commerce** area inside the Agentic page, alongside the **Agents** area (the chat surface + Hermes / Open Claw runtime). An icon card-tab strip under the LuwiPress-branded header switches between them; the Commerce area only appears when the UCP/AP2 modules are loaded. The old `?page=luwipress-commerce` URL still resolves (hidden route) as a full-page render for existing bookmarks.
+* **Header fix:** the Commerce page used invented CSS classes (`lp-header__brand` / `__title` / `__logo`) that don't exist in the LuwiPress admin stylesheet, so its header rendered unstyled (oversized logo, left-pinned title). It now uses the real `lp-header-left` / `lp-title` / `lp-logo` classes, matching the Agents header exactly. When embedded in the hub it suppresses its own wrap + header (no double chrome); standalone it renders the full page.
+* Verified by rendering all three modes (Agents area, Commerce area embedded, standalone Commerce) in isolation — no double-wrap, real header classes, no fatal.
 
 = 1.3.1 — Hotfix: Commerce hub fatal (tab array shape) =
 * **Fix:** the Agentic Commerce admin page (`LuwiPress → Commerce`) threw a critical error — the modernized tab strip iterates each tab as an array (`$meta['icon']` / `$meta['label']`), but the `$tabs` definition was still the flat string shape from before the UI refresh, so PHP 8 raised a fatal on string-offset access. The header rendered, then the page body died. The `$tabs` array is now the icon-keyed shape the strip expects, and the `$lp_logo_url` used by the branded header is defined. All five tabs render cleanly. No backend / REST / data change — UCP and AP2 endpoints were unaffected throughout (returned HTTP 200 the whole time).

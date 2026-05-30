@@ -25,6 +25,24 @@ $active_adapter = $agent_host ? $agent_host->get_active_adapter() : null;
 $active_label   = $active_adapter ? $active_adapter->get_label() : __( 'Open Claw', 'luwipress-agentic' );
 $is_configured  = $active_adapter ? $active_adapter->is_configured() : false;
 $settings_url   = admin_url( 'admin.php?page=luwipress-settings&tab=agentic' );
+
+// ─── Hub area dispatch (1.3.2) ──────────────────────────────────────
+// The Agentic page is now a two-area hub: "Agents" (the chat surface +
+// Hermes / Open Claw runtime) and "Commerce" (Google UCP + AP2). Commerce
+// only appears when its core-side modules loaded.
+$lwp_commerce_available = class_exists( 'LuwiPress_UCP' );
+$lwp_area_raw = isset( $_GET['area'] ) ? sanitize_key( wp_unslash( $_GET['area'] ) ) : 'agents';
+$lwp_area     = ( 'commerce' === $lwp_area_raw && $lwp_commerce_available ) ? 'commerce' : 'agents';
+
+$lwp_area_tabs = array(
+	'agents' => array( 'label' => __( 'Agents', 'luwipress-agentic' ), 'icon' => 'dashicons-superhero-alt' ),
+);
+if ( $lwp_commerce_available ) {
+	$lwp_area_tabs['commerce'] = array( 'label' => __( 'Commerce', 'luwipress-agentic' ), 'icon' => 'dashicons-cart' );
+}
+$lwp_area_url = function ( $area ) {
+	return esc_url( add_query_arg( array( 'page' => 'luwipress-agentic', 'area' => $area ), admin_url( 'admin.php' ) ) );
+};
 ?>
 
 <div class="wrap luwipress-admin luwipress-dashboard luwipress-claw-wrap">
@@ -64,6 +82,31 @@ $settings_url   = admin_url( 'admin.php?page=luwipress-settings&tab=agentic' );
 		</div>
 	</div>
 
+	<?php if ( $lwp_commerce_available ) : ?>
+	<nav class="lp-hub-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Agentic areas', 'luwipress-agentic' ); ?>">
+		<?php foreach ( $lwp_area_tabs as $area_key => $area_meta ) :
+			$is_act = ( $area_key === $lwp_area );
+			?>
+			<a class="lp-hub-tab<?php echo $is_act ? ' lp-hub-tab--active' : ''; ?>"
+			   href="<?php echo $lwp_area_url( $area_key ); // phpcs:ignore ?>"
+			   role="tab" aria-selected="<?php echo $is_act ? 'true' : 'false'; ?>">
+				<span class="dashicons <?php echo esc_attr( $area_meta['icon'] ); ?>"></span>
+				<span><?php echo esc_html( $area_meta['label'] ); ?></span>
+			</a>
+		<?php endforeach; ?>
+	</nav>
+	<?php endif; ?>
+
+	<?php if ( 'commerce' === $lwp_area ) : ?>
+		<div class="lp-hub-body">
+			<?php
+			if ( ! defined( 'LUWIPRESS_AGENTIC_HUB_INCLUDED' ) ) {
+				define( 'LUWIPRESS_AGENTIC_HUB_INCLUDED', true );
+			}
+			include LUWIPRESS_AGENTIC_PLUGIN_DIR . 'admin/agentic-commerce-page.php';
+			?>
+		</div>
+	<?php else : ?>
 	<div class="claw-layout">
 		<!-- Chat Panel -->
 		<div class="claw-chat-panel">
@@ -194,5 +237,6 @@ $settings_url   = admin_url( 'admin.php?page=luwipress-settings&tab=agentic' );
 			</div>
 		</div>
 	</div>
+	<?php endif; ?>
 </div>
 

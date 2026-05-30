@@ -37,8 +37,16 @@ $nonce    = wp_create_nonce( 'wp_rest' );
 $rest_ucp = esc_url_raw( rest_url( 'luwipress/v1/ucp/' ) );
 $rest_ap2 = esc_url_raw( rest_url( 'luwipress/v1/ap2/' ) );
 
-$tab_url = function ( $tab ) {
-	return esc_url( add_query_arg( array( 'page' => 'luwipress-commerce', 'tab' => $tab ), admin_url( 'admin.php' ) ) );
+// Embedded inside the Agentic hub? Then the hub already renders the outer
+// .wrap + LuwiPress header + the Agents/Commerce area strip — we only emit
+// the Commerce sub-tabs + body, and our tab links stay inside the hub.
+$lwp_embedded = defined( 'LUWIPRESS_AGENTIC_HUB_INCLUDED' );
+
+$tab_url = function ( $tab ) use ( $lwp_embedded ) {
+	$args = $lwp_embedded
+		? array( 'page' => 'luwipress-agentic', 'area' => 'commerce', 'tab' => $tab )
+		: array( 'page' => 'luwipress-commerce', 'tab' => $tab );
+	return esc_url( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 };
 $tabs = array(
 	'overview'     => array( 'label' => __( 'Overview', 'luwipress-agentic' ),     'icon' => 'dashicons-chart-area' ),
@@ -50,32 +58,38 @@ $tabs = array(
 
 $lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' : '';
 ?>
-<div class="wrap luwipress-hub-wrap luwipress-commerce">
+<?php if ( ! $lwp_embedded ) : ?>
+<div class="wrap luwipress-hub luwipress-commerce">
 
 	<div class="lp-header">
-		<div class="lp-header__brand">
-			<?php if ( $lp_logo_url ) : ?>
-				<img src="<?php echo esc_url( $lp_logo_url ); ?>" alt="LuwiPress" class="lp-header__logo" />
-			<?php endif; ?>
-			<div>
-				<h1 class="lp-header__title"><?php esc_html_e( 'Agentic Commerce', 'luwipress-agentic' ); ?></h1>
-				<p class="lp-header__subtitle"><?php esc_html_e( 'Google Universal Commerce Protocol (UCP) + Agent Payments Protocol (AP2)', 'luwipress-agentic' ); ?></p>
-			</div>
+		<div class="lp-header-left">
+			<h1 class="lp-title">
+				<?php if ( $lp_logo_url ) : ?>
+					<img class="lp-logo" width="28" height="28" src="<?php echo esc_url( $lp_logo_url ); ?>" alt="LuwiPress" />
+				<?php endif; ?>
+				<?php esc_html_e( 'Agentic Commerce', 'luwipress-agentic' ); ?>
+			</h1>
+			<p class="lp-subtitle"><?php esc_html_e( 'Google Universal Commerce Protocol (UCP) + Agent Payments Protocol (AP2)', 'luwipress-agentic' ); ?></p>
 		</div>
 	</div>
+<?php endif; ?>
 
-	<nav class="lp-hub-tabs">
+	<nav class="lp-hub-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Commerce tools', 'luwipress-agentic' ); ?>">
 		<?php foreach ( $tabs as $slug => $meta ) :
 			$is_active = ( $active_tab === $slug );
 			?>
-			<a href="<?php echo $tab_url( $slug ); // phpcs:ignore ?>" class="lp-hub-tab <?php echo $is_active ? 'is-active' : ''; ?>">
+			<a href="<?php echo $tab_url( $slug ); // phpcs:ignore ?>"
+			   class="lp-hub-tab<?php echo $is_active ? ' lp-hub-tab--active' : ''; ?>"
+			   role="tab" aria-selected="<?php echo $is_active ? 'true' : 'false'; ?>">
 				<span class="dashicons <?php echo esc_attr( $meta['icon'] ); ?>"></span>
-				<span class="lp-hub-tab__label"><?php echo esc_html( $meta['label'] ); ?></span>
+				<span><?php echo esc_html( $meta['label'] ); ?></span>
 			</a>
 		<?php endforeach; ?>
 	</nav>
 
+	<?php if ( ! $lwp_embedded ) : ?>
 	<div class="lp-hub-body">
+	<?php endif; ?>
 
 	<?php if ( 'overview' === $active_tab ) : ?>
 		<div id="lwp-ac-overview" class="luwipress-card" style="margin-top:16px;">
@@ -205,7 +219,10 @@ $lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'asset
 		</div>
 	<?php endif; ?>
 
-</div>
+	<?php if ( ! $lwp_embedded ) : ?>
+	</div><!-- .lp-hub-body -->
+</div><!-- .wrap -->
+	<?php endif; ?>
 
 <script>
 (function () {

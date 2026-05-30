@@ -728,6 +728,19 @@ class LuwiPress_Schema_Registry {
 			'renderer'    => array( $this, 'render_passthrough_schema' ),
 		) );
 
+		// Event — concerts, workshops, classes the store organizes (FR-024).
+		// Writable on any post (default target: blog post). WPML-aware the same
+		// way FAQ is: each language sibling carries its own _luwipress_schema_event
+		// meta, so a 4-language event writes one schema per translation post_id.
+		$this->register_type( 'event', array(
+			'schema_type' => 'Event',
+			'meta_key'    => '_luwipress_schema_event',
+			'contexts'    => array( 'post:*' ),
+			'description' => 'Event — concert/workshop/class. Fields: name, startDate, endDate?, eventStatus?, eventAttendanceMode?, location {name,address|url}, organizer?, description?, offers? {price,priceCurrency,url,availability?}, image?, performer?. WPML-aware (write per language sibling).',
+			'sanitizer'   => array( $this, 'sanitize_event' ),
+			'renderer'    => array( $this, 'render_event' ),
+		) );
+
 		// Review — product review schema.
 		$this->register_type( 'review', array(
 			'schema_type' => 'Review',
@@ -808,6 +821,225 @@ class LuwiPress_Schema_Registry {
 			'@type'      => 'FAQPage',
 			'mainEntity' => $entities,
 		);
+	}
+
+	// ─── EVENT (FR-024) ────────────────────────────────────────────────
+
+	/**
+	 * Sanitize an Event payload into a normalized, storable shape. Accepts a
+	 * friendly flat object and tolerates partial input — only `name` and
+	 * `startDate` are required; everything else is optional and dropped when
+	 * absent so we never emit empty schema.org keys.
+	 *
+	 * Accepted keys: name, startDate, endDate, description, image,
+	 * eventStatus, eventAttendanceMode, organizer (string|{name,url}),
+	 * performer (string|{name}), location ({name,address,url}), offers
+	 * ({price,priceCurrency,url,availability,validFrom}).
+	 *
+	 * @param mixed $data
+	 * @param array $context
+	 * @return array|WP_Error
+	 */
+	public function sanitize_event( $data, $context ) {
+		if ( ! is_array( $data ) ) {
+			return new WP_Error( 'invalid_data', 'Event data must be an object.', array( 'status' => 400 ) );
+		}
+		$name  = isset( $data['name'] ) ? sanitize_text_field( (string) $data['name'] ) : '';
+		$start = isset( $data['startDate'] ) ? sanitize_text_field( (string) $data['startDate'] ) : '';
+		if ( '' === $name || '' === $start ) {
+			return new WP_Error( 'invalid_data', 'Event requires at least name and startDate (ISO 8601).', array( 'status' => 400 ) );
+		}
+
+		$out = array(
+			'name'      => $name,
+			'startDate' => $start,
+		);
+
+		if ( ! empty( $data['endDate'] ) ) {
+			$out['endDate'] = sanitize_text_field( (string) $data['endDate'] );
+		}
+		if ( ! empty( $data['description'] ) ) {
+			$out['description'] = wp_kses_post( (string) $data['description'] );
+		}
+		if ( ! empty( $data['image'] ) ) {
+			$out['image'] = esc_url_raw( (string) $data['image'] );
+		}
+
+		// eventStatus — accept short form (Scheduled) or full URL; normalize to a schema.org enum URL.
+		if ( ! empty( $data['eventStatus'] ) ) {
+			$out['eventStatus'] = $this->normalize_event_enum(
+				(string) $data['eventStatus'],
+				array( 'EventScheduled', 'EventCancelled', 'EventMovedOnline', 'EventPostponed', 'EventRescheduled' ),
+				'EventScheduled'
+			);
+		}
+		// eventAttendanceMode — Offline / Online / MixedEventAttendanceMode.
+		if ( ! empty( $data['eventAttendanceMode'] ) ) {
+			$out['eventAttendanceMode'] = $this->normalize_event_enum(
+				(string) $data['eventAttendanceMode'],
+				array( 'OfflineEventAttendanceMode', 'OnlineEventAttendanceMode', 'MixedEventAttendanceMode' ),
+				'OfflineEventAttendanceMode'
+			);
+		}
+
+		// organizer / performer — accept string or {name,url}.
+		foreach ( array( 'organizer', 'performer' ) as $agent_key ) {
+			if ( empty( $data[ $agent_key ] ) ) {
+				continue;
+			}
+			$agent = $data[ $agent_key ];
+			if ( is_string( $agent ) ) {
+				$out[ $agent_key ] = sanitize_text_field( $agent );
+			} elseif ( is_array( $agent ) && ! empty( $agent['name'] ) ) {
+				$node = array( 'name' => sanitize_text_field( (string) $agent['name'] ) );
+				if ( ! empty( $agent['url'] ) ) {
+					$node['url'] = esc_url_raw( (string) $agent['url'] );
+				}
+				$out[ $agent_key ] = $node;
+			}
+		}
+
+		// location — physical ({name,address}) or virtual ({url}); both allowed.
+		if ( ! empty( $data['location'] ) && is_array( $data['location'] ) ) {
+			$loc = array();
+			if ( ! empty( $data['location']['name'] ) ) {
+				$loc['name'] = sanitize_text_field( (string) $data['location']['name'] );
+			}
+			if ( ! empty( $data['location']['address'] ) ) {
+				$loc['address'] = sanitize_text_field( (string) $data['location']['address'] );
+			}
+			if ( ! empty( $data['location']['url'] ) ) {
+				$loc['url'] = esc_url_raw( (string) $data['location']['url'] );
+			}
+			if ( ! empty( $loc ) ) {
+				$out['location'] = $loc;
+			}
+		}
+
+		// offers — optional ticketing block.
+		if ( ! empty( $data['offers'] ) && is_array( $data['offers'] ) ) {
+			$offers = array();
+			if ( isset( $data['offers']['price'] ) && '' !== (string) $data['offers']['price'] ) {
+				$offers['price'] = sanitize_text_field( (string) $data['offers']['price'] );
+			}
+			if ( ! empty( $data['offers']['priceCurrency'] ) ) {
+				$offers['priceCurrency'] = sanitize_text_field( (string) $data['offers']['priceCurrency'] );
+			}
+			if ( ! empty( $data['offers']['url'] ) ) {
+				$offers['url'] = esc_url_raw( (string) $data['offers']['url'] );
+			}
+			if ( ! empty( $data['offers']['availability'] ) ) {
+				$offers['availability'] = sanitize_text_field( (string) $data['offers']['availability'] );
+			}
+			if ( ! empty( $data['offers']['validFrom'] ) ) {
+				$offers['validFrom'] = sanitize_text_field( (string) $data['offers']['validFrom'] );
+			}
+			if ( ! empty( $offers ) ) {
+				$out['offers'] = $offers;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Normalize a schema.org enum value: accept the bare token ("EventScheduled"),
+	 * a full https://schema.org/X URL, or a loose label, and return the canonical
+	 * https://schema.org/<Token> URL. Falls back to $default on no match.
+	 */
+	private function normalize_event_enum( $value, $allowed, $default ) {
+		$value = trim( $value );
+		// Strip any URL prefix to get the bare token.
+		$token = preg_replace( '#^https?://schema\.org/#i', '', $value );
+		foreach ( $allowed as $candidate ) {
+			if ( strcasecmp( $token, $candidate ) === 0 ) {
+				return 'https://schema.org/' . $candidate;
+			}
+		}
+		// Loose match: "online" -> OnlineEventAttendanceMode, "cancelled" -> EventCancelled, etc.
+		foreach ( $allowed as $candidate ) {
+			if ( stripos( $candidate, $token ) !== false && '' !== $token ) {
+				return 'https://schema.org/' . $candidate;
+			}
+		}
+		return 'https://schema.org/' . $default;
+	}
+
+	public function render_event( $data, $context ) {
+		if ( empty( $data ) || ! is_array( $data ) || empty( $data['name'] ) || empty( $data['startDate'] ) ) {
+			return null;
+		}
+		$schema = array(
+			'@context'  => 'https://schema.org',
+			'@type'     => 'Event',
+			'name'      => $data['name'],
+			'startDate' => $data['startDate'],
+		);
+		foreach ( array( 'endDate', 'description', 'image', 'eventStatus', 'eventAttendanceMode' ) as $k ) {
+			if ( ! empty( $data[ $k ] ) ) {
+				$schema[ $k ] = $data[ $k ];
+			}
+		}
+
+		if ( ! empty( $data['location'] ) ) {
+			$loc = $data['location'];
+			// A bare url with no address reads as a VirtualLocation; otherwise Place.
+			if ( is_array( $loc ) && empty( $loc['address'] ) && empty( $loc['name'] ) && ! empty( $loc['url'] ) ) {
+				$schema['location'] = array(
+					'@type' => 'VirtualLocation',
+					'url'   => $loc['url'],
+				);
+			} elseif ( is_array( $loc ) ) {
+				$place = array( '@type' => 'Place' );
+				if ( ! empty( $loc['name'] ) ) {
+					$place['name'] = $loc['name'];
+				}
+				if ( ! empty( $loc['address'] ) ) {
+					$place['address'] = $loc['address'];
+				}
+				if ( ! empty( $loc['url'] ) ) {
+					$place['url'] = $loc['url'];
+				}
+				$schema['location'] = $place;
+			}
+		}
+
+		foreach ( array( 'organizer', 'performer' ) as $agent_key ) {
+			if ( empty( $data[ $agent_key ] ) ) {
+				continue;
+			}
+			$agent = $data[ $agent_key ];
+			// Organizer defaults to Organization; performer to Person — but both
+			// accept either; Organization is the safe default for a string name.
+			$at_type = ( 'organizer' === $agent_key ) ? 'Organization' : 'Person';
+			if ( is_string( $agent ) ) {
+				$schema[ $agent_key ] = array( '@type' => $at_type, 'name' => $agent );
+			} elseif ( is_array( $agent ) && ! empty( $agent['name'] ) ) {
+				$node = array( '@type' => $at_type, 'name' => $agent['name'] );
+				if ( ! empty( $agent['url'] ) ) {
+					$node['url'] = $agent['url'];
+				}
+				$schema[ $agent_key ] = $node;
+			}
+		}
+
+		if ( ! empty( $data['offers'] ) && is_array( $data['offers'] ) ) {
+			$offer = array( '@type' => 'Offer' );
+			foreach ( array( 'price', 'priceCurrency', 'url', 'availability', 'validFrom' ) as $ok ) {
+				if ( ! empty( $data['offers'][ $ok ] ) || ( 'price' === $ok && isset( $data['offers']['price'] ) && '0' === (string) $data['offers']['price'] ) ) {
+					$offer[ $ok ] = $data['offers'][ $ok ];
+				}
+			}
+			// availability shorthand -> schema.org URL.
+			if ( ! empty( $offer['availability'] ) && false === strpos( $offer['availability'], 'schema.org' ) ) {
+				$offer['availability'] = 'https://schema.org/' . preg_replace( '#^https?://schema\.org/#i', '', $offer['availability'] );
+			}
+			if ( count( $offer ) > 1 ) {
+				$schema['offers'] = $offer;
+			}
+		}
+
+		return $schema;
 	}
 
 	public function sanitize_howto( $data, $context ) {

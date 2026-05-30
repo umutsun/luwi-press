@@ -26,16 +26,17 @@ $tabs = array(
 		'icon'  => 'dashicons-shield',
 		'file'  => $plugin_dir . 'admin/content-audit-page.php',
 	),
+	// Schema = the editor (Picker) + the live inspector (Preview) stacked in
+	// one tab. Both pages suppress their own wrap/h1 under LUWIPRESS_HUB_INCLUDED,
+	// so they render as consecutive chrome-less sections under a single tab.
 	'schema'    => array(
 		'label' => __( 'Schema', 'luwipress' ),
 		'icon'  => 'dashicons-screenoptions',
-		'file'  => $plugin_dir . 'admin/schema-picker-page.php',
+		'files' => array(
+			$plugin_dir . 'admin/schema-picker-page.php',
+			$plugin_dir . 'admin/schema-preview-page.php',
+		),
 		'guard' => 'LuwiPress_Schema_Registry',
-	),
-	'preview'   => array(
-		'label' => __( 'Schema Preview', 'luwipress' ),
-		'icon'  => 'dashicons-visibility',
-		'file'  => $plugin_dir . 'admin/schema-preview-page.php',
 	),
 	'taxonomy'  => array(
 		'label' => __( 'Taxonomy', 'luwipress' ),
@@ -56,15 +57,20 @@ $tabs = array(
 	),
 );
 
-$available = array();
+$available = array();        // key => {label, icon} for the tab strip
+$lwp_tab_files = array();    // key => string[] of page files to include
 foreach ( $tabs as $key => $tab ) {
 	if ( ! empty( $tab['guard'] ) && ! class_exists( $tab['guard'] ) ) {
 		continue;
 	}
-	if ( ! file_exists( $tab['file'] ) ) {
+	// Normalize to a files[] list — a tab may declare one `file` or several `files`.
+	$files = isset( $tab['files'] ) ? (array) $tab['files'] : ( isset( $tab['file'] ) ? array( $tab['file'] ) : array() );
+	$files = array_values( array_filter( $files, 'file_exists' ) );
+	if ( empty( $files ) ) {
 		continue;
 	}
-	$available[ $key ] = $tab;
+	$lwp_tab_files[ $key ] = $files;
+	$available[ $key ]     = $tab;
 }
 
 $requested = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
@@ -130,11 +136,14 @@ $current = $available[ $requested ] ?? null;
 
 	<div class="lp-hub-body">
 		<?php
-		if ( $current && file_exists( $current['file'] ) ) {
+		$lwp_hub_files = ( '' !== $requested && isset( $lwp_tab_files[ $requested ] ) ) ? $lwp_tab_files[ $requested ] : array();
+		if ( ! empty( $lwp_hub_files ) ) {
 			if ( ! defined( 'LUWIPRESS_HUB_INCLUDED' ) ) {
 				define( 'LUWIPRESS_HUB_INCLUDED', true );
 			}
-			include $current['file'];
+			foreach ( $lwp_hub_files as $lwp_hub_file ) {
+				include $lwp_hub_file;
+			}
 		} else {
 			?>
 			<div class="luwipress-card luwipress-card--warning">

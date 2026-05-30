@@ -278,23 +278,40 @@ $profile_fields = array(
 		</div>
 	</form>
 
-	<!-- Vendor roster -->
+	<!-- Vendor roster → defers to the native CPT list table -->
+	<?php
+	// The WordPress CPT list table for vendors (edit.php?post_type=lwp_vendor)
+	// is the canonical roster: it already ships WPML/Polylang language columns,
+	// SEO columns, bulk actions, search, sort and pagination — everything a
+	// custom roster would have to re-implement. We point the operator there
+	// instead of maintaining a parallel, less-capable table.
+	$lwp_v_list_url = admin_url( 'edit.php?post_type=' . $post_type );
+	$lwp_v_new_url  = admin_url( 'post-new.php?post_type=' . $post_type );
+	?>
 	<div class="luwipress-card luwipress-card--info">
 		<h2><span class="dashicons dashicons-groups" aria-hidden="true"></span> <?php echo esc_html( sprintf( /* translators: %s plural label */ __( '%s roster', 'luwipress' ), $settings['plural_label'] ) ); ?></h2>
-		<p class="lp-form-hint"><?php esc_html_e( 'Published vendors with profile-meta completeness indicators. Click any row to edit.', 'luwipress' ); ?></p>
-		<div id="lwp-v-roster-status" class="lp-form-hint lwp-v-roster-status"><?php esc_html_e( 'Loading roster…', 'luwipress' ); ?></div>
-		<table class="wp-list-table widefat striped" id="lwp-v-roster">
-			<thead>
-				<tr>
-					<th style="width:30%;"><?php esc_html_e( 'Name', 'luwipress' ); ?></th>
-					<th style="width:18%;"><?php esc_html_e( 'Slug', 'luwipress' ); ?></th>
-					<th style="width:18%;"><?php esc_html_e( 'Specialty', 'luwipress' ); ?></th>
-					<th style="width:14%;"><?php esc_html_e( 'Socials', 'luwipress' ); ?></th>
-					<th><?php esc_html_e( 'Actions', 'luwipress' ); ?></th>
-				</tr>
-			</thead>
-			<tbody><tr><td colspan="5" class="lwp-v-empty"><?php esc_html_e( 'Loading…', 'luwipress' ); ?></td></tr></tbody>
-		</table>
+		<p class="lp-form-hint">
+			<?php
+			echo esc_html( sprintf(
+				/* translators: 1: count, 2: plural label */
+				_n( '%1$d published %2$s.', '%1$d published %2$s.', $published, 'luwipress' ),
+				$published,
+				strtolower( $settings['plural_label'] )
+			) );
+			echo ' ';
+			esc_html_e( 'The full roster — with language columns, SEO status, search and bulk actions — lives in the WordPress list table.', 'luwipress' );
+			?>
+		</p>
+		<p>
+			<a href="<?php echo esc_url( $lwp_v_list_url ); ?>" class="button button-primary">
+				<span class="dashicons dashicons-list-view" style="vertical-align:text-bottom;"></span>
+				<?php echo esc_html( sprintf( /* translators: %s plural label */ __( 'Manage all %s', 'luwipress' ), $settings['plural_label'] ) ); ?>
+			</a>
+			<a href="<?php echo esc_url( $lwp_v_new_url ); ?>" class="button">
+				<span class="dashicons dashicons-plus-alt2" style="vertical-align:text-bottom;"></span>
+				<?php echo esc_html( sprintf( /* translators: %s singular label */ __( 'Add new %s', 'luwipress' ), $settings['singular_label'] ) ); ?>
+			</a>
+		</p>
 	</div>
 <?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
