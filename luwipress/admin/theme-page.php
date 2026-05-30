@@ -504,25 +504,15 @@ $companion_state   = $is_official_companion ? 'stat-success' : ( $is_third_party
 	   ~1200-1300px content areas → 7th wraps to a new row. Drop min to 145px
 	   so 7 × 145 + 6 × 16 = 1086px fits comfortably even on 1366px laptops.
 	   Below ~1100px content width, auto-fit gracefully wraps to fewer columns. */
+	/* 3.7.2: minimal scale — inherit the tightened base .luwipress-stat-card;
+	   only the denser min-track is page-specific so all 8 Overview cards fit one
+	   row. Long theme names still wrap. */
 	.luwipress-theme-page .luwipress-stats-row {
-		grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-		gap: 12px;
-	}
-	/* Stat cards stretch full width of grid columns and let long theme names wrap */
-	.luwipress-theme-page .luwipress-stats-row .luwipress-stat-card {
-		padding: 14px 12px;
-		gap: 10px;
+		grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+		gap: 8px;
 	}
 	.luwipress-theme-page .luwipress-stats-row .stat-number {
-		font-size: 16px;
-		line-height: 1.25;
 		word-break: break-word;
-	}
-	.luwipress-theme-page .luwipress-stats-row .stat-label {
-		font-size: 10px;
-	}
-	.luwipress-theme-page .luwipress-stats-row .stat-icon .dashicons {
-		font-size: 22px; width: 22px; height: 22px;
 	}
 	.luwipress-stat-card.stat-success { border-left-color: var(--lp-success); }
 	.luwipress-stat-card.stat-success .stat-icon .dashicons { color: var(--lp-success); }

@@ -1847,6 +1847,15 @@ class LuwiPress_Knowledge_Graph {
 			'translation_coverage'  => $translation_coverage,
 			'opportunity_score_total' => $total_score,
 			'opportunity_score_avg'   => $total > 0 ? round( $total_score / $total, 1 ) : 0,
+			// 3.7.2: vendors + customers as FIRST-CLASS summary counts so the KG
+			// stat cards always render a number, independent of whether the
+			// vendor/customer node sections were requested or (for customers)
+			// privacy-gated. Both are cheap + non-PII. The post-hoc node-count
+			// overrides below stay for exact accuracy when the nodes are present.
+			'total_vendors'           => post_type_exists( 'lwp_vendor' )
+				? (int) ( ( (array) wp_count_posts( 'lwp_vendor' ) )['publish'] ?? 0 )
+				: 0,
+			'total_customers'         => array_sum( array_map( 'intval', (array) get_option( 'luwipress_crm_segment_counts', array() ) ) ),
 		);
 
 		// History + delta — keep a rolling 30-day ring of daily snapshots so

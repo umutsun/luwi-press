@@ -160,6 +160,27 @@
             );
         }
 
+        // 3.7.2: classify which actor (user/agent) is behind an activity row,
+        // from an explicit log.source if present else the message prefix. Fixed
+        // enum -> fixed kind+label (never interpolated, XSS-safe).
+        function lpClassifyActor(log) {
+            var src = (log && log.source) ? String(log.source).toLowerCase() : '';
+            if (src === 'webmcp') return { kind: 'webmcp', label: 'WebMCP' };
+            if (src === 'themebridge') return { kind: 'themebridge', label: 'ThemeBridge' };
+            if (src === 'agent' || src === 'agentic') return { kind: 'agent', label: 'Agent' };
+            if (src === 'user') return { kind: 'user', label: 'You' };
+            var m = (log && log.message) ? String(log.message) : '';
+            if (/\[ThemeBridge\]/i.test(m) || /\bThemeBridge\b/i.test(m)) return { kind: 'themebridge', label: 'ThemeBridge' };
+            if (/WebMCP tool called/i.test(m) || /\bWebMCP\b/i.test(m)) return { kind: 'webmcp', label: 'WebMCP' };
+            if (/\bagent(ic)?\b/i.test(m)) return { kind: 'agent', label: 'Agent' };
+            return { kind: 'system', label: 'System' };
+        }
+        function lpActorPill(log) {
+            var a = lpClassifyActor(log);
+            // kind from a fixed whitelist; label a fixed string — safe to inline.
+            return '<span class="lp-actor-pill lp-actor--' + a.kind + '">' + a.label + '</span>';
+        }
+
         function lpRenderActivity(logs) {
             var $feed = $('#lp-activity');
             if (!logs || !logs.length) {
@@ -170,11 +191,72 @@
             logs.forEach(function(log) {
                 html += '<div class="lp-activity-item">' +
                     '<span class="lp-activity-dot dot-' + log.level + '"></span>' +
+                    lpActorPill(log) +
                     '<span class="lp-activity-msg">' + $('<span>').text(log.message).html() + '</span>' +
                     '<span class="lp-activity-time">' + log.time + ' ago</span>' +
                 '</div>';
             });
             $feed.html(html);
+        }
+
+        // 3.7.2: clickable customer-segment pills -> drawer listing that
+        // segment's customers via the existing /crm/segment/{seg} REST route.
+        function lpOpenSegmentDrawer(seg, label) {
+            $('.lp-seg-modal').remove();
+            var $ov = $('<div class="lp-seg-modal" role="dialog" aria-modal="true"></div>');
+            var $panel = $('<div class="lp-seg-modal__panel"></div>');
+            $panel.append(
+                '<div class="lp-seg-modal__head">' +
+                    '<strong>' + $('<span>').text(label || seg).html() +
+                    ' <span class="lp-seg-modal__sub">customers</span></strong>' +
+                    '<button type="button" class="lp-seg-modal__x" aria-label="Close">&times;</button>' +
+                '</div>'
+            );
+            var $body = $('<div class="lp-seg-modal__body"><div class="lp-empty">Loading…</div></div>');
+            $panel.append($body);
+            $ov.append($panel).appendTo(document.body);
+
+            function close() { $ov.remove(); $(document).off('keydown.lpseg'); }
+            $ov.on('click', function(e) { if (e.target === $ov[0]) close(); });
+            $panel.find('.lp-seg-modal__x').on('click', close);
+            $(document).on('keydown.lpseg', function(e) { if (e.key === 'Escape') close(); });
+
+            var base = (window.luwipress && luwipress.rest_base) || '/wp-json/luwipress/v1/';
+            fetch(base + 'crm/segment/' + encodeURIComponent(seg), {
+                headers: { 'X-WP-Nonce': (window.luwipress && luwipress.nonce_rest) || '', 'Accept': 'application/json' },
+                credentials: 'same-origin'
+            }).then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+              .then(function(data) {
+                var rows = (data && (data.customers || data.items)) || (Array.isArray(data) ? data : []);
+                if (!rows.length) {
+                    $body.html('<div class="lp-empty">No customers in this segment yet.</div>');
+                    return;
+                }
+                var t = '<table class="lp-seg-table"><thead><tr>' +
+                    '<th>Customer</th><th>Orders</th><th>Spent</th><th>Last order</th></tr></thead><tbody>';
+                rows.forEach(function(c) {
+                    var name = $('<span>').text(c.name || c.email || ('#' + (c.id || ''))).html();
+                    var orders = (c.order_count != null) ? c.order_count : (c.orders || 0);
+                    var spent = (c.total_spent != null) ? c.total_spent : (c.spent || '');
+                    var last = $('<span>').text(c.last_order || c.last_order_date || '—').html();
+                    t += '<tr><td>' + name + '</td><td>' + orders + '</td><td>' +
+                         $('<span>').text(String(spent)).html() + '</td><td>' + last + '</td></tr>';
+                });
+                t += '</tbody></table>';
+                $body.html(t);
+              })
+              .catch(function() {
+                $body.html('<div class="lp-empty">Could not load customers (segment data may need a refresh).</div>');
+              });
+        }
+        if (!window.__lpSegDrillBound) {
+            window.__lpSegDrillBound = true;
+            $(document).on('click', '.lp-seg-pill--clickable', function() {
+                lpOpenSegmentDrawer(this.getAttribute('data-segment'), this.textContent.trim());
+            });
+            $(document).on('keydown', '.lp-seg-pill--clickable', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.click(); }
+            });
         }
 
         function lpRefreshActivity() {

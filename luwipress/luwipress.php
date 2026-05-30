@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.7.0
+ * Version: 3.7.2
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.7.0');
+define('LUWIPRESS_VERSION', '3.7.2');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -1332,11 +1332,17 @@ class LuwiPress {
             // iframe popup instead of the proper plugin detail card.
             add_thickbox();
 
+            // Cache-bust on file mtime (not just plugin version) so CSS tweaks
+            // shipped within the same version are picked up immediately — the JS
+            // already does this; the stylesheet must too or browsers serve a
+            // stale admin.css on every `?ver=<same-version>` request.
+            $admin_css_path = LUWIPRESS_PLUGIN_DIR . 'assets/css/admin.css';
+            $admin_css_ver  = LUWIPRESS_VERSION . '.' . ( file_exists( $admin_css_path ) ? filemtime( $admin_css_path ) : '0' );
             wp_enqueue_style(
                 'luwipress-admin',
                 LUWIPRESS_PLUGIN_URL . 'assets/css/admin.css',
                 array(),
-                LUWIPRESS_VERSION
+                $admin_css_ver
             );
 
             $admin_js_path = LUWIPRESS_PLUGIN_DIR . 'assets/js/admin.js';

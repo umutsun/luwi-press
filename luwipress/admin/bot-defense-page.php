@@ -147,39 +147,23 @@ $tab_url = function ( $tab ) use ( $lwp_bd_hub_mode ) {
 	</div>
 	<?php endif; ?>
 
-	<nav class="lp-hub-tabs lwp-bd-subtabs" role="tablist" aria-label="<?php esc_attr_e( 'Bot defense sections', 'luwipress' ); ?>">
-		<a href="<?php echo esc_url( $tab_url( 'overview' ) ); ?>"
-		   class="lp-hub-tab <?php echo $active_tab === 'overview' ? 'lp-hub-tab--active' : ''; ?>"
-		   role="tab"
-		   aria-selected="<?php echo $active_tab === 'overview' ? 'true' : 'false'; ?>">
-			<span class="dashicons dashicons-chart-bar"></span>
-			<span><?php esc_html_e( 'Overview', 'luwipress' ); ?></span>
-		</a>
-		<a href="<?php echo esc_url( $tab_url( 'accounts' ) ); ?>"
-		   class="lp-hub-tab <?php echo $active_tab === 'accounts' ? 'lp-hub-tab--active' : ''; ?>"
-		   role="tab"
-		   aria-selected="<?php echo $active_tab === 'accounts' ? 'true' : 'false'; ?>">
-			<span class="dashicons dashicons-admin-users"></span>
-			<span><?php esc_html_e( 'Accounts', 'luwipress' ); ?></span>
-		</a>
-		<a href="<?php echo esc_url( $tab_url( 'shield' ) ); ?>"
-		   class="lp-hub-tab <?php echo $active_tab === 'shield' ? 'lp-hub-tab--active' : ''; ?>"
-		   role="tab"
-		   aria-selected="<?php echo $active_tab === 'shield' ? 'true' : 'false'; ?>">
-			<span class="dashicons dashicons-shield"></span>
-			<span><?php esc_html_e( 'Shield', 'luwipress' ); ?></span>
-		</a>
-		<a href="<?php echo esc_url( $settings_url ); ?>"
-		   class="lp-hub-tab lwp-bd-settings-link"
-		   title="<?php esc_attr_e( 'All bot settings live under the main Settings page', 'luwipress' ); ?>">
-			<span class="dashicons dashicons-admin-generic"></span>
-			<?php esc_html_e( 'Settings', 'luwipress' ); ?>
-			<span class="dashicons dashicons-external" style="font-size:14px; vertical-align:middle; opacity:.6;"></span>
-		</a>
-	</nav>
+	<?php
+/* 3.7.2: sub-tab strip -> collapsible accordion (operator request). All three
+   panels render at once; $active_tab sets which <details> opens. Page JS already
+   null-guards every getElementById so wiring all panels is safe. Bot settings
+   live on the main Settings page via the link below. */
+?>
+<div class="lwp-collapse-stack">
 
 	<?php /* ============================ OVERVIEW ============================ */ ?>
-	<?php if ( $active_tab === 'overview' ) : ?>
+	<details class="lp-collapse"<?php echo $active_tab === 'overview' ? ' open' : ''; ?>>
+	<summary>
+		<span class="dashicons dashicons-chart-bar"></span> <span><?php esc_html_e( 'Overview', 'luwipress' ); ?></span>
+		<a href="<?php echo esc_url( $settings_url ); ?>" class="lwp-bd-settings-link lp-collapse-hint" onclick="event.stopPropagation();">
+			<span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e( 'All bot settings', 'luwipress' ); ?> &rarr;
+		</a>
+	</summary>
+	<div class="lp-collapse-body">
 
 		<div class="luwipress-stat-grid" style="margin-top:16px;">
 			<div class="luwipress-stat-card <?php echo esc_attr( $state_class( $flagged, 1, 25 ) ); ?>">
@@ -281,7 +265,11 @@ $tab_url = function ( $tab ) use ( $lwp_bd_hub_mode ) {
 		</div>
 
 	<?php /* ============================ ACCOUNTS ============================ */ ?>
-	<?php elseif ( $active_tab === 'accounts' ) : ?>
+		</div><!-- .lp-collapse-body -->
+</details>
+<details class="lp-collapse"<?php echo $active_tab === 'accounts' ? ' open' : ''; ?>>
+	<summary><span class="dashicons dashicons-admin-users"></span> <span><?php esc_html_e( 'Accounts', 'luwipress' ); ?></span></summary>
+	<div class="lp-collapse-body">
 
 		<div class="luwipress-stat-grid" style="margin-top:16px;">
 			<div class="luwipress-stat-card <?php echo esc_attr( $state_class( $buckets['high'], 1, 25 ) ); ?>">
@@ -405,7 +393,11 @@ $tab_url = function ( $tab ) use ( $lwp_bd_hub_mode ) {
 		</div>
 
 	<?php /* ============================ SHIELD ============================ */ ?>
-	<?php elseif ( $active_tab === 'shield' ) : ?>
+		</div><!-- .lp-collapse-body -->
+</details>
+<details class="lp-collapse"<?php echo $active_tab === 'shield' ? ' open' : ''; ?>>
+	<summary><span class="dashicons dashicons-shield"></span> <span><?php esc_html_e( 'Shield', 'luwipress' ); ?></span></summary>
+	<div class="lp-collapse-body">
 
 		<div class="luwipress-stat-grid" style="margin-top:16px;">
 			<div class="luwipress-stat-card <?php echo esc_attr( $state_class( $active_blocks, 10, 200 ) ); ?>">
@@ -579,7 +571,9 @@ $tab_url = function ( $tab ) use ( $lwp_bd_hub_mode ) {
 			</table>
 		</div>
 
-	<?php endif; ?>
+	</div><!-- .lp-collapse-body -->
+</details>
+</div><!-- .lwp-collapse-stack -->
 
 <?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
@@ -605,7 +599,10 @@ $tab_url = function ( $tab ) use ( $lwp_bd_hub_mode ) {
 	function apiShield(p, o) { return api(REST_SHIELD, p, o); }
 
 	/* -------------------- ACCOUNTS TAB -------------------- */
-	if (ACTIVE_TAB === 'accounts') {
+	/* 3.7.2: all accordion panels render at once, so wire this unconditionally
+	   instead of gating on ACTIVE_TAB (which left collapsed panels stuck on
+	   "Loading…"). Every loader already null-guards via getElementById. */
+	if (document.getElementById('lwp-bot-tbody')) {
 
 		function fmtSignals(sig) {
 			if (!sig || typeof sig !== 'object') return '<span style="color:var(--lp-text-muted);">—</span>';
@@ -930,7 +927,8 @@ $tab_url = function ( $tab ) use ( $lwp_bd_hub_mode ) {
 	}
 
 	/* -------------------- SHIELD TAB -------------------- */
-	if (ACTIVE_TAB === 'shield') {
+	/* 3.7.2: wire unconditionally (accordion renders all panels). DOM-guarded. */
+	if (document.getElementById('bs-blocks-tbody') || document.getElementById('lwp-bot-comments-tbody') || document.getElementById('bs-test-btn')) {
 
 		var testBtn = document.getElementById('bs-test-btn');
 		if (testBtn) {

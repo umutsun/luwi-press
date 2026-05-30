@@ -53,7 +53,15 @@ if ( class_exists( 'LuwiPress_Schema_Registry' ) ) {
 // `created/edit/delete_product_cat` hooks the KG already listens on will
 // fire `clean_term_cache` etc. — we use a short TTL instead of registering
 // a dedicated invalidator since this is purely a UI affordance.
-$quick_urls = get_transient( 'luwipress_schema_preview_quick_urls' );
+// NOTE the `_v2` key bump (3.7.1): get_term_link() / get_permalink() can
+// return a WP_Error / false (notably under WPML when a term's language
+// context can't resolve a link). The pre-3.7.1 code stored that WP_Error
+// object straight into the transient, then `esc_attr( $q['url'] )` at
+// render time fataled with "Object of class WP_Error could not be
+// converted to string" — surfacing as the admin "critical error" box. The
+// guards below skip any non-string URL; the new key sidesteps a transient
+// already poisoned with a WP_Error on live sites.
+$quick_urls = get_transient( 'luwipress_schema_preview_quick_urls_v2' );
 if ( false === $quick_urls ) {
 	$quick_urls = array();
 	$quick_urls[] = array(
@@ -70,10 +78,13 @@ if ( false === $quick_urls ) {
 			'no_found_rows'  => true,
 		) );
 		if ( ! empty( $recent_products ) ) {
-			$quick_urls[] = array(
-				'label' => __( 'Latest product', 'luwipress' ) . ' — ' . get_the_title( $recent_products[0] ),
-				'url'   => get_permalink( $recent_products[0] ),
-			);
+			$prod_link = get_permalink( $recent_products[0] );
+			if ( is_string( $prod_link ) && '' !== $prod_link ) {
+				$quick_urls[] = array(
+					'label' => __( 'Latest product', 'luwipress' ) . ' — ' . get_the_title( $recent_products[0] ),
+					'url'   => $prod_link,
+				);
+			}
 		}
 		$recent_cats = get_terms( array(
 			'taxonomy'   => 'product_cat',
@@ -81,13 +92,16 @@ if ( false === $quick_urls ) {
 			'number'     => 1,
 		) );
 		if ( ! empty( $recent_cats ) && ! is_wp_error( $recent_cats ) ) {
-			$quick_urls[] = array(
-				'label' => __( 'Product category', 'luwipress' ) . ' — ' . $recent_cats[0]->name,
-				'url'   => get_term_link( $recent_cats[0] ),
-			);
+			$cat_link = get_term_link( $recent_cats[0] );
+			if ( is_string( $cat_link ) && '' !== $cat_link ) {
+				$quick_urls[] = array(
+					'label' => __( 'Product category', 'luwipress' ) . ' — ' . $recent_cats[0]->name,
+					'url'   => $cat_link,
+				);
+			}
 		}
 	}
-	set_transient( 'luwipress_schema_preview_quick_urls', $quick_urls, 6 * HOUR_IN_SECONDS );
+	set_transient( 'luwipress_schema_preview_quick_urls_v2', $quick_urls, 6 * HOUR_IN_SECONDS );
 }
 ?>
 <?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
@@ -113,10 +127,15 @@ if ( false === $quick_urls ) {
 		</p>
 	</div>
 
-	<!-- Registry overview -->
+	<!-- Registry overview (collapsible — read-only reference, default-collapsed to declutter) -->
 	<?php if ( ! empty( $registered_types ) ) : ?>
-	<div class="luwipress-card luwipress-card--info">
-		<h2><span class="dashicons dashicons-list-view" aria-hidden="true"></span> <?php esc_html_e( 'Schema Registry — registered types', 'luwipress' ); ?></h2>
+	<details class="lp-collapse lwp-spv-registry">
+		<summary>
+			<span class="dashicons dashicons-list-view" aria-hidden="true"></span>
+			<span><?php esc_html_e( 'Schema Registry — registered types', 'luwipress' ); ?></span>
+			<span class="lp-collapse-hint"><?php echo esc_html( (string) count( $registered_types ) ); ?></span>
+		</summary>
+		<div class="lp-collapse-body">
 		<p class="lp-form-hint"><?php esc_html_e( 'Types LuwiPress will emit on relevant content when their meta key carries data. Use the preview below to see which ones are actually rendering on a sample URL.', 'luwipress' ); ?></p>
 		<div class="lwp-spv-type-row">
 			<?php foreach ( $registered_types as $type_key => $type_def ) :
@@ -130,7 +149,8 @@ if ( false === $quick_urls ) {
 				</span>
 			<?php endforeach; ?>
 		</div>
-	</div>
+		</div><!-- .lp-collapse-body -->
+	</details>
 	<?php endif; ?>
 
 	<!-- Preview form -->
@@ -150,6 +170,7 @@ if ( false === $quick_urls ) {
 		<div class="lwp-spv-quick">
 			<span class="lp-form-hint lwp-spv-quick-label"><?php esc_html_e( 'Quick targets:', 'luwipress' ); ?></span>
 			<?php foreach ( $quick_urls as $q ) : ?>
+				<?php if ( empty( $q['url'] ) || ! is_string( $q['url'] ) ) { continue; } ?>
 				<button type="button" class="lp-btn lp-btn--outline lp-btn--sm lwp-schema-quick" data-url="<?php echo esc_attr( $q['url'] ); ?>">
 					<?php echo esc_html( $q['label'] ); ?>
 				</button>

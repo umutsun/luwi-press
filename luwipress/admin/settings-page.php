@@ -251,14 +251,17 @@ $hmac_secret        = get_option( 'luwipress_hmac_secret', '' );
 $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'connection';
 
 // Related settings sections are merged into collapsible groups for a less
-// cluttered nav: CRM + Customer Chat live under the `crm` tab, Security + Bot
-// under the `security` tab. Old deep-links to the now-merged sections still
-// resolve — they map to the host tab and auto-open the right collapsible via
-// $open_section.
+// cluttered nav: CRM + Customer Chat live under the `crm` (Customers) tab,
+// Security + Bot under the `security` tab, AI API Keys + AI Content under the
+// `ai` (AI) tab, and General + Content Health under the `general` tab. Old
+// deep-links to the now-merged sections still resolve — they map to the host
+// tab and auto-open the right collapsible via $open_section.
 $open_section    = '';
 $lwp_merged_into = array(
-	'customer-chat' => 'crm',
-	'bot'           => 'security',
+	'customer-chat'  => 'crm',
+	'bot'            => 'security',
+	'api-keys'       => 'ai',
+	'content-health' => 'general',
 );
 if ( isset( $lwp_merged_into[ $active_tab ] ) ) {
 	$open_section = $active_tab;
@@ -307,14 +310,16 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 	<nav class="lp-hub-tabs lwp-settings-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Settings sections', 'luwipress' ); ?>">
 		<?php
 		$tabs_def = array(
-			'connection'     => array( 'label' => __( 'Connection', 'luwipress' ),     'icon' => 'dashicons-admin-links' ),
-			'general'        => array( 'label' => __( 'General', 'luwipress' ),        'icon' => 'dashicons-admin-settings' ),
-			'api-keys'       => array( 'label' => __( 'AI API Keys', 'luwipress' ),    'icon' => 'dashicons-admin-network' ),
-			'ai'             => array( 'label' => __( 'AI Content', 'luwipress' ),     'icon' => 'dashicons-edit-large' ),
-			'translation'    => array( 'label' => __( 'Translation', 'luwipress' ),    'icon' => 'dashicons-translation' ),
-			'crm'            => array( 'label' => __( 'Customers', 'luwipress' ),      'icon' => 'dashicons-groups' ),
-			'security'       => array( 'label' => __( 'Security', 'luwipress' ),       'icon' => 'dashicons-shield-alt' ),
-			'content-health' => array( 'label' => __( 'Content Health', 'luwipress' ), 'icon' => 'dashicons-chart-area' ),
+			// Grouped nav (3.7.2): AI API Keys folds into "AI" (with AI Content),
+			// Content Health folds into "General" — each as a collapsible section
+			// inside the host tab. Deep-links to the old slugs still resolve via
+			// $lwp_merged_into above.
+			'connection'     => array( 'label' => __( 'Connection', 'luwipress' ),  'icon' => 'dashicons-admin-links' ),
+			'general'        => array( 'label' => __( 'General', 'luwipress' ),     'icon' => 'dashicons-admin-settings' ),
+			'ai'             => array( 'label' => __( 'AI', 'luwipress' ),          'icon' => 'dashicons-admin-network' ),
+			'translation'    => array( 'label' => __( 'Translation', 'luwipress' ), 'icon' => 'dashicons-translation' ),
+			'crm'            => array( 'label' => __( 'Customers', 'luwipress' ),   'icon' => 'dashicons-groups' ),
+			'security'       => array( 'label' => __( 'Security', 'luwipress' ),    'icon' => 'dashicons-shield-alt' ),
 		);
 		foreach ( $tabs_def as $slug => $cfg ) :
 			$is_active = ( $slug === $active_tab );
@@ -543,8 +548,8 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			</div>
 		</div>
 
-		<!-- AI API KEYS -->
-		<div class="luwipress-tab-content <?php echo 'api-keys' === $active_tab ? 'tab-active' : ''; ?>" id="tab-api-keys">
+		<!-- AI API KEYS — grouped under the "AI" tab (3.7.2); shows alongside AI Content -->
+		<div class="luwipress-tab-content <?php echo 'ai' === $active_tab ? 'tab-active' : ''; ?>" id="tab-api-keys">
 			<?php
 			// WordPress 7.0 Connectors detection — when active, API keys live
 			// in the native WP Connectors UI. We keep the model picker + budget
@@ -1904,8 +1909,8 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		</div><!-- .lwp-collapse-stack -->
 		</div><!-- #tab-security -->
 
-		<!-- CONTENT HEALTH -->
-		<div class="luwipress-tab-content <?php echo 'content-health' === $active_tab ? 'tab-active' : ''; ?>" id="tab-content-health">
+		<!-- CONTENT HEALTH — grouped under the "General" tab (3.7.2); shows below General settings -->
+		<div class="luwipress-tab-content <?php echo 'general' === $active_tab ? 'tab-active' : ''; ?>" id="tab-content-health">
 			<?php
 			$health_ready = class_exists( 'LuwiPress_Health_Score' );
 			if ( $health_ready ) :

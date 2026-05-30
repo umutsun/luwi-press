@@ -4,7 +4,7 @@ Tags: ai, agent, woocommerce, chat, automation, admin, assistant, middleware
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.3.3
+Stable tag: 1.3.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,6 +49,9 @@ Or just type — "how many at-risk customers do I have?", "generate a blog post 
 5. In the right-hand "Backend Runtime" panel, pick your active agent and enter the access token. Endpoints default to the hosted services; override them if you self-host.
 
 == Changelog ==
+
+= 1.3.4 — Settings tab matches core styling =
+* The Settings "Agentic" tab now emits the core `lp-hub-tab` markup so it matches the other tabs (glassmorphism + active state) instead of the legacy nav-tab style.
 
 = 1.3.3 — Commerce sub-tabs become a collapsible accordion =
 * **Leaner Commerce surface:** the Commerce area's sub-tab strip (Overview / UCP Feed / Checkout / AP2 / Transactions) is now a collapsible **accordion** — each section opens in place instead of switching tabs, and only loads its data the first time it is expanded. A more minimal, modern UI. Old `?tab=<section>` deep links still resolve and auto-open the matching section.

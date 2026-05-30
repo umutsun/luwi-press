@@ -144,7 +144,6 @@ $type_catalog = array(
 	<div class="luwipress-card luwipress-card--primary">
 		<h2><span class="dashicons dashicons-search" aria-hidden="true"></span> <?php esc_html_e( 'Pick target', 'luwipress' ); ?></h2>
 		<div class="lwp-sp-search" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="lwp-sp-results">
-			<span class="dashicons dashicons-search lwp-sp-search-icon" aria-hidden="true"></span>
 			<input class="lp-form-input lwp-sp-q" type="search" id="lwp-sp-q" autocomplete="off" role="searchbox" aria-autocomplete="list" aria-controls="lwp-sp-results" placeholder="<?php esc_attr_e( 'Search by title — product, page, post or category…', 'luwipress' ); ?>">
 			<ul id="lwp-sp-results" class="lwp-sp-results" role="listbox" hidden></ul>
 		</div>
@@ -196,9 +195,14 @@ $type_catalog = array(
 		</div>
 	</div>
 
-	<!-- Reference card -->
-	<div class="luwipress-card luwipress-card--muted">
-		<h2><span class="dashicons dashicons-book" aria-hidden="true"></span> <?php esc_html_e( 'Reference', 'luwipress' ); ?></h2>
+	<!-- Reference card (collapsible — pure static docs, default-collapsed to declutter) -->
+	<details class="lp-collapse lwp-sp-reference">
+		<summary>
+			<span class="dashicons dashicons-book" aria-hidden="true"></span>
+			<span><?php esc_html_e( 'Reference', 'luwipress' ); ?></span>
+			<span class="lp-collapse-hint"><?php esc_html_e( 'schema.org docs', 'luwipress' ); ?></span>
+		</summary>
+		<div class="lp-collapse-body">
 		<p class="lp-form-hint"><?php esc_html_e( 'Documentation links per schema type — pin alongside the editor when filling unfamiliar fields:', 'luwipress' ); ?></p>
 		<ul class="lwp-sp-ref-list">
 			<li><strong>HowTo</strong> — <a href="https://schema.org/HowTo" target="_blank" rel="noopener">schema.org/HowTo</a></li>
@@ -216,15 +220,15 @@ $type_catalog = array(
 			<a href="https://search.google.com/test/rich-results" target="_blank" rel="noopener"><?php esc_html_e( 'Google Rich Results Test', 'luwipress' ); ?></a>
 			<?php esc_html_e( 'to validate it.', 'luwipress' ); ?>
 		</p>
-	</div>
+		</div><!-- .lp-collapse-body -->
+	</details>
 <?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
 <?php endif; ?>
 
 <style>
 .lwp-sp-search { position: relative; max-width: 560px; margin: 10px 0 0; }
-.lwp-sp-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--lp-gray); pointer-events: none; }
-.lwp-sp-q { width: 100%; padding-left: 34px; }
+.lwp-sp-q { width: 100%; }
 .lwp-sp-results {
 	position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 2px);
 	margin: 0; padding: 4px; list-style: none;

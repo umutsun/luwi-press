@@ -592,8 +592,16 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			foreach ( $segs as $key => $s ) :
 				$count = $crm_counts[ $key ] ?? 0;
 				if ( 0 === $count && in_array( $key, array( 'dormant', 'lost' ), true ) ) continue;
+				$seg_clickable = $count > 0;
+				$seg_class     = 'lp-seg-pill' . ( $seg_clickable ? ' lp-seg-pill--clickable' : ' is-empty' );
+				/* translators: 1: count, 2: segment label */
+				$seg_title     = $seg_clickable
+					? sprintf( __( 'View %1$s %2$s customers', 'luwipress' ), absint( $count ), $s[2] )
+					: sprintf( __( 'No %s customers', 'luwipress' ), $s[2] );
 			?>
-			<span class="lp-seg-pill" style="--seg-color:<?php echo esc_attr( $s[0] ); ?>">
+			<span class="<?php echo esc_attr( $seg_class ); ?>" style="--seg-color:<?php echo esc_attr( $s[0] ); ?>"
+				<?php if ( $seg_clickable ) : ?>data-segment="<?php echo esc_attr( $key ); ?>" role="button" tabindex="0"<?php endif; ?>
+				title="<?php echo esc_attr( $seg_title ); ?>">
 				<span class="dashicons dashicons-<?php echo esc_attr( $s[1] ); ?>"></span>
 				<strong><?php echo absint( $count ); ?></strong>
 				<?php echo esc_html( $s[2] ); ?>

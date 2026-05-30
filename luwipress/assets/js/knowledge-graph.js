@@ -1889,7 +1889,13 @@ function updateStats(data, phase) {
 		plugin_readiness: Math.round(pluginHealth.readiness_score || 0),
 		revenue_30d: Math.round(revenue30),
 		taxonomy_coverage: taxCoverage,
-		media_health: mediaHealth
+		media_health: mediaHealth,
+		// 3.7.2: vendors + customers were absent from this literal, so their
+		// stat cards stayed at the '—' default even though summary carries the
+		// counts (render bug, not data). total_customers may be absent when
+		// customer detail is privacy-gated — fall back to 0.
+		total_vendors: summary.total_vendors || 0,
+		total_customers: summary.total_customers || 0
 	};
 
 	renderStoreHealthHero(stats, summary);

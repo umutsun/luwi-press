@@ -91,31 +91,16 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 		);
 	};
 	?>
-	<nav class="lp-hub-tabs lwp-cookies-subtabs" role="tablist" aria-label="<?php esc_attr_e( 'Cookie consent sections', 'luwipress' ); ?>">
-		<a href="<?php echo esc_url( $lwp_cookies_tab_url( 'settings' ) ); ?>"
-		   class="lp-hub-tab <?php echo $active_tab === 'settings' ? 'lp-hub-tab--active' : ''; ?>"
-		   role="tab"
-		   aria-selected="<?php echo $active_tab === 'settings' ? 'true' : 'false'; ?>">
-			<span class="dashicons dashicons-admin-settings"></span>
-			<span><?php esc_html_e( 'Settings', 'luwipress' ); ?></span>
-		</a>
-		<a href="<?php echo esc_url( $lwp_cookies_tab_url( 'log' ) ); ?>"
-		   class="lp-hub-tab <?php echo $active_tab === 'log' ? 'lp-hub-tab--active' : ''; ?>"
-		   role="tab"
-		   aria-selected="<?php echo $active_tab === 'log' ? 'true' : 'false'; ?>">
-			<span class="dashicons dashicons-list-view"></span>
-			<span><?php esc_html_e( 'Log', 'luwipress' ); ?></span>
-		</a>
-		<a href="<?php echo esc_url( $lwp_cookies_tab_url( 'policy' ) ); ?>"
-		   class="lp-hub-tab <?php echo $active_tab === 'policy' ? 'lp-hub-tab--active' : ''; ?>"
-		   role="tab"
-		   aria-selected="<?php echo $active_tab === 'policy' ? 'true' : 'false'; ?>">
-			<span class="dashicons dashicons-edit"></span>
-			<span><?php esc_html_e( 'AI Policy', 'luwipress' ); ?></span>
-		</a>
-	</nav>
+	<?php
+/* 3.7.2: sub-tab strip -> collapsible accordion (operator request). All three
+   panels render at once; $active_tab sets which <details> opens. Page JS
+   null-guards getElementById so wiring all panels is safe. */
+?>
+<div class="lwp-collapse-stack">
 
-	<?php if ( $active_tab === 'settings' ) : ?>
+	<details class="lp-collapse"<?php echo $active_tab === 'settings' ? ' open' : ''; ?>>
+	<summary><span class="dashicons dashicons-admin-settings"></span> <span><?php esc_html_e( 'Settings', 'luwipress' ); ?></span></summary>
+	<div class="lp-collapse-body">
 
 		<div class="luwipress-stat-grid" style="margin-top:16px;">
 			<div class="luwipress-stat-card stat-success">
@@ -259,7 +244,11 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
         data-src="https://connect.facebook.net/en_US/fbevents.js"&gt;&lt;/script&gt;</code></pre>
 		</div>
 
-	<?php elseif ( $active_tab === 'log' ) : ?>
+		</div><!-- .lp-collapse-body -->
+</details>
+<details class="lp-collapse"<?php echo $active_tab === 'log' ? ' open' : ''; ?>>
+	<summary><span class="dashicons dashicons-list-view"></span> <span><?php esc_html_e( 'Log', 'luwipress' ); ?></span></summary>
+	<div class="lp-collapse-body">
 
 		<div class="luwipress-section" style="margin-top:16px;">
 			<h2 style="margin-top:0;"><?php esc_html_e( 'Consent log', 'luwipress' ); ?></h2>
@@ -279,7 +268,11 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 			</table>
 		</div>
 
-	<?php else: /* policy */ ?>
+		</div><!-- .lp-collapse-body -->
+</details>
+<details class="lp-collapse"<?php echo $active_tab === 'policy' ? ' open' : ''; ?>>
+	<summary><span class="dashicons dashicons-edit"></span> <span><?php esc_html_e( 'AI Policy', 'luwipress' ); ?></span></summary>
+	<div class="lp-collapse-body">
 
 		<div class="luwipress-section" style="margin-top:16px;">
 			<!-- Header row: heading on the left, CTA buttons on the right, status pill trailing.
@@ -317,7 +310,9 @@ $rest_root = esc_url_raw( rest_url( 'luwipress/v1/cookies/' ) );
 			<pre id="lwp-cc-policy-detected" style="background:var(--lp-bg-muted,#f4f4f4); padding:12px; border-radius:6px; max-width:880px; overflow:auto;"></pre>
 		</div>
 
-	<?php endif; ?>
+	</div><!-- .lp-collapse-body -->
+</details>
+</div><!-- .lwp-collapse-stack -->
 
 <?php if ( ! $luwipress_hub_mode ) : ?>
 </div>

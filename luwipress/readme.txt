@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.7.0
+Stable tag: 3.7.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,17 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.7.2 =
+* Admin UI cohesion pass. Settings nav trimmed from 8 tabs to 6: "AI API Keys" now lives alongside "AI Content" under a single **AI** tab, and "Content Health" now lives under **General**. Old `?tab=api-keys` / `?tab=content-health` links still resolve.
+* Reference/help cards are now collapsible (Schema Picker "Reference" and Schema Preview "Schema Registry" overview) so the working areas stay uncluttered.
+* Dashboard **Customer Segments** pills are now clickable — click a segment to open a drawer listing that segment's customers.
+* **Recent Activity** rows now show a minimal actor pill (WebMCP / ThemeBridge / Agent / System / You) so you can see who or what performed each action at a glance.
+* Knowledge Graph **Vendors** and **Customers** stat cards now show their real counts (previously blank), and the counts are always present in the summary even when a section isn't requested.
+
+= 3.7.1 =
+* Admin UI modernization: unified card spacing via a container-gap rhythm (fixes uneven grey gaps between cards, e.g. the Content > Schema tab), glassmorphism hub tabs with the hover top-border bug fixed, standardized button sizing (32px / 26px small) so native and lp-btn buttons match, calmer card hover.
+* Fix: Schema Preview "critical error" that could appear when a product-category quick-target permalink failed to resolve (WP_Error/false guard + cache key bump).
 
 = 3.7.0 — Vendor manufacturer schema + per-vendor entity type + leaner admin =
 * **NEW Product manufacturer/author schema on Rank Math sites:** when a product is attributed to a vendor, that vendor now lands in the product's JSON-LD as `manufacturer` (or `author` for person-type vendors) — including on sites where **Rank Math** manages product schema (previously the attribution only reached WooCommerce-native structured data, which Rank Math replaces). A strong vendor-attribution signal for Google.

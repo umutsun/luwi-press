@@ -433,9 +433,12 @@ a:focus-visible {
 
 .luwipress-stats-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
+    /* 3.7.2: aligned to the KG dashboard stat row (operator's canonical look) —
+       denser min track + tighter gap so hero rows stay one line and read
+       minimal, matching the Knowledge Graph cards. */
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    margin-bottom: 18px;
 }
 
 /* Compact "mini card" grid — column-shaped tiles in a tight horizontal row.
@@ -450,24 +453,24 @@ a:focus-visible {
 .luwipress-stat-grid .luwipress-stat-card {
     flex-direction: column;
     align-items: flex-start;
-    padding: 14px 16px;
-    gap: 4px;
+    padding: 9px 11px;
+    gap: 2px;
     min-height: 0;
 }
 .luwipress-stat-grid .stat-value {
     display: block;
-    font-size: 22px;
+    font-size: 16px;
     font-weight: 700;
-    line-height: 1.15;
+    line-height: 1.1;
     color: var(--lp-text, #111827);
 }
 .luwipress-stat-grid .stat-label {
     display: block;
-    font-size: 11px;
+    font-size: 9px;
     color: var(--lp-text-muted, #64748b);
     text-transform: uppercase;
-    letter-spacing: 0.4px;
-    line-height: 1.2;
+    letter-spacing: 0.3px;
+    line-height: 1.25;
 }
 .luwipress-stat-grid .stat-link {
     margin-top: 4px;
@@ -483,17 +486,18 @@ a:focus-visible {
     background: var(--lp-surface);
     border: 1px solid var(--lp-border);
     border-radius: var(--radius-md);
-    padding: var(--space-xl);
+    padding: 9px 11px;
     display: flex;
     align-items: center;
-    gap: var(--space-lg);
-    border-left: 4px solid var(--lp-primary);
+    gap: 9px;
+    min-width: 0;
+    border-left: 3px solid var(--lp-primary);
     box-shadow: var(--lp-shadow-sm);
-    transition: transform var(--duration-normal) var(--ease-out),
+    transition: border-color var(--duration-normal) var(--ease-out),
                 box-shadow var(--duration-normal) var(--ease-out);
 }
 .luwipress-stat-card:hover {
-    transform: translateY(-2px);
+    border-color: var(--lp-primary);
     box-shadow: var(--lp-shadow-md);
 }
 
@@ -501,26 +505,37 @@ a:focus-visible {
 .luwipress-stat-card.stat-error { border-left-color: var(--lp-error); }
 .luwipress-stat-card.stat-translation { border-left-color: #0ea5e9; }
 
+.stat-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius-sm);
+    background: var(--lp-primary-50);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
 .stat-icon .dashicons {
-    font-size: 28px;
-    width: 28px;
-    height: 28px;
+    font-size: 17px;
+    width: 17px;
+    height: 17px;
     color: var(--lp-gray-light);
 }
 
 .stat-number {
     display: block;
-    font-size: 24px;
-    font-weight: 600;
-    line-height: 1.2;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.1;
 }
 
 .stat-label {
     display: block;
-    font-size: 12px;
+    font-size: 10px;
     color: var(--lp-gray);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.4px;
+    margin-top: 1px;
 }
 
 /* ========================================
@@ -2668,34 +2683,132 @@ a:focus-visible {
    Global Animation Enhancements
    ======================================== */
 
-/* Smooth card hover for all luwipress cards */
+/* Card hover — minimal + calm: static content cards no longer lift on
+   hover (only interactive things — buttons, tabs, action/module cards —
+   move). A whisper of shadow on hover keeps them feeling like surfaces
+   without the jarring jump. (operator: "on hover efektleri") */
 .luwipress-card,
 .lp-card,
 .lp-step {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: box-shadow 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
 }
 .luwipress-card:hover,
 .lp-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    box-shadow: var(--lp-shadow-md);
 }
 
-/* Smooth button transitions everywhere */
+/* Native WP .button harmonized to the .lp-btn metrics — ONE button system
+   across every admin page (operator: "buttonlar standardize olmalı",
+   "height'ı çok fazla"). inline-flex + min-height:32 matches .lp-btn
+   exactly; .button-small drops to 26 (== .lp-btn--sm); .button-primary
+   is recolored to the brand primary so blue WP buttons stop clashing with
+   purple lp-btn--primary. Link-style buttons keep their chrome-less look
+   (we never set bg/border, only metrics). */
 .luwipress-dashboard .button,
 .luwipress-settings .button,
+.luwipress-hub .button,
 .lp-tm .button {
-    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 14px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    line-height: 1.2;
+    vertical-align: middle;
+    transition: all 0.2s var(--ease-out);
+}
+.luwipress-dashboard .button.button-small,
+.luwipress-settings .button.button-small,
+.luwipress-hub .button.button-small,
+.lp-tm .button.button-small {
+    min-height: 26px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 500;
+    gap: 4px;
+}
+.luwipress-dashboard .button-primary,
+.luwipress-settings .button-primary,
+.luwipress-hub .button-primary,
+.lp-tm .button-primary {
+    background: var(--lp-primary);
+    border-color: var(--lp-primary);
+    color: #fff;
+    text-shadow: none;
+}
+/* Icon inside a primary (filled) button must be white too — otherwise a
+   primary-colored dashicon renders blue-on-blue and disappears (operator:
+   "mavi üzerine mavi ikon görünmüyor"). Covers .lp-btn--primary as well. */
+/* Body-anchored so it covers EVERY LuwiPress admin screen regardless of the
+   page's inner wrap class (e.g. .luwipress-bot-defense-page) — a primary-colored
+   icon on a primary-filled button/tab was invisible (blue-on-blue). */
+body.toplevel_page_luwipress .button-primary .dashicons,
+body[class*="_page_luwipress"] .button-primary .dashicons,
+body.toplevel_page_luwipress .lp-btn--primary .dashicons,
+body[class*="_page_luwipress"] .lp-btn--primary .dashicons,
+body.toplevel_page_luwipress .lp-hub-tab--active .dashicons,
+body[class*="_page_luwipress"] .lp-hub-tab--active .dashicons,
+.lp-btn--primary .dashicons,
+.lp-hub-tab--active .dashicons {
+    color: #fff !important;
+}
+
+/* Companion tabs registered via do_action that still emit the legacy WP
+   .nav-tab markup (e.g. an older luwipress-agentic) render grey inside our
+   token-styled strip. Coerce any .nav-tab inside .lp-hub-tabs to match the
+   .lp-hub-tab look so companion tabs are visually indistinguishable from core
+   tabs even before the companion is updated. */
+.lp-hub-tabs .nav-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    min-height: 38px;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--lp-text);
+    background: color-mix(in srgb, var(--lp-surface) 82%, transparent);
+    border: 1px solid color-mix(in srgb, var(--lp-border) 70%, transparent);
+    border-radius: 10px;
+    box-shadow: var(--lp-shadow-sm);
+}
+.lp-hub-tabs .nav-tab:hover {
+    background: color-mix(in srgb, var(--lp-surface) 94%, transparent);
+    border-color: var(--lp-primary);
+    color: var(--lp-primary);
+}
+.lp-hub-tabs .nav-tab.nav-tab-active {
+    background: var(--lp-primary);
+    border-color: var(--lp-primary);
+    color: #fff;
+}
+.lp-hub-tabs .nav-tab.nav-tab-active .dashicons { color: #fff; }
+.luwipress-dashboard .button-primary:hover,
+.luwipress-settings .button-primary:hover,
+.luwipress-hub .button-primary:hover,
+.lp-tm .button-primary:hover {
+    background: var(--lp-primary-dark);
+    border-color: var(--lp-primary-dark);
+    color: #fff;
 }
 .luwipress-dashboard .button:hover,
 .luwipress-settings .button:hover,
+.luwipress-hub .button:hover,
 .lp-tm .button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow: var(--lp-shadow-sm);
 }
 .luwipress-dashboard .button:active,
 .luwipress-settings .button:active,
+.luwipress-hub .button:active,
 .lp-tm .button:active {
     transform: translateY(0);
+    box-shadow: none;
 }
 
 /* Progress bar animations */
@@ -3235,6 +3348,43 @@ a:focus-visible {
 .lp-activity-dot.dot-error { background: var(--lp-error); }
 .lp-activity-msg { font-size: 13px; color: var(--lp-text); flex: 1; line-height: 1.4; }
 .lp-activity-time { font-size: 11px; color: var(--lp-gray-light); white-space: nowrap; }
+/* Actor pill (3.7.2) — minimal chip on each Recent Activity row showing which
+   user/agent performed the action. Fixed enum of kinds → fixed token-driven
+   accent, never interpolated from log text (XSS-safe). */
+.lp-actor-pill {
+    display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+    padding: 1px 8px; border-radius: var(--radius-full);
+    font-size: 10.5px; font-weight: 600; line-height: 1.7;
+    letter-spacing: 0.01em; white-space: nowrap;
+    /* surface-relative tokens so the chip flips correctly in dark mode
+       (--lp-gray-100 is NOT dark-overridden, so it would stay light). */
+    background: var(--lp-surface-hover); color: var(--lp-text-secondary);
+    border: 1px solid var(--lp-border);
+}
+.lp-actor--webmcp {
+    background: color-mix(in srgb, var(--lp-primary) 12%, var(--lp-surface));
+    color: var(--lp-primary-dark);
+    border-color: color-mix(in srgb, var(--lp-primary) 30%, transparent);
+}
+.lp-actor--agent {
+    background: color-mix(in srgb, var(--lp-info) 12%, var(--lp-surface));
+    color: var(--lp-info);
+    border-color: color-mix(in srgb, var(--lp-info) 30%, transparent);
+}
+.lp-actor--themebridge {
+    background: color-mix(in srgb, var(--lp-warning) 14%, var(--lp-surface));
+    color: var(--lp-warning);
+    border-color: color-mix(in srgb, var(--lp-warning) 32%, transparent);
+}
+.lp-actor--user {
+    background: color-mix(in srgb, var(--lp-success) 12%, var(--lp-surface));
+    color: var(--lp-success);
+    border-color: color-mix(in srgb, var(--lp-success) 30%, transparent);
+}
+.lp-actor--system {
+    background: var(--lp-surface-hover); color: var(--lp-text-secondary);
+    border-color: var(--lp-border);
+}
 
 /* ─── Translation Coverage ─── */
 .lp-trans-card { margin-bottom: 16px; }
@@ -3264,6 +3414,49 @@ a:focus-visible {
 }
 .lp-seg-pill .dashicons { font-size: 14px; width: 14px; height: 14px; }
 .lp-seg-pill strong { font-weight: 700; }
+/* Clickable segment pills (3.7.2) — drill into a segment's customers. Stays
+   token-driven; --seg-color is the per-segment accent already set inline. */
+.lp-seg-pill--clickable { cursor: pointer; user-select: none; transition: transform 140ms var(--ease-out), background 140ms var(--ease-out), border-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out); }
+.lp-seg-pill--clickable:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--seg-color) 20%, var(--lp-surface)); border-color: color-mix(in srgb, var(--seg-color) 50%, transparent); box-shadow: var(--lp-shadow-sm); }
+.lp-seg-pill--clickable:focus-visible { outline: 2px solid color-mix(in srgb, var(--seg-color) 60%, transparent); outline-offset: 2px; }
+.lp-seg-pill.is-empty { opacity: 0.5; cursor: default; }
+/* Segment drill-down drawer (3.7.2) — customers in a clicked segment. */
+.lp-seg-modal {
+    position: fixed; inset: 0; z-index: 100050;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(15, 23, 42, 0.45);
+    -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+    animation: lp-fade-in 160ms var(--ease-out);
+}
+.lp-seg-modal__panel {
+    width: min(640px, calc(100vw - 48px)); max-height: 80vh; overflow: auto;
+    background: var(--lp-surface); color: var(--lp-text);
+    border: 1px solid var(--lp-border); border-radius: var(--radius-lg);
+    box-shadow: var(--lp-shadow-lg);
+}
+.lp-seg-modal__head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-lg) var(--space-xl);
+    border-bottom: 1px solid var(--lp-border);
+    position: sticky; top: 0; background: var(--lp-surface);
+}
+.lp-seg-modal__head strong { font-size: 15px; text-transform: capitalize; }
+.lp-seg-modal__sub { color: var(--lp-text-secondary); font-weight: 400; font-size: 12px; }
+.lp-seg-modal__x {
+    border: 0; background: none; cursor: pointer;
+    font-size: 22px; line-height: 1; color: var(--lp-gray);
+    padding: 0 4px; border-radius: var(--radius-sm);
+}
+.lp-seg-modal__x:hover { color: var(--lp-error); }
+.lp-seg-modal__body { padding: var(--space-md) var(--space-xl) var(--space-xl); }
+.lp-seg-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.lp-seg-table th {
+    text-align: left; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.03em; color: var(--lp-text-secondary);
+    padding: 8px 10px; border-bottom: 1px solid var(--lp-border);
+}
+.lp-seg-table td { padding: 8px 10px; border-bottom: 1px solid var(--lp-border-light); }
+.lp-seg-table tbody tr:hover { background: var(--lp-surface-hover); }
 
 /* ─── Skeleton Loading ─── */
 .lp-skeleton {
@@ -5852,8 +6045,12 @@ body.luwipress_page_luwipress-scheduler #wpbody-content > .updated:not(.luwipres
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    overflow-x: auto;
-    scrollbar-width: thin;
+    /* overflow MUST stay visible: flex-wrap already handles narrow
+       screens, and an `overflow-x: auto` here forces overflow-y to auto
+       too (CSS spec), which CLIPS the hover `translateY(-1px)` lift —
+       making the tab's top border vanish on hover (operator-reported
+       "üst border çıkmıyor"). */
+    overflow: visible;
 }
 .lp-hub-tab {
     display: inline-flex;
@@ -5865,16 +6062,23 @@ body.luwipress_page_luwipress-scheduler #wpbody-content > .updated:not(.luwipres
     font-weight: 500;
     color: var(--lp-text);
     text-decoration: none;
-    background: var(--lp-surface);
-    border: 1px solid var(--lp-border);
-    border-radius: 8px;
+    /* Glassmorphism: translucent frosted surface so the strip reads as a
+       row of light, modern controls. color-mix keeps it token-driven (no
+       hex); the 82% surface mix is a solid-enough fallback for browsers
+       without backdrop-filter. */
+    background: color-mix(in srgb, var(--lp-surface) 82%, transparent);
+    -webkit-backdrop-filter: blur(8px) saturate(1.1);
+    backdrop-filter: blur(8px) saturate(1.1);
+    border: 1px solid color-mix(in srgb, var(--lp-border) 70%, transparent);
+    border-radius: 10px;
     box-shadow: var(--lp-shadow-sm);
     white-space: nowrap;
-    transition: color 160ms ease, background 160ms ease,
-                border-color 160ms ease, transform 160ms ease,
-                box-shadow 160ms ease;
+    transition: color 160ms var(--ease-out), background 160ms var(--ease-out),
+                border-color 160ms var(--ease-out), transform 160ms var(--ease-out),
+                box-shadow 160ms var(--ease-out);
 }
 .lp-hub-tab:hover {
+    background: color-mix(in srgb, var(--lp-surface) 94%, transparent);
     border-color: var(--lp-primary);
     color: var(--lp-primary);
     transform: translateY(-1px);
@@ -5889,14 +6093,14 @@ body.luwipress_page_luwipress-scheduler #wpbody-content > .updated:not(.luwipres
     background: var(--lp-primary);
     color: #fff;
     border-color: var(--lp-primary);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.30);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--lp-primary) 34%, transparent);
 }
 .lp-hub-tab--active:hover {
     background: var(--lp-primary-dark);
     border-color: var(--lp-primary-dark);
     color: #fff;
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.40);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--lp-primary) 44%, transparent);
 }
 .lp-hub-tab .dashicons {
     font-size: 16px;
@@ -5929,42 +6133,52 @@ body.luwipress_page_luwipress-scheduler #wpbody-content > .updated:not(.luwipres
 .lp-hub-tab-badge.is-error   { background: var(--lp-error-bg);   color: var(--lp-error); }
 .lp-hub-tab-badge.is-success { background: var(--lp-success-bg); color: var(--lp-success); }
 
-/* Hub body — owns the vertical rhythm between every section card so
-   pages stop looking ad-hoc. First child sits flush against the tab
-   strip; siblings get 16 px between them; section titles tighten the
-   gap to the next card so labels feel attached. */
+/* ── Hub body vertical rhythm — ONE container-owned gap ─────────────
+   Every hub tab body (Content, Site, KG, Agentic) renders its blocks
+   into .lp-hub-body. The gap between top-level blocks comes from a
+   flex-column GAP on the CONTAINER — never from each card's own margin —
+   so spacing can NOT drift by nesting depth or by which included file
+   emitted the block. This is the fix for the recurring merged-tab grey-
+   gap bug: the Schema tab stacks picker + preview, each wrapping its
+   card in its own div, so the old `> .luwipress-card` rule never matched
+   and cards kept a 24px margin while the wrapper divs had none → uneven
+   gaps + page-bg bleeding through. With a container gap, a card, a stat
+   row, a sub-tab strip, OR an included sub-page's wrapper div all sit at
+   the same rhythm regardless of depth. */
 .lp-hub-body {
     margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
 }
-.lp-hub-body > .luwipress-card,
+/* The container gap owns separation, so every block drops its own
+   vertical margin — whether it's a direct child or nested one level deep
+   inside an included file's wrapper div. */
+.lp-hub-body .luwipress-card,
 .lp-hub-body > .lp-stat-row,
 .lp-hub-body > .luwipress-stat-grid,
 .lp-hub-body > details.luwipress-card,
-.lp-hub-body > nav.lp-hub-tabs {
+.lp-hub-body > nav.lp-hub-tabs,
+.lp-hub-body > .lp-page-intro,
+.lp-hub-body > .lwp-collapse-stack,
+.lp-hub-body .lp-hub-tabs {
     margin-top: 0;
-    margin-bottom: 18px;
-}
-.lp-hub-body > .luwipress-card:last-child,
-.lp-hub-body > .lp-stat-row:last-child,
-.lp-hub-body > .luwipress-stat-grid:last-child {
     margin-bottom: 0;
 }
-/* Page-level intro paragraph inside a tab body — typically the first
-   element each refactored page emits. Pulls it tight to the strip
-   without losing breathing room. */
-.lp-hub-body > .lp-page-intro:first-child {
-    margin-top: 0;
+/* A wrapper div an included sub-page emits (e.g. .luwipress-schema-
+   picker-body / -preview-body) is itself a flex item, so it gets the
+   container gap; strip any stray margin so it doesn't double up. */
+.lp-hub-body > .luwipress-schema-picker-body,
+.lp-hub-body > .luwipress-schema-preview-body {
+    margin: 0;
 }
-.lp-hub-body > .lp-page-intro {
-    margin-bottom: 18px;
-}
-/* Sub-tab strip (Cookie Consent settings/log/policy, Bot Defense
-   overview/accounts/shield, Content Audit phrase/ai-tell/word-count)
-   sits inside a tab body — keep its top margin tight to the page-intro. */
-.lp-hub-body .lp-hub-tabs {
-    margin-top: 14px;
-    margin-bottom: 18px;
-}
+
+/* Settings page has no .lp-hub-body wrapper (its tabs live inside the
+   master <form>), so align its card rhythm to the same 16px the hubs use
+   so the two surfaces feel like one product. Padding-based, no flex — the
+   form's show/hide logic stays untouched. */
+.luwipress-settings-form .luwipress-card { margin: 0 0 var(--space-lg); }
+.luwipress-settings-form .lwp-collapse-stack { margin: 0; }
 
 /* ── Collapsible section (lp-collapse) ──────────────────────────
    Reusable <details>/<summary> accordion for hub bodies — a modern,
@@ -5972,6 +6186,19 @@ body.luwipress_page_luwipress-scheduler #wpbody-content > .updated:not(.luwipres
    consolidation). Chevron + marker-hide mirror the .lp-secondary-keys
    pattern so it reads consistently across the admin. */
 .lwp-collapse-stack { margin-top: 16px; }
+/* Bot Defense "All bot settings →" link rides the Overview summary row
+   (right-aligned via the .lp-collapse-hint margin-left:auto) so it costs no
+   extra vertical space. Reads as a quiet link, not a button. */
+.lwp-bd-settings-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+    color: var(--lp-primary);
+    font-weight: 500;
+}
+.lwp-bd-settings-link:hover { color: var(--lp-primary-dark); text-decoration: underline; }
+.lwp-bd-settings-link .dashicons { font-size: 14px; width: 14px; height: 14px; }
 details.lp-collapse {
     background: var(--lp-surface);
     border: 1px solid var(--lp-border);
@@ -6262,9 +6489,9 @@ details.lp-collapse > .lp-collapse-body > .luwipress-card:first-child { margin-t
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 8px 16px;
-    min-height: 36px;
-    border-radius: 8px;
+    padding: 0 14px;
+    min-height: 32px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--lp-border);
     background: var(--lp-surface);
     color: var(--lp-text);
@@ -6376,20 +6603,21 @@ details.lp-collapse > .lp-collapse-body > .luwipress-card:first-child { margin-t
    ───────────────────────────────────────────────────────────────── */
 .lp-stat-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 14px;
-    margin: 0 0 20px;
+    /* 3.7.2: KG-aligned density — denser track + gap, minimal cards. */
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    margin: 0 0 18px;
 }
 .lp-stat {
     background: var(--lp-surface);
     border: 1px solid var(--lp-border);
     border-left: 3px solid var(--lp-primary);
     border-radius: 8px;
-    padding: 14px 16px;
+    padding: 11px 13px;
     box-shadow: var(--lp-shadow-sm);
-    transition: box-shadow 160ms ease, transform 160ms ease;
+    transition: box-shadow 160ms ease;
 }
-.lp-stat:hover { transform: translateY(-1px); box-shadow: var(--lp-shadow-md); }
+.lp-stat:hover { box-shadow: var(--lp-shadow-md); }
 .lp-stat--success { border-left-color: var(--lp-success); }
 .lp-stat--warning { border-left-color: var(--lp-warning); }
 .lp-stat--error   { border-left-color: var(--lp-error); }
@@ -6397,16 +6625,16 @@ details.lp-collapse > .lp-collapse-body > .luwipress-card:first-child { margin-t
 .lp-stat--muted   { border-left-color: var(--lp-gray); }
 
 .lp-stat-label {
-    font-size: 11px;
+    font-size: 9px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.3px;
     color: var(--lp-text-secondary);
-    margin: 0 0 6px;
+    margin: 0 0 2px;
 }
 .lp-stat-value {
-    font-size: 26px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
     color: var(--lp-text);
     line-height: 1.1;
     margin: 0;
