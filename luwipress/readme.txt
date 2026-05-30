@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.6.0
+Stable tag: 3.6.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,10 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.6.1 — Knowledge Graph: vendor node detail panel =
+* **Fix:** clicking a vendor node in the Knowledge Graph opened an empty sidebar. The detail panel renderer had no `vendor` branch (and no fallback), so vendor clicks rendered nothing. Vendor nodes now open a full operational panel: entity-type badge (Organization / Person / Local Business), an E-E-A-T score health bar, profile stats (products attributed, specialty, location, role, group), severity-graded recommendations ("Attribute products" when none are linked, "Strengthen E-E-A-T profile" when the score is low), and Edit Vendor + View Profile actions — matching the product / segment / category panels.
+* Vendor nodes are now color-tinted by E-E-A-T score (teal strong / amber partial / red weak) instead of falling through to neutral gray, and gain a hover tooltip (E-E-A-T, product count, specialty). JS-only change; cache-busts automatically on the asset version stamp.
 
 = 3.6.0 — Agentic Commerce: Google Universal Commerce Protocol (UCP) + Agent Payments Protocol (AP2) =
 * **NEW Agentic Commerce hub (`LuwiPress → Commerce`)** — a dedicated admin surface for selling through AI agents on Google AI Mode (Search) and Gemini. Tabs: Overview (UCP readiness checklist + eligibility coverage), UCP Feed (store + per-product settings + supplemental feed preview), Checkout (native checkout session tester), AP2 (mandate verifier + settings), Transactions (per-order mandate audit trail).

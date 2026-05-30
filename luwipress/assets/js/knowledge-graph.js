@@ -659,6 +659,14 @@ function buildGraph(data, viewFilter) {
 			if (d.score > 15) return '#f59e0b';
 			return '#6366f1';
 		}
+		if (d.type === 'vendor' || d.type === 'vendor_hub') {
+			// Tint by E-E-A-T score so weak vendor profiles stand out.
+			var ve = Number(d.score || 0);
+			if (d.type === 'vendor_hub') return '#0d9488'; // teal hub
+			if (ve >= 70) return '#0d9488'; // strong — teal
+			if (ve >= 40) return '#f59e0b'; // partial — amber
+			return '#ef4444';               // weak — red
+		}
 		return '#6b7280';
 	}
 
@@ -1080,6 +1088,13 @@ function buildTooltip(d) {
 		h += '<div class="kg-tt-row">Click a segment around the hub for a breakdown.</div>';
 	} else if (d.type === 'page_hub') {
 		h += '<div class="kg-tt-row">Site pages overview — click a page for its detail panel.</div>';
+	} else if (d.type === 'vendor') {
+		var vt = d.data || {};
+		h += '<div class="kg-tt-row">E-E-A-T: <b>' + Number(vt.eat_score != null ? vt.eat_score : (d.score || 0)) + '</b></div>';
+		h += '<div class="kg-tt-row">Products: ' + Number(vt.product_count || 0) + '</div>';
+		if (vt.specialty) h += '<div class="kg-tt-row">Specialty: ' + escHtml(vt.specialty) + '</div>';
+	} else if (d.type === 'vendor_hub') {
+		h += '<div class="kg-tt-row">Vendor directory — click a vendor for their profile.</div>';
 	}
 	return h;
 }
@@ -1580,6 +1595,57 @@ function showDetailPanel(d) {
 		h += 'Pull the customer list via <code>GET /wp-json/luwipress/v1/crm/overview</code> (the segment array includes customer IDs). ';
 		h += 'Feed into your email tool of choice — LuwiPress never writes to third-party CRM plugins, so ownership stays with you.';
 		h += '</p></div>';
+	} else if (d.type === 'vendor') {
+		var v = d.data || {};
+		var eat = Number(v.eat_score != null ? v.eat_score : (d.score || 0));
+		var pc = Number(v.product_count || 0);
+		var eatCls = eat >= 70 ? 'good' : eat >= 40 ? 'warn' : 'bad';
+		var entityLabel = (v.entity_type === 'person') ? 'Person' : (v.entity_type === 'localbusiness') ? 'Local Business' : 'Organization';
+
+		h += '<div class="kg-p-type-badge" style="background:#0d9488;color:#fff">Vendor &middot; ' + entityLabel + '</div>';
+		h += '<h3 class="kg-p-name">' + escHtml(d.label || v.name || 'Vendor') + '</h3>';
+		h += '<div class="kg-p-meta">' + pc + (pc === 1 ? ' product' : ' products') + ' attributed</div>';
+
+		h += '<div class="kg-p-health kg-h-' + eatCls + '">';
+		h += '<div class="kg-p-health-bar" style="width:' + Math.min(100, eat) + '%"></div>';
+		h += '<span class="kg-p-health-label">E-E-A-T ' + eat + '%</span></div>';
+
+		// Profile stats
+		h += '<div class="kg-p-section"><div class="kg-p-section-title">Profile</div>';
+		h += '<div class="kg-p-stat-row"><span>Products</span><strong>' + pc + '</strong></div>';
+		if (v.specialty)  h += '<div class="kg-p-stat-row"><span>Specialty</span><strong>' + escHtml(v.specialty) + '</strong></div>';
+		if (v.location)   h += '<div class="kg-p-stat-row"><span>Location</span><strong>' + escHtml(v.location) + '</strong></div>';
+		if (v.occupation) h += '<div class="kg-p-stat-row"><span>Role</span><strong>' + escHtml(v.occupation) + '</strong></div>';
+		if (v.group)      h += '<div class="kg-p-stat-row"><span>Group</span><strong>' + escHtml(v.group) + '</strong></div>';
+		h += '</div>';
+
+		// Recommendations — E-E-A-T leverage points
+		var vRecs = [];
+		if (pc === 0) {
+			vRecs.push({ p: 'high', l: 'Attribute products', d: 'No products link to this vendor yet. Tick the Vendor box on a product to build the supply graph.' });
+		}
+		if (eat < 70) {
+			vRecs.push({ p: 'medium', l: 'Strengthen E-E-A-T profile', d: 'Add bio, portrait, location, specialty and verified social links to lift the authority score.' });
+		}
+		if (vRecs.length) {
+			h += '<div class="kg-p-section"><div class="kg-p-section-title">Recommendations</div>';
+			vRecs.forEach(function(r) {
+				var open = v.edit_url ? ' onclick="window.open(\'' + v.edit_url + '\',\'_blank\')" style="cursor:pointer;border:none;width:100%;text-align:left;"' : '';
+				h += '<button class="kg-rec kg-rec-' + r.p + '"' + open + '>';
+				h += '<span class="kg-rec-dot"></span>';
+				h += '<span class="kg-rec-body"><strong>' + escHtml(r.l) + '</strong><br><small>' + escHtml(r.d) + '</small></span>';
+				h += '</button>';
+			});
+			h += '</div>';
+		} else {
+			h += '<div class="kg-p-allgood">Strong vendor profile — attributed and authoritative</div>';
+		}
+
+		// Footer actions
+		h += '<div class="kg-p-footer">';
+		if (v.edit_url)    h += '<a href="' + v.edit_url + '" target="_blank" class="kg-btn kg-btn-primary">Edit Vendor</a>';
+		if (v.archive_url) h += '<a href="' + v.archive_url + '" target="_blank" class="kg-btn kg-btn-outline">View Profile</a>';
+		h += '</div>';
 	}
 
 	content.innerHTML = h;
