@@ -4,7 +4,7 @@ Tags: ai, agent, woocommerce, chat, automation, admin, assistant, middleware
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,6 +49,9 @@ Or just type — "how many at-risk customers do I have?", "generate a blog post 
 5. In the right-hand "Backend Runtime" panel, pick your active agent and enter the access token. Endpoints default to the hosted services; override them if you self-host.
 
 == Changelog ==
+
+= 1.3.1 — Hotfix: Commerce hub fatal (tab array shape) =
+* **Fix:** the Agentic Commerce admin page (`LuwiPress → Commerce`) threw a critical error — the modernized tab strip iterates each tab as an array (`$meta['icon']` / `$meta['label']`), but the `$tabs` definition was still the flat string shape from before the UI refresh, so PHP 8 raised a fatal on string-offset access. The header rendered, then the page body died. The `$tabs` array is now the icon-keyed shape the strip expects, and the `$lp_logo_url` used by the branded header is defined. All five tabs render cleanly. No backend / REST / data change — UCP and AP2 endpoints were unaffected throughout (returned HTTP 200 the whole time).
 
 = 1.3.0 — Agentic Commerce hub (Google UCP + AP2), moved in from core =
 * **New `LuwiPress → Commerce` hub.** The Agentic Commerce modules (introduced in core 3.6.0) now live here so the core plugin stays lean. Requires core LuwiPress 3.6.2+. Modernized admin UI: LuwiPress-branded `lp-header` with logo + icon-based `lp-hub-tabs` strip (Overview / UCP Feed / Checkout / AP2 / Transactions), reusing the core LuwiPress admin design system.

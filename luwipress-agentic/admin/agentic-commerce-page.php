@@ -41,12 +41,14 @@ $tab_url = function ( $tab ) {
 	return esc_url( add_query_arg( array( 'page' => 'luwipress-commerce', 'tab' => $tab ), admin_url( 'admin.php' ) ) );
 };
 $tabs = array(
-	'overview'     => __( 'Overview', 'luwipress' ),
-	'feed'         => __( 'UCP Feed', 'luwipress' ),
-	'checkout'     => __( 'Checkout', 'luwipress' ),
-	'ap2'          => __( 'AP2', 'luwipress' ),
-	'transactions' => __( 'Transactions', 'luwipress' ),
+	'overview'     => array( 'label' => __( 'Overview', 'luwipress-agentic' ),     'icon' => 'dashicons-chart-area' ),
+	'feed'         => array( 'label' => __( 'UCP Feed', 'luwipress-agentic' ),     'icon' => 'dashicons-rss' ),
+	'checkout'     => array( 'label' => __( 'Checkout', 'luwipress-agentic' ),     'icon' => 'dashicons-cart' ),
+	'ap2'          => array( 'label' => __( 'AP2', 'luwipress-agentic' ),          'icon' => 'dashicons-shield' ),
+	'transactions' => array( 'label' => __( 'Transactions', 'luwipress-agentic' ), 'icon' => 'dashicons-list-view' ),
 );
+
+$lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' : '';
 ?>
 <div class="wrap luwipress-hub-wrap luwipress-commerce">
 
