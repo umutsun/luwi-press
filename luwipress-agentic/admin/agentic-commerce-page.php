@@ -48,22 +48,32 @@ $tabs = array(
 	'transactions' => __( 'Transactions', 'luwipress' ),
 );
 ?>
-<div class="wrap luwipress-wrap luwipress-commerce">
+<div class="wrap luwipress-hub-wrap luwipress-commerce">
 
 	<div class="lp-header">
 		<div class="lp-header__brand">
-			<h1><?php esc_html_e( 'Agentic Commerce', 'luwipress' ); ?></h1>
-			<p class="lp-header__sub"><?php esc_html_e( 'Google Universal Commerce Protocol (UCP) + Agent Payments Protocol (AP2)', 'luwipress' ); ?></p>
+			<?php if ( $lp_logo_url ) : ?>
+				<img src="<?php echo esc_url( $lp_logo_url ); ?>" alt="LuwiPress" class="lp-header__logo" />
+			<?php endif; ?>
+			<div>
+				<h1 class="lp-header__title"><?php esc_html_e( 'Agentic Commerce', 'luwipress-agentic' ); ?></h1>
+				<p class="lp-header__subtitle"><?php esc_html_e( 'Google Universal Commerce Protocol (UCP) + Agent Payments Protocol (AP2)', 'luwipress-agentic' ); ?></p>
+			</div>
 		</div>
 	</div>
 
-	<h2 class="nav-tab-wrapper" style="margin-top:16px;">
-		<?php foreach ( $tabs as $slug => $label ) : ?>
-			<a href="<?php echo $tab_url( $slug ); // phpcs:ignore ?>" class="nav-tab <?php echo $active_tab === $slug ? 'nav-tab-active' : ''; ?>">
-				<?php echo esc_html( $label ); ?>
+	<nav class="lp-hub-tabs">
+		<?php foreach ( $tabs as $slug => $meta ) :
+			$is_active = ( $active_tab === $slug );
+			?>
+			<a href="<?php echo $tab_url( $slug ); // phpcs:ignore ?>" class="lp-hub-tab <?php echo $is_active ? 'is-active' : ''; ?>">
+				<span class="dashicons <?php echo esc_attr( $meta['icon'] ); ?>"></span>
+				<span class="lp-hub-tab__label"><?php echo esc_html( $meta['label'] ); ?></span>
 			</a>
 		<?php endforeach; ?>
-	</h2>
+	</nav>
+
+	<div class="lp-hub-body">
 
 	<?php if ( 'overview' === $active_tab ) : ?>
 		<div id="lwp-ac-overview" class="luwipress-card" style="margin-top:16px;">

@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.6.1
+ * Version: 3.6.2
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.6.1');
+define('LUWIPRESS_VERSION', '3.6.2');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -192,20 +192,10 @@ class LuwiPress {
         // ACP/ACS attribution bridge — server-side multi-cast for AI agent orders
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-acp-attribution.php';
 
-        // UCP (Universal Commerce Protocol) — Google's agentic-checkout standard.
-        // Phase 1: feed readiness (native_commerce / consumer_notice meta,
-        // return + support config, eligibility report, supplemental feed).
-        // Phase 2: native checkout API backed by the WC cart/order pipeline.
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-ucp.php';
-
-        // UCP Native Checkout — session create/update/complete backed by WC
-        // draft orders (phase 2). Loaded after the UCP module it depends on.
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-ucp-checkout.php';
-
-        // AP2 (Agent Payments Protocol) — verify + persist the Intent → Cart
-        // mandate chain as a non-repudiable order audit trail (phase 3).
-        // Composes with UCP checkout completion; pluggable signature verifier.
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-ap2.php';
+        // Agentic Commerce (Google UCP + AP2) moved to the LuwiPress Agentic
+        // companion plugin in core 3.6.2 so the core stays lean for stores that
+        // don't sell through AI agents. The WebMCP ucp_/ap2_ tools guard on
+        // class_exists, so they simply don't register when Agentic is inactive.
 
         // Theme Bridge — generic contract for LuwiPress-aware themes (3.1.48+).
         // Themes register tools + theme_mod proxies via two filters; the bridge
@@ -287,7 +277,6 @@ class LuwiPress {
         LuwiPress_Bot_Account_Cleaner::create_table();
         LuwiPress_Cookie_Consent::create_table();
         LuwiPress_Bot_Shield::create_table();
-        LuwiPress_UCP_Checkout::create_table();
         LuwiPress_CRM_Campaigns::maybe_create_tables();
         // Marketplace listings table created by the LuwiPress Marketplace Sync
         // companion plugin's own activation hook (3.1.44+).
@@ -373,9 +362,6 @@ class LuwiPress {
         LuwiPress_Customer_Chat::get_instance();
         LuwiPress_Abilities::get_instance();
         LuwiPress_ACP_Attribution::get_instance();
-        LuwiPress_UCP::get_instance();
-        LuwiPress_UCP_Checkout::get_instance();
-        LuwiPress_AP2::get_instance();
         LuwiPress_Theme_Bridge::get_instance();
         LuwiPress_Slug_Resolver::get_instance();
         LuwiPress_Bot_Account_Cleaner::get_instance();
@@ -492,18 +478,8 @@ class LuwiPress {
             array( $this, 'site_hub_page' )
         );
 
-        // 6. Commerce — hub: agentic commerce (Google UCP feed readiness +
-        //    native checkout) and AP2 mandate audit trail. Distinct domain
-        //    (payments/checkout) so it earns its own hub rather than folding
-        //    into Content or Site. Tabs server-rendered via ?tab=.
-        add_submenu_page(
-            'luwipress',
-            __( 'Commerce', 'luwipress' ),
-            __( 'Commerce', 'luwipress' ),
-            'manage_options',
-            'luwipress-commerce',
-            array( $this, 'commerce_hub_page' )
-        );
+        // (Agentic Commerce hub moved to the LuwiPress Agentic companion in
+        //  core 3.6.2 — it registers its own submenu under this parent.)
 
         // 7. Settings
         add_submenu_page(
@@ -637,15 +613,6 @@ class LuwiPress {
      */
     public function site_hub_page() {
         include LUWIPRESS_PLUGIN_DIR . 'admin/site-hub-page.php';
-    }
-
-    /**
-     * Commerce hub — agentic commerce surface. Renders the UCP feed readiness
-     * tab (phase 1), with Checkout (phase 2) and AP2 / Transactions (phase 3)
-     * tabs added as those phases ship. Server-rendered ?tab= dispatch.
-     */
-    public function commerce_hub_page() {
-        include LUWIPRESS_PLUGIN_DIR . 'admin/agentic-commerce-page.php';
     }
 
     /**
@@ -911,7 +878,6 @@ class LuwiPress {
             LuwiPress_Bot_Account_Cleaner::create_table();
             LuwiPress_Cookie_Consent::create_table();
             LuwiPress_Bot_Shield::create_table();
-            LuwiPress_UCP_Checkout::create_table();
             update_option( 'luwipress_db_version', LUWIPRESS_VERSION );
 
             // Auto-build BM25 index on first upgrade

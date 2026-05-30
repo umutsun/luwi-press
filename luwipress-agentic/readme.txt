@@ -4,7 +4,7 @@ Tags: ai, agent, woocommerce, chat, automation, admin, assistant, middleware
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,6 +49,14 @@ Or just type — "how many at-risk customers do I have?", "generate a blog post 
 5. In the right-hand "Backend Runtime" panel, pick your active agent and enter the access token. Endpoints default to the hosted services; override them if you self-host.
 
 == Changelog ==
+
+= 1.3.0 — Agentic Commerce hub (Google UCP + AP2), moved in from core =
+* **New `LuwiPress → Commerce` hub.** The Agentic Commerce modules (introduced in core 3.6.0) now live here so the core plugin stays lean. Requires core LuwiPress 3.6.2+. Modernized admin UI: LuwiPress-branded `lp-header` with logo + icon-based `lp-hub-tabs` strip (Overview / UCP Feed / Checkout / AP2 / Transactions), reusing the core LuwiPress admin design system.
+* **`LuwiPress_UCP`** — Google Universal Commerce Protocol feed readiness: `native_commerce` / `consumer_notice` / `merchant_item_id` product meta, return-policy + support settings, per-product eligibility validator + store-wide coverage report, supplemental feed (JSON/CSV/XML). REST `/ucp/settings`, `/ucp/eligibility`, `/ucp/product/{id}`, `/ucp/feed`.
+* **`LuwiPress_UCP_Checkout`** — UCP native checkout (session create/update/complete) backed by WooCommerce `checkout-draft` orders so totals are WooCommerce's own. Sandbox-first. Table `wp_luwipress_ucp_sessions`. REST `/ucp/checkout/session(/{id}(/complete))`.
+* **`LuwiPress_AP2`** — Agent Payments Protocol mandate audit trail: verify a presented Cart Mandate (structure / expiry / issuer / amount-match), persist the Intent → Cart chain on the order, pluggable signature verifier via `luwipress_ap2_verify_mandate`. REST `/ap2/settings`, `/ap2/mandate/verify`, `/ap2/transaction/{id}`, `/ap2/log`, `/ap2/checkout/complete`.
+* **WebMCP:** the 15 `ucp_*` / `ap2_*` tools (WebMCP companion 1.0.36) register against these classes — they activate when this companion is active and silently skip when it isn't.
+* **Data continuity:** the move reuses the exact same table + option + order-meta names, so a site upgrading from core 3.6.0/3.6.1 keeps all UCP/AP2 settings, sessions, and mandate history. The checkout sessions table is ensured on version advance (not just on activation), so a ZIP-replace update creates it cleanly.
 
 = 1.2.0 — WebMCP tool-calling agentic loop =
 * **Real agentic loop.** When the active backend supports OpenAI function-calling, the plugin now sends the WebMCP read-only tool catalog to the LLM with every dispatch. The LLM picks the right tool, the plugin executes it locally against WebMCP's registered handler (no HTTP round-trip), feeds the result back as a `tool` role message, and loops up to 5 turns until the LLM produces a final answer. Result: questions like "kaç müşteri var" / "kaç bot hesabı flagged" / "FAQ coverage" / "stoğu biten ürünler" now return **actual site data** instead of generic "ben göremiyorum" responses.
