@@ -4,7 +4,7 @@ Tags: ai, agent, woocommerce, chat, automation, admin, assistant, middleware
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.3.2
+Stable tag: 1.3.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,6 +49,9 @@ Or just type — "how many at-risk customers do I have?", "generate a blog post 
 5. In the right-hand "Backend Runtime" panel, pick your active agent and enter the access token. Endpoints default to the hosted services; override them if you self-host.
 
 == Changelog ==
+
+= 1.3.3 — Commerce sub-tabs become a collapsible accordion =
+* **Leaner Commerce surface:** the Commerce area's sub-tab strip (Overview / UCP Feed / Checkout / AP2 / Transactions) is now a collapsible **accordion** — each section opens in place instead of switching tabs, and only loads its data the first time it is expanded. A more minimal, modern UI. Old `?tab=<section>` deep links still resolve and auto-open the matching section.
 
 = 1.3.2 — Agentic becomes a two-area hub (Agents + Commerce) =
 * **Restructure:** the standalone "Commerce" submenu is gone — Agentic Commerce now lives as the **Commerce** area inside the Agentic page, alongside the **Agents** area (the chat surface + Hermes / Open Claw runtime). An icon card-tab strip under the LuwiPress-branded header switches between them; the Commerce area only appears when the UCP/AP2 modules are loaded. The old `?page=luwipress-commerce` URL still resolves (hidden route) as a full-page render for existing bookmarks.

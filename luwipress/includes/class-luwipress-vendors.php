@@ -129,6 +129,11 @@ class LuwiPress_Vendors {
 		// WP Settings → Permalinks page: add a notice pointing to our settings
 		add_action( 'admin_init', array( $this, 'register_permalinks_page_notice' ) );
 
+		// Vendor edit screen: per-vendor Schema.org @type override metabox (FR-019).
+		// Not WC-gated — vendor profiles exist independently of WooCommerce.
+		add_action( 'add_meta_boxes', array( $this, 'add_vendor_entity_type_metabox' ) );
+		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_vendor_entity_type' ), 10, 2 );
+
 		// WooCommerce integration (loaded only when WC is active)
 		add_action( 'woocommerce_init', array( $this, 'init_woocommerce_integration' ) );
 	}
@@ -178,9 +183,32 @@ class LuwiPress_Vendors {
 
 		// Product Schema.org: inject manufacturer / author linking to vendor URL.
 		add_filter( 'woocommerce_structured_data_product', array( $this, 'enrich_product_schema_with_vendor' ), 10, 2 );
+
+		// Rank Math replaces WooCommerce's native structured-data printer with its
+		// own @graph, so the woocommerce_structured_data_product result is
+		// discarded on Rank-Math sites — mirror the manufacturer/author injection
+		// into Rank Math's Product node. Late priority (99) so we run AFTER other
+		// rank_math/json_ld subscribers that may rebuild the product node.
+		add_filter( 'rank_math/json_ld', array( $this, 'enrich_rank_math_product_schema' ), 99, 2 );
+
+		// Bust the per-vendor makesOffer transient whenever a product's vendor
+		// attribution changes through ANY write path (admin save, REST, MCP,
+		// wp-cli, seed scripts) — all funnel through the post-meta lifecycle.
+		// update_post_meta / delete_post_meta fire BEFORE the DB write (old value
+		// still readable), added_post_meta AFTER — the callback unions both so a
+		// de-attached vendor's cache is busted too.
+		add_action( 'update_post_meta', array( $this, 'invalidate_vendor_offers_on_meta' ), 10, 4 );
+		add_action( 'added_post_meta', array( $this, 'invalidate_vendor_offers_on_meta' ), 10, 4 );
+		add_action( 'delete_post_meta', array( $this, 'invalidate_vendor_offers_on_meta' ), 10, 4 );
 	}
 
 	const PRODUCT_VENDORS_META = '_lwp_vendor_ids';
+
+	// Optional per-vendor Schema.org @type override (organization|person|
+	// localbusiness). Empty = inherit the site-global luwipress_vendors_entity_type.
+	// Lets a single atelier/organization vendor emit @type Organization while
+	// every other vendor on the same site stays the global default (FR-019).
+	const ENTITY_TYPE_META = '_lwp_vendor_entity_type';
 
 	public function add_product_vendor_metabox() {
 		$singular = (string) self::get_setting( 'singular_label' );
@@ -275,6 +303,61 @@ class LuwiPress_Vendors {
 		}
 		// Stored as JSON string-encoded array so meta_query LIKE matches survive.
 		update_post_meta( $post_id, self::PRODUCT_VENDORS_META, wp_json_encode( array_map( 'strval', $valid ) ) );
+	}
+
+	/**
+	 * Vendor edit screen — Schema.org @type override metabox (FR-019). Lets an
+	 * operator flip a single vendor (e.g. an atelier / workshop) to Organization
+	 * while the rest of the site keeps the global default.
+	 */
+	public function add_vendor_entity_type_metabox() {
+		add_meta_box(
+			'lwp_vendor_entity_type',
+			__( 'Schema entity type', 'luwipress' ),
+			array( $this, 'render_vendor_entity_type_metabox' ),
+			self::POST_TYPE,
+			'side',
+			'default'
+		);
+	}
+
+	public function render_vendor_entity_type_metabox( $post ) {
+		$current = (string) get_post_meta( $post->ID, self::ENTITY_TYPE_META, true );
+		$global  = (string) self::get_setting( 'entity_type' );
+		wp_nonce_field( 'lwp_vendor_entity_type_save', 'lwp_vendor_entity_type_nonce' );
+		$options = array(
+			''              => sprintf( __( 'Inherit site default (%s)', 'luwipress' ), ucfirst( $global ) ),
+			'organization'  => __( 'Organization', 'luwipress' ),
+			'person'        => __( 'Person', 'luwipress' ),
+			'localbusiness' => __( 'LocalBusiness', 'luwipress' ),
+		);
+		echo '<p style="font-size:12px;color:#646970;margin:0 0 8px;">' . esc_html__( 'Overrides the Schema.org @type for this profile and its product attribution.', 'luwipress' ) . '</p>';
+		echo '<select name="lwp_vendor_entity_type" style="width:100%;">';
+		foreach ( $options as $val => $label ) {
+			echo '<option value="' . esc_attr( $val ) . '" ' . selected( $current, $val, false ) . '>' . esc_html( $label ) . '</option>';
+		}
+		echo '</select>';
+	}
+
+	public function save_vendor_entity_type( $post_id, $post ) {
+		if ( ! isset( $_POST['lwp_vendor_entity_type_nonce'] ) ) {
+			return;
+		}
+		if ( ! wp_verify_nonce( sanitize_key( $_POST['lwp_vendor_entity_type_nonce'] ), 'lwp_vendor_entity_type_save' ) ) {
+			return;
+		}
+		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+			return;
+		}
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return;
+		}
+		$val = isset( $_POST['lwp_vendor_entity_type'] ) ? sanitize_text_field( wp_unslash( $_POST['lwp_vendor_entity_type'] ) ) : '';
+		if ( in_array( $val, array( 'organization', 'person', 'localbusiness' ), true ) ) {
+			update_post_meta( $post_id, self::ENTITY_TYPE_META, $val );
+		} else {
+			delete_post_meta( $post_id, self::ENTITY_TYPE_META );
+		}
 	}
 
 	/**
@@ -407,8 +490,9 @@ class LuwiPress_Vendors {
 				'title'     => get_the_title( $p ),
 				'link'      => get_permalink( $p ),
 				'image'     => get_the_post_thumbnail_url( $p, 'thumbnail' ) ?: '',
-				'location'  => (string) get_post_meta( $p->ID, self::META_KEYS['location'],  true ),
-				'specialty' => (string) get_post_meta( $p->ID, self::META_KEYS['specialty'], true ),
+				'location'    => (string) get_post_meta( $p->ID, self::META_KEYS['location'],  true ),
+				'specialty'   => (string) get_post_meta( $p->ID, self::META_KEYS['specialty'], true ),
+				'entity_type' => $this->resolve_entity_type( $p->ID ),
 			);
 		}
 		return $out;
@@ -441,44 +525,230 @@ class LuwiPress_Vendors {
 	}
 
 	/**
-	 * Add `manufacturer` (or `author` for entity_type=person) to the
-	 * WC Product Schema.org payload — strong vendor attribution signal
-	 * for Google product search.
+	 * Build the manufacturer/author schema payload for a product's attributed
+	 * vendors. Shared by the WooCommerce-native and Rank Math json_ld paths so
+	 * both emit an identical node. Returns null when the product has no
+	 * attributed vendors (or an invalid id).
+	 *
+	 * @param int $product_id
+	 * @return array{field:string,value:array}|null
+	 */
+	private function build_vendor_schema_payload( $product_id ) {
+		$product_id = (int) $product_id;
+		if ( $product_id <= 0 ) {
+			return null;
+		}
+		$vendors = $this->get_product_vendors( $product_id );
+		if ( empty( $vendors ) ) {
+			return null;
+		}
+
+		$schema_type_map = array(
+			'organization'  => 'Organization',
+			'person'        => 'Person',
+			'localbusiness' => 'LocalBusiness',
+		);
+		// The wrapper field key (manufacturer vs author) is product-level and
+		// follows the site-global entity type — schema.org can't mix author and
+		// manufacturer keys on one Product. Each vendor NODE, however, carries
+		// its OWN @type from its per-vendor override (FR-019), so an atelier
+		// Organization and a luthier Person attributed to the same product each
+		// render with the correct @type under that single key.
+		$global_entity = (string) self::get_setting( 'entity_type' );
+		if ( ! isset( $schema_type_map[ $global_entity ] ) ) {
+			$global_entity = 'organization';
+		}
+		$schema_field = $global_entity === 'person' ? 'author' : 'manufacturer';
+
+		// Single vendor — emit one object. Multiple → array. Per-vendor @type.
+		$vendor_payloads = array_map( function ( $v ) use ( $schema_type_map, $global_entity ) {
+			$etype   = ( isset( $v['entity_type'] ) && isset( $schema_type_map[ $v['entity_type'] ] ) ) ? $v['entity_type'] : $global_entity;
+			$payload = array(
+				'@type' => $schema_type_map[ $etype ],
+				'name'  => $v['title'],
+				'url'   => esc_url_raw( $v['link'] ),
+			);
+			if ( ! empty( $v['image'] ) ) {
+				$payload['image'] = esc_url_raw( $v['image'] );
+			}
+			return $payload;
+		}, $vendors );
+
+		return array(
+			'field' => $schema_field,
+			'value' => count( $vendor_payloads ) === 1 ? $vendor_payloads[0] : $vendor_payloads,
+		);
+	}
+
+	/**
+	 * Add `manufacturer` (or `author` for entity_type=person) to the WC Product
+	 * Schema.org payload — strong vendor attribution signal. Rendered on sites
+	 * using WooCommerce's native structured data (non-Rank-Math SEO plugins).
 	 */
 	public function enrich_product_schema_with_vendor( $markup, $product ) {
 		// Duck-type — WC passes a WC_Product instance via the woocommerce_structured_data_product filter.
 		if ( ! is_object( $product ) || ! method_exists( $product, 'get_id' ) ) {
 			return $markup;
 		}
-		$vendors = $this->get_product_vendors( $product->get_id() );
-		if ( empty( $vendors ) ) {
+		$payload = $this->build_vendor_schema_payload( $product->get_id() );
+		if ( null === $payload ) {
 			return $markup;
 		}
-
-		$entity_type = (string) self::get_setting( 'entity_type' );
-		$schema_type_map = array(
-			'organization'  => 'Organization',
-			'person'        => 'Person',
-			'localbusiness' => 'LocalBusiness',
-		);
-		$type = $schema_type_map[ $entity_type ] ?? 'Organization';
-		$schema_field = $entity_type === 'person' ? 'author' : 'manufacturer';
-
-		// Single vendor — emit one object. Multiple → array.
-		$vendor_payloads = array_map( function ( $v ) use ( $type ) {
-			$payload = array(
-				'@type' => $type,
-				'name'  => $v['title'],
-				'url'   => $v['link'],
-			);
-			if ( ! empty( $v['image'] ) ) {
-				$payload['image'] = $v['image'];
-			}
-			return $payload;
-		}, $vendors );
-
-		$markup[ $schema_field ] = count( $vendor_payloads ) === 1 ? $vendor_payloads[0] : $vendor_payloads;
+		if ( ! isset( $markup[ $payload['field'] ] ) ) {
+			$markup[ $payload['field'] ] = $payload['value'];
+		}
 		return $markup;
+	}
+
+	/**
+	 * Mirror the manufacturer/author injection into Rank Math's @graph. On
+	 * Rank-Math sites WC's native structured-data printer is disabled and Rank
+	 * Math emits its own Product node, so the woocommerce_structured_data_product
+	 * result never reaches the page — this lands the same node in Rank Math's
+	 * graph.
+	 *
+	 * @param mixed $data   Rank Math json_ld node collection (assoc array).
+	 * @param mixed $jsonld Rank Math JsonLD object (exposes get_post_id()).
+	 * @return mixed
+	 */
+	public function enrich_rank_math_product_schema( $data, $jsonld ) {
+		if ( ! is_array( $data ) ) {
+			return $data;
+		}
+		$product_id = ( is_object( $jsonld ) && method_exists( $jsonld, 'get_post_id' ) )
+			? (int) $jsonld->get_post_id()
+			: 0;
+		$payload = $this->build_vendor_schema_payload( $product_id );
+		if ( null === $payload ) {
+			return $data;
+		}
+
+		// Locate the Product node and inject. Write by KEY into $data — never
+		// mutate a foreach copy (that write would be silently discarded). Match
+		// @type as a string OR array; tolerate ProductGroup (variable products)
+		// and don't clobber an operator-filled Rank Math Brand/manufacturer.
+		$found = false;
+		foreach ( $data as $key => $entry ) {
+			if ( ! is_array( $entry ) ) {
+				continue;
+			}
+			$types = array_map( 'strval', (array) ( $entry['@type'] ?? array() ) );
+			if ( ! in_array( 'Product', $types, true ) && ! in_array( 'ProductGroup', $types, true ) ) {
+				continue;
+			}
+			if ( ! isset( $data[ $key ][ $payload['field'] ] ) ) {
+				$data[ $key ][ $payload['field'] ] = $payload['value'];
+			}
+			$found = true;
+			break;
+		}
+
+		if ( ! $found && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			// No top-level Product node — log the shape so the live graph can be
+			// inspected if attribution ever fails to land.
+			error_log( 'LuwiPress Vendors: rank_math/json_ld carried no top-level Product node. Keys=' . wp_json_encode( array_keys( $data ) ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		}
+
+		return $data;
+	}
+
+	/**
+	 * Decode a `_lwp_vendor_ids` meta value (JSON quoted-string array, integer
+	 * array, or single int) into an int[] of vendor IDs. Shape-agnostic.
+	 *
+	 * @param mixed $raw
+	 * @return int[]
+	 */
+	private function decode_vendor_ids( $raw ) {
+		if ( is_array( $raw ) ) {
+			$decoded = $raw;
+		} elseif ( is_string( $raw ) && '' !== $raw ) {
+			$decoded = json_decode( $raw, true );
+			if ( ! is_array( $decoded ) ) {
+				$decoded = array( $raw );
+			}
+		} elseif ( is_numeric( $raw ) ) {
+			$decoded = array( $raw );
+		} else {
+			return array();
+		}
+		return array_values( array_unique( array_filter( array_map( 'intval', $decoded ) ) ) );
+	}
+
+	/**
+	 * Current language code for cache scoping (WPML / Polylang), or 'all' in a
+	 * language-neutral context.
+	 *
+	 * @return string
+	 */
+	private function current_lang_code() {
+		$lang = apply_filters( 'wpml_current_language', null );
+		if ( ! $lang && function_exists( 'pll_current_language' ) ) {
+			$lang = pll_current_language();
+		}
+		return $lang ? (string) $lang : 'all';
+	}
+
+	/**
+	 * Every language code a vendor-offers transient may have been cached under,
+	 * for invalidation. Includes the 'all' (language-neutral) fallback.
+	 *
+	 * @return string[]
+	 */
+	private function active_lang_codes() {
+		$codes = array();
+		$wpml  = apply_filters( 'wpml_active_languages', null );
+		if ( is_array( $wpml ) ) {
+			$codes = array_keys( $wpml );
+		}
+		if ( function_exists( 'pll_languages_list' ) ) {
+			$codes = array_merge( $codes, (array) pll_languages_list() );
+		}
+		$codes[] = 'all';
+		return array_values( array_unique( array_filter( array_map( 'strval', $codes ) ) ) );
+	}
+
+	/**
+	 * Delete the makesOffer transient for the given vendors across every cached
+	 * language.
+	 *
+	 * @param int[] $vendor_ids
+	 */
+	private function invalidate_vendor_offer_cache( $vendor_ids ) {
+		$langs = $this->active_lang_codes();
+		foreach ( array_unique( array_map( 'intval', (array) $vendor_ids ) ) as $vid ) {
+			if ( $vid <= 0 ) {
+				continue;
+			}
+			foreach ( $langs as $lang ) {
+				delete_transient( 'luwipress_vendor_offers_' . $vid . '_' . $lang );
+			}
+		}
+	}
+
+	/**
+	 * Post-meta lifecycle listener — busts the makesOffer cache for the OLD and
+	 * NEW vendor sets whenever `_lwp_vendor_ids` changes on a product through any
+	 * write path. Hooked on update_post_meta / added_post_meta / delete_post_meta.
+	 *
+	 * @param int|int[] $meta_id    Unused (single id on add/update, array on delete).
+	 * @param int       $object_id
+	 * @param string    $meta_key
+	 * @param mixed     $meta_value
+	 */
+	public function invalidate_vendor_offers_on_meta( $meta_id, $object_id, $meta_key, $meta_value ) {
+		unset( $meta_id );
+		if ( self::PRODUCT_VENDORS_META !== $meta_key ) {
+			return;
+		}
+		$ids = $this->decode_vendor_ids( $meta_value );
+		// On the BEFORE-write hooks (update_post_meta / delete_post_meta) the DB
+		// still holds the prior value — union it so a de-attached vendor's cache
+		// is busted too.
+		$ids = array_merge( $ids, $this->decode_vendor_ids( get_post_meta( (int) $object_id, $meta_key, true ) ) );
+		if ( ! empty( $ids ) ) {
+			$this->invalidate_vendor_offer_cache( $ids );
+		}
 	}
 
 	/* ─── END WC INTEGRATION ──────────────────────────────────────────── */
@@ -488,6 +758,24 @@ class LuwiPress_Vendors {
 	public static function get_setting( $key, $fallback = null ) {
 		$default = self::DEFAULTS[ $key ] ?? $fallback;
 		return get_option( self::OPTION_PREFIX . $key, $default );
+	}
+
+	/**
+	 * Effective Schema.org entity type for a vendor: the per-post override
+	 * (_lwp_vendor_entity_type) when set to a valid value, else the site-global
+	 * setting. Always clamped to organization|person|localbusiness (FR-019).
+	 *
+	 * @param int $vendor_id
+	 * @return string
+	 */
+	public function resolve_entity_type( $vendor_id ) {
+		$valid    = array( 'organization', 'person', 'localbusiness' );
+		$override = (string) get_post_meta( (int) $vendor_id, self::ENTITY_TYPE_META, true );
+		if ( in_array( $override, $valid, true ) ) {
+			return $override;
+		}
+		$global = (string) self::get_setting( 'entity_type' );
+		return in_array( $global, $valid, true ) ? $global : 'organization';
 	}
 
 	public static function get_all_settings() {
@@ -617,6 +905,21 @@ class LuwiPress_Vendors {
 				) )
 			);
 		}
+
+		// Per-vendor entity_type override (FR-019) — kept OUT of META_KEYS (those
+		// are free-text / url profile fields); this is an enum with its own
+		// sanitizer. Settable via REST /vendors/{id}/meta, MCP meta_set, wp-cli.
+		register_post_meta(
+			self::POST_TYPE,
+			self::ENTITY_TYPE_META,
+			array_merge( $base, array(
+				'description'       => 'LuwiPress Vendor — Schema.org @type override (organization|person|localbusiness; empty = inherit global)',
+				'sanitize_callback' => function ( $value ) {
+					$value = (string) $value;
+					return in_array( $value, array( 'organization', 'person', 'localbusiness' ), true ) ? $value : '';
+				},
+			) )
+		);
 	}
 
 	private function sanitizer_for( $key ) {
@@ -834,6 +1137,17 @@ class LuwiPress_Vendors {
 			update_post_meta( $id, $meta_key, $value );
 			$updated[ $short ] = $value;
 		}
+		// Per-vendor entity_type override (FR-019) — not part of META_KEYS.
+		if ( array_key_exists( 'entity_type', $params ) ) {
+			$etype = (string) $params['entity_type'];
+			if ( in_array( $etype, array( 'organization', 'person', 'localbusiness' ), true ) ) {
+				update_post_meta( $id, self::ENTITY_TYPE_META, $etype );
+				$updated['entity_type'] = $etype;
+			} else {
+				delete_post_meta( $id, self::ENTITY_TYPE_META );
+				$updated['entity_type'] = '';
+			}
+		}
 		return rest_ensure_response( array(
 			'status'  => 'updated',
 			'id'      => $id,
@@ -930,16 +1244,78 @@ class LuwiPress_Vendors {
 		return $node;
 	}
 
+	/**
+	 * Product IDs a vendor makes — the inverse of the `_lwp_vendor_ids` product
+	 * meta. Powers the vendor's makesOffer schema node. Capped, cached per
+	 * (vendor, language), and de-duplicated across WPML language siblings so a
+	 * language-neutral context (REST /vendors/{id}) doesn't list a product once
+	 * per language.
+	 *
+	 * @param int $vendor_id
+	 * @param int $limit
+	 * @return int[]
+	 */
+	private function get_vendor_product_ids( $vendor_id, $limit = 50 ) {
+		$vendor_id = (int) $vendor_id;
+		if ( $vendor_id <= 0 || ! function_exists( 'wc_get_product' ) ) {
+			return array();
+		}
+		$lang      = $this->current_lang_code();
+		$cache_key = 'luwipress_vendor_offers_' . $vendor_id . '_' . $lang;
+		$cached    = get_transient( $cache_key );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		// JSON-array-element-aware REGEXP — tolerates quoted "36633" and legacy
+		// bare 36633, and the boundaries stop 36633 false-matching 366331.
+		$regex = '(\\[|,)[[:space:]]*"?' . preg_quote( (string) $vendor_id, '/' ) . '"?[[:space:]]*(,|\\])';
+
+		$q = new WP_Query( array(
+			'post_type'      => 'product',
+			'post_status'    => 'publish',
+			'posts_per_page' => (int) $limit,
+			'fields'         => 'ids',
+			'no_found_rows'  => true,
+			'meta_query'     => array(
+				array(
+					'key'     => self::PRODUCT_VENDORS_META,
+					'value'   => $regex,
+					'compare' => 'REGEXP',
+				),
+			),
+		) );
+		$ids = array_map( 'intval', (array) $q->posts );
+
+		// Collapse WPML language siblings to one canonical id per trid (no-op
+		// when WPML is inactive or the query already returned one language).
+		if ( count( $ids ) > 1 ) {
+			$seen    = array();
+			$deduped = array();
+			foreach ( $ids as $pid ) {
+				$trid = apply_filters( 'wpml_element_trid', null, $pid, 'post_product' );
+				if ( $trid ) {
+					if ( isset( $seen[ $trid ] ) ) {
+						continue;
+					}
+					$seen[ $trid ] = true;
+				}
+				$deduped[] = $pid;
+			}
+			$ids = $deduped;
+		}
+
+		set_transient( $cache_key, $ids, HOUR_IN_SECONDS );
+		return $ids;
+	}
+
 	public function build_vendor_schema( $vendor_id ) {
 		$p = get_post( $vendor_id );
 		if ( ! $p || $p->post_type !== self::POST_TYPE ) {
 			return null;
 		}
 
-		$entity_type = (string) self::get_setting( 'entity_type' );
-		if ( ! in_array( $entity_type, array( 'organization', 'person', 'localbusiness' ), true ) ) {
-			$entity_type = 'organization';
-		}
+		$entity_type = $this->resolve_entity_type( $vendor_id );
 
 		$schema_type_map = array(
 			'organization'  => 'Organization',
@@ -959,12 +1335,12 @@ class LuwiPress_Vendors {
 			'@context' => 'https://schema.org',
 			'@type'    => $schema_type_map[ $entity_type ],
 			'name'     => get_the_title( $p ),
-			'url'      => get_permalink( $p ),
+			'url'      => esc_url_raw( get_permalink( $p ) ),
 		);
 
 		$image = get_the_post_thumbnail_url( $p, 'full' );
 		if ( $image ) {
-			$schema['image'] = $image;
+			$schema['image'] = esc_url_raw( $image );
 		}
 
 		$desc = $p->post_excerpt ?: wp_strip_all_tags( wp_trim_words( $p->post_content, 40, '' ) );
@@ -996,6 +1372,25 @@ class LuwiPress_Vendors {
 					),
 				);
 			}
+
+			// worksFor — link the person to the store as an Organization. Inline
+			// + self-contained (name + url) so the node is always valid (never a
+			// dangling @id reference); the `luwipress_vendor_works_for` filter
+			// lets operators point it at a specific org or suppress it (return an
+			// empty array / non-array).
+			$works_for = apply_filters(
+				'luwipress_vendor_works_for',
+				array(
+					'@type' => 'Organization',
+					'name'  => get_bloginfo( 'name' ),
+					'url'   => esc_url_raw( home_url( '/' ) ),
+				),
+				$vendor_id,
+				$p
+			);
+			if ( is_array( $works_for ) && ! empty( $works_for ) ) {
+				$schema['worksFor'] = $works_for;
+			}
 		}
 
 		// Organization / LocalBusiness-specific fields.
@@ -1026,6 +1421,42 @@ class LuwiPress_Vendors {
 
 		if ( ! empty( $same_as ) ) {
 			$schema['sameAs'] = $same_as;
+		}
+
+		// makesOffer — the products this vendor makes (inverse of _lwp_vendor_ids).
+		// Valid on Person, Organization and LocalBusiness. Compact Offer nodes;
+		// price/priceCurrency/availability filled from WooCommerce when known.
+		$offer_pids = $this->get_vendor_product_ids( $vendor_id, 50 );
+		if ( ! empty( $offer_pids ) && function_exists( 'wc_get_product' ) ) {
+			$offers = array();
+			foreach ( $offer_pids as $pid ) {
+				$wc = wc_get_product( $pid );
+				if ( ! is_object( $wc ) || ! method_exists( $wc, 'get_id' ) ) {
+					continue;
+				}
+				$url   = esc_url_raw( get_permalink( $pid ) );
+				$offer = array(
+					'@type'       => 'Offer',
+					'url'         => $url,
+					'itemOffered' => array(
+						'@type' => 'Product',
+						'name'  => get_the_title( $pid ),
+						'url'   => $url,
+					),
+				);
+				$price = method_exists( $wc, 'get_price' ) ? $wc->get_price() : null;
+				if ( '' !== $price && null !== $price && is_numeric( $price ) ) {
+					$offer['price']         = (string) $price;
+					$offer['priceCurrency'] = function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'USD';
+					if ( method_exists( $wc, 'is_in_stock' ) ) {
+						$offer['availability'] = $wc->is_in_stock() ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+					}
+				}
+				$offers[] = $offer;
+			}
+			if ( ! empty( $offers ) ) {
+				$schema['makesOffer'] = $offers;
+			}
 		}
 
 		return $schema;

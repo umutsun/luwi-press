@@ -23,6 +23,7 @@
 		<custom-field action="copy">_lwp_vendor_behance</custom-field>
 		<custom-field action="copy">_lwp_vendor_website</custom-field>
 		<custom-field action="copy">_lwp_vendor_ids</custom-field>
+		<custom-field action="copy">_lwp_vendor_entity_type</custom-field>
 	</custom-fields>
 
 </wpml-config>

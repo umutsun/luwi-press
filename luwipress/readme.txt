@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.6.3
+Stable tag: 3.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,14 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.7.0 — Vendor manufacturer schema + per-vendor entity type + leaner admin =
+* **NEW Product manufacturer/author schema on Rank Math sites:** when a product is attributed to a vendor, that vendor now lands in the product's JSON-LD as `manufacturer` (or `author` for person-type vendors) — including on sites where **Rank Math** manages product schema (previously the attribution only reached WooCommerce-native structured data, which Rank Math replaces). A strong vendor-attribution signal for Google.
+* **NEW vendor `makesOffer` + `worksFor` schema:** each vendor profile page now declares the products that vendor makes (`makesOffer`) and the store they work for (`worksFor`) — richer E-E-A-T identity for makers, ateliers and luthiers. Language-scoped and cached.
+* **NEW per-vendor Schema entity type override:** a single vendor (e.g. an atelier or workshop) can now emit `@type` Organization while every other vendor on the site keeps the global default. Set it from the new **Schema entity type** box on the vendor edit screen, via REST `/vendors/{id}/meta`, or the WebMCP `vendor_meta_set` tool. Copies to WPML translation siblings automatically.
+* **Vendor profiles are now translatable** through the Translation pipeline (the vendor CPT was already WPML-registered; the request path now accepts it). Filterable via `luwipress_translatable_post_types`.
+* **Leaner Settings:** the **CRM + Customer Chat** tabs are now one **Customers** group and **Security + Bot** one **Security** group, each with collapsible sections — fewer top-level tabs, less clutter. Old `?tab=` deep links still resolve and auto-open the right section.
+* **Smarter Schema target picker:** the Schema tab's "Pick target" box replaces the type dropdown + raw numeric-ID field with a single **search-by-title** typeahead that resolves any post, page, product or category and shows it as a removable chip — no more hunting for IDs.
 
 = 3.6.3 — Event schema + admin UI tidy =
 * **NEW Event schema type (FR-024):** `schema.org/Event` is now a first-class built-in type in the Schema Registry — writable through `aeo_save_schema` / the Schema tab on any post (default target: a blog post). Fields: name, startDate, endDate, description, image, eventStatus, eventAttendanceMode, location (physical `Place` or, when only a URL is given, `VirtualLocation`), organizer, performer, offers (price/currency/url/availability). Short enum values are normalized to canonical schema.org URLs (e.g. `offline` → `OfflineEventAttendanceMode`, `Scheduled` → `EventScheduled`). WPML-aware exactly like FAQ — write per language-sibling `post_id` for multilingual event pages. Zero new files / hot-path load: it slots into the existing registry alongside Course/Service/Review.

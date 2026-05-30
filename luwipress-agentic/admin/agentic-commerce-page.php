@@ -2,16 +2,21 @@
 /**
  * LuwiPress Commerce hub — agentic commerce surface.
  *
- * Tabs:
+ * Sections (collapsible accordion — `details.lp-collapse`):
  *   • Overview     — UCP readiness checklist + eligibility coverage hero
- *   • Feed         — UCP feed settings (return policy / support / native_commerce)
+ *   • UCP Feed     — UCP feed settings (return policy / support / native_commerce)
  *                    + per-product lookup/toggle + supplemental feed preview
  *   • Checkout     — UCP Native Checkout API (phase 2)
  *   • AP2          — Agent Payments Protocol mandate verification (phase 3)
  *   • Transactions — mandate audit trail (phase 3)
  *
- * Design language: `lp-header` + `.luwipress-stat-card` + `.lp-pill` +
- * `.luwipress-card` from assets/css/admin.css — all colors via --lp-* tokens.
+ * UI: replaced the sub-tab strip with a collapsible accordion for a more
+ * minimal, modern surface — each section lazy-loads its data the first time
+ * it is expanded. `?tab=<slug>` still deep-links (auto-opens that section).
+ *
+ * Design language: `lp-header` + `details.lp-collapse` + `.luwipress-stat-card`
+ * + `.lp-pill` + `.luwipress-card` from core assets/css/admin.css — all colors
+ * via --lp-* tokens.
  *
  * @package LuwiPress
  * @since   3.5.9-dev
@@ -39,22 +44,34 @@ $rest_ap2 = esc_url_raw( rest_url( 'luwipress/v1/ap2/' ) );
 
 // Embedded inside the Agentic hub? Then the hub already renders the outer
 // .wrap + LuwiPress header + the Agents/Commerce area strip — we only emit
-// the Commerce sub-tabs + body, and our tab links stay inside the hub.
+// the Commerce accordion body.
 $lwp_embedded = defined( 'LUWIPRESS_AGENTIC_HUB_INCLUDED' );
 
-$tab_url = function ( $tab ) use ( $lwp_embedded ) {
-	$args = $lwp_embedded
-		? array( 'page' => 'luwipress-agentic', 'area' => 'commerce', 'tab' => $tab )
-		: array( 'page' => 'luwipress-commerce', 'tab' => $tab );
-	return esc_url( add_query_arg( $args, admin_url( 'admin.php' ) ) );
-};
-$tabs = array(
-	'overview'     => array( 'label' => __( 'Overview', 'luwipress-agentic' ),     'icon' => 'dashicons-chart-area' ),
-	'feed'         => array( 'label' => __( 'UCP Feed', 'luwipress-agentic' ),     'icon' => 'dashicons-rss' ),
-	'checkout'     => array( 'label' => __( 'Checkout', 'luwipress-agentic' ),     'icon' => 'dashicons-cart' ),
-	'ap2'          => array( 'label' => __( 'AP2', 'luwipress-agentic' ),          'icon' => 'dashicons-shield' ),
-	'transactions' => array( 'label' => __( 'Transactions', 'luwipress-agentic' ), 'icon' => 'dashicons-list-view' ),
+$sections = array(
+	'overview'     => array( 'label' => __( 'Overview', 'luwipress-agentic' ),     'icon' => 'dashicons-chart-area', 'hint' => __( 'Readiness + eligibility', 'luwipress-agentic' ) ),
+	'feed'         => array( 'label' => __( 'UCP Feed', 'luwipress-agentic' ),     'icon' => 'dashicons-rss',        'hint' => __( 'Settings · products · feed', 'luwipress-agentic' ) ),
+	'checkout'     => array( 'label' => __( 'Checkout', 'luwipress-agentic' ),     'icon' => 'dashicons-cart',       'hint' => __( 'Native checkout tester', 'luwipress-agentic' ) ),
+	'ap2'          => array( 'label' => __( 'AP2', 'luwipress-agentic' ),          'icon' => 'dashicons-shield',     'hint' => __( 'Mandate verification', 'luwipress-agentic' ) ),
+	'transactions' => array( 'label' => __( 'Transactions', 'luwipress-agentic' ), 'icon' => 'dashicons-list-view',  'hint' => __( 'Audit trail', 'luwipress-agentic' ) ),
 );
+
+// Summary chrome for a section. The matching `$active_tab` section opens by
+// default (deep-link friendly); everything else starts collapsed.
+$lwp_ac_open = function ( $slug ) use ( $active_tab ) {
+	return ( $slug === $active_tab ) ? ' open' : '';
+};
+$lwp_ac_summary = function ( $slug ) use ( $sections ) {
+	$meta = $sections[ $slug ];
+	ob_start();
+	?>
+	<summary>
+		<span class="dashicons <?php echo esc_attr( $meta['icon'] ); ?>"></span>
+		<span><?php echo esc_html( $meta['label'] ); ?></span>
+		<span class="lp-collapse-hint"><?php echo esc_html( $meta['hint'] ); ?></span>
+	</summary>
+	<?php
+	return ob_get_clean();
+};
 
 $lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' : '';
 ?>
@@ -74,162 +91,160 @@ $lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'asset
 	</div>
 <?php endif; ?>
 
-	<nav class="lp-hub-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Commerce tools', 'luwipress-agentic' ); ?>">
-		<?php foreach ( $tabs as $slug => $meta ) :
-			$is_active = ( $active_tab === $slug );
-			?>
-			<a href="<?php echo $tab_url( $slug ); // phpcs:ignore ?>"
-			   class="lp-hub-tab<?php echo $is_active ? ' lp-hub-tab--active' : ''; ?>"
-			   role="tab" aria-selected="<?php echo $is_active ? 'true' : 'false'; ?>">
-				<span class="dashicons <?php echo esc_attr( $meta['icon'] ); ?>"></span>
-				<span><?php echo esc_html( $meta['label'] ); ?></span>
-			</a>
-		<?php endforeach; ?>
-	</nav>
+	<div class="lwp-collapse-stack">
 
-	<?php if ( ! $lwp_embedded ) : ?>
-	<div class="lp-hub-body">
-	<?php endif; ?>
-
-	<?php if ( 'overview' === $active_tab ) : ?>
-		<div id="lwp-ac-overview" class="luwipress-card" style="margin-top:16px;">
-			<div class="luwipress-stat-grid" id="lwp-ac-stats">
-				<div class="luwipress-stat-card stat-info"><div class="stat-value" id="lwp-ac-total">—</div><div class="stat-label"><?php esc_html_e( 'Published products', 'luwipress' ); ?></div></div>
-				<div class="luwipress-stat-card stat-success"><div class="stat-value" id="lwp-ac-flagged">—</div><div class="stat-label"><?php esc_html_e( 'native_commerce flagged', 'luwipress' ); ?></div></div>
-				<div class="luwipress-stat-card stat-translation"><div class="stat-value" id="lwp-ac-sample-elig">—</div><div class="stat-label"><?php esc_html_e( 'Eligible in sample', 'luwipress' ); ?></div></div>
-				<div class="luwipress-stat-card stat-warning"><div class="stat-value" id="lwp-ac-mode">—</div><div class="stat-label"><?php esc_html_e( 'Mode', 'luwipress' ); ?></div></div>
+		<details class="lp-collapse" data-section="overview"<?php echo esc_attr( $lwp_ac_open( 'overview' ) ); ?>>
+			<?php echo $lwp_ac_summary( 'overview' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pre-escaped in closure. ?>
+			<div class="lp-collapse-body">
+				<div class="luwipress-stat-grid" id="lwp-ac-stats">
+					<div class="luwipress-stat-card stat-info"><div class="stat-value" id="lwp-ac-total">—</div><div class="stat-label"><?php esc_html_e( 'Published products', 'luwipress' ); ?></div></div>
+					<div class="luwipress-stat-card stat-success"><div class="stat-value" id="lwp-ac-flagged">—</div><div class="stat-label"><?php esc_html_e( 'native_commerce flagged', 'luwipress' ); ?></div></div>
+					<div class="luwipress-stat-card stat-translation"><div class="stat-value" id="lwp-ac-sample-elig">—</div><div class="stat-label"><?php esc_html_e( 'Eligible in sample', 'luwipress' ); ?></div></div>
+					<div class="luwipress-stat-card stat-warning"><div class="stat-value" id="lwp-ac-mode">—</div><div class="stat-label"><?php esc_html_e( 'Mode', 'luwipress' ); ?></div></div>
+				</div>
+				<h3 style="margin-top:20px;"><?php esc_html_e( 'Readiness checklist', 'luwipress' ); ?></h3>
+				<ul id="lwp-ac-checklist" class="luwipress-checklist"><li><?php esc_html_e( 'Loading…', 'luwipress' ); ?></li></ul>
+				<p class="description"><?php esc_html_e( 'Sample-based breakdown of the most recent products. Configure the store-level prerequisites under the UCP Feed section, then flag products native_commerce.', 'luwipress' ); ?></p>
+				<div id="lwp-ac-breakdown"></div>
 			</div>
-			<h3 style="margin-top:20px;"><?php esc_html_e( 'Readiness checklist', 'luwipress' ); ?></h3>
-			<ul id="lwp-ac-checklist" class="luwipress-checklist"><li><?php esc_html_e( 'Loading…', 'luwipress' ); ?></li></ul>
-			<p class="description"><?php esc_html_e( 'Sample-based breakdown of the most recent products. Configure the store-level prerequisites under the UCP Feed tab, then flag products native_commerce.', 'luwipress' ); ?></p>
-			<div id="lwp-ac-breakdown"></div>
-		</div>
+		</details>
 
-	<?php elseif ( 'feed' === $active_tab ) : ?>
-		<div class="luwipress-card" style="margin-top:16px;">
-			<h3><?php esc_html_e( 'Store UCP settings', 'luwipress' ); ?></h3>
-			<p class="description"><?php esc_html_e( 'Merchant Center requires a return policy and support contact; these surface on the agentic checkout screen. Keep sandbox on until Google validates your integration.', 'luwipress' ); ?></p>
-			<table class="form-table" role="presentation">
-				<tr><th><?php esc_html_e( 'Enable UCP', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ucp-enabled"> <?php esc_html_e( 'Master on/off', 'luwipress' ); ?></label></td></tr>
-				<tr><th><?php esc_html_e( 'Sandbox', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ucp-sandbox"> <?php esc_html_e( 'Validate against Google sandbox (no live checkout)', 'luwipress' ); ?></label></td></tr>
-				<tr><th><?php esc_html_e( 'Default native_commerce', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ucp-default-nc"> <?php esc_html_e( 'New products eligible by default', 'luwipress' ); ?></label></td></tr>
-				<tr><th><?php esc_html_e( 'Return cost', 'luwipress' ); ?></th><td><input type="text" id="ucp-return-cost" class="regular-text" placeholder="Free / 9.90 USD"></td></tr>
-				<tr><th><?php esc_html_e( 'Return window (days)', 'luwipress' ); ?></th><td><input type="number" id="ucp-return-window" class="small-text" min="0"></td></tr>
-				<tr><th><?php esc_html_e( 'Return policy URL', 'luwipress' ); ?></th><td><input type="url" id="ucp-return-url" class="regular-text"></td></tr>
-				<tr><th><?php esc_html_e( 'Support email', 'luwipress' ); ?></th><td><input type="email" id="ucp-support-email" class="regular-text"></td></tr>
-				<tr><th><?php esc_html_e( 'Support phone', 'luwipress' ); ?></th><td><input type="text" id="ucp-support-phone" class="regular-text"></td></tr>
-				<tr><th><?php esc_html_e( 'Support URL', 'luwipress' ); ?></th><td><input type="url" id="ucp-support-url" class="regular-text"></td></tr>
-				<tr><th><?php esc_html_e( 'Feed format', 'luwipress' ); ?></th><td><select id="ucp-feed-format"><option value="json">JSON</option><option value="csv">CSV</option><option value="xml">XML (g:)</option></select></td></tr>
-			</table>
-			<p><button class="button button-primary" id="ucp-save-settings"><?php esc_html_e( 'Save settings', 'luwipress' ); ?></button> <span id="ucp-save-status" class="description"></span></p>
-		</div>
+		<details class="lp-collapse" data-section="feed"<?php echo esc_attr( $lwp_ac_open( 'feed' ) ); ?>>
+			<?php echo $lwp_ac_summary( 'feed' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<div class="lp-collapse-body">
+				<div class="luwipress-card">
+					<h3><?php esc_html_e( 'Store UCP settings', 'luwipress' ); ?></h3>
+					<p class="description"><?php esc_html_e( 'Merchant Center requires a return policy and support contact; these surface on the agentic checkout screen. Keep sandbox on until Google validates your integration.', 'luwipress' ); ?></p>
+					<table class="form-table" role="presentation">
+						<tr><th><?php esc_html_e( 'Enable UCP', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ucp-enabled"> <?php esc_html_e( 'Master on/off', 'luwipress' ); ?></label></td></tr>
+						<tr><th><?php esc_html_e( 'Sandbox', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ucp-sandbox"> <?php esc_html_e( 'Validate against Google sandbox (no live checkout)', 'luwipress' ); ?></label></td></tr>
+						<tr><th><?php esc_html_e( 'Default native_commerce', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ucp-default-nc"> <?php esc_html_e( 'New products eligible by default', 'luwipress' ); ?></label></td></tr>
+						<tr><th><?php esc_html_e( 'Return cost', 'luwipress' ); ?></th><td><input type="text" id="ucp-return-cost" class="regular-text" placeholder="Free / 9.90 USD"></td></tr>
+						<tr><th><?php esc_html_e( 'Return window (days)', 'luwipress' ); ?></th><td><input type="number" id="ucp-return-window" class="small-text" min="0"></td></tr>
+						<tr><th><?php esc_html_e( 'Return policy URL', 'luwipress' ); ?></th><td><input type="url" id="ucp-return-url" class="regular-text"></td></tr>
+						<tr><th><?php esc_html_e( 'Support email', 'luwipress' ); ?></th><td><input type="email" id="ucp-support-email" class="regular-text"></td></tr>
+						<tr><th><?php esc_html_e( 'Support phone', 'luwipress' ); ?></th><td><input type="text" id="ucp-support-phone" class="regular-text"></td></tr>
+						<tr><th><?php esc_html_e( 'Support URL', 'luwipress' ); ?></th><td><input type="url" id="ucp-support-url" class="regular-text"></td></tr>
+						<tr><th><?php esc_html_e( 'Feed format', 'luwipress' ); ?></th><td><select id="ucp-feed-format"><option value="json">JSON</option><option value="csv">CSV</option><option value="xml">XML (g:)</option></select></td></tr>
+					</table>
+					<p><button class="button button-primary" id="ucp-save-settings"><?php esc_html_e( 'Save settings', 'luwipress' ); ?></button> <span id="ucp-save-status" class="description"></span></p>
+				</div>
 
-		<div class="luwipress-card" style="margin-top:16px;">
-			<h3><?php esc_html_e( 'Product eligibility', 'luwipress' ); ?></h3>
-			<p>
-				<input type="number" id="ucp-pid" class="small-text" placeholder="<?php esc_attr_e( 'Product ID', 'luwipress' ); ?>">
-				<button class="button" id="ucp-lookup"><?php esc_html_e( 'Look up', 'luwipress' ); ?></button>
-			</p>
-			<div id="ucp-product-panel" style="display:none;">
-				<table class="form-table" role="presentation">
-					<tr><th><?php esc_html_e( 'native_commerce', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ucp-p-nc"> <?php esc_html_e( 'Eligible for UCP Buy button', 'luwipress' ); ?></label></td></tr>
-					<tr><th><?php esc_html_e( 'merchant_item_id', 'luwipress' ); ?></th><td><input type="text" id="ucp-p-itemid" class="regular-text" placeholder="<?php esc_attr_e( 'leave blank = product ID', 'luwipress' ); ?>"></td></tr>
-					<tr><th><?php esc_html_e( 'consumer_notice', 'luwipress' ); ?></th><td><textarea id="ucp-p-notice" class="large-text" rows="2" placeholder="<?php esc_attr_e( 'Regulatory warning (e.g. Prop 65) — leave blank if none', 'luwipress' ); ?>"></textarea></td></tr>
-				</table>
-				<p><button class="button button-primary" id="ucp-p-save"><?php esc_html_e( 'Save product', 'luwipress' ); ?></button> <span id="ucp-p-verdict"></span></p>
-				<div id="ucp-p-warnings"></div>
+				<div class="luwipress-card" style="margin-top:16px;">
+					<h3><?php esc_html_e( 'Product eligibility', 'luwipress' ); ?></h3>
+					<p>
+						<input type="number" id="ucp-pid" class="small-text" placeholder="<?php esc_attr_e( 'Product ID', 'luwipress' ); ?>">
+						<button class="button" id="ucp-lookup"><?php esc_html_e( 'Look up', 'luwipress' ); ?></button>
+					</p>
+					<div id="ucp-product-panel" style="display:none;">
+						<table class="form-table" role="presentation">
+							<tr><th><?php esc_html_e( 'native_commerce', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ucp-p-nc"> <?php esc_html_e( 'Eligible for UCP Buy button', 'luwipress' ); ?></label></td></tr>
+							<tr><th><?php esc_html_e( 'merchant_item_id', 'luwipress' ); ?></th><td><input type="text" id="ucp-p-itemid" class="regular-text" placeholder="<?php esc_attr_e( 'leave blank = product ID', 'luwipress' ); ?>"></td></tr>
+							<tr><th><?php esc_html_e( 'consumer_notice', 'luwipress' ); ?></th><td><textarea id="ucp-p-notice" class="large-text" rows="2" placeholder="<?php esc_attr_e( 'Regulatory warning (e.g. Prop 65) — leave blank if none', 'luwipress' ); ?>"></textarea></td></tr>
+						</table>
+						<p><button class="button button-primary" id="ucp-p-save"><?php esc_html_e( 'Save product', 'luwipress' ); ?></button> <span id="ucp-p-verdict"></span></p>
+						<div id="ucp-p-warnings"></div>
+					</div>
+				</div>
+
+				<div class="luwipress-card" style="margin-top:16px;">
+					<h3><?php esc_html_e( 'Supplemental feed preview', 'luwipress' ); ?></h3>
+					<p class="description"><?php esc_html_e( 'A supplemental feed overlays your primary Merchant Center feed with the UCP signals only (id + native_commerce + consumer_notice).', 'luwipress' ); ?></p>
+					<p>
+						<button class="button" id="ucp-feed-preview"><?php esc_html_e( 'Preview eligible rows', 'luwipress' ); ?></button>
+						<code id="ucp-feed-endpoint" style="margin-left:8px;"></code>
+					</p>
+					<pre id="ucp-feed-out" style="max-height:320px;overflow:auto;background:var(--lp-bg-alt,#f6f7f7);padding:12px;border-radius:6px;display:none;"></pre>
+				</div>
 			</div>
-		</div>
+		</details>
 
-		<div class="luwipress-card" style="margin-top:16px;">
-			<h3><?php esc_html_e( 'Supplemental feed preview', 'luwipress' ); ?></h3>
-			<p class="description"><?php esc_html_e( 'A supplemental feed overlays your primary Merchant Center feed with the UCP signals only (id + native_commerce + consumer_notice).', 'luwipress' ); ?></p>
-			<p>
-				<button class="button" id="ucp-feed-preview"><?php esc_html_e( 'Preview eligible rows', 'luwipress' ); ?></button>
-				<code id="ucp-feed-endpoint" style="margin-left:8px;"></code>
-			</p>
-			<pre id="ucp-feed-out" style="max-height:320px;overflow:auto;background:var(--lp-bg-alt,#f6f7f7);padding:12px;border-radius:6px;display:none;"></pre>
-		</div>
+		<details class="lp-collapse" data-section="checkout"<?php echo esc_attr( $lwp_ac_open( 'checkout' ) ); ?>>
+			<?php echo $lwp_ac_summary( 'checkout' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<div class="lp-collapse-body">
+				<h3><?php esc_html_e( 'UCP Native Checkout — session tester', 'luwipress' ); ?></h3>
+				<p class="description"><?php esc_html_e( 'Three UCP endpoints (session create / update / complete) backed by a WooCommerce draft order — totals, tax and shipping come from WooCommerce itself. Keep sandbox ON (UCP Feed section) while testing: completion is simulated, no payable order is created.', 'luwipress' ); ?></p>
 
-	<?php elseif ( 'checkout' === $active_tab ) : ?>
-		<div class="luwipress-card" style="margin-top:16px;">
-			<h3><?php esc_html_e( 'UCP Native Checkout — session tester', 'luwipress' ); ?></h3>
-			<p class="description"><?php esc_html_e( 'Three UCP endpoints (session create / update / complete) backed by a WooCommerce draft order — totals, tax and shipping come from WooCommerce itself. Keep sandbox ON (UCP Feed tab) while testing: completion is simulated, no payable order is created.', 'luwipress' ); ?></p>
+				<h4><?php esc_html_e( '1. Create session', 'luwipress' ); ?></h4>
+				<p>
+					<input type="text" id="cko-items" class="regular-text" placeholder="123:1, 456:2">
+					<button class="button" id="cko-create"><?php esc_html_e( 'Create', 'luwipress' ); ?></button>
+					<span class="description"><?php esc_html_e( 'product_id:qty pairs', 'luwipress' ); ?></span>
+				</p>
 
-			<h4><?php esc_html_e( '1. Create session', 'luwipress' ); ?></h4>
-			<p>
-				<input type="text" id="cko-items" class="regular-text" placeholder="123:1, 456:2">
-				<button class="button" id="cko-create"><?php esc_html_e( 'Create', 'luwipress' ); ?></button>
-				<span class="description"><?php esc_html_e( 'product_id:qty pairs', 'luwipress' ); ?></span>
-			</p>
+				<h4><?php esc_html_e( '2. Address + shipping', 'luwipress' ); ?></h4>
+				<p>
+					<input type="text" id="cko-country" class="small-text" placeholder="Country (US)">
+					<input type="text" id="cko-state" class="small-text" placeholder="State">
+					<input type="text" id="cko-postcode" class="small-text" placeholder="Postcode">
+					<input type="text" id="cko-city" class="small-text" placeholder="City">
+					<button class="button" id="cko-update"><?php esc_html_e( 'Update / get shipping', 'luwipress' ); ?></button>
+				</p>
+				<p id="cko-ship-wrap" style="display:none;">
+					<label><?php esc_html_e( 'Shipping', 'luwipress' ); ?> <select id="cko-shipping"></select></label>
+					<button class="button" id="cko-pick-ship"><?php esc_html_e( 'Apply rate', 'luwipress' ); ?></button>
+				</p>
 
-			<h4><?php esc_html_e( '2. Address + shipping', 'luwipress' ); ?></h4>
-			<p>
-				<input type="text" id="cko-country" class="small-text" placeholder="Country (US)">
-				<input type="text" id="cko-state" class="small-text" placeholder="State">
-				<input type="text" id="cko-postcode" class="small-text" placeholder="Postcode">
-				<input type="text" id="cko-city" class="small-text" placeholder="City">
-				<button class="button" id="cko-update"><?php esc_html_e( 'Update / get shipping', 'luwipress' ); ?></button>
-			</p>
-			<p id="cko-ship-wrap" style="display:none;">
-				<label><?php esc_html_e( 'Shipping', 'luwipress' ); ?> <select id="cko-shipping"></select></label>
-				<button class="button" id="cko-pick-ship"><?php esc_html_e( 'Apply rate', 'luwipress' ); ?></button>
-			</p>
+				<h4><?php esc_html_e( '3. Complete', 'luwipress' ); ?></h4>
+				<p>
+					<input type="email" id="cko-email" class="regular-text" placeholder="buyer@example.com">
+					<button class="button button-primary" id="cko-complete"><?php esc_html_e( 'Complete', 'luwipress' ); ?></button>
+				</p>
 
-			<h4><?php esc_html_e( '3. Complete', 'luwipress' ); ?></h4>
-			<p>
-				<input type="email" id="cko-email" class="regular-text" placeholder="buyer@example.com">
-				<button class="button button-primary" id="cko-complete"><?php esc_html_e( 'Complete', 'luwipress' ); ?></button>
-			</p>
+				<p><strong><?php esc_html_e( 'Session', 'luwipress' ); ?>:</strong> <code id="cko-sid">—</code> <span id="cko-status"></span></p>
+				<pre id="cko-out" style="max-height:340px;overflow:auto;background:var(--lp-bg-alt,#f6f7f7);padding:12px;border-radius:6px;display:none;"></pre>
+			</div>
+		</details>
 
-			<p><strong><?php esc_html_e( 'Session', 'luwipress' ); ?>:</strong> <code id="cko-sid">—</code> <span id="cko-status"></span></p>
-			<pre id="cko-out" style="max-height:340px;overflow:auto;background:var(--lp-bg-alt,#f6f7f7);padding:12px;border-radius:6px;display:none;"></pre>
-		</div>
+		<details class="lp-collapse" data-section="ap2"<?php echo esc_attr( $lwp_ac_open( 'ap2' ) ); ?>>
+			<?php echo $lwp_ac_summary( 'ap2' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<div class="lp-collapse-body">
+				<div class="luwipress-card">
+					<h3><?php esc_html_e( 'Agent Payments Protocol (AP2)', 'luwipress' ); ?></h3>
+					<p class="description"><?php esc_html_e( 'When an agent presents a Cart Mandate during checkout, LuwiPress verifies it (structure, expiry, issuer, amount-match) and stores the Intent → Cart mandate chain on the order as a non-repudiable audit trail. Cryptographic signature verification plugs in via the luwipress_ap2_verify_mandate filter.', 'luwipress' ); ?></p>
+					<table class="form-table" role="presentation">
+						<tr><th><?php esc_html_e( 'Enable AP2', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ap2-enabled"> <?php esc_html_e( 'Accept + record mandates', 'luwipress' ); ?></label></td></tr>
+						<tr><th><?php esc_html_e( 'Strict verification', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ap2-require"> <?php esc_html_e( 'Abort checkout if mandate is unverified or amount mismatches', 'luwipress' ); ?></label></td></tr>
+						<tr><th><?php esc_html_e( 'Amount match', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ap2-amount"> <?php esc_html_e( 'Require Cart Mandate total = order total', 'luwipress' ); ?></label></td></tr>
+						<tr><th><?php esc_html_e( 'Allowed issuers', 'luwipress' ); ?></th><td><input type="text" id="ap2-issuers" class="regular-text" placeholder="comma,separated (blank = any)"></td></tr>
+						<tr><th><?php esc_html_e( 'Issuer JWKS URL', 'luwipress' ); ?></th><td><input type="url" id="ap2-jwks" class="regular-text" placeholder="optional — for a signature verifier"></td></tr>
+					</table>
+					<p><button class="button button-primary" id="ap2-save"><?php esc_html_e( 'Save settings', 'luwipress' ); ?></button> <span id="ap2-save-status" class="description"></span></p>
+				</div>
+				<div class="luwipress-card" style="margin-top:16px;">
+					<h3><?php esc_html_e( 'Mandate verifier (diagnostic)', 'luwipress' ); ?></h3>
+					<p><textarea id="ap2-mandate" class="large-text code" rows="6" placeholder='{"issuer":"...","cart":{"total":99.90,"currency":"USD"},"exp":1830000000}'></textarea></p>
+					<p><button class="button" id="ap2-verify"><?php esc_html_e( 'Verify', 'luwipress' ); ?></button></p>
+					<pre id="ap2-verify-out" style="max-height:280px;overflow:auto;background:var(--lp-bg-alt,#f6f7f7);padding:12px;border-radius:6px;display:none;"></pre>
+				</div>
+			</div>
+		</details>
 
-	<?php elseif ( 'ap2' === $active_tab ) : ?>
-		<div class="luwipress-card" style="margin-top:16px;">
-			<h3><?php esc_html_e( 'Agent Payments Protocol (AP2)', 'luwipress' ); ?></h3>
-			<p class="description"><?php esc_html_e( 'When an agent presents a Cart Mandate during checkout, LuwiPress verifies it (structure, expiry, issuer, amount-match) and stores the Intent → Cart mandate chain on the order as a non-repudiable audit trail. Cryptographic signature verification plugs in via the luwipress_ap2_verify_mandate filter.', 'luwipress' ); ?></p>
-			<table class="form-table" role="presentation">
-				<tr><th><?php esc_html_e( 'Enable AP2', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ap2-enabled"> <?php esc_html_e( 'Accept + record mandates', 'luwipress' ); ?></label></td></tr>
-				<tr><th><?php esc_html_e( 'Strict verification', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ap2-require"> <?php esc_html_e( 'Abort checkout if mandate is unverified or amount mismatches', 'luwipress' ); ?></label></td></tr>
-				<tr><th><?php esc_html_e( 'Amount match', 'luwipress' ); ?></th><td><label><input type="checkbox" id="ap2-amount"> <?php esc_html_e( 'Require Cart Mandate total = order total', 'luwipress' ); ?></label></td></tr>
-				<tr><th><?php esc_html_e( 'Allowed issuers', 'luwipress' ); ?></th><td><input type="text" id="ap2-issuers" class="regular-text" placeholder="comma,separated (blank = any)"></td></tr>
-				<tr><th><?php esc_html_e( 'Issuer JWKS URL', 'luwipress' ); ?></th><td><input type="url" id="ap2-jwks" class="regular-text" placeholder="optional — for a signature verifier"></td></tr>
-			</table>
-			<p><button class="button button-primary" id="ap2-save"><?php esc_html_e( 'Save settings', 'luwipress' ); ?></button> <span id="ap2-save-status" class="description"></span></p>
-		</div>
-		<div class="luwipress-card" style="margin-top:16px;">
-			<h3><?php esc_html_e( 'Mandate verifier (diagnostic)', 'luwipress' ); ?></h3>
-			<p><textarea id="ap2-mandate" class="large-text code" rows="6" placeholder='{"issuer":"...","cart":{"total":99.90,"currency":"USD"},"exp":1830000000}'></textarea></p>
-			<p><button class="button" id="ap2-verify"><?php esc_html_e( 'Verify', 'luwipress' ); ?></button></p>
-			<pre id="ap2-verify-out" style="max-height:280px;overflow:auto;background:var(--lp-bg-alt,#f6f7f7);padding:12px;border-radius:6px;display:none;"></pre>
-		</div>
+		<details class="lp-collapse" data-section="transactions"<?php echo esc_attr( $lwp_ac_open( 'transactions' ) ); ?>>
+			<?php echo $lwp_ac_summary( 'transactions' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<div class="lp-collapse-body">
+				<h3><?php esc_html_e( 'Mandate audit trail', 'luwipress' ); ?></h3>
+				<p>
+					<input type="number" id="tx-oid" class="small-text" placeholder="<?php esc_attr_e( 'Order ID', 'luwipress' ); ?>">
+					<button class="button" id="tx-lookup"><?php esc_html_e( 'Look up order', 'luwipress' ); ?></button>
+				</p>
+				<pre id="tx-out" style="max-height:300px;overflow:auto;background:var(--lp-bg-alt,#f6f7f7);padding:12px;border-radius:6px;display:none;"></pre>
+				<h4 style="margin-top:20px;"><?php esc_html_e( 'Recent verifications', 'luwipress' ); ?></h4>
+				<table class="widefat striped" id="tx-log"><thead><tr><th><?php esc_html_e( 'Order', 'luwipress' ); ?></th><th><?php esc_html_e( 'Status', 'luwipress' ); ?></th><th><?php esc_html_e( 'Issuer', 'luwipress' ); ?></th><th><?php esc_html_e( 'Amount match', 'luwipress' ); ?></th><th><?php esc_html_e( 'At', 'luwipress' ); ?></th></tr></thead><tbody><tr><td colspan="5"><?php esc_html_e( 'Loading…', 'luwipress' ); ?></td></tr></tbody></table>
+			</div>
+		</details>
 
-	<?php else : ?>
-		<div class="luwipress-card" style="margin-top:16px;">
-			<h3><?php esc_html_e( 'Mandate audit trail', 'luwipress' ); ?></h3>
-			<p>
-				<input type="number" id="tx-oid" class="small-text" placeholder="<?php esc_attr_e( 'Order ID', 'luwipress' ); ?>">
-				<button class="button" id="tx-lookup"><?php esc_html_e( 'Look up order', 'luwipress' ); ?></button>
-			</p>
-			<pre id="tx-out" style="max-height:300px;overflow:auto;background:var(--lp-bg-alt,#f6f7f7);padding:12px;border-radius:6px;display:none;"></pre>
-			<h4 style="margin-top:20px;"><?php esc_html_e( 'Recent verifications', 'luwipress' ); ?></h4>
-			<table class="widefat striped" id="tx-log"><thead><tr><th><?php esc_html_e( 'Order', 'luwipress' ); ?></th><th><?php esc_html_e( 'Status', 'luwipress' ); ?></th><th><?php esc_html_e( 'Issuer', 'luwipress' ); ?></th><th><?php esc_html_e( 'Amount match', 'luwipress' ); ?></th><th><?php esc_html_e( 'At', 'luwipress' ); ?></th></tr></thead><tbody><tr><td colspan="5"><?php esc_html_e( 'Loading…', 'luwipress' ); ?></td></tr></tbody></table>
-		</div>
-	<?php endif; ?>
+	</div><!-- .lwp-collapse-stack -->
 
-	<?php if ( ! $lwp_embedded ) : ?>
-	</div><!-- .lp-hub-body -->
+<?php if ( ! $lwp_embedded ) : ?>
 </div><!-- .wrap -->
-	<?php endif; ?>
+<?php endif; ?>
 
 <script>
 (function () {
 	const REST     = <?php echo wp_json_encode( $rest_ucp ); ?>;
 	const REST_AP2 = <?php echo wp_json_encode( $rest_ap2 ); ?>;
 	const NONCE    = <?php echo wp_json_encode( $nonce ); ?>;
-	const TAB      = <?php echo wp_json_encode( $active_tab ); ?>;
 
 	function call(base, path, method, body) {
 		const opts = { method: method || 'GET', headers: { 'X-WP-Nonce': NONCE } };
@@ -244,7 +259,7 @@ $lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'asset
 	function api2(path, method, body) { return call(REST_AP2, path, method, body); }
 	function $(id) { return document.getElementById(id); }
 
-	if (TAB === 'overview') {
+	function initOverview() {
 		api('eligibility').then(function (res) {
 			const d = res.data || {};
 			if (d.wc_active === false) { $('lwp-ac-checklist').innerHTML = '<li>WooCommerce is not active.</li>'; return; }
@@ -272,7 +287,7 @@ $lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'asset
 		});
 	}
 
-	if (TAB === 'feed') {
+	function initFeed() {
 		$('ucp-feed-endpoint').textContent = REST + 'feed';
 
 		api('settings').then(function (res) {
@@ -347,7 +362,7 @@ $lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'asset
 		});
 	}
 
-	if (TAB === 'checkout') {
+	function initCheckout() {
 		let sid = '';
 		function show(res) {
 			$('cko-out').style.display = 'block';
@@ -390,7 +405,7 @@ $lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'asset
 		});
 	}
 
-	if (TAB === 'ap2') {
+	function initAp2() {
 		api2('settings').then(function (res) {
 			const d = res.data || {};
 			$('ap2-enabled').checked = !!d.enabled;
@@ -420,7 +435,7 @@ $lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'asset
 		});
 	}
 
-	if (TAB === 'transactions') {
+	function initTransactions() {
 		function loadLog() {
 			api2('log?limit=50').then(function (res) {
 				const rows = (res.data && res.data.entries) || [];
@@ -441,5 +456,21 @@ $lp_logo_url = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'asset
 		});
 		loadLog();
 	}
+
+	// Lazy-init: each section wires up its data + handlers the first time it
+	// is expanded (and immediately for the deep-linked / default-open one).
+	const INIT = { overview: initOverview, feed: initFeed, checkout: initCheckout, ap2: initAp2, transactions: initTransactions };
+	const done = {};
+	function ensure(name) {
+		if (name && !done[name] && INIT[name]) {
+			done[name] = true;
+			try { INIT[name](); } catch (e) { /* defensive — a broken section must not kill the others */ }
+		}
+	}
+	document.querySelectorAll('details.lp-collapse[data-section]').forEach(function (d) {
+		const name = d.getAttribute('data-section');
+		d.addEventListener('toggle', function () { if (d.open) { ensure(name); } });
+		if (d.open) { ensure(name); }
+	});
 })();
 </script>

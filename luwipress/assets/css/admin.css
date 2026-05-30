@@ -5966,6 +5966,52 @@ body.luwipress_page_luwipress-scheduler #wpbody-content > .updated:not(.luwipres
     margin-bottom: 18px;
 }
 
+/* ── Collapsible section (lp-collapse) ──────────────────────────
+   Reusable <details>/<summary> accordion for hub bodies — a modern,
+   minimal alternative to a sub-tab strip (agentic Commerce, Settings
+   consolidation). Chevron + marker-hide mirror the .lp-secondary-keys
+   pattern so it reads consistently across the admin. */
+.lwp-collapse-stack { margin-top: 16px; }
+details.lp-collapse {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+details.lp-collapse + details.lp-collapse { margin-top: 12px; }
+details.lp-collapse > summary {
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer; user-select: none;
+    padding: 14px 16px;
+    font-size: 14px; font-weight: 600; color: var(--lp-text);
+    list-style: none;
+}
+details.lp-collapse > summary::-webkit-details-marker { display: none; }
+details.lp-collapse > summary::before {
+    content: '\f345';
+    font-family: 'dashicons';
+    font-size: 16px; color: var(--lp-gray);
+    transition: transform 150ms ease;
+    flex: 0 0 auto;
+}
+details.lp-collapse[open] > summary::before { transform: rotate(90deg); }
+details.lp-collapse > summary:hover { background: var(--lp-surface-hover); }
+details.lp-collapse > summary .dashicons {
+    color: var(--lp-primary, var(--lp-text));
+    font-size: 17px; width: 17px; height: 17px;
+}
+details.lp-collapse > summary .lp-collapse-hint {
+    margin-left: auto;
+    font-size: 11.5px; color: var(--lp-gray); font-weight: 400;
+}
+details.lp-collapse > .lp-collapse-body {
+    padding: 12px 16px 16px;
+    border-top: 1px solid var(--lp-border);
+}
+/* Nested .luwipress-card inside a collapse body reads as a sub-panel —
+   drop its own top margin so the body padding controls spacing. */
+details.lp-collapse > .lp-collapse-body > .luwipress-card:first-child { margin-top: 0; }
+
 /* Sub-tab variant — sits inside a tab body, so it reads as one notch
    smaller and lighter than the outer KG-style button row. Pill-shaped,
    ghost background, primary tint on active rather than the full

@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.37
+Stable tag: 1.0.38
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,11 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.38 — media_alt_bulk + iframe-in-term-descriptions + vendor post type (paired with core 3.7.0) =
+* **NEW `media_alt_bulk` tool** — bulk-write image alt text to up to 500 attachments in one call (each row `{ attachment_id, alt_text }`; an empty `alt_text` clears it). Wraps the core `POST /media/alt-bulk` endpoint; powers the Image Alt Bulk sweep / CSV round-trip. Write-classified (`readOnlyHint:false`), so the autonomous agent loop never invokes it on its own.
+* **`taxonomy_update_term` gains `allow_iframe`** — set `allow_iframe:true` to keep an `<iframe>` embed (YouTube, Maps) in a category / term description; off by default. `javascript:` / `data:` sources and `on*` event handlers are always stripped, and it applies on both write paths (the WPML-safe direct write and the full `wp_update_term` path). Admin-gated by the MCP token.
+* **`content_create_post` + `content_get_posts` accept `lwp_vendor`** — agents can now create and search LuwiPress Vendor profiles through the standard content tools (the vendor CPT was previously absent from the `post_type` enum).
 
 = 1.0.37 — Event schema discoverability (paired with core 3.6.3) =
 * `aeo_save_schema` now lists **event** in its `schema_type` enum + documents the Event field shape inline, so AI agents discover the new `schema.org/Event` type (shipped in core 3.6.3) without a separate tool. No new tool — the generic schema-save path already accepts any registered type; this is a description/enum refresh + a note that the path is WPML-aware (write per language-sibling post_id).

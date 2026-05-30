@@ -250,6 +250,21 @@ $hmac_secret        = get_option( 'luwipress_hmac_secret', '' );
 
 $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'connection';
 
+// Related settings sections are merged into collapsible groups for a less
+// cluttered nav: CRM + Customer Chat live under the `crm` tab, Security + Bot
+// under the `security` tab. Old deep-links to the now-merged sections still
+// resolve — they map to the host tab and auto-open the right collapsible via
+// $open_section.
+$open_section    = '';
+$lwp_merged_into = array(
+	'customer-chat' => 'crm',
+	'bot'           => 'security',
+);
+if ( isset( $lwp_merged_into[ $active_tab ] ) ) {
+	$open_section = $active_tab;
+	$active_tab   = $lwp_merged_into[ $active_tab ];
+}
+
 // Detected plugins for info boxes
 $detector    = LuwiPress_Plugin_Detector::get_instance();
 $env         = $detector->get_environment();
@@ -297,10 +312,8 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			'api-keys'       => array( 'label' => __( 'AI API Keys', 'luwipress' ),    'icon' => 'dashicons-admin-network' ),
 			'ai'             => array( 'label' => __( 'AI Content', 'luwipress' ),     'icon' => 'dashicons-edit-large' ),
 			'translation'    => array( 'label' => __( 'Translation', 'luwipress' ),    'icon' => 'dashicons-translation' ),
-			'crm'            => array( 'label' => __( 'CRM', 'luwipress' ),            'icon' => 'dashicons-groups' ),
-			'customer-chat'  => array( 'label' => __( 'Customer Chat', 'luwipress' ),  'icon' => 'dashicons-format-chat' ),
+			'crm'            => array( 'label' => __( 'Customers', 'luwipress' ),      'icon' => 'dashicons-groups' ),
 			'security'       => array( 'label' => __( 'Security', 'luwipress' ),       'icon' => 'dashicons-shield-alt' ),
-			'bot'            => array( 'label' => __( 'Bot', 'luwipress' ),            'icon' => 'dashicons-shield' ),
 			'content-health' => array( 'label' => __( 'Content Health', 'luwipress' ), 'icon' => 'dashicons-chart-area' ),
 		);
 		foreach ( $tabs_def as $slug => $cfg ) :
@@ -1425,8 +1438,13 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			</div>
 		</div>
 
-		<!-- CRM -->
+		<!-- CUSTOMERS (CRM + Customer Chat) -->
 		<div class="luwipress-tab-content <?php echo 'crm' === $active_tab ? 'tab-active' : ''; ?>" id="tab-crm">
+		<div class="lwp-collapse-stack">
+
+		<details class="lp-collapse"<?php echo 'customer-chat' !== $open_section ? ' open' : ''; ?>>
+			<summary><span class="dashicons dashicons-groups"></span> <span><?php esc_html_e( 'CRM segments', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'Customer segmentation', 'luwipress' ); ?></span></summary>
+			<div class="lp-collapse-body">
 			<div class="luwipress-info-box">
 				<span class="dashicons dashicons-info-outline"></span>
 				<?php esc_html_e( 'Customer segments are computed from your WooCommerce order history. Configure segment thresholds below; segments refresh weekly via WP-Cron.', 'luwipress' ); ?>
@@ -1493,10 +1511,12 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					</tr>
 				</table>
 			</div>
-		</div>
+			</div><!-- .lp-collapse-body -->
+		</details>
 
-		<!-- CUSTOMER CHAT -->
-		<div class="luwipress-tab-content <?php echo 'customer-chat' === $active_tab ? 'tab-active' : ''; ?>" id="tab-customer-chat">
+		<details class="lp-collapse"<?php echo 'customer-chat' === $open_section ? ' open' : ''; ?>>
+			<summary><span class="dashicons dashicons-format-chat"></span> <span><?php esc_html_e( 'Customer chat', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'Storefront AI chat', 'luwipress' ); ?></span></summary>
+			<div class="lp-collapse-body">
 			<?php
 			$chat_enabled    = get_option( 'luwipress_chat_enabled', 0 );
 			$chat_greeting   = get_option( 'luwipress_chat_greeting', 'Hi! How can I help you today?' );
@@ -1667,12 +1687,20 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					</tr>
 				</table>
 			</div>
-		</div>
+			</div><!-- .lp-collapse-body -->
+		</details>
+		</div><!-- .lwp-collapse-stack -->
+		</div><!-- #tab-crm -->
 
 		<!-- MARKETPLACES — moved to LuwiPress Marketplace Sync companion (3.1.44) -->
 
-		<!-- SECURITY -->
+		<!-- SECURITY (Security headers + Bot defense) -->
 		<div class="luwipress-tab-content <?php echo 'security' === $active_tab ? 'tab-active' : ''; ?>" id="tab-security">
+		<div class="lwp-collapse-stack">
+
+		<details class="lp-collapse"<?php echo ( 'bot' !== $open_section || ! ( class_exists( 'LuwiPress_Bot_Account_Cleaner' ) && class_exists( 'LuwiPress_Bot_Shield' ) ) ) ? ' open' : ''; ?>>
+			<summary><span class="dashicons dashicons-shield-alt"></span> <span><?php esc_html_e( 'Security headers & API', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'Headers, IP, HMAC', 'luwipress' ); ?></span></summary>
+			<div class="lp-collapse-body">
 			<div class="luwipress-card">
 				<h2><?php esc_html_e( 'Security Headers', 'luwipress' ); ?></h2>
 				<table class="form-table">
@@ -1721,7 +1749,8 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					</tr>
 				</table>
 			</div>
-		</div>
+			</div><!-- .lp-collapse-body -->
+		</details>
 
 		<?php
 		// ============================ BOT TAB (Account Cleaner + Shield) ============================
@@ -1740,7 +1769,9 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			$bot_rest_acct  = esc_url_raw( rest_url( 'luwipress/v1/bot-accounts/' ) );
 			$bot_rest_sh    = esc_url_raw( rest_url( 'luwipress/v1/bot-shield/' ) );
 		?>
-		<div class="luwipress-tab-content <?php echo 'bot' === $active_tab ? 'tab-active' : ''; ?>" id="tab-bot">
+			<details class="lp-collapse"<?php echo 'bot' === $open_section ? ' open' : ''; ?>>
+				<summary><span class="dashicons dashicons-shield"></span> <span><?php esc_html_e( 'Bot defense', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'Account cleaner + shield', 'luwipress' ); ?></span></summary>
+				<div class="lp-collapse-body">
 			<div class="luwipress-card">
 				<h2><span class="dashicons dashicons-admin-users" style="vertical-align:middle;"></span> <?php esc_html_e( 'Account detection', 'luwipress' ); ?></h2>
 				<p class="description">
@@ -1867,8 +1898,11 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					<li><?php esc_html_e( 'Shield never blocks RFC1918 (LAN) IPs or logged-in administrators.', 'luwipress' ); ?></li>
 				</ul>
 			</div>
-		</div>
+				</div><!-- .lp-collapse-body -->
+			</details>
 		<?php endif; /* bot tab guard */ ?>
+		</div><!-- .lwp-collapse-stack -->
+		</div><!-- #tab-security -->
 
 		<!-- CONTENT HEALTH -->
 		<div class="luwipress-tab-content <?php echo 'content-health' === $active_tab ? 'tab-active' : ''; ?>" id="tab-content-health">

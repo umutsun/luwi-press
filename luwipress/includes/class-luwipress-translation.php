@@ -641,7 +641,11 @@ class LuwiPress_Translation {
         $product = function_exists( 'wc_get_product' ) ? wc_get_product($product_id) : null;
         $post    = get_post($product_id);
 
-        $translatable_types = array( 'product', 'post', 'page' );
+        // Filterable so the vendor CPT (and any custom type) is translatable
+        // without re-touching this whitelist. lwp_vendor is translatable per
+        // wpml-config.xml; this list is the pipeline-side gate that was the real
+        // blocker behind the "not translatable" 404 (FR-021).
+        $translatable_types = apply_filters( 'luwipress_translatable_post_types', array( 'product', 'post', 'page', 'lwp_vendor' ) );
         if ( ! $post || ! in_array( $post->post_type, $translatable_types, true ) ) {
             return new WP_Error('not_found', 'Post not found or not translatable', ['status' => 404]);
         }
@@ -3697,7 +3701,7 @@ class LuwiPress_Translation {
 
         // Find translated posts/pages with empty title OR numeric slug
         // SAFE: only post, page, product â€” never nav_menu_item or other types
-        $safe_types = array( 'post', 'page', 'product' );
+        $safe_types = apply_filters( 'luwipress_translatable_post_types', array( 'post', 'page', 'product', 'lwp_vendor' ) );
         $type_ph    = implode( ',', array_fill( 0, count( $safe_types ), '%s' ) );
         $sql        = sprintf(
             "SELECT p.ID, p.post_title, p.post_name, p.post_type, t.trid, t.language_code

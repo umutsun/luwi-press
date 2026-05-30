@@ -143,26 +143,12 @@ $type_catalog = array(
 	<!-- Object selector -->
 	<div class="luwipress-card luwipress-card--primary">
 		<h2><span class="dashicons dashicons-search" aria-hidden="true"></span> <?php esc_html_e( 'Pick target', 'luwipress' ); ?></h2>
-		<form class="lwp-sp-target-form" onsubmit="return false;">
-			<div class="lp-form-row lwp-sp-field">
-				<label class="lp-form-label" for="lwp-sp-type"><?php esc_html_e( 'Type', 'luwipress' ); ?></label>
-				<select class="lp-form-select" id="lwp-sp-type">
-					<option value="post"><?php esc_html_e( 'Post / Page / Product', 'luwipress' ); ?></option>
-					<option value="term"><?php esc_html_e( 'Taxonomy term', 'luwipress' ); ?></option>
-				</select>
-			</div>
-			<div class="lp-form-row lwp-sp-field lwp-sp-field--grow">
-				<label class="lp-form-label" for="lwp-sp-id"><?php esc_html_e( 'ID', 'luwipress' ); ?></label>
-				<input class="lp-form-input" type="number" id="lwp-sp-id" placeholder="<?php esc_attr_e( 'Post or Term ID', 'luwipress' ); ?>" min="1" step="1">
-				<p class="lp-form-hint"><?php esc_html_e( 'Find the ID by hovering a post in WP admin lists — the URL contains post=<id>. Term ID via Products → Categories → hover.', 'luwipress' ); ?></p>
-			</div>
-			<div class="lp-form-row lwp-sp-submit">
-				<button class="lp-btn lp-btn--primary" id="lwp-sp-load">
-					<span class="dashicons dashicons-search" aria-hidden="true"></span>
-					<?php esc_html_e( 'Load schemas', 'luwipress' ); ?>
-				</button>
-			</div>
-		</form>
+		<div class="lwp-sp-search" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="lwp-sp-results">
+			<span class="dashicons dashicons-search lwp-sp-search-icon" aria-hidden="true"></span>
+			<input class="lp-form-input lwp-sp-q" type="search" id="lwp-sp-q" autocomplete="off" role="searchbox" aria-autocomplete="list" aria-controls="lwp-sp-results" placeholder="<?php esc_attr_e( 'Search by title — product, page, post or category…', 'luwipress' ); ?>">
+			<ul id="lwp-sp-results" class="lwp-sp-results" role="listbox" hidden></ul>
+		</div>
+		<div id="lwp-sp-chip" class="lwp-sp-chip-slot"></div>
 		<div id="lwp-sp-target-info" class="lp-form-hint lwp-sp-target-info"></div>
 	</div>
 
@@ -236,16 +222,30 @@ $type_catalog = array(
 <?php endif; ?>
 
 <style>
-.lwp-sp-target-form {
-	display: flex;
-	gap: 12px;
-	flex-wrap: wrap;
-	align-items: flex-end;
-	margin: 10px 0 0;
+.lwp-sp-search { position: relative; max-width: 560px; margin: 10px 0 0; }
+.lwp-sp-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--lp-gray); pointer-events: none; }
+.lwp-sp-q { width: 100%; padding-left: 34px; }
+.lwp-sp-results {
+	position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 2px);
+	margin: 0; padding: 4px; list-style: none;
+	background: var(--lp-surface, #fff); border: 1px solid var(--lp-border); border-radius: 8px;
+	box-shadow: 0 6px 24px rgba(0,0,0,.12); max-height: 320px; overflow: auto;
 }
-.lwp-sp-field { min-width: 200px; margin: 0; }
-.lwp-sp-field--grow { flex: 1 1 280px; }
-.lwp-sp-submit { margin: 0; align-self: flex-end; }
+.lwp-sp-result { display: flex; align-items: baseline; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+.lwp-sp-result:hover { background: var(--lp-surface-hover); }
+.lwp-sp-result--empty { color: var(--lp-gray); cursor: default; }
+.lwp-sp-result-title { font-weight: 500; }
+.lwp-sp-result-meta { color: var(--lp-gray); font-size: 11.5px; }
+.lwp-sp-chip-slot { margin-top: 10px; }
+.lwp-sp-chip {
+	display: inline-flex; align-items: center; gap: 8px;
+	padding: 6px 10px; border-radius: 999px;
+	background: var(--lp-surface-hover); border: 1px solid var(--lp-border); font-size: 13px;
+}
+.lwp-sp-chip-label { font-weight: 600; color: var(--lp-text); }
+.lwp-sp-chip-meta { color: var(--lp-gray); font-size: 11.5px; }
+.lwp-sp-chip-x { border: 0; background: none; cursor: pointer; font-size: 16px; line-height: 1; color: var(--lp-gray); padding: 0 2px; }
+.lwp-sp-chip-x:hover { color: var(--lp-error, #c33); }
 .lwp-sp-target-info { margin-top: 10px; }
 
 .lwp-sp-type-row {
@@ -308,6 +308,7 @@ $type_catalog = array(
 	var REST_BASE   = <?php echo wp_json_encode( $rest_base ); ?>;
 	var REST_NONCE  = <?php echo wp_json_encode( $rest_nonce ); ?>;
 	var TYPE_CAT    = <?php echo wp_json_encode( $type_catalog ); ?>;
+	var WP_ROOT     = <?php echo wp_json_encode( esc_url_raw( rest_url( 'wp/v2/' ) ) ); ?>;
 
 	function api(path, opts) {
 		opts = opts || {};
@@ -326,9 +327,10 @@ $type_catalog = array(
 		});
 	}
 
-	var typeSelect = document.getElementById('lwp-sp-type');
-	var idInput    = document.getElementById('lwp-sp-id');
-	var loadBtn    = document.getElementById('lwp-sp-load');
+	var qInput     = document.getElementById('lwp-sp-q');
+	var resultsEl  = document.getElementById('lwp-sp-results');
+	var chipSlot   = document.getElementById('lwp-sp-chip');
+	var searchWrap = qInput ? qInput.closest('.lwp-sp-search') : null;
 	var targetInfo = document.getElementById('lwp-sp-target-info');
 	var existingCard = document.getElementById('lwp-sp-existing-card');
 	var existingDiv  = document.getElementById('lwp-sp-existing');
@@ -352,16 +354,20 @@ $type_catalog = array(
 		statusEl.style.color = color || '#666';
 	}
 
+	var searchTimer = null;
+
+	// Reads currentTarget (set by selectTarget). The save/get/delete REST
+	// contract downstream is unchanged — only how object_type+object_id get
+	// chosen moved from raw inputs to the typeahead.
 	function loadTarget() {
-		var ot = typeSelect.value;
-		var id = parseInt(idInput.value, 10);
-		if (!id) { targetInfo.textContent = 'Enter an ID first.'; targetInfo.style.color = '#c33'; return; }
+		if (!currentTarget) { return; }
+		var ot = currentTarget.object_type;
+		var id = currentTarget.object_id;
 		targetInfo.textContent = 'Loading…';
 		targetInfo.style.color = '#666';
 
 		var query = 'aeo/get-schema?object_type=' + encodeURIComponent(ot) + '&object_id=' + id;
 		api(query).then(function (j) {
-			currentTarget = { object_type: ot, object_id: id };
 			targetInfo.innerHTML = 'Loaded <code>' + ot + ' #' + id + '</code> — ' + (j.count || 0) + ' existing schemas.';
 			targetInfo.style.color = '#2c7a2c';
 			existingCard.hidden = false;
@@ -371,6 +377,80 @@ $type_catalog = array(
 			targetInfo.textContent = 'Load failed: ' + e.message;
 			targetInfo.style.color = '#c33';
 		});
+	}
+
+	function closeResults() {
+		resultsEl.hidden = true;
+		resultsEl.innerHTML = '';
+		if (searchWrap) { searchWrap.setAttribute('aria-expanded', 'false'); }
+	}
+
+	function selectTarget(ot, id, label) {
+		currentTarget = { object_type: ot, object_id: id, label: label };
+		renderChip();
+		qInput.value = '';
+		closeResults();
+		loadTarget();
+	}
+
+	function renderChip() {
+		chipSlot.innerHTML = '';
+		if (!currentTarget) { return; }
+		var c = currentTarget;
+		var chip = document.createElement('span');
+		chip.className = 'lwp-sp-chip';
+		chip.innerHTML = '<span class="lwp-sp-chip-label"></span> <span class="lwp-sp-chip-meta"></span>' +
+			'<button type="button" class="lwp-sp-chip-x" aria-label="Clear selection">&times;</button>';
+		chip.querySelector('.lwp-sp-chip-label').textContent = c.label || (c.object_type + ' #' + c.object_id);
+		chip.querySelector('.lwp-sp-chip-meta').textContent = c.object_type + ' #' + c.object_id;
+		chip.querySelector('.lwp-sp-chip-x').addEventListener('click', function () {
+			currentTarget = null;
+			chipSlot.innerHTML = '';
+			existingCard.hidden = true;
+			addCard.hidden = true;
+			targetInfo.textContent = '';
+			qInput.focus();
+		});
+		chipSlot.appendChild(chip);
+	}
+
+	function wpSearch(type, q) {
+		var url = WP_ROOT + 'search?per_page=8&search=' + encodeURIComponent(q) + (type === 'term' ? '&type=term&subtype=any' : '');
+		return fetch(url, { headers: { 'X-WP-Nonce': REST_NONCE, 'Accept': 'application/json' } })
+			.then(function (r) { return r.ok ? r.json() : []; })
+			.catch(function () { return []; });
+	}
+
+	function searchTargets(q) {
+		if (!q || q.length < 2) { closeResults(); return; }
+		Promise.all([wpSearch('post', q), wpSearch('term', q)]).then(function (res) {
+			renderResults([].concat(res[0] || [], res[1] || []));
+		});
+	}
+
+	function renderResults(rows) {
+		resultsEl.innerHTML = '';
+		if (!rows.length) {
+			resultsEl.innerHTML = '<li class="lwp-sp-result lwp-sp-result--empty" role="option">No matches.</li>';
+			resultsEl.hidden = false;
+			if (searchWrap) { searchWrap.setAttribute('aria-expanded', 'true'); }
+			return;
+		}
+		rows.slice(0, 12).forEach(function (row) {
+			var ot = (row.type === 'term') ? 'term' : 'post';
+			var li = document.createElement('li');
+			li.className = 'lwp-sp-result';
+			li.setAttribute('role', 'option');
+			li.innerHTML = '<span class="lwp-sp-result-title"></span> <small class="lwp-sp-result-meta"></small>';
+			li.querySelector('.lwp-sp-result-title').textContent = (row.title || '(no title)');
+			li.querySelector('.lwp-sp-result-meta').textContent = (row.subtype || ot) + ' · #' + row.id;
+			li.addEventListener('click', function () {
+				selectTarget(ot, row.id, row.title || (ot + ' #' + row.id));
+			});
+			resultsEl.appendChild(li);
+		});
+		resultsEl.hidden = false;
+		if (searchWrap) { searchWrap.setAttribute('aria-expanded', 'true'); }
 	}
 
 	function renderExisting(schemas) {
@@ -478,8 +558,22 @@ $type_catalog = array(
 		});
 	}
 
-	loadBtn.addEventListener('click', loadTarget);
-	idInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); loadTarget(); } });
+	qInput.addEventListener('input', function () {
+		clearTimeout(searchTimer);
+		var q = qInput.value.trim();
+		searchTimer = setTimeout(function () { searchTargets(q); }, 250);
+	});
+	qInput.addEventListener('keydown', function (e) {
+		if (e.key === 'Escape') { closeResults(); }
+		else if (e.key === 'Enter') {
+			e.preventDefault();
+			var first = resultsEl.querySelector('.lwp-sp-result:not(.lwp-sp-result--empty)');
+			if (first) { first.click(); }
+		}
+	});
+	document.addEventListener('click', function (e) {
+		if (searchWrap && !searchWrap.contains(e.target)) { closeResults(); }
+	});
 	saveBtn.addEventListener('click', saveSchema);
 	validateBtn.addEventListener('click', validateJson);
 	resetBtn.addEventListener('click', function () {

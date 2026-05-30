@@ -1023,7 +1023,7 @@ class LuwiPress_WebMCP {
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
-                    'post_type' => array( 'type' => 'string', 'enum' => array( 'post', 'page', 'product' ), 'description' => 'Post type (default: post)' ),
+                    'post_type' => array( 'type' => 'string', 'enum' => array( 'post', 'page', 'product', 'lwp_vendor' ), 'description' => 'Post type (default: post; lwp_vendor = LuwiPress Vendor CPT)' ),
                     'status'    => array( 'type' => 'string', 'enum' => array( 'publish', 'draft', 'pending', 'private', 'any' ), 'description' => 'Post status (default: any)' ),
                     'search'    => array( 'type' => 'string', 'description' => 'Search query for title/content' ),
                     'per_page'  => array( 'type' => 'integer', 'description' => 'Results per page (max 100)' ),
@@ -1061,7 +1061,7 @@ class LuwiPress_WebMCP {
                     'content'   => array( 'type' => 'string', 'description' => 'Post content (HTML)' ),
                     'excerpt'   => array( 'type' => 'string', 'description' => 'Post excerpt' ),
                     'status'    => array( 'type' => 'string', 'enum' => array( 'draft', 'publish', 'private', 'pending' ), 'description' => 'Post status' ),
-                    'post_type' => array( 'type' => 'string', 'enum' => array( 'post', 'page', 'product' ), 'description' => 'Post type' ),
+                    'post_type' => array( 'type' => 'string', 'enum' => array( 'post', 'page', 'product', 'lwp_vendor' ), 'description' => 'Post type (lwp_vendor = LuwiPress Vendor CPT)' ),
                     'categories' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Category IDs' ),
                     'tags'       => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Tag names' ),
                 ),
@@ -1456,6 +1456,58 @@ class LuwiPress_WebMCP {
             $request = new WP_REST_Request( 'POST', '/luwipress/v1/taxonomy/seo-meta-bulk' );
             $request->set_param( 'rows', $rows );
             $data = $api->handle_bulk_taxonomy_seo_meta( $request );
+            if ( is_wp_error( $data ) ) {
+                return array(
+                    'error'   => $data->get_error_code(),
+                    'message' => $data->get_error_message(),
+                );
+            }
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        // ─── media_alt_bulk (1.0.38+) ────────────────────────────────
+        // Sibling of taxonomy_seo_meta_bulk for image alt text — wraps
+        // POST /media/alt-bulk (core 3.5.6) so the Image Alt Bulk sweep /
+        // CSV round-trip runs in one call. Each row is { attachment_id,
+        // alt_text }; an empty/omitted alt_text CLEARS the existing alt.
+        $this->register_tool( 'media_alt_bulk', array(
+            'description' => 'Bulk-write image alt text to up to 500 media attachments in a single call. Each row is { attachment_id, alt_text }; an empty or omitted alt_text CLEARS the existing alt text. Returns { success, applied, skipped, error_rows, total }. Use this for the Image Alt Bulk sweep / CSV round-trip.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'rows' => array(
+                        'type'        => 'array',
+                        'description' => 'Up to 500 rows, each: { attachment_id (required), alt_text? }.',
+                        'items'       => array(
+                            'type'       => 'object',
+                            'properties' => array(
+                                'attachment_id' => array( 'type' => 'integer', 'description' => 'Media attachment ID (required per row).' ),
+                                'alt_text'      => array( 'type' => 'string',  'description' => 'Alt text; an empty or omitted value clears the existing alt.' ),
+                            ),
+                            'required' => array( 'attachment_id' ),
+                        ),
+                    ),
+                ),
+                'required' => array( 'rows' ),
+            ),
+            'annotations' => array(
+                'title'            => 'Bulk Write Image Alt Text',
+                'readOnlyHint'     => false,
+                'idempotentHint'   => true,
+                'openWorldHint'    => false,
+            ),
+        ), function ( $args ) {
+            $rows = isset( $args['rows'] ) && is_array( $args['rows'] ) ? $args['rows'] : array();
+            if ( empty( $rows ) ) {
+                return array( 'error' => 'no_rows', 'message' => 'rows array is required (each: { attachment_id, alt_text? }).' );
+            }
+            if ( count( $rows ) > 500 ) {
+                return array( 'error' => 'too_many_rows', 'message' => 'Max 500 rows per request; split and retry.', 'submitted' => count( $rows ) );
+            }
+            $api     = LuwiPress_API::get_instance();
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/media/alt-bulk' );
+            $request->set_param( 'rows', $rows );
+            $data = $api->handle_bulk_media_alt( $request );
             if ( is_wp_error( $data ) ) {
                 return array(
                     'error'   => $data->get_error_code(),
@@ -5750,6 +5802,53 @@ class LuwiPress_WebMCP {
         } );
     }
 
+    /**
+     * KSES sanitizer for taxonomy term descriptions. Default behaviour matches
+     * wp_kses_post (prose HTML). When $allow_iframe is true, extends the
+     * post-content allowlist with <iframe> for embeds (YouTube / Maps): on*
+     * event handlers are always stripped by kses and the default allowed-
+     * protocols list blocks javascript:/data: src, so this cannot introduce
+     * script execution. Backs taxonomy_update_term's allow_iframe flag.
+     *
+     * @param string $html
+     * @param bool   $allow_iframe
+     * @return string
+     */
+    private function kses_term_description( $html, $allow_iframe ) {
+        if ( ! $allow_iframe ) {
+            return wp_kses_post( (string) $html );
+        }
+        $allowed           = wp_kses_allowed_html( 'post' );
+        $allowed['iframe'] = array(
+            'src'             => true,
+            'width'           => true,
+            'height'          => true,
+            'title'           => true,
+            'frameborder'     => true,
+            'allow'           => true,
+            'allowfullscreen' => true,
+            'loading'         => true,
+            'referrerpolicy'  => true,
+            'sandbox'         => true,
+            'style'           => true,
+            'class'           => true,
+        );
+        return wp_kses( (string) $html, $allowed );
+    }
+
+    /**
+     * `pre_term_description` filter callback swapped in (instead of
+     * wp_filter_post_kses) when taxonomy_update_term runs with allow_iframe, so
+     * the <iframe> survives wp_update_term's re-sanitize pass. Must be public —
+     * WP core invokes it as a filter from outside the class scope.
+     *
+     * @param string $data
+     * @return string
+     */
+    public function filter_term_description_iframe( $data ) {
+        return $this->kses_term_description( $data, true );
+    }
+
     /* ───────────────────── Taxonomy Tools ──────────────────────────── */
 
     private function register_taxonomy_tools() {
@@ -5932,16 +6031,17 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'taxonomy_update_term', array(
-            'description' => 'Update an existing term name, slug, description, or parent',
+            'description' => 'Update an existing term name, slug, description, or parent. Description preserves prose HTML (a / h2-h6 / ul / li / em); set allow_iframe=true to also permit <iframe> embeds (YouTube / Maps).',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
-                    'term_id'     => array( 'type' => 'integer', 'description' => 'Term ID (required)' ),
-                    'taxonomy'    => array( 'type' => 'string', 'description' => 'Taxonomy slug (required)' ),
-                    'name'        => array( 'type' => 'string', 'description' => 'New name' ),
-                    'slug'        => array( 'type' => 'string', 'description' => 'New slug' ),
-                    'parent'      => array( 'type' => 'integer', 'description' => 'New parent term ID' ),
-                    'description' => array( 'type' => 'string', 'description' => 'New description' ),
+                    'term_id'      => array( 'type' => 'integer', 'description' => 'Term ID (required)' ),
+                    'taxonomy'     => array( 'type' => 'string', 'description' => 'Taxonomy slug (required)' ),
+                    'name'         => array( 'type' => 'string', 'description' => 'New name' ),
+                    'slug'         => array( 'type' => 'string', 'description' => 'New slug' ),
+                    'parent'       => array( 'type' => 'integer', 'description' => 'New parent term ID' ),
+                    'description'  => array( 'type' => 'string', 'description' => 'New description (prose HTML preserved)' ),
+                    'allow_iframe' => array( 'type' => 'boolean', 'description' => 'When true, permit <iframe> embeds (e.g. YouTube / Maps) in description. javascript:/data: src + on* event handlers are always stripped. Admin-gated via the MCP token. Default false.' ),
                 ),
                 'required' => array( 'term_id', 'taxonomy' ),
             ),
@@ -5962,6 +6062,10 @@ class LuwiPress_WebMCP {
             $has_slug   = isset( $args['slug'] );
             $has_parent = isset( $args['parent'] );
             $has_desc   = isset( $args['description'] );
+            // Opt-in <iframe> embeds in the description. Admin-gated by the MCP
+            // token (the token path skips wp_set_current_user, so manage_options
+            // can't be checked here — the token IS the admin gate).
+            $allow_iframe = ! empty( $args['allow_iframe'] );
 
             // wp_update_term() always re-runs wp_unique_term_slug() — which is not
             // WPML-language-aware. On translation terms this falsely flags the
@@ -5983,7 +6087,7 @@ class LuwiPress_WebMCP {
             if ( $has_desc && ! $has_name && ! $has_slug && ! $has_parent ) {
                 $updated = $wpdb->update(
                     $wpdb->term_taxonomy,
-                    array( 'description' => wp_kses_post( (string) $args['description'] ) ),
+                    array( 'description' => $this->kses_term_description( $args['description'], $allow_iframe ) ),
                     array( 'term_taxonomy_id' => (int) $term->term_taxonomy_id ),
                     array( '%s' ),
                     array( '%d' )
@@ -6025,7 +6129,7 @@ class LuwiPress_WebMCP {
             // wp_kses_post matches the render-side filter the luwipress-gold
             // theme uses (1.7.34+). See the direct path above for the full
             // rationale.
-            if ( $has_desc )   $term_args['description'] = wp_kses_post( (string) $args['description'] );
+            if ( $has_desc )   $term_args['description'] = $this->kses_term_description( $args['description'], $allow_iframe );
 
             // wp_update_term → sanitize_term → sanitize_term_field('description', …, 'db')
             // applies the `pre_term_description` filter. WP core attaches
@@ -6033,19 +6137,22 @@ class LuwiPress_WebMCP {
             // unless the current user has `unfiltered_html`. Our token-auth path
             // intentionally does NOT call wp_set_current_user (see
             // LuwiPress_Permission::is_token_authenticated docblock) so that
-            // capability is false in this context. Swap to the permissive
-            // `wp_filter_post_kses` for the duration of this call so the input
-            // we pre-sanitized with wp_kses_post survives intact, then restore.
+            // capability is false in this context. Swap to a permissive kses
+            // filter for the duration of this call so the input we pre-sanitized
+            // survives wp_update_term's re-sanitize intact, then restore. When
+            // allow_iframe is set we swap in our iframe-aware filter (otherwise
+            // wp_filter_post_kses would re-strip the <iframe> we just kept).
             $kses_swap = $has_desc;
+            $kses_cb   = $allow_iframe ? array( $this, 'filter_term_description_iframe' ) : 'wp_filter_post_kses';
             if ( $kses_swap ) {
                 remove_filter( 'pre_term_description', 'wp_filter_kses' );
-                add_filter( 'pre_term_description', 'wp_filter_post_kses' );
+                add_filter( 'pre_term_description', $kses_cb );
             }
 
             $result = wp_update_term( $term_id, $taxonomy, $term_args );
 
             if ( $kses_swap ) {
-                remove_filter( 'pre_term_description', 'wp_filter_post_kses' );
+                remove_filter( 'pre_term_description', $kses_cb );
                 add_filter( 'pre_term_description', 'wp_filter_kses' );
             }
 
