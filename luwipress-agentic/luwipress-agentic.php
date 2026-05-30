@@ -2,8 +2,8 @@
 /**
  * Plugin Name: LuwiPress Agentic
  * Plugin URI: https://luwi.dev/luwipress-agentic
- * Description: Agentic middleware for LuwiPress — uniform admin chat surface, pluggable agent backend. Ships with Open Claw (oc.luwi.dev) and Hermes (hermes.luwi.dev) runtime adapters; operators pick the active backend and can point either at their own self-hosted endpoint. Requires the core LuwiPress plugin.
- * Version: 1.2.0
+ * Description: Agentic middleware for LuwiPress — uniform admin chat surface, pluggable agent backend, plus the Agentic Commerce hub (Google UCP feed + native checkout and AP2 payment mandates). Ships with Open Claw (oc.luwi.dev) and Hermes (hermes.luwi.dev) runtime adapters; operators pick the active backend and can point either at their own self-hosted endpoint. Requires the core LuwiPress plugin.
+ * Version: 1.3.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'LUWIPRESS_AGENTIC_VERSION', '1.2.0' );
+define( 'LUWIPRESS_AGENTIC_VERSION', '1.3.0' );
 define( 'LUWIPRESS_AGENTIC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LUWIPRESS_AGENTIC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'LUWIPRESS_AGENTIC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );

@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.6.1
+Stable tag: 3.6.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,10 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.6.2 — Agentic Commerce moved to the LuwiPress Agentic companion =
+* **Architecture:** the Agentic Commerce modules (Google UCP feed + native checkout, AP2 mandate audit trail) introduced in 3.6.0 have moved out of core into the **LuwiPress Agentic** companion plugin (1.3.0+). The core stays lean for the majority of stores that don't sell through AI agents. No feature is lost — install/activate LuwiPress Agentic 1.3.0 to keep the `LuwiPress → Commerce` hub, the `/ucp/*` and `/ap2/*` REST routes, and the `ucp_*` / `ap2_*` WebMCP tools. The WebMCP tools already guard on `class_exists`, so they register only when the companion is active.
+* **Upgrade note:** deploy core 3.6.2 **together with** LuwiPress Agentic 1.3.0. Updating core alone removes the Commerce hub until the companion is updated. The `wp_luwipress_ucp_sessions` table and all stored UCP/AP2 settings + order meta are untouched by the move — the companion reuses the same table and option names.
 
 = 3.6.1 — Knowledge Graph: vendor node detail panel =
 * **Fix:** clicking a vendor node in the Knowledge Graph opened an empty sidebar. The detail panel renderer had no `vendor` branch (and no fallback), so vendor clicks rendered nothing. Vendor nodes now open a full operational panel: entity-type badge (Organization / Person / Local Business), an E-E-A-T score health bar, profile stats (products attributed, specialty, location, role, group), severity-graded recommendations ("Attribute products" when none are linked, "Strengthen E-E-A-T profile" when the score is low), and Edit Vendor + View Profile actions — matching the product / segment / category panels.
