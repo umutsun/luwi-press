@@ -45,6 +45,15 @@ class LuwiPress_Vendors {
 	const TAXONOMY_GROUP = 'lwp_vendor_group';
 	const OPTION_PREFIX  = 'luwipress_vendors_';
 
+	// Per-group archive slugs (3.7.5) — each lwp_vendor_group term may carry
+	// its own URL base so /team/<name>/ and /luthiers/<name>/ coexist under one
+	// CPT. A vendor's canonical permalink follows its _primary_group base when
+	// set, otherwise falls back to the global archive_slug (zero breakage for
+	// existing vendors that have no primary group).
+	const GROUP_SLUG_META       = 'lwp_group_archive_slug';   // term meta: per-group URL base
+	const PRIMARY_GROUP_META    = '_lwp_vendor_primary_group'; // post meta: canonical group term_id
+	const TRANSIENT_GROUP_BASES = 'luwipress_vendor_group_bases_v1';
+
 	/**
 	 * Default config. Each value lives under
 	 * option key `luwipress_vendors_<key>`. Operator overrides via Settings UI
@@ -136,6 +145,24 @@ class LuwiPress_Vendors {
 
 		// WooCommerce integration (loaded only when WC is active)
 		add_action( 'woocommerce_init', array( $this, 'init_woocommerce_integration' ) );
+
+		// ── Per-group archive slugs (3.7.5) ──────────────────────────────
+		// Dynamic rewrite rules per group base (runs after register_cpt p5).
+		add_action( 'init', array( $this, 'register_group_rewrites' ), 7 );
+		// Canonical permalink → primary group's base (falls back to global).
+		add_filter( 'post_type_link', array( $this, 'filter_vendor_permalink' ), 10, 2 );
+		// Tell the core Slug Resolver to leave group bases alone (no 301) — keeps
+		// the resolver generic; the vendor module owns the base knowledge.
+		add_filter( 'luwipress_slug_resolver_skip_slugs', array( $this, 'resolver_skip_group_bases' ) );
+		// Group term edit screens: archive_slug field + save (+ rewrite flush).
+		add_action( self::TAXONOMY_GROUP . '_add_form_fields', array( $this, 'group_archive_slug_add_field' ) );
+		add_action( self::TAXONOMY_GROUP . '_edit_form_fields', array( $this, 'group_archive_slug_edit_field' ), 10, 2 );
+		add_action( 'created_' . self::TAXONOMY_GROUP, array( $this, 'save_group_archive_slug' ) );
+		add_action( 'edited_' . self::TAXONOMY_GROUP, array( $this, 'save_group_archive_slug' ) );
+		add_action( 'delete_' . self::TAXONOMY_GROUP, array( $this, 'bust_group_bases_cache' ) );
+		// Vendor edit screen: pick the canonical (primary) group.
+		add_action( 'add_meta_boxes', array( $this, 'add_primary_group_metabox' ) );
+		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_primary_group' ), 10, 2 );
 	}
 
 	/* ─── WOOCOMMERCE INTEGRATION ─────────────────────────────────────── */
@@ -757,7 +784,32 @@ class LuwiPress_Vendors {
 
 	public static function get_setting( $key, $fallback = null ) {
 		$default = self::DEFAULTS[ $key ] ?? $fallback;
-		return get_option( self::OPTION_PREFIX . $key, $default );
+		$value   = get_option( self::OPTION_PREFIX . $key, $default );
+		// Normalize the slug pattern on every read so a stray quote that crept
+		// into the stored value (e.g. "%postname%'") can never leak out through
+		// the admin UI, REST, or MCP — it was the trailing apostrophe, not a
+		// "clipped leading %", that made the value look corrupted over MCP.
+		if ( 'single_slug_pattern' === $key ) {
+			$value = self::sanitize_slug_pattern( $value );
+		}
+		return $value;
+	}
+
+	/**
+	 * Clamp the single-post slug pattern to a known, clean token. Strips stray
+	 * surrounding/trailing quotes & backticks left behind by shell/JSON quoting
+	 * accidents, then validates against the supported set. `%category%/%postname%`
+	 * is intentionally NOT supported — per-group archive_slug is the canonical
+	 * way to namespace vendor URLs (see LuwiPress_Vendors group bases).
+	 *
+	 * @param mixed $value
+	 * @return string
+	 */
+	public static function sanitize_slug_pattern( $value ) {
+		$value   = trim( (string) $value );
+		$value   = trim( $value, "\"'` \t\n\r" );
+		$allowed = array( '%postname%' );
+		return in_array( $value, $allowed, true ) ? $value : '%postname%';
 	}
 
 	/**
@@ -920,6 +972,39 @@ class LuwiPress_Vendors {
 				},
 			) )
 		);
+
+		// Canonical (primary) group for a vendor's permalink base (3.7.5).
+		// Integer term_id of a lwp_vendor_group term; 0/empty = global default.
+		register_post_meta(
+			self::POST_TYPE,
+			self::PRIMARY_GROUP_META,
+			array(
+				'type'              => 'integer',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'description'       => 'LuwiPress Vendor — canonical group term_id driving the permalink base (0 = global archive_slug).',
+				'sanitize_callback' => 'absint',
+				'auth_callback'     => function () {
+					return current_user_can( 'edit_posts' );
+				},
+			)
+		);
+
+		// Per-group archive slug (term meta on lwp_vendor_group).
+		register_term_meta(
+			self::TAXONOMY_GROUP,
+			self::GROUP_SLUG_META,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'description'       => 'LuwiPress Vendor Group — URL base for this group (e.g. team, music-academy-teachers). Empty = vendors fall back to the global archive_slug.',
+				'sanitize_callback' => 'sanitize_title',
+				'auth_callback'     => function () {
+					return current_user_can( 'manage_categories' );
+				},
+			)
+		);
 	}
 
 	private function sanitizer_for( $key ) {
@@ -944,6 +1029,240 @@ class LuwiPress_Vendors {
 			return 'wp_kses_post';
 		}
 		return 'sanitize_text_field';
+	}
+
+	/* ─── PER-GROUP ARCHIVE SLUGS (3.7.5) ─────────────────────────────── */
+
+	/**
+	 * Map of [ base_slug => group_term_slug ] for every lwp_vendor_group term
+	 * that defines an archive_slug. Cached 1h; busted on group save/delete.
+	 *
+	 * @return array<string,string>
+	 */
+	public function group_bases_map() {
+		$cached = get_transient( self::TRANSIENT_GROUP_BASES );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+		$map   = array();
+		$terms = get_terms( array(
+			'taxonomy'   => self::TAXONOMY_GROUP,
+			'hide_empty' => false,
+		) );
+		if ( is_array( $terms ) ) {
+			foreach ( $terms as $t ) {
+				if ( ! $t instanceof WP_Term ) {
+					continue;
+				}
+				$base = sanitize_title( (string) get_term_meta( $t->term_id, self::GROUP_SLUG_META, true ) );
+				if ( $base !== '' ) {
+					$map[ $base ] = $t->slug;
+				}
+			}
+		}
+		set_transient( self::TRANSIENT_GROUP_BASES, $map, HOUR_IN_SECONDS );
+		return $map;
+	}
+
+	/** Bust the group-bases cache (group term save/delete). */
+	public function bust_group_bases_cache() {
+		delete_transient( self::TRANSIENT_GROUP_BASES );
+	}
+
+	/**
+	 * Register dynamic rewrite rules for each group base:
+	 *   /<base>/<vendor>/  → single vendor
+	 *   /<base>/           → that group's term archive
+	 * Runs on init p7 (after register_cpt p5). Rules are added to the in-memory
+	 * rewrite set every load; a flush (on group save) persists them so request
+	 * matching actually uses them.
+	 */
+	public function register_group_rewrites() {
+		if ( (int) self::get_setting( 'enabled' ) !== 1 ) {
+			return;
+		}
+		foreach ( $this->group_bases_map() as $base => $term_slug ) {
+			// Slugs come from sanitize_title (regex-safe). Single first, then archive.
+			add_rewrite_rule(
+				'^' . $base . '/([^/]+)/?$',
+				'index.php?' . self::POST_TYPE . '=$matches[1]',
+				'top'
+			);
+			add_rewrite_rule(
+				'^' . $base . '/?$',
+				'index.php?' . self::TAXONOMY_GROUP . '=' . $term_slug,
+				'top'
+			);
+		}
+	}
+
+	/**
+	 * Rewrite a vendor's permalink to its primary group's base. Falls back to
+	 * the global archive_slug when no primary group is set, so the existing
+	 * vendor pool keeps its current /<archive_slug>/<name>/ URLs (zero breakage).
+	 *
+	 * @param string  $post_link
+	 * @param WP_Post $post
+	 * @return string
+	 */
+	public function filter_vendor_permalink( $post_link, $post ) {
+		if ( ! $post instanceof WP_Post || $post->post_type !== self::POST_TYPE ) {
+			return $post_link;
+		}
+		$base = $this->primary_group_base( $post->ID );
+		if ( $base === '' ) {
+			return $post_link;
+		}
+		$global = sanitize_title( (string) self::get_setting( 'archive_slug' ) ) ?: 'people';
+		if ( $base === $global ) {
+			return $post_link;
+		}
+		// Swap the first /<global>/ path segment for /<base>/.
+		$swapped = preg_replace( '#/' . preg_quote( $global, '#' ) . '/#', '/' . $base . '/', (string) $post_link, 1 );
+		return is_string( $swapped ) ? $swapped : $post_link;
+	}
+
+	/** Resolve a vendor's primary-group base slug, or '' for the global default. */
+	public function primary_group_base( $vendor_id ) {
+		$term_id = (int) get_post_meta( (int) $vendor_id, self::PRIMARY_GROUP_META, true );
+		if ( $term_id <= 0 ) {
+			return '';
+		}
+		return sanitize_title( (string) get_term_meta( $term_id, self::GROUP_SLUG_META, true ) );
+	}
+
+	/**
+	 * Slug Resolver integration: append every group base to the resolver's skip
+	 * list so /team/<vendor>/ (etc.) is never auto-301'd to the global archive.
+	 * Keeps the core resolver generic — the vendor module owns the base list.
+	 *
+	 * @param string[] $slugs
+	 * @return string[]
+	 */
+	public function resolver_skip_group_bases( $slugs ) {
+		if ( ! is_array( $slugs ) ) {
+			$slugs = array();
+		}
+		foreach ( array_keys( $this->group_bases_map() ) as $base ) {
+			$slugs[] = $base;
+		}
+		return $slugs;
+	}
+
+	/* ─── GROUP TERM archive_slug FIELD ───────────────────────────────── */
+
+	/** Group "Add new" screen: archive_slug field. */
+	public function group_archive_slug_add_field() {
+		?>
+		<div class="form-field term-lwp-archive-slug-wrap">
+			<label for="lwp_group_archive_slug"><?php esc_html_e( 'Archive slug (URL base)', 'luwipress' ); ?></label>
+			<input type="text" name="lwp_group_archive_slug" id="lwp_group_archive_slug" value="" />
+			<p><?php esc_html_e( 'Optional. Gives this group its own URL base, e.g. "team" → /team/<vendor>/. Leave empty to use the global Vendors archive slug.', 'luwipress' ); ?></p>
+		</div>
+		<?php
+	}
+
+	/** Group "Edit" screen: archive_slug field. */
+	public function group_archive_slug_edit_field( $term, $taxonomy ) {
+		$val = (string) get_term_meta( $term->term_id, self::GROUP_SLUG_META, true );
+		?>
+		<tr class="form-field term-lwp-archive-slug-wrap">
+			<th scope="row"><label for="lwp_group_archive_slug"><?php esc_html_e( 'Archive slug (URL base)', 'luwipress' ); ?></label></th>
+			<td>
+				<input type="text" name="lwp_group_archive_slug" id="lwp_group_archive_slug" value="<?php echo esc_attr( $val ); ?>" />
+				<p class="description"><?php esc_html_e( 'Gives this group its own URL base, e.g. "team" → /team/<vendor>/. Empty = global Vendors archive slug. Vendors point here via "Primary group" on the vendor edit screen.', 'luwipress' ); ?></p>
+			</td>
+		</tr>
+		<?php
+	}
+
+	/**
+	 * Save the group archive_slug term meta + flush rewrites so the new base
+	 * resolves. Fires inside WP's nonce-checked term-edit flow; we cap-check and
+	 * sanitize the field. Only flushes when the value actually changed.
+	 *
+	 * @param int $term_id
+	 */
+	public function save_group_archive_slug( $term_id ) {
+		if ( ! current_user_can( 'manage_categories' ) ) {
+			return;
+		}
+		if ( ! isset( $_POST['lwp_group_archive_slug'] ) ) {
+			return;
+		}
+		$raw  = sanitize_title( (string) wp_unslash( $_POST['lwp_group_archive_slug'] ) );
+		$prev = (string) get_term_meta( $term_id, self::GROUP_SLUG_META, true );
+		if ( $raw === '' ) {
+			delete_term_meta( $term_id, self::GROUP_SLUG_META );
+		} else {
+			update_term_meta( $term_id, self::GROUP_SLUG_META, $raw );
+		}
+		$this->bust_group_bases_cache();
+		if ( $raw !== $prev ) {
+			$this->register_group_rewrites();
+			flush_rewrite_rules( false );
+		}
+	}
+
+	/* ─── VENDOR _primary_group METABOX ───────────────────────────────── */
+
+	/** Vendor edit: "Primary group" metabox (canonical permalink base). */
+	public function add_primary_group_metabox() {
+		add_meta_box(
+			'lwp_vendor_primary_group',
+			__( 'Primary group (URL base)', 'luwipress' ),
+			array( $this, 'render_primary_group_metabox' ),
+			self::POST_TYPE,
+			'side',
+			'default'
+		);
+	}
+
+	public function render_primary_group_metabox( $post ) {
+		$current = (int) get_post_meta( $post->ID, self::PRIMARY_GROUP_META, true );
+		$terms   = get_the_terms( $post->ID, self::TAXONOMY_GROUP );
+		wp_nonce_field( 'lwp_primary_group_save', 'lwp_primary_group_nonce' );
+		if ( empty( $terms ) || is_wp_error( $terms ) ) {
+			echo '<p>' . esc_html__( 'Assign this vendor to a group (in the Groups box) to pick a URL base. Until then the global Vendors archive slug is used.', 'luwipress' ) . '</p>';
+			return;
+		}
+		echo '<select name="lwp_primary_group" style="width:100%;">';
+		echo '<option value="0">' . esc_html__( '— Global default —', 'luwipress' ) . '</option>';
+		foreach ( $terms as $t ) {
+			$base  = sanitize_title( (string) get_term_meta( $t->term_id, self::GROUP_SLUG_META, true ) );
+			$label = $base !== '' ? $t->name . ' (/' . $base . '/)' : $t->name . ' — ' . __( 'no base set', 'luwipress' );
+			printf(
+				'<option value="%d" %s%s>%s</option>',
+				(int) $t->term_id,
+				selected( $current, (int) $t->term_id, false ),
+				$base === '' ? ' disabled' : '',
+				esc_html( $label )
+			);
+		}
+		echo '</select>';
+		echo '<p class="description">' . esc_html__( 'Canonical URL base for this vendor. Groups without an archive slug are disabled here.', 'luwipress' ) . '</p>';
+	}
+
+	/**
+	 * @param int     $post_id
+	 * @param WP_Post $post
+	 */
+	public function save_primary_group( $post_id, $post ) {
+		if ( ! isset( $_POST['lwp_primary_group_nonce'] ) || ! wp_verify_nonce( sanitize_key( wp_unslash( $_POST['lwp_primary_group_nonce'] ) ), 'lwp_primary_group_save' ) ) {
+			return;
+		}
+		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+			return;
+		}
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return;
+		}
+		$term_id = isset( $_POST['lwp_primary_group'] ) ? absint( $_POST['lwp_primary_group'] ) : 0;
+		if ( $term_id > 0 ) {
+			update_post_meta( $post_id, self::PRIMARY_GROUP_META, $term_id );
+		} else {
+			delete_post_meta( $post_id, self::PRIMARY_GROUP_META );
+		}
 	}
 
 	/* ─── REST ENDPOINTS ──────────────────────────────────────────────── */
@@ -1036,7 +1355,9 @@ class LuwiPress_Vendors {
 					$decoded = json_decode( (string) $value, true );
 					$value   = is_array( $decoded ) ? wp_json_encode( $decoded ) : '';
 				}
-			} elseif ( $key === 'single_slug_pattern' || $key === 'default_occupation' || $key === 'entity_type' || $key === 'menu_icon' ) {
+			} elseif ( $key === 'single_slug_pattern' ) {
+				$value = self::sanitize_slug_pattern( $value );
+			} elseif ( $key === 'default_occupation' || $key === 'entity_type' || $key === 'menu_icon' ) {
 				$value = sanitize_text_field( (string) $value );
 			} elseif ( is_int( $default ) ) {
 				$value = (int) (bool) $value;

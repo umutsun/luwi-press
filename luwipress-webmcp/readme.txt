@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.38
+Stable tag: 1.0.39
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,12 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.39 — Health Score, AI-tell audit, CRM settings + KG queue tools (paired with core 3.7.4) =
+* **NEW `health_score_get`** — read the composite Content Health Score plus its six-pillar breakdown and per-pillar config in one call. Read-only.
+* **NEW `content_ai_tell_audit` + `content_ai_tell_bank`** — scan content for AI-tell boilerplate phrases ("In the world of…", "stands as one of the most…") that weaken brand voice; twin of the promotional-phrase audit, different multilingual phrase bank. Read-only.
+* **NEW `crm_settings_get` / `crm_settings_set` / `crm_refresh_segments`** — read and update the six customer-segmentation thresholds, then recompute existing customers. Closes the last module `/settings` surface that lacked an MCP tool.
+* **NEW `kg_candidate_snooze` / `kg_candidate_dismiss`** — manage the KG Action Queue from MCP (snooze for N hours or dismiss permanently), not just read it.
 
 = 1.0.38 — media_alt_bulk + iframe-in-term-descriptions + vendor post type (paired with core 3.7.0) =
 * **NEW `media_alt_bulk` tool** — bulk-write image alt text to up to 500 attachments in one call (each row `{ attachment_id, alt_text }`; an empty `alt_text` clears it). Wraps the core `POST /media/alt-bulk` endpoint; powers the Image Alt Bulk sweep / CSV round-trip. Write-classified (`readOnlyHint:false`), so the autonomous agent loop never invokes it on its own.

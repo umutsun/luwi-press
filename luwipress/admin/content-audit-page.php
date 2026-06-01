@@ -91,7 +91,27 @@ $wc_targets = class_exists( 'LuwiPress_Health_Score' )
 <div class="wrap luwipress-content-audit">
 <?php endif; ?>
 	<?php if ( ! $luwipress_hub_mode ) : ?>
-	<h1><span class="dashicons dashicons-search"></span> <?php esc_html_e( 'Content Audit', 'luwipress' ); ?></h1>
+	<div class="lp-header">
+			<div class="lp-header-left">
+				<h1 class="lp-title">
+					<img class="lp-logo" width="28" height="28"
+					     src="<?php echo esc_url( LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' ); ?>"
+					     alt="LuwiPress" />
+					<?php esc_html_e( 'Content Audit', 'luwipress' ); ?>
+				</h1>
+			</div>
+			<div class="lp-header-actions">
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress' ) ); ?>"
+				   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
+				   title="<?php esc_attr_e( 'Dashboard', 'luwipress' ); ?>">
+					<span class="dashicons dashicons-dashboard"></span>
+					<span class="screen-reader-text"><?php esc_html_e( 'Dashboard', 'luwipress' ); ?></span>
+				</a>
+				<span class="lp-pill pill-neutral" title="<?php esc_attr_e( 'Plugin version', 'luwipress' ); ?>">
+					v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
+				</span>
+			</div>
+		</div>
 	<?php endif; ?>
 	<p class="lp-page-intro">
 		<?php esc_html_e( 'Catch promotional phrases that trigger GMC disapproval, stock LLM phrasings that 2024+ Helpful Content Update flags, and content that falls outside your per-type word count target. Each tab runs against your live content and surfaces 1-click fix paths.', 'luwipress' ); ?>

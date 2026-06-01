@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.7.3
+Stable tag: 3.7.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,16 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.7.5 — Per-group vendor URLs + slug-pattern cleanup =
+* **Per-group archive slugs for Vendors.** Each vendor group (Vendor Groups taxonomy) can now carry its own URL base — set "Archive slug" on the group's edit screen (e.g. `team` → `/team/<vendor>/`, `music-academy-teachers` → `/music-academy-teachers/<vendor>/`). On the vendor edit screen, pick the **Primary group** to choose that vendor's canonical URL base. Vendors with no primary group keep the global Vendors archive slug, so existing vendor URLs don't change.
+* The core Slug Resolver now leaves group bases alone (no accidental 301 to the global archive).
+* **Fix:** the Vendors `single_slug_pattern` value is normalized on read/write — strips a stray trailing quote that could creep in and make the value look corrupted when read over MCP/REST.
+
+= 3.7.4 — Admin design-system cohesion =
+* **One consistent look across every admin screen.** Usage & Logs, Translation Manager, the Content Scheduler and six tool pages (Vendors, Slug Resolver, Image Alt Bulk, Schema Preview, Schema Picker, Content Audit) now share the same branded header (logo + version pill + Dashboard shortcut), tab strip and card styling as the Dashboard.
+* **Connection settings folded into General.** The Settings nav drops to 5 tabs — "Connection" (API token, MCP & REST) is now a collapsible section under **General**, beside General and Content Health. Old `?tab=connection` links still resolve.
+* All admin colours now flow through the design-token palette (no hard-coded hex); the Translation drift / sync-audit panels were re-tinted to the standard error / warning / info severities.
 
 = 3.7.3 — One Site hub + collapsible admin everywhere =
 * **Content tools folded into the Site hub + grouped.** The separate "Content" sidebar item is gone — the **Site** page now holds every tool under a handful of top sections (**Content** · **SEO & Taxonomy** · **Security** · **Theme** · **Vendors**). Pick a section, then a tool — it opens directly with its own collapsible panels (one tool loads at a time, so the page stays fast and nothing nests). One fewer sidebar row, nothing lost. Old `?page=luwipress-content` links (and every old tab deep-link) still resolve onto the right section.

@@ -114,12 +114,12 @@ $default_tab = $total_items > 0 ? 'queue' : 'create';
 		</div>
 		<div class="lp-header-actions">
 			<?php if ( $has_ai_key ) : ?>
-			<span class="lp-pill pill-ok" title="<?php esc_attr_e( 'Active AI provider', 'luwipress' ); ?>">
+			<span class="lp-pill pill-success" title="<?php esc_attr_e( 'Active AI provider', 'luwipress' ); ?>">
 				<span class="dashicons dashicons-admin-generic"></span>
 				<?php echo esc_html( ( $provider_labels[ $ai_provider ] ?? 'AI' ) . ' · ' . $ai_model ); ?>
 			</span>
 			<?php else : ?>
-			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-settings&tab=api-keys' ) ); ?>" class="lp-pill pill-err">
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-settings&tab=api-keys' ) ); ?>" class="lp-pill pill-warning">
 				<span class="dashicons dashicons-warning"></span>
 				<?php esc_html_e( 'No AI key configured', 'luwipress' ); ?>
 			</a>
@@ -174,7 +174,7 @@ $default_tab = $total_items > 0 ? 'queue' : 'create';
 
 		<?php if ( empty( $scheduled_items ) ) : ?>
 		<!-- Empty state -->
-		<div class="lp-card sched-empty-card">
+		<div class="luwipress-card sched-empty-card">
 			<div class="sched-empty">
 				<span class="dashicons dashicons-calendar-alt"></span>
 				<h3><?php esc_html_e( 'No scheduled content yet', 'luwipress' ); ?></h3>
@@ -328,7 +328,7 @@ $default_tab = $total_items > 0 ? 'queue' : 'create';
 		</div>
 
 		<?php if ( empty( $recurring_plans ) ) : ?>
-		<div class="lp-card sched-empty-card">
+		<div class="luwipress-card sched-empty-card">
 			<div class="sched-empty">
 				<span class="dashicons dashicons-backup"></span>
 				<h3><?php esc_html_e( 'No recurring plans yet', 'luwipress' ); ?></h3>
@@ -388,7 +388,7 @@ $default_tab = $total_items > 0 ? 'queue' : 'create';
 	     ═══════════════════════════════════════════════════════ -->
 	<section class="sched-tabpanel" id="sched-tabpanel-create" role="tabpanel" aria-labelledby="sched-tab-create" hidden>
 
-		<div class="lp-card sched-wizard-card">
+		<div class="luwipress-card sched-wizard-card">
 			<form id="sched-wizard-form" class="sched-wizard-layout" autocomplete="off">
 				<?php wp_nonce_field( 'luwipress_scheduler_nonce' ); ?>
 				<input type="hidden" name="action" value="luwipress_bulk_schedule_content">

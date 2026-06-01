@@ -989,6 +989,35 @@ class LuwiPress_WebMCP {
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
 
+        $this->register_tool( 'health_score_get', array(
+            'description' => 'Get the LuwiPress Content Health Score — the composite store-health number plus its per-pillar breakdown (SEO Coverage, AEO Coverage, Translation Health, Schema Coverage, Brand Voice, Content Depth). Also returns the pillar config (weight, target, action threshold). Mirrors GET /health/score + /health/pillars.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'force' => array(
+                        'type'        => 'boolean',
+                        'description' => 'Bypass the 15-minute cache and recompute from scratch (default false).',
+                    ),
+                ),
+            ),
+            'annotations' => array(
+                'title'           => 'Content Health Score',
+                'readOnlyHint'    => true,
+                'idempotentHint'  => true,
+                'openWorldHint'   => false,
+            ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_Health_Score' ) ) {
+                return array( 'error' => 'Content Health Score module is not available on this site.' );
+            }
+            $force = ! empty( $args['force'] );
+            $hs    = LuwiPress_Health_Score::get_instance();
+            return array(
+                'score'   => $hs->compute( $force ),
+                'pillars' => array_values( $hs->get_pillars() ),
+            );
+        } );
+
         $this->register_tool( 'cache_purge', array(
             'description' => 'Purge caches across LiteSpeed, WP Rocket, W3TC, WP Super Cache, Elementor CSS, and WordPress object cache. Use after bulk content or style updates to make new output visible immediately.',
             'inputSchema' => array(
@@ -1224,6 +1253,46 @@ class LuwiPress_WebMCP {
             $audit   = LuwiPress_Content_Audit::get_instance();
             $request = new WP_REST_Request( 'GET', '/luwipress/v1/content/promotional-phrase-bank' );
             $data    = $audit->rest_phrase_bank( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        // ─── content_ai_tell_audit ───────────────────────────────────
+        // Twin of content_promotional_phrase_audit, different phrase bank:
+        // detects LLM "tell" phrases ("In the world of…", "stands as one of
+        // the most…", "In conclusion,") that flag machine-written copy and
+        // weaken brand voice. Multilingual (en/tr/fr/it/es); per-post detect.
+        $this->register_tool( 'content_ai_tell_audit', array(
+            'description' => 'Scan posts for AI-tell phrases — the giveaway LLM boilerplate ("In the world of…", "stands as one of the most…", "In conclusion,") that signals machine-written copy and weakens brand voice. Same engine as content_promotional_phrase_audit, different phrase bank. Pass post_id for a single post, or post_type + category_id for a sweep. Multilingual; per-post language auto-detect via WPML/Polylang. Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'         => array( 'type' => 'integer', 'description' => 'Audit a single post only' ),
+                    'post_type'       => array( 'type' => 'string',  'description' => 'Post type to scan (default product)' ),
+                    'category_id'     => array( 'type' => 'integer', 'description' => 'Restrict to a product_cat term (only when post_type=product)' ),
+                    'lang'            => array( 'type' => 'string',  'description' => 'Force language code (en/tr/fr/it/es); default = per-post detect' ),
+                    'scope'           => array( 'type' => 'string',  'description' => 'meta | body | all (default all)', 'enum' => array( 'meta', 'body', 'all' ) ),
+                    'limit'           => array( 'type' => 'integer', 'description' => 'Max posts to scan (default 50, max 500)', 'minimum' => 1, 'maximum' => 500 ),
+                    'offset'          => array( 'type' => 'integer', 'description' => 'Pagination offset', 'minimum' => 0 ),
+                    'only_violations' => array( 'type' => 'boolean', 'description' => 'Return only posts with findings (default true)' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'AI-Tell Phrase Audit', 'readOnlyHint' => true, 'idempotentHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Content_Audit', 'rest_ai_tell_audit', $args );
+        } );
+
+        // ─── content_ai_tell_bank ────────────────────────────────────
+        $this->register_tool( 'content_ai_tell_bank', array(
+            'description' => 'Return the canonical AI-tell phrase bank used by content_ai_tell_audit. Read-only; lists per-language phrase counts and the full bank for inspection.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new \stdClass(),
+            ),
+            'annotations' => array( 'title' => 'AI-Tell Phrase Bank', 'readOnlyHint' => true, 'idempotentHint' => true ),
+        ), function () {
+            $audit   = LuwiPress_Content_Audit::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/content/ai-tell-bank' );
+            $data    = $audit->rest_ai_tell_bank( $request );
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
     }
@@ -3422,6 +3491,49 @@ class LuwiPress_WebMCP {
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
         } );
 
+        $this->register_tool( 'crm_settings_get', array(
+            'description' => 'Read CRM segmentation thresholds: vip_spend, loyal_orders, active_days, at_risk_days, dormant_days, new_days. Returns current values + the schema (defaults + descriptions). Mirrors GET /crm/settings.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'CRM Settings', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $crm     = LuwiPress_CRM_Bridge::get_instance();
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/crm/settings' );
+            $data    = $crm->handle_get_settings( $request );
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'crm_settings_set', array(
+            'description' => 'Update CRM segmentation thresholds (partial update — only the keys you pass change). After changing thresholds, call crm_refresh_segments to reclassify existing customers. Mirrors POST /crm/settings.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'vip_spend'    => array( 'type' => 'number',  'description' => 'Lifetime spend (store currency) at which a customer becomes VIP.' ),
+                    'loyal_orders' => array( 'type' => 'integer', 'description' => 'Order count at which a repeat customer becomes Loyal.' ),
+                    'active_days'  => array( 'type' => 'integer', 'description' => 'Recency window (days) during which a customer is Active.' ),
+                    'at_risk_days' => array( 'type' => 'integer', 'description' => 'Max days since last order before At Risk.' ),
+                    'dormant_days' => array( 'type' => 'integer', 'description' => 'Max days since last order before Dormant.' ),
+                    'new_days'     => array( 'type' => 'integer', 'description' => 'First-time customer window (days since first order) tagged as New.' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Update CRM Settings', 'readOnlyHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_CRM_Bridge', 'handle_update_settings', $args );
+        } );
+
+        $this->register_tool( 'crm_refresh_segments', array(
+            'description' => 'Recompute customer segments now, applying the current thresholds to every customer. Run this after crm_settings_set so existing customers pick up the new thresholds. Mirrors POST /crm/refresh-segments.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Refresh CRM Segments', 'readOnlyHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_CRM_Bridge', 'handle_refresh_segments', $args );
+        } );
+
         $this->register_tool( 'crm_segments', array(
             'description' => 'List customer segments (VIP, at-risk, new, churned, etc.)',
             'inputSchema' => array(
@@ -4054,6 +4166,39 @@ class LuwiPress_WebMCP {
                 return array( 'error' => $data->get_error_code(), 'message' => $data->get_error_message() );
             }
             return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        // ─── KG candidate queue management (snooze / dismiss) ─────────
+        // Lets an agent ACT on the Action Queue, not just read it. Snooze
+        // pulls a candidate off the queue for `hours`; dismiss removes it
+        // permanently. Both take the candidate `id` from kg_candidates.
+        $this->register_tool( 'kg_candidate_snooze', array(
+            'description' => 'Snooze a KG Action Queue candidate for a number of hours so it temporarily drops off the queue. Pass the candidate `id` (from kg_candidates) and `hours`. Mirrors POST /knowledge-graph/candidate/snooze.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'id'    => array( 'type' => 'string',  'description' => 'Candidate id from kg_candidates (required).' ),
+                    'hours' => array( 'type' => 'integer', 'description' => 'How long to snooze, in hours (e.g. 24).' ),
+                ),
+                'required'   => array( 'id' ),
+            ),
+            'annotations' => array( 'title' => 'Snooze KG Candidate', 'readOnlyHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Knowledge_Graph', 'handle_kg_candidate_snooze', $args );
+        } );
+
+        $this->register_tool( 'kg_candidate_dismiss', array(
+            'description' => 'Permanently dismiss a KG Action Queue candidate so it no longer surfaces. Pass the candidate `id` (from kg_candidates). Mirrors POST /knowledge-graph/candidate/dismiss.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'id' => array( 'type' => 'string', 'description' => 'Candidate id from kg_candidates (required).' ),
+                ),
+                'required'   => array( 'id' ),
+            ),
+            'annotations' => array( 'title' => 'Dismiss KG Candidate', 'readOnlyHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Knowledge_Graph', 'handle_kg_candidate_dismiss', $args );
         } );
 
         // ─── KG Events stream + summary ───────────────────────────────

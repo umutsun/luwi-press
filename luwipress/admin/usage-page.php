@@ -77,17 +77,26 @@ $rest_nonce = wp_create_nonce( 'wp_rest' );
 
 <div class="wrap lp-tm" data-luwi-usage-root data-tab="<?php echo esc_attr( $active_tab ); ?>">
 
-	<!-- ═══ HEADER ═══ -->
-	<div class="tm-header">
-		<div class="tm-header-left">
-			<h1 class="tm-title">
-				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--lp-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>
-				</svg>
+	<!-- ═══ HEADER — canonical lp-header chrome (brand mark + version + action pills) ═══ -->
+	<div class="lp-header">
+		<div class="lp-header-left">
+			<h1 class="lp-title">
+				<img class="lp-logo" width="28" height="28"
+				     src="<?php echo esc_url( LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' ); ?>"
+				     alt="LuwiPress" />
 				<?php esc_html_e( 'Usage & Logs', 'luwipress' ); ?>
 			</h1>
 		</div>
-		<div class="tm-header-right">
+		<div class="lp-header-actions">
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress' ) ); ?>"
+			   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
+			   title="<?php esc_attr_e( 'Dashboard', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-dashboard"></span>
+				<span class="screen-reader-text"><?php esc_html_e( 'Dashboard', 'luwipress' ); ?></span>
+			</a>
+			<span class="lp-pill pill-neutral" title="<?php esc_attr_e( 'Plugin version', 'luwipress' ); ?>">
+				v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
+			</span>
 			<button type="button" id="luwipress-emergency-stop" class="tm-btn tm-btn-danger">
 				<span class="dashicons dashicons-dismiss"></span>
 				<?php esc_html_e( 'Emergency Stop', 'luwipress' ); ?>
@@ -183,27 +192,33 @@ $rest_nonce = wp_create_nonce( 'wp_rest' );
 		</div>
 	</div>
 
-	<!-- ═══ TABS ═══ -->
-	<div class="usage-tabs">
-		<a href="<?php echo esc_url( $base_url . '&tab=overview' ); ?>" class="usage-tab <?php echo 'overview' === $active_tab ? 'active' : ''; ?>">
-			<span class="dashicons dashicons-chart-area"></span> <?php esc_html_e( 'Overview', 'luwipress' ); ?>
+	<!-- ═══ TABS — canonical lp-hub-tabs ═══ -->
+	<nav class="lp-hub-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Usage sections', 'luwipress' ); ?>">
+		<a href="<?php echo esc_url( $base_url . '&tab=overview' ); ?>"
+		   class="lp-hub-tab <?php echo 'overview' === $active_tab ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab" aria-selected="<?php echo 'overview' === $active_tab ? 'true' : 'false'; ?>">
+			<span class="dashicons dashicons-chart-area"></span> <span><?php esc_html_e( 'Overview', 'luwipress' ); ?></span>
 		</a>
-		<a href="<?php echo esc_url( $base_url . '&tab=logs' ); ?>" class="usage-tab <?php echo 'logs' === $active_tab ? 'active' : ''; ?>">
-			<span class="dashicons dashicons-list-view"></span> <?php esc_html_e( 'Activity Log', 'luwipress' ); ?>
+		<a href="<?php echo esc_url( $base_url . '&tab=logs' ); ?>"
+		   class="lp-hub-tab <?php echo 'logs' === $active_tab ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab" aria-selected="<?php echo 'logs' === $active_tab ? 'true' : 'false'; ?>">
+			<span class="dashicons dashicons-list-view"></span> <span><?php esc_html_e( 'Activity Log', 'luwipress' ); ?></span>
 			<?php if ( $level_counts['error'] > 0 ) : ?>
-				<span class="usage-tab-badge"><?php echo $level_counts['error']; ?></span>
+				<span class="lp-hub-tab-badge is-error"><?php echo (int) $level_counts['error']; ?></span>
 			<?php endif; ?>
 		</a>
-		<a href="<?php echo esc_url( $base_url . '&tab=api-calls' ); ?>" class="usage-tab <?php echo 'api-calls' === $active_tab ? 'active' : ''; ?>">
-			<span class="dashicons dashicons-cloud"></span> <?php esc_html_e( 'API Calls', 'luwipress' ); ?>
+		<a href="<?php echo esc_url( $base_url . '&tab=api-calls' ); ?>"
+		   class="lp-hub-tab <?php echo 'api-calls' === $active_tab ? 'lp-hub-tab--active' : ''; ?>"
+		   role="tab" aria-selected="<?php echo 'api-calls' === $active_tab ? 'true' : 'false'; ?>">
+			<span class="dashicons dashicons-cloud"></span> <span><?php esc_html_e( 'API Calls', 'luwipress' ); ?></span>
 		</a>
-	</div>
+	</nav>
 
 	<?php if ( 'overview' === $active_tab ) : ?>
 	<!-- ═══ OVERVIEW ═══ -->
 	<div class="usage-grid">
 		<!-- Workflow Breakdown -->
-		<div class="lpress-card" style="animation: lp-fade-up var(--duration-slow) var(--ease-out) both;">
+		<div class="luwipress-card" style="animation: lp-fade-up var(--duration-slow) var(--ease-out) both;">
 			<h2><span class="dashicons dashicons-chart-bar" style="color:var(--lp-primary);"></span> <?php esc_html_e( 'Cost by Workflow (30d)', 'luwipress' ); ?></h2>
 			<?php if ( empty( $by_workflow ) ) : ?>
 				<div class="usage-empty">
@@ -211,7 +226,7 @@ $rest_nonce = wp_create_nonce( 'wp_rest' );
 					<p><?php esc_html_e( 'No AI calls yet.', 'luwipress' ); ?></p>
 				</div>
 			<?php else :
-				$wf_palette = array( 'var(--lp-primary)', 'var(--lp-success)', 'var(--lp-warning)', 'var(--lp-error)', 'var(--lp-blue)', '#a855f7', '#ec4899' );
+				$wf_palette = array( 'var(--lp-primary)', 'var(--lp-success)', 'var(--lp-warning)', 'var(--lp-error)', 'var(--lp-blue)', 'var(--lp-primary-light)', 'var(--lp-primary-dark)' );
 				$wf_max     = max( 0.000001, max( array_map( function ( $w ) { return floatval( $w->cost ); }, $by_workflow ) ) );
 			?>
 				<div class="lp-bar-meter" data-live-workflows>
@@ -237,7 +252,7 @@ $rest_nonce = wp_create_nonce( 'wp_rest' );
 		</div>
 
 		<!-- Recent Activity -->
-		<div class="lpress-card" style="animation: lp-fade-up var(--duration-slow) var(--ease-out) both; animation-delay: 100ms;">
+		<div class="luwipress-card" style="animation: lp-fade-up var(--duration-slow) var(--ease-out) both; animation-delay: 100ms;">
 			<h2><span class="dashicons dashicons-clock" style="color:var(--lp-primary);"></span> <?php esc_html_e( 'Recent Activity', 'luwipress' ); ?></h2>
 			<?php
 			$summary_logs = array_slice( $all_logs, 0, 10 );
@@ -342,7 +357,7 @@ $rest_nonce = wp_create_nonce( 'wp_rest' );
 		<?php endif; ?>
 
 		<!-- Log Maintenance -->
-		<div class="lpress-card" style="margin-top:var(--space-lg);">
+		<div class="luwipress-card" style="margin-top:var(--space-lg);">
 			<h2><span class="dashicons dashicons-trash" style="color:var(--lp-text-secondary);"></span> <?php esc_html_e( 'Log Maintenance', 'luwipress' ); ?></h2>
 			<form method="post" class="usage-maint-form">
 				<?php wp_nonce_field( 'luwipress_usage_nonce' ); ?>
@@ -363,7 +378,7 @@ $rest_nonce = wp_create_nonce( 'wp_rest' );
 
 	<?php elseif ( 'api-calls' === $active_tab ) : ?>
 	<!-- ═══ API CALLS ═══ -->
-	<div class="lpress-card" style="margin-top:var(--space-lg); animation: lp-fade-up var(--duration-slow) var(--ease-out) both;">
+	<div class="luwipress-card" style="margin-top:var(--space-lg); animation: lp-fade-up var(--duration-slow) var(--ease-out) both;">
 		<h2><span class="dashicons dashicons-cloud" style="color:var(--lp-primary);"></span> <?php esc_html_e( 'Recent API Calls', 'luwipress' ); ?></h2>
 		<table class="tm-table">
 			<thead><tr>

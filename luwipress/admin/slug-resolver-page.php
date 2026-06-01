@@ -59,7 +59,27 @@ $last_build    = is_array( $diag['last_build'] ?? null ) ? $diag['last_build'] :
 <div class="wrap luwipress-slug-resolver">
 <?php endif; ?>
 	<?php if ( ! $luwipress_hub_mode ) : ?>
-	<h1><span class="dashicons dashicons-randomize"></span> <?php esc_html_e( 'Slug Resolver', 'luwipress' ); ?></h1>
+	<div class="lp-header">
+			<div class="lp-header-left">
+				<h1 class="lp-title">
+					<img class="lp-logo" width="28" height="28"
+					     src="<?php echo esc_url( LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' ); ?>"
+					     alt="LuwiPress" />
+					<?php esc_html_e( 'Slug Resolver', 'luwipress' ); ?>
+				</h1>
+			</div>
+			<div class="lp-header-actions">
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress' ) ); ?>"
+				   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
+				   title="<?php esc_attr_e( 'Dashboard', 'luwipress' ); ?>">
+					<span class="dashicons dashicons-dashboard"></span>
+					<span class="screen-reader-text"><?php esc_html_e( 'Dashboard', 'luwipress' ); ?></span>
+				</a>
+				<span class="lp-pill pill-neutral" title="<?php esc_attr_e( 'Plugin version', 'luwipress' ); ?>">
+					v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
+				</span>
+			</div>
+		</div>
 	<?php endif; ?>
 	<p class="lp-page-intro">
 		<?php esc_html_e( 'Auto-redirects legacy /<hub>/ page URLs to their matching /product-category/<hub>/ archive using six discovery passes (exact / cross-language / fuzzy / Levenshtein-1 / menu-parent / ancestor fallback). Critical before a DNS swap so visitors and Google land on the live archive, not a stale editorial page.', 'luwipress' ); ?>
