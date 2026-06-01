@@ -163,6 +163,77 @@ class LuwiPress_Vendors {
 		// Vendor edit screen: pick the canonical (primary) group.
 		add_action( 'add_meta_boxes', array( $this, 'add_primary_group_metabox' ) );
 		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_primary_group' ), 10, 2 );
+
+		// CPT Engine (3.7.x+): describe this module to the generic registry as
+		// preset #1 so downstream integrations (Translation Manager, Elementor,
+		// WooCommerce) can enumerate it generically. Pure metadata — Vendors
+		// still self-registers its own CPT/taxonomy/meta above.
+		add_action( 'luwipress_cpt_engine_register', array( $this, 'register_with_cpt_engine' ) );
+	}
+
+	/**
+	 * Describe the Vendors module to the CPT Engine as preset #1.
+	 *
+	 * @param LuwiPress_CPT_Engine $engine
+	 */
+	public function register_with_cpt_engine( $engine ) {
+		if ( ! is_object( $engine ) || ! method_exists( $engine, 'register_type' ) ) {
+			return;
+		}
+
+		$url_keys   = array( 'facebook', 'instagram', 'youtube', 'soundcloud', 'linkedin', 'x', 'behance', 'website' );
+		$translate  = array( 'location', 'specialty', 'quote', 'occupation' );
+		$fields     = array();
+		foreach ( self::META_KEYS as $name => $meta_key ) {
+			if ( in_array( $name, $url_keys, true ) ) {
+				$type = 'url';
+			} elseif ( 'years' === $name ) {
+				$type = 'number';
+			} elseif ( 'quote' === $name ) {
+				$type = 'textarea';
+			} else {
+				$type = 'text';
+			}
+			$fields[] = array(
+				'key'          => $meta_key,
+				'type'         => $type,
+				'label'        => ucwords( str_replace( '_', ' ', $name ) ),
+				'translatable' => in_array( $name, $translate, true ),
+				'in_elementor' => true,
+			);
+		}
+
+		$engine->register_type( 'vendors', array(
+			'post_type'      => self::POST_TYPE,
+			'source'         => 'preset',
+			'self_registers' => true, // Vendors registers its own CPT below — engine must not double-register.
+			'enabled'        => ( (int) self::get_setting( 'enabled' ) === 1 ),
+			'labels'         => array(
+				'singular' => (string) self::get_setting( 'singular_label' ),
+				'plural'   => (string) self::get_setting( 'plural_label' ),
+			),
+			'permalink'      => array(
+				'archive_slug'        => (string) self::get_setting( 'archive_slug' ),
+				'single_slug_pattern' => (string) self::get_setting( 'single_slug_pattern' ),
+			),
+			'field_schema'   => $fields,
+			'taxonomies'     => array(
+				array(
+					'slug'         => self::TAXONOMY_GROUP,
+					'label'        => __( 'Vendor Groups', 'luwipress' ),
+					'hierarchical' => false,
+					'translatable' => true,
+				),
+			),
+			'schema_mapping' => array(
+				'type'          => 'person',
+				'override_meta' => self::ENTITY_TYPE_META,
+			),
+			'woocommerce'    => array(
+				'attribution_meta' => self::PRODUCT_VENDORS_META,
+				'attribution_role' => __( 'Made by', 'luwipress' ),
+			),
+		) );
 	}
 
 	/* ─── WOOCOMMERCE INTEGRATION ─────────────────────────────────────── */

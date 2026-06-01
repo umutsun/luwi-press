@@ -250,6 +250,15 @@ class LuwiPress {
         // and rendering audits.
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-frontend-inspector.php';
 
+        // CPT Engine — generic custom-post-type registry (3.7.x+). The single
+        // source of truth for what content types exist (Vendors = preset #1;
+        // Events / Team = future presets). Loaded before Vendors so presets can
+        // describe themselves into it. Phase 0: directory only (modules still
+        // self-register); downstream integrations (Translation Manager,
+        // Elementor, WooCommerce) enumerate it.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-cpt-engine.php';
+        LuwiPress_CPT_Engine::get_instance();
+
         // Vendors CPT — generic E-E-A-T maker/atelier/team profile system (3.5.2+).
         // Per-site configurable: music store → "Luthiers", restaurant → "Chefs",
         // gallery → "Artists", agency → "Team". Emits Schema.org Person /

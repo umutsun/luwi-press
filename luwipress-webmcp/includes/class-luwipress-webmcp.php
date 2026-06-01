@@ -1018,6 +1018,55 @@ class LuwiPress_WebMCP {
             );
         } );
 
+        // ─── CPT Engine — generic custom-post-type management (3.7.x+) ───────
+        $this->register_tool( 'cpt_types_list', array(
+            'description' => 'List all LuwiPress CPT Engine type definitions — the Vendors preset plus any operator-defined CPTs (Events, Team, Venues, …). Each entry returns post_type, labels, field_schema (custom attributes), taxonomies, schema mapping and WooCommerce relationship. Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'CPT Types', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_CPT_Engine' ) ) {
+                return array( 'error' => 'CPT Engine is not available on this site.' );
+            }
+            return array( 'types' => array_values( LuwiPress_CPT_Engine::get_instance()->get_types() ) );
+        } );
+
+        $this->register_tool( 'cpt_type_set', array(
+            'description' => 'Create or update an operator-defined CPT in the LuwiPress CPT Engine (e.g. Events, Team). The post type registers on the next request and rewrite rules are flushed. field_schema entries: { key, type (text|textarea|number|url|email|image|date|datetime|select|relationship), label, translatable }. taxonomies entries: { slug, label, hierarchical, translatable, is_attribute }. Reserved/existing post types and the lwp_vendor preset cannot be overridden.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'key'          => array( 'type' => 'string',  'description' => 'Stable engine key, e.g. "events" (required).' ),
+                    'post_type'    => array( 'type' => 'string',  'description' => 'Post type slug, <=20 chars, [a-z0-9_-] (defaults to key).' ),
+                    'labels'       => array( 'type' => 'object',  'description' => '{ singular, plural, menu_icon (dashicons-*) }' ),
+                    'permalink'    => array( 'type' => 'object',  'description' => '{ archive_slug, with_front }' ),
+                    'field_schema' => array( 'type' => 'array',   'description' => 'Custom fields / attributes for this CPT.' ),
+                    'taxonomies'   => array( 'type' => 'array',   'description' => 'Taxonomies (incl. attribute-taxonomies) for this CPT.' ),
+                    'enabled'      => array( 'type' => 'boolean', 'description' => 'Default true.' ),
+                ),
+                'required'   => array( 'key' ),
+            ),
+            'annotations' => array( 'title' => 'Create/Update CPT', 'readOnlyHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_CPT_Engine', 'rest_set_type', $args );
+        } );
+
+        $this->register_tool( 'cpt_type_delete', array(
+            'description' => 'Delete an operator-defined CPT type from the LuwiPress CPT Engine by its engine key. Stops registering the CPT (existing posts are not deleted). The Vendors preset cannot be deleted.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'key' => array( 'type' => 'string', 'description' => 'Engine key to delete (required).' ),
+                ),
+                'required'   => array( 'key' ),
+            ),
+            'annotations' => array( 'title' => 'Delete CPT', 'readOnlyHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_CPT_Engine', 'rest_delete_type', $args );
+        } );
+
         $this->register_tool( 'cache_purge', array(
             'description' => 'Purge caches across LiteSpeed, WP Rocket, W3TC, WP Super Cache, Elementor CSS, and WordPress object cache. Use after bulk content or style updates to make new output visible immediately.',
             'inputSchema' => array(
