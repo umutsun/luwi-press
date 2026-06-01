@@ -68,7 +68,45 @@ class LuwiPress_CPT_Engine {
 		// the pipeline-side gate behind the Translation Manager content steps —
 		// without it LuwiPress_Translation::request_translation() 404s engine CPTs.
 		add_filter( 'luwipress_translatable_post_types', array( $this, 'add_translatable_post_types' ) );
+
+		// Phase 3: promote each type's WooCommerce attribution (e.g. the Vendors
+		// module's `_lwp_vendor_ids` product meta) to a first-class hidden
+		// taxonomy on `product`, so WC-native term queries / Store API / feeds /
+		// the admin products filter work without the O(n) REGEXP meta scan. The
+		// meta stays canonical (theme REGEXP, KG, FR-016 normalization untouched);
+		// the taxonomy is an additive, dual-written index. No-op without WC.
+		add_action( 'init', array( $this, 'register_wc_attribution_taxonomies' ), 9 );
+		// Backfill runs OUT-OF-BAND on cron (never inline on a visitor request) —
+		// an atomic option-lock claims it once, schedules a single event, and the
+		// cron handler does the (potentially large) sweep. New writes sync live
+		// regardless, so a cron-deferred backfill only delays indexing pre-existing
+		// attribution — never blocks a page load or retry-storms on timeout.
+		add_action( 'init', array( $this, 'maybe_schedule_wc_attribution_backfill' ), 20 );
+		add_action( 'luwipress_cpt_attr_backfill', array( $this, 'run_wc_attribution_backfill' ), 10, 1 );
+		// Mirror one hidden term per CPT post (slug = post id, name = title).
+		add_action( 'save_post', array( $this, 'mirror_cpt_post_to_term' ), 20, 2 );
+		add_action( 'untrashed_post', array( $this, 'mirror_cpt_post_on_untrash' ) );
+		add_action( 'before_delete_post', array( $this, 'remove_cpt_mirror_term' ) );
+		add_action( 'wp_trash_post', array( $this, 'remove_cpt_mirror_term' ) );
+		// Dual-write meta <-> terms (re-entrancy guarded via $this->syncing).
+		add_action( 'added_post_meta', array( $this, 'sync_attribution_meta_to_terms' ), 20, 4 );
+		add_action( 'updated_post_meta', array( $this, 'sync_attribution_meta_to_terms' ), 20, 4 );
+		add_action( 'deleted_post_meta', array( $this, 'sync_attribution_meta_deleted' ), 20, 4 );
+		add_action( 'set_object_terms', array( $this, 'sync_attribution_terms_to_meta' ), 20, 6 );
+		// Admin: products-list filter dropdown per attribution taxonomy.
+		add_action( 'restrict_manage_posts', array( $this, 'render_attribution_filter' ) );
 	}
+
+	/**
+	 * @var bool Re-entrancy guard so meta<->term dual-write never loops. A single
+	 * process-wide bool: it intentionally drops the echo of an in-flight write.
+	 * Nested writes to a DIFFERENT object during a sync are not anticipated by any
+	 * shipped path; the guard is always restored to its prior value (try/finally).
+	 */
+	private $syncing = false;
+
+	/** @var array<string,array{post_type:string,meta:string,taxonomy:string,label:string}>|null memoized attribution map (request-immutable). */
+	private $wc_map_cache = null;
 
 	/**
 	 * Fire the registration action (code presets describe themselves) and load
@@ -396,6 +434,526 @@ class LuwiPress_CPT_Engine {
 				return 'sanitize_email';
 			default:
 				return 'sanitize_text_field';
+		}
+	}
+
+	/* ── Phase 3: WooCommerce attribution taxonomy ──────────────────────── */
+
+	/**
+	 * Build the attribution map: every enabled type that declares a
+	 * `woocommerce.attribution_meta` gets a hidden taxonomy on `product`.
+	 *
+	 * @return array<string,array{post_type:string,meta:string,taxonomy:string,label:string}>
+	 *               keyed by taxonomy slug.
+	 */
+	public function wc_attribution_map() {
+		// Memoized: this is consulted on every site-wide save_post / *_post_meta /
+		// set_object_terms fire, and the result is request-immutable.
+		if ( null !== $this->wc_map_cache ) {
+			return $this->wc_map_cache;
+		}
+		$this->maybe_collect();
+		$map = array();
+		if ( ! post_type_exists( 'product' ) ) {
+			// Don't memoize the empty map — WC may register `product` after this
+			// first call (e.g. a very early hook) and we want the real map later.
+			return $map;
+		}
+		foreach ( $this->types as $def ) {
+			$wc = ( isset( $def['woocommerce'] ) && is_array( $def['woocommerce'] ) ) ? $def['woocommerce'] : array();
+			if ( empty( $def['enabled'] ) || empty( $wc['attribution_meta'] ) ) {
+				continue;
+			}
+			$pt  = (string) $def['post_type'];
+			$tax = ! empty( $wc['taxonomy'] )
+				? sanitize_key( (string) $wc['taxonomy'] )
+				: 'product_' . $pt;
+			// WordPress taxonomy names are capped at 32 chars. Hash-suffix an
+			// over-long custom slug so two distinct long slugs can't collide.
+			if ( strlen( $tax ) > 32 ) {
+				$tax = rtrim( substr( $tax, 0, 27 ), '-_' ) . '_' . substr( md5( $tax ), 0, 4 );
+			}
+			if ( ! empty( $def['labels']['plural'] ) ) {
+				$label = (string) $def['labels']['plural'];
+			} elseif ( ! empty( $wc['attribution_role'] ) ) {
+				$label = (string) $wc['attribution_role'];
+			} else {
+				$label = $pt;
+			}
+			$map[ $tax ] = array(
+				'post_type' => $pt,
+				'meta'      => (string) $wc['attribution_meta'],
+				'taxonomy'  => $tax,
+				'label'     => $label,
+			);
+		}
+		$this->wc_map_cache = $map;
+		return $map;
+	}
+
+	/**
+	 * Register a hidden-but-REST-visible taxonomy on `product` for each
+	 * attribution type. `meta_box_cb` is false: attribution is edited through
+	 * the owning module's own metabox (e.g. the Vendors checkbox box) which
+	 * dual-writes to this taxonomy — a second editable term box on the same
+	 * screen would fight that one. Term management, admin column, products
+	 * filter and REST/Store API exposure are all on. Runs init p9 (after WC
+	 * registers `product` at p5).
+	 */
+	public function register_wc_attribution_taxonomies() {
+		foreach ( $this->wc_attribution_map() as $info ) {
+			if ( taxonomy_exists( $info['taxonomy'] ) ) {
+				register_taxonomy_for_object_type( $info['taxonomy'], 'product' );
+				continue;
+			}
+			register_taxonomy( $info['taxonomy'], 'product', array(
+				'labels'             => array(
+					'name'          => $info['label'],
+					'singular_name' => $info['label'],
+				),
+				'public'             => false,
+				'publicly_queryable' => false,
+				'hierarchical'       => false,
+				'show_ui'            => true,
+				'show_in_menu'       => true,
+				'show_admin_column'  => true,
+				'show_in_rest'       => true,
+				'show_in_quick_edit' => false,
+				// Edited via the owning module's metabox (avoids a conflicting
+				// second box that would clobber it on save).
+				'meta_box_cb'        => false,
+				'query_var'          => true,
+				'rewrite'            => false,
+			) );
+		}
+	}
+
+	/**
+	 * Normalize an attribution meta value (canonical JSON of quoted IDs, a
+	 * comma list, or an array) into a deduped list of positive int IDs.
+	 *
+	 * @param mixed $value
+	 * @return int[]
+	 */
+	private function parse_attribution_meta_value( $value ) {
+		if ( is_array( $value ) ) {
+			$arr = $value;
+		} elseif ( is_string( $value ) && '' !== trim( $value ) ) {
+			$decoded = json_decode( trim( $value ), true );
+			$arr     = is_array( $decoded ) ? $decoded : preg_split( '/[\s,]+/', trim( $value ) );
+		} else {
+			return array();
+		}
+		$out = array();
+		foreach ( (array) $arr as $v ) {
+			$v = absint( $v );
+			if ( $v > 0 ) {
+				$out[] = $v;
+			}
+		}
+		return array_values( array_unique( $out ) );
+	}
+
+	/**
+	 * Get (creating if needed) the mirror term_id for a CPT post in $taxonomy.
+	 * Term slug == CPT post id (stable across renames); term name == post title.
+	 *
+	 * @param int    $cpt_post_id
+	 * @param string $taxonomy
+	 * @return int term_id, or 0 on failure.
+	 */
+	private function ensure_term_id_for_cpt_post( $cpt_post_id, $taxonomy ) {
+		$slug = (string) (int) $cpt_post_id;
+		$term = get_term_by( 'slug', $slug, $taxonomy );
+		if ( $term instanceof WP_Term ) {
+			return (int) $term->term_id;
+		}
+		$post = get_post( (int) $cpt_post_id );
+		$name = ( $post && '' !== $post->post_title ) ? $post->post_title : $slug;
+		$res  = wp_insert_term( $name, $taxonomy, array( 'slug' => $slug ) );
+		if ( is_wp_error( $res ) ) {
+			// Our (post-id) slug may already exist (race / re-entry) — reuse it.
+			$term = get_term_by( 'slug', $slug, $taxonomy );
+			if ( $term instanceof WP_Term ) {
+				return (int) $term->term_id;
+			}
+			// Otherwise it's a NAME collision (two CPT posts share a title, and
+			// wp_insert_term enforces unique names for flat taxonomies). Retry
+			// with a slug-disambiguated name; the slug stays the stable sync key.
+			$res = wp_insert_term( $name . ' (#' . $slug . ')', $taxonomy, array( 'slug' => $slug ) );
+			if ( is_wp_error( $res ) ) {
+				return 0;
+			}
+		}
+		return (int) $res['term_id'];
+	}
+
+	/**
+	 * Upsert the mirror term when a CPT post is saved.
+	 *
+	 * @param int     $post_id
+	 * @param WP_Post $post
+	 */
+	public function mirror_cpt_post_to_term( $post_id, $post ) {
+		if ( ! $post instanceof WP_Post ) {
+			return;
+		}
+		if ( wp_is_post_revision( $post_id ) || ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) ) {
+			return;
+		}
+		// Only PUBLISHED posts get a mirror term — matches the publish-only
+		// invariant used by the backfill and the Vendors attribution validators,
+		// and stops an abandoned "Add New" auto-draft leaking a junk term into
+		// the products filter. On unpublish, drop the existing mirror term too.
+		foreach ( $this->wc_attribution_map() as $info ) {
+			if ( $info['post_type'] !== $post->post_type ) {
+				continue;
+			}
+			if ( ! taxonomy_exists( $info['taxonomy'] ) ) {
+				return;
+			}
+			$slug = (string) (int) $post_id;
+			$term = get_term_by( 'slug', $slug, $info['taxonomy'] );
+			if ( 'publish' !== $post->post_status ) {
+				if ( $term instanceof WP_Term ) {
+					wp_delete_term( (int) $term->term_id, $info['taxonomy'] );
+				}
+				return;
+			}
+			if ( $term instanceof WP_Term ) {
+				if ( $term->name !== $post->post_title && '' !== $post->post_title ) {
+					$res = wp_update_term( $term->term_id, $info['taxonomy'], array( 'name' => $post->post_title ) );
+					if ( is_wp_error( $res ) ) {
+						// Name collision with another vendor's term — keep the slug
+						// (the sync key) and disambiguate the display name.
+						wp_update_term( $term->term_id, $info['taxonomy'], array( 'name' => $post->post_title . ' (#' . $slug . ')' ) );
+					}
+				}
+			} else {
+				$this->ensure_term_id_for_cpt_post( $post_id, $info['taxonomy'] );
+			}
+			return;
+		}
+	}
+
+	/**
+	 * Re-create the mirror term when a CPT post is restored from trash.
+	 * `wp_untrash_post` does not fire `save_post`, so without this an untrashed
+	 * vendor stays missing from the WC-native index until its next edit.
+	 *
+	 * @param int $post_id
+	 */
+	public function mirror_cpt_post_on_untrash( $post_id ) {
+		$post = get_post( (int) $post_id );
+		if ( $post instanceof WP_Post ) {
+			$this->mirror_cpt_post_to_term( (int) $post_id, $post );
+		}
+	}
+
+	/**
+	 * Remove the mirror term (and its product relationships) when a CPT post is
+	 * deleted or trashed.
+	 *
+	 * Note: the additive product meta (e.g. `_lwp_vendor_ids`) may still carry the
+	 * removed id until each product's next save — that is the pre-Phase-3 meta
+	 * behaviour and is self-healing: the owning module's sanitize_callback drops
+	 * unpublished ids on the next write, and its read path filters dead ids, so
+	 * the frontend / KG / Schema never surface a deleted vendor.
+	 *
+	 * @param int $post_id
+	 */
+	public function remove_cpt_mirror_term( $post_id ) {
+		$post = get_post( (int) $post_id );
+		if ( ! $post ) {
+			return;
+		}
+		foreach ( $this->wc_attribution_map() as $info ) {
+			if ( $info['post_type'] !== $post->post_type ) {
+				continue;
+			}
+			if ( ! taxonomy_exists( $info['taxonomy'] ) ) {
+				return;
+			}
+			$term = get_term_by( 'slug', (string) (int) $post_id, $info['taxonomy'] );
+			if ( $term instanceof WP_Term ) {
+				wp_delete_term( (int) $term->term_id, $info['taxonomy'] );
+			}
+			return;
+		}
+	}
+
+	/**
+	 * Forward sync: a product's attribution meta changed → set its terms.
+	 * (added_post_meta / updated_post_meta callback.)
+	 *
+	 * @param int    $meta_id
+	 * @param int    $object_id
+	 * @param string $meta_key
+	 * @param mixed  $meta_value
+	 */
+	public function sync_attribution_meta_to_terms( $meta_id, $object_id, $meta_key, $meta_value ) {
+		if ( $this->syncing ) {
+			return;
+		}
+		foreach ( $this->wc_attribution_map() as $info ) {
+			if ( $info['meta'] !== $meta_key ) {
+				continue;
+			}
+			if ( 'product' !== get_post_type( (int) $object_id ) || ! taxonomy_exists( $info['taxonomy'] ) ) {
+				return;
+			}
+			$term_ids = array();
+			foreach ( $this->parse_attribution_meta_value( $meta_value ) as $vid ) {
+				$tid = $this->ensure_term_id_for_cpt_post( $vid, $info['taxonomy'] );
+				if ( $tid ) {
+					$term_ids[] = $tid;
+				}
+			}
+			$prev          = $this->syncing;
+			$this->syncing = true;
+			try {
+				wp_set_object_terms( (int) $object_id, $term_ids, $info['taxonomy'], false );
+			} finally {
+				$this->syncing = $prev;
+			}
+			return;
+		}
+	}
+
+	/**
+	 * Forward sync: attribution meta deleted → clear the product's terms.
+	 *
+	 * @param string[]|int[] $meta_ids
+	 * @param int            $object_id
+	 * @param string         $meta_key
+	 * @param mixed          $meta_value
+	 */
+	public function sync_attribution_meta_deleted( $meta_ids, $object_id, $meta_key, $meta_value ) {
+		if ( $this->syncing ) {
+			return;
+		}
+		foreach ( $this->wc_attribution_map() as $info ) {
+			if ( $info['meta'] !== $meta_key ) {
+				continue;
+			}
+			if ( 'product' !== get_post_type( (int) $object_id ) || ! taxonomy_exists( $info['taxonomy'] ) ) {
+				return;
+			}
+			$prev          = $this->syncing;
+			$this->syncing = true;
+			try {
+				wp_set_object_terms( (int) $object_id, array(), $info['taxonomy'], false );
+			} finally {
+				$this->syncing = $prev;
+			}
+			return;
+		}
+	}
+
+	/**
+	 * Reverse sync: a product's attribution TERMS changed (REST / Store API /
+	 * programmatic) → rebuild the canonical meta so the theme REGEXP, KG and
+	 * Schema readers stay correct. (set_object_terms callback.)
+	 *
+	 * @param int    $object_id
+	 * @param array  $terms
+	 * @param array  $tt_ids
+	 * @param string $taxonomy
+	 * @param bool   $append
+	 * @param array  $old_tt_ids
+	 */
+	public function sync_attribution_terms_to_meta( $object_id, $terms, $tt_ids, $taxonomy, $append, $old_tt_ids ) {
+		if ( $this->syncing ) {
+			return;
+		}
+		$map = $this->wc_attribution_map();
+		if ( ! isset( $map[ $taxonomy ] ) || 'product' !== get_post_type( (int) $object_id ) ) {
+			return;
+		}
+		$meta     = $map[ $taxonomy ]['meta'];
+		$assigned = wp_get_object_terms( (int) $object_id, $taxonomy, array( 'fields' => 'slugs' ) );
+		// Never destroy canonical meta on an ambiguous read: a WP_Error here means
+		// "unknown" (late de-registration / object-cache / DB fault), NOT "this
+		// product genuinely has zero vendors". Only mutate on a clean read.
+		if ( is_wp_error( $assigned ) ) {
+			return;
+		}
+		$ids = array();
+		foreach ( $assigned as $slug ) {
+			$v = absint( $slug );
+			if ( $v > 0 ) {
+				$ids[] = $v;
+			}
+		}
+		$ids = array_values( array_unique( $ids ) );
+
+		$prev          = $this->syncing;
+		$this->syncing = true;
+		try {
+			if ( empty( $ids ) ) {
+				delete_post_meta( (int) $object_id, $meta );
+			} else {
+				// Let the owning module's registered sanitize_callback re-validate
+				// (e.g. Vendors' normalize keeps the FR-016 canonical quoted shape).
+				update_post_meta( (int) $object_id, $meta, wp_json_encode( array_map( 'strval', $ids ) ) );
+			}
+		} finally {
+			$this->syncing = $prev;
+		}
+	}
+
+	/**
+	 * Schedule the one-time backfill (per post_type) on cron — never run it inline
+	 * on a page request. WP's cron API dedupes an identical hook+args event within
+	 * a 10-minute window, so concurrent visitors can't double-schedule. The heavy
+	 * sweep runs out-of-band in run_wc_attribution_backfill().
+	 *
+	 * On a cron-disabled site the sweep simply never runs and pre-existing
+	 * attribution stays un-indexed in the taxonomy — but every NEW write still
+	 * dual-writes live, and the index self-heals as products are edited.
+	 */
+	public function maybe_schedule_wc_attribution_backfill() {
+		if ( ! post_type_exists( 'product' ) ) {
+			return;
+		}
+		foreach ( $this->wc_attribution_map() as $info ) {
+			$pt = $info['post_type'];
+			if ( get_option( 'luwipress_cpt_attr_backfill_' . $pt, false ) ) {
+				continue; // already completed.
+			}
+			if ( ! wp_next_scheduled( 'luwipress_cpt_attr_backfill', array( $pt ) ) ) {
+				wp_schedule_single_event( time() + 30, 'luwipress_cpt_attr_backfill', array( $pt ) );
+			}
+		}
+	}
+
+	/**
+	 * Cron handler: run the one-time backfill for one post_type out-of-band, then
+	 * set the completion flag. Idempotent — re-entry is gated by the flag and the
+	 * underlying term/relationship writes are themselves idempotent.
+	 *
+	 * @param string $post_type
+	 */
+	public function run_wc_attribution_backfill( $post_type ) {
+		$post_type = sanitize_key( (string) $post_type );
+		$flag      = 'luwipress_cpt_attr_backfill_' . $post_type;
+		if ( get_option( $flag, false ) ) {
+			return;
+		}
+		foreach ( $this->wc_attribution_map() as $info ) {
+			if ( $info['post_type'] !== $post_type || ! taxonomy_exists( $info['taxonomy'] ) ) {
+				continue;
+			}
+			$this->backfill_one_wc_attribution( $info );
+			update_option( $flag, current_time( 'c' ), false );
+			return;
+		}
+	}
+
+	/**
+	 * @param array{post_type:string,meta:string,taxonomy:string,label:string} $info
+	 */
+	private function backfill_one_wc_attribution( array $info ) {
+		$tax   = $info['taxonomy'];
+		$cache = array(); // CPT post id => term id — collapses repeated get_term_by lookups.
+
+		// 1. Mirror term for every published CPT post.
+		$posts = get_posts( array(
+			'post_type'      => $info['post_type'],
+			'post_status'    => 'publish',
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+		) );
+		foreach ( $posts as $pid ) {
+			$pid           = (int) $pid;
+			$cache[ $pid ] = $this->ensure_term_id_for_cpt_post( $pid, $tax );
+		}
+
+		// 2. Set product terms from the existing attribution meta.
+		global $wpdb;
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT pm.post_id, pm.meta_value
+			   FROM {$wpdb->postmeta} pm
+			   JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+			  WHERE pm.meta_key = %s AND p.post_type = 'product'",
+			$info['meta']
+		) );
+		$products = 0;
+		foreach ( $rows as $row ) {
+			$term_ids = array();
+			foreach ( $this->parse_attribution_meta_value( $row->meta_value ) as $vid ) {
+				$vid = (int) $vid;
+				if ( ! isset( $cache[ $vid ] ) ) {
+					$cache[ $vid ] = $this->ensure_term_id_for_cpt_post( $vid, $tax );
+				}
+				if ( $cache[ $vid ] ) {
+					$term_ids[] = $cache[ $vid ];
+				}
+			}
+			// Skip the write when the product already carries exactly these terms.
+			$current = wp_get_object_terms( (int) $row->post_id, $tax, array( 'fields' => 'ids' ) );
+			$current = is_wp_error( $current ) ? array() : array_map( 'intval', $current );
+			$want    = $term_ids;
+			sort( $current );
+			sort( $want );
+			if ( $current === $want ) {
+				continue;
+			}
+			$prev          = $this->syncing;
+			$this->syncing = true;
+			try {
+				wp_set_object_terms( (int) $row->post_id, $term_ids, $tax, false );
+			} finally {
+				$this->syncing = $prev;
+			}
+			$products++;
+		}
+
+		if ( class_exists( 'LuwiPress_Logger' ) ) {
+			LuwiPress_Logger::log( sprintf(
+				'CPT Engine: backfilled "%s" attribution taxonomy (%d terms, %d products).',
+				$tax, count( $posts ), $products
+			), 'info' );
+		}
+	}
+
+	/**
+	 * Products-list admin filter dropdown for each attribution taxonomy. WP's
+	 * edit.php applies the term filter automatically from the matching query
+	 * var (taxonomy registered with query_var => true).
+	 *
+	 * @param string $post_type
+	 */
+	public function render_attribution_filter( $post_type ) {
+		if ( 'product' !== $post_type ) {
+			return;
+		}
+		foreach ( $this->wc_attribution_map() as $info ) {
+			$tax = $info['taxonomy'];
+			if ( ! taxonomy_exists( $tax ) ) {
+				continue;
+			}
+			$terms = get_terms( array( 'taxonomy' => $tax, 'hide_empty' => false ) );
+			if ( is_wp_error( $terms ) || empty( $terms ) ) {
+				continue;
+			}
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only list filter.
+			$current = isset( $_GET[ $tax ] ) ? sanitize_text_field( wp_unslash( $_GET[ $tax ] ) ) : '';
+			echo '<select name="' . esc_attr( $tax ) . '">';
+			/* translators: %s: attribution type label (e.g. Vendors) */
+			echo '<option value="">' . esc_html( sprintf( __( 'All %s', 'luwipress' ), $info['label'] ) ) . '</option>';
+			foreach ( $terms as $t ) {
+				if ( ! $t instanceof WP_Term ) {
+					continue;
+				}
+				printf(
+					'<option value="%s"%s>%s</option>',
+					esc_attr( $t->slug ),
+					selected( $current, $t->slug, false ),
+					esc_html( $t->name )
+				);
+			}
+			echo '</select>';
 		}
 	}
 

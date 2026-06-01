@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.8.0
+Stable tag: 3.8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,10 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.8.1 — CPT Engine: WooCommerce attribution as a first-class taxonomy =
+* **Products are now indexed by their attributed content type (e.g. Vendors) as a real WooCommerce taxonomy**, not just a hidden meta field. Each CPT Engine type that attributes to products gets a `product_<type>` taxonomy mirroring its entries, so you can filter the Products list by vendor and feeds / Store API / term queries see the relationship natively (no more slow meta scans).
+* Attribution stays editable from the same place (the product's Vendors box); the taxonomy is kept in lockstep automatically in both directions, and a one-time background sweep indexes existing products. Existing data and front-end output are untouched (the canonical meta is preserved).
 
 = 3.8.0 — CPT Engine: translate + display any content type =
 * **Custom content types are now first-class in the Translation Manager.** Every content type managed by the LuwiPress CPT Engine — Vendors today, plus operator-defined types (Team, Events, …) — and its taxonomies now appear in the Translation Manager's steps alongside Products / Posts / Pages, so they translate the same way (engine post types join the translatable whitelist via the `luwipress_translatable_post_types` filter).
