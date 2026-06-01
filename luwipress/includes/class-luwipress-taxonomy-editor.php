@@ -51,8 +51,21 @@ class LuwiPress_Taxonomy_Editor {
 	// -----------------------------------------------------------------
 
 	public function enqueue_assets( $hook_suffix ) {
-		// Only fire on our admin page.
-		if ( false === strpos( (string) $hook_suffix, 'luwipress-taxonomy-editor' ) ) {
+		// Fire on our standalone page AND on the Site hub when the Taxonomy tool
+		// is the active one (3.7.3 grouped IA — the tool no longer has its own
+		// top-level screen, so gating on `luwipress-taxonomy-editor` alone left
+		// the editor with no CSS/JS inside the hub).
+		$on_screen = false !== strpos( (string) $hook_suffix, 'luwipress-taxonomy-editor' );
+		if ( ! $on_screen && false !== strpos( (string) $hook_suffix, 'luwipress-site' ) ) {
+			// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only routing.
+			$lwp_tab  = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
+			$lwp_tool = isset( $_GET['tool'] ) ? sanitize_key( wp_unslash( $_GET['tool'] ) ) : '';
+			// phpcs:enable WordPress.Security.NonceVerification.Recommended
+			if ( 'taxonomy' === $lwp_tab || 'taxonomy' === $lwp_tool ) {
+				$on_screen = true;
+			}
+		}
+		if ( ! $on_screen ) {
 			return;
 		}
 

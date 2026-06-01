@@ -49,6 +49,9 @@ $requested_tax    = isset( $_GET['taxonomy'] ) ? sanitize_key( $_GET['taxonomy']
 <?php $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' ); ?>
 <?php if ( ! $luwipress_hub_mode ) : ?>
 <div class="wrap luwipress-tax-editor">
+<?php else : ?>
+<?php // Hub mode drops the .wrap chrome but still needs the .luwipress-tax-editor scope so the toolbar's flex/spacing CSS applies. ?>
+<div class="luwipress-tax-editor">
 <?php endif; ?>
 
 	<?php if ( ! $luwipress_hub_mode ) : ?>
@@ -137,6 +140,4 @@ $requested_tax    = isset( $_GET['taxonomy'] ) ? sanitize_key( $_GET['taxonomy']
 		</p>
 	</div>
 
-<?php if ( ! $luwipress_hub_mode ) : ?>
-</div>
-<?php endif; ?>
+</div><?php // close .luwipress-tax-editor (.wrap in standalone, plain scope in hub) ?>
