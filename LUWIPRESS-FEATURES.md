@@ -126,6 +126,7 @@ Shipped as a lean **~700 KB core** plus three optional companion plugins (WebMCP
 - **Batch translate by language** — translate up to 200 missing posts in a single call (`POST /translation/batch`). Powers the "Translate N missing products" button on Knowledge Graph language nodes.
 - **DB-level sibling resolution (since WebMCP 1.0.23)** — pair-resolve any post / page / product across all WPML or Polylang languages in a single call. Give it any sibling ID (the English one, the Italian one, doesn't matter) and it returns the full `{lang: post_id}` map plus the source language and (under WPML) the translation group ID. Replaces fragile XML-export + fuzzy-slug-matching workarounds for cross-language SEO sweeps, retranslation drift cleanup, and any audit that needs to walk a translation set programmatically. Mirrors the read-before-write `taxonomy_term_get` discipline already in place for terms.
 - **FAQ + focus keyword translation scope (3.2.9)** — `translation_request` now translates the AEO `_luwipress_faq` Q&A set and tightens focus-keyword enforcement on top of titles + descriptions + meta + slug. The AI prompt is extended with the source FAQ block and a matching-length response schema so the writer can persist the translated Q&A array straight to the target post's `_luwipress_faq` meta in WPML and Polylang siblings. Focus-keyword prompt rule now explicitly forbids leaving source-language tokens (e.g. "silent" must become "silencieux"). Closes the long-tail bug where FR/IT/ES sibling products rendered empty FAQ tabs + empty FAQPage JSON-LD even when the AI had produced a perfectly good translation set.
+- **Automatic WPML/Polylang setup for custom content types (3.9.0)** — LuwiPress ships a `wpml-config.xml` (read by both WPML and Polylang) and registers its content types with Polylang's filters, so Vendors, Events and their taxonomies + fields become translatable in the Translation Manager with no manual "Post Types / Taxonomies Translation" toggling. For content types you define yourself, a ready-to-paste WPML configuration is generated on demand (`GET /cpt-engine/wpml-config`).
 
 ### 4. Elementor Mastery (46+ endpoints)
 - Read full page structure via REST API (tree + flat widget view + compact outline + **deep outline** with backgrounds)
@@ -333,6 +334,21 @@ Lets customers buy your products directly inside AI assistants — Google AI Mod
 - **Strict mode** (optional) — abort checkout completion when a mandate is unverified or its amount mismatches
 - **Endpoints**: `GET|POST /ap2/settings`, `POST /ap2/mandate/verify`, `GET /ap2/transaction/{order_id}`, `GET /ap2/log`, `POST /ap2/checkout/complete`
 - **15 WebMCP tools** across UCP + AP2; checkout and write tools are classified so an autonomous agent loop never places an order on its own
+
+### 16. Custom Content Types — Vendors & Events (CPT Engine)
+
+One engine powers the store's "non-product" content types — described once, then translatable in the Translation Manager, displayable via an Elementor card grid, and (where relevant) linkable to products and to one another.
+
+**Vendors** (preset #1) — vendor / maker / atelier / team profiles with Schema.org Person / Organization / LocalBusiness JSON-LD, verified social links (E-E-A-T `sameAs`), and product attribution ("Made by …"). One module, many verticals: Luthiers, Chefs, Artists, Team — labelled per site, with optional per-group URL bases.
+
+**Events** (preset #2, since 3.9.0 — **off by default**; enable under `LuwiPress → Events`) — concerts, workshops and classes as a first-class content type:
+- **Structured fields** — start / end date-time, status (scheduled / cancelled / postponed / rescheduled), attendance mode (in-person / online / hybrid), venue name + address, online URL, and ticketing (URL + price + currency).
+- **schema.org Event JSON-LD** — every event page emits valid Event structured data (location, offers, organizer, performer) for rich results, reusing LuwiPress's schema engine — exactly one Event node per page, and an operator-authored override still wins.
+- **Vendor links** — attach organizers and performers from your Vendors (multiple performers supported); the relationship flows straight into the event's structured data.
+- **`.ics` calendar export** — a one-click downloadable iCalendar file per event (`?lwp_ics=1`), plus an `event_ics` MCP tool.
+- **Endpoints**: `GET|POST /events/settings`, `GET /events`, `GET /events/{id}`, `POST /events/{id}/meta`, `GET /events/{id}/ics`, `POST /events/sync-rewrite`.
+
+**Operator-defined types** — add your own content types (Team, Venues, …) through the engine; they automatically join the Translation Manager, the **CPT Grid** Elementor widget (LuwiPress Gold theme), and Polylang's translation settings, with a pasteable WPML configuration generated on demand (`GET /cpt-engine/wpml-config`).
 
 ---
 
