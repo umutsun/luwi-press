@@ -131,9 +131,12 @@ $profile_fields = array(
 	<form id="lwp-vendors-form" method="post" autocomplete="off">
 		<?php wp_nonce_field( 'lwp_vendors_save', 'lwp_vendors_nonce' ); ?>
 
-		<!-- Identity card -->
-		<div class="luwipress-card">
-			<h2><?php esc_html_e( 'Identity', 'luwipress' ); ?></h2>
+		<div class="lwp-collapse-stack">
+
+		<!-- Identity -->
+		<details class="lp-collapse" open>
+		<summary><span class="dashicons dashicons-id-alt"></span> <span><?php esc_html_e( 'Identity', 'luwipress' ); ?></span></summary>
+		<div class="lp-collapse-body">
 			<table class="form-table" role="presentation">
 				<tr>
 					<th><label for="lwp-v-archive_slug"><?php esc_html_e( 'Archive URL slug', 'luwipress' ); ?></label></th>
@@ -173,11 +176,13 @@ $profile_fields = array(
 					<td><input type="text" id="lwp-v-icon" name="menu_icon" class="regular-text" style="font-family:monospace;" value="<?php echo esc_attr( $settings['menu_icon'] ); ?>" placeholder="dashicons-store"></td>
 				</tr>
 			</table>
-		</div>
+		</div><!-- .lp-collapse-body -->
+		</details>
 
-		<!-- Permalink card -->
-		<div class="luwipress-card">
-			<h2><?php esc_html_e( 'Permalink & archive', 'luwipress' ); ?></h2>
+		<!-- Permalink & archive -->
+		<details class="lp-collapse">
+		<summary><span class="dashicons dashicons-admin-links"></span> <span><?php esc_html_e( 'Permalink & archive', 'luwipress' ); ?></span></summary>
+		<div class="lp-collapse-body">
 			<table class="form-table" role="presentation">
 				<tr>
 					<th><?php esc_html_e( 'Permalink prefix', 'luwipress' ); ?></th>
@@ -200,11 +205,13 @@ $profile_fields = array(
 					</td>
 				</tr>
 			</table>
-		</div>
+		</div><!-- .lp-collapse-body -->
+		</details>
 
-		<!-- Profile fields -->
-		<div class="luwipress-card">
-			<h2><?php esc_html_e( 'Profile field visibility', 'luwipress' ); ?></h2>
+		<!-- Profile field visibility -->
+		<details class="lp-collapse">
+		<summary><span class="dashicons dashicons-visibility"></span> <span><?php esc_html_e( 'Profile field visibility', 'luwipress' ); ?></span></summary>
+		<div class="lp-collapse-body">
 			<p class="description"><?php esc_html_e( 'Show or hide standard profile fields on the front-end single-vendor template.', 'luwipress' ); ?></p>
 			<div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:8px;">
 				<?php foreach ( $profile_fields as $key => $label ) :
@@ -216,11 +223,13 @@ $profile_fields = array(
 					</label>
 				<?php endforeach; ?>
 			</div>
-		</div>
+		</div><!-- .lp-collapse-body -->
+		</details>
 
-		<!-- Social link toggles -->
-		<div class="luwipress-card">
-			<h2><?php esc_html_e( 'Social link fields', 'luwipress' ); ?></h2>
+		<!-- Social link fields -->
+		<details class="lp-collapse">
+		<summary><span class="dashicons dashicons-share"></span> <span><?php esc_html_e( 'Social link fields', 'luwipress' ); ?></span></summary>
+		<div class="lp-collapse-body">
 			<p class="description"><?php esc_html_e( 'Toggle which social link inputs appear on each vendor edit screen. Populated URLs flow into JSON-LD sameAs.', 'luwipress' ); ?></p>
 			<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
 				<?php foreach ( $social_fields as $key => $label ) :
@@ -232,11 +241,13 @@ $profile_fields = array(
 					</label>
 				<?php endforeach; ?>
 			</div>
-		</div>
+		</div><!-- .lp-collapse-body -->
+		</details>
 
-		<!-- Legacy redirects -->
-		<div class="luwipress-card">
-			<h2><?php esc_html_e( 'Legacy URL redirects', 'luwipress' ); ?></h2>
+		<!-- Legacy URL redirects -->
+		<details class="lp-collapse">
+		<summary><span class="dashicons dashicons-randomize"></span> <span><?php esc_html_e( 'Legacy URL redirects', 'luwipress' ); ?></span></summary>
+		<div class="lp-collapse-body">
 			<p class="description">
 				<?php esc_html_e( 'Old slug renamed (e.g. /masters/ → /luthiers/) ? Add 301 redirect pairs so existing bookmarks + Google index entries route to the new URL. Prefix-match: both /masters/ and /masters/yildirim-palabiyik/ redirect.', 'luwipress' ); ?>
 			</p>
@@ -262,7 +273,10 @@ $profile_fields = array(
 				</tbody>
 			</table>
 			<button type="button" class="button" id="lwp-v-redirect-add" style="margin-top:8px;">+ <?php esc_html_e( 'Add row', 'luwipress' ); ?></button>
-		</div>
+		</div><!-- .lp-collapse-body -->
+		</details>
+
+		</div><!-- .lwp-collapse-stack -->
 
 		<!-- Save / flush row -->
 		<div class="luwipress-card luwipress-card--primary lwp-v-save-row">

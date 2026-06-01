@@ -182,8 +182,10 @@ $wc_targets = class_exists( 'LuwiPress_Health_Score' )
 	// when this page is rendered inside `luwipress-content`.
 	$ca_tab_url = function ( $sub ) use ( $luwipress_hub_mode ) {
 		if ( $luwipress_hub_mode ) {
+			// Content folded into the Site hub (3.7.3): audit lives at
+			// page=luwipress-site&tab=audit. Keep &sub= for the inner strip.
 			return add_query_arg(
-				array( 'page' => 'luwipress-content', 'tab' => 'audit', 'sub' => $sub ),
+				array( 'page' => 'luwipress-site', 'tab' => 'audit', 'sub' => $sub ),
 				admin_url( 'admin.php' )
 			);
 		}

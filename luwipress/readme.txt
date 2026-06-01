@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.7.2
+Stable tag: 3.7.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.7.3 — One Site hub + collapsible admin everywhere =
+* **Content tools folded into the Site hub.** The separate "Content" sidebar item is gone — the **Site** page now hosts every tool in one grouped tab strip: a **Site** group (Slug Resolver, Vendors, Theme, Bot Defense, Cookie Consent) and a **Content** group (Health Audit, Schema, Taxonomy, Image Alt, Scheduler). One fewer sidebar row, nothing lost. Old `?page=luwipress-content` links (and every old tab deep-link) still resolve.
+* **Consistent collapsible UI across the admin.** Vendors, Slug Resolver and Theme pages — plus the Settings **AI** (API Keys + AI Content) and **General** (General + Content Health) tabs — now use the same clean accordion sections as Bot Defense and Cookie Consent. Top buttons, content opens below, collapse what you're not using.
+* CSS now cache-busts on file modification time so admin styling updates appear immediately.
 
 = 3.7.2 =
 * Admin UI cohesion pass. Settings nav trimmed from 8 tabs to 6: "AI API Keys" now lives alongside "AI Content" under a single **AI** tab, and "Content Health" now lives under **General**. Old `?tab=api-keys` / `?tab=content-health` links still resolve.

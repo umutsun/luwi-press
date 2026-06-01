@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.7.2
+ * Version: 3.7.3
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.7.2');
+define('LUWIPRESS_VERSION', '3.7.3');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -424,12 +424,13 @@ class LuwiPress {
             </style>';
         } );
 
-        // ─── VISIBLE SUBMENUS (7 total — IA consolidated 3.5.7) ─────
+        // ─── VISIBLE SUBMENUS (6 total — Content folded into Site 3.7.3) ─
         // Pre-3.5.7 each module shipped a flat submenu; 15+ items overflowed
-        // the WP sidebar and operator focus. The 3.5.7 IA folds related
-        // tools into two hubs (Content / Site) so the visible row stays at
-        // 7 and every tool keeps a deep-linkable URL via ?tab=. Old slugs
-        // remain as hidden redirect-only submenus below.
+        // the WP sidebar and operator focus. The 3.5.7 IA folded related
+        // tools into two hubs (Content / Site); 3.7.3 folds Content INTO the
+        // Site hub (one grouped tab strip: Site / Content) so the visible
+        // row drops to 6. Every tool keeps a deep-linkable URL via ?tab=;
+        // old slugs remain as hidden redirect-only submenus below.
 
         // 1. Dashboard (rename the auto-generated first submenu)
         add_submenu_page(
@@ -451,24 +452,17 @@ class LuwiPress {
             array( $this, 'knowledge_graph_page' )
         );
 
-        // 3. Content — hub: Health Audit / Schema / Schema Preview /
-        //    Taxonomy / Image Alt / Scheduler. Tab dispatch is server-
-        //    rendered (`?tab=` whitelist) inside content-hub-page.php.
-        add_submenu_page(
-            'luwipress',
-            __( 'Content', 'luwipress' ),
-            __( 'Content', 'luwipress' ),
-            'manage_options',
-            'luwipress-content',
-            array( $this, 'content_hub_page' )
-        );
+        // 3. Translations — owned by LuwiPress_Translation; left between
+        //    Knowledge Graph and Site in the visible row. Sync Audit panel
+        //    lives inside that page at ?tab=sync-audit (handled by module).
 
-        // 4. Translations — owned by LuwiPress_Translation; left between
-        //    Content and Site in the visible row. Sync Audit panel lives
-        //    inside this page at ?tab=sync-audit (handled by the module).
-
-        // 5. Site — hub: Slug Resolver / Vendors / Theme / Bot Defense /
-        //    Cookie Consent.
+        // 4. Site — combined hub (Content folded in 3.7.3). Site group:
+        //    Slug Resolver / Vendors / Theme / Bot Defense / Cookie Consent.
+        //    Content group: Health Audit / Schema / Taxonomy / Image Alt /
+        //    Scheduler. Tab dispatch is server-rendered (`?tab=` whitelist)
+        //    inside site-hub-page.php; the strip is grouped by section.
+        //    The old `luwipress-content` slug + its tab deep-links survive
+        //    via the hidden compat redirects below.
         add_submenu_page(
             'luwipress',
             __( 'Site', 'luwipress' ),
@@ -508,12 +502,15 @@ class LuwiPress {
         // matching hub home with the right ?tab= parameter. Parent slug
         // '' keeps them out of the visible sidebar.
         $compat_redirects = array(
-            // Content hub tabs
-            'luwipress-content-audit'    => 'luwipress-content&tab=audit',
-            'luwipress-schema-picker'    => 'luwipress-content&tab=schema',
-            'luwipress-schema-preview'   => 'luwipress-content&tab=schema', // merged into Schema tab (3.6.x)
-            'luwipress-taxonomy-editor'  => 'luwipress-content&tab=taxonomy',
-            'luwipress-image-alt-bulk'   => 'luwipress-content&tab=alt',
+            // Content hub — folded into the Site hub in 3.7.3. The old
+            // `luwipress-content` slug + every former tab deep-link now
+            // resolve onto the combined Site hub (Content group).
+            'luwipress-content'          => 'luwipress-site&tab=audit',
+            'luwipress-content-audit'    => 'luwipress-site&tab=audit',
+            'luwipress-schema-picker'    => 'luwipress-site&tab=schema',
+            'luwipress-schema-preview'   => 'luwipress-site&tab=schema', // merged into Schema tab (3.6.x)
+            'luwipress-taxonomy-editor'  => 'luwipress-site&tab=taxonomy',
+            'luwipress-image-alt-bulk'   => 'luwipress-site&tab=alt',
             // Site hub tabs
             'luwipress-slug-resolver'    => 'luwipress-site&tab=slug-resolver',
             'luwipress-vendors'          => 'luwipress-site&tab=vendors',
@@ -547,12 +544,30 @@ class LuwiPress {
                 '',
                 'manage_options',
                 $old_slug,
-                function () use ( $target ) {
+                function () use ( $old_slug, $target ) {
                     if ( ! current_user_can( 'manage_options' ) ) {
                         wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'luwipress' ) );
                     }
-                    $url = admin_url( 'admin.php?page=' . $target );
                     // phpcs:disable WordPress.Security.NonceVerification.Recommended
+                    // Hub→hub remap (Content folded into Site, 3.7.3): the old
+                    // `?page=luwipress-content&tab=<x>` bookmarks carry a
+                    // TOP-LEVEL hub tab whose key is identical in the Site hub.
+                    // Forward it as `&tab=` (not `&sub=`) so the deep-link lands
+                    // on the right tab instead of the default. Whitelist the
+                    // former Content tabs so an unknown ?tab= can't be injected.
+                    if ( 'luwipress-content' === $old_slug && isset( $_GET['tab'] ) ) {
+                        $ctab     = sanitize_key( wp_unslash( $_GET['tab'] ) );
+                        $content_tabs = array( 'audit', 'schema', 'taxonomy', 'alt', 'scheduler' );
+                        if ( in_array( $ctab, $content_tabs, true ) ) {
+                            wp_safe_redirect( admin_url( 'admin.php?page=luwipress-site&tab=' . $ctab ) );
+                            exit;
+                        }
+                    }
+                    $url = admin_url( 'admin.php?page=' . $target );
+                    // Sub-tab forwarding: pages with their own inner sub-tab
+                    // system (Cookie Consent, Bot Defense, Translations Sync)
+                    // emit `&tab=<sub>` on internal links — recover it as
+                    // `&sub=<sub>` so the hub renders the right inner panel.
                     if ( isset( $_GET['tab'] ) ) {
                         $sub = sanitize_key( wp_unslash( $_GET['tab'] ) );
                         if ( '' !== $sub ) {
@@ -1370,7 +1385,14 @@ class LuwiPress {
             ));
 
             // Theme page — page-specific tools UI (scan/execute/restore + settings save).
-            if ( false !== strpos( $hook, 'luwipress-theme' ) || 'luwipress_page_luwipress-theme' === $screen_id ) {
+            // The Theme surface now lives as the Site hub's `?tab=theme` (3.7.3
+            // merge) as well as the legacy standalone slug, so gate on both.
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page routing.
+            $lwp_active_tab    = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
+            $lwp_theme_surface = ( false !== strpos( $hook, 'luwipress-theme' ) )
+                || ( 'luwipress_page_luwipress-theme' === $screen_id )
+                || ( false !== strpos( $screen_id, 'luwipress-site' ) && 'theme' === $lwp_active_tab );
+            if ( $lwp_theme_surface ) {
                 $tools_js_path = LUWIPRESS_PLUGIN_DIR . 'assets/js/theme-tools.js';
                 $tools_js_ver  = LUWIPRESS_VERSION . '.' . ( file_exists( $tools_js_path ) ? filemtime( $tools_js_path ) : '0' );
                 wp_enqueue_script(

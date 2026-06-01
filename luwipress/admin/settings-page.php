@@ -499,7 +499,9 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		</div>
 
 		<!-- GENERAL -->
-		<div class="luwipress-tab-content <?php echo 'general' === $active_tab ? 'tab-active' : ''; ?>" id="tab-general">
+		<details class="luwipress-tab-content lp-collapse <?php echo 'general' === $active_tab ? 'tab-active' : ''; ?>" id="tab-general"<?php echo 'content-health' !== $open_section ? ' open' : ''; ?>>
+		<summary><span class="dashicons dashicons-admin-settings"></span> <span><?php esc_html_e( 'General', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'Logging, language & defaults', 'luwipress' ); ?></span></summary>
+		<div class="lp-collapse-body">
 			<div class="luwipress-card">
 				<h2><?php esc_html_e( 'Logging', 'luwipress' ); ?></h2>
 				<table class="form-table">
@@ -546,10 +548,13 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					</tr>
 				</table>
 			</div>
-		</div>
+		</div><!-- .lp-collapse-body -->
+		</details>
 
-		<!-- AI API KEYS — grouped under the "AI" tab (3.7.2); shows alongside AI Content -->
-		<div class="luwipress-tab-content <?php echo 'ai' === $active_tab ? 'tab-active' : ''; ?>" id="tab-api-keys">
+		<!-- AI API KEYS — grouped under the "AI" tab (3.7.2 → 3.7.3); collapsible alongside AI Content -->
+		<details class="luwipress-tab-content lp-collapse <?php echo 'ai' === $active_tab ? 'tab-active' : ''; ?>" id="tab-api-keys"<?php echo 'api-keys' === $open_section ? ' open' : ''; ?>>
+		<summary><span class="dashicons dashicons-admin-network"></span> <span><?php esc_html_e( 'API Keys', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'Providers, models & limits', 'luwipress' ); ?></span></summary>
+		<div class="lp-collapse-body">
 			<?php
 			// WordPress 7.0 Connectors detection — when active, API keys live
 			// in the native WP Connectors UI. We keep the model picker + budget
@@ -1050,10 +1055,13 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				</table>
 			</div>
 
-		</div>
+		</div><!-- .lp-collapse-body -->
+		</details>
 
 		<!-- AI CONTENT -->
-		<div class="luwipress-tab-content <?php echo 'ai' === $active_tab ? 'tab-active' : ''; ?>" id="tab-ai">
+		<details class="luwipress-tab-content lp-collapse <?php echo 'ai' === $active_tab ? 'tab-active' : ''; ?>" id="tab-ai"<?php echo 'api-keys' !== $open_section ? ' open' : ''; ?>>
+		<summary><span class="dashicons dashicons-edit"></span> <span><?php esc_html_e( 'AI Content', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'Enrichment & brand voice', 'luwipress' ); ?></span></summary>
+		<div class="lp-collapse-body">
 			<?php if ( 'luwipress-native' === $seo_plugin ) : ?>
 			<div class="luwipress-info-box">
 				<span class="dashicons dashicons-yes-alt" style="color:var(--lp-success);"></span>
@@ -1361,7 +1369,8 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 				</p>
 			</div>
 			<?php endif; ?>
-		</div>
+		</div><!-- .lp-collapse-body -->
+		</details>
 
 		<!-- TRANSLATION -->
 		<div class="luwipress-tab-content <?php echo 'translation' === $active_tab ? 'tab-active' : ''; ?>" id="tab-translation">
@@ -1910,7 +1919,9 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		</div><!-- #tab-security -->
 
 		<!-- CONTENT HEALTH — grouped under the "General" tab (3.7.2); shows below General settings -->
-		<div class="luwipress-tab-content <?php echo 'general' === $active_tab ? 'tab-active' : ''; ?>" id="tab-content-health">
+		<details class="luwipress-tab-content lp-collapse <?php echo 'general' === $active_tab ? 'tab-active' : ''; ?>" id="tab-content-health"<?php echo 'content-health' === $open_section ? ' open' : ''; ?>>
+		<summary><span class="dashicons dashicons-chart-area"></span> <span><?php esc_html_e( 'Content Health', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'Score pillars & targets', 'luwipress' ); ?></span></summary>
+		<div class="lp-collapse-body">
 			<?php
 			$health_ready = class_exists( 'LuwiPress_Health_Score' );
 			if ( $health_ready ) :
@@ -2047,7 +2058,8 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 
 				<?php endif; ?>
 			</div>
-		</div>
+		</div><!-- .lp-collapse-body -->
+		</details>
 
 		<?php
 		/**

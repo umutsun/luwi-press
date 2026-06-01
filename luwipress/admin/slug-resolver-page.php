@@ -143,9 +143,12 @@ $last_build    = is_array( $diag['last_build'] ?? null ) ? $diag['last_build'] :
 		</div>
 	</div>
 
+	<div class="lwp-collapse-stack">
+
 	<!-- Probe form — pre-swap verification -->
-	<div class="luwipress-card luwipress-card--primary">
-		<h2><span class="dashicons dashicons-search" aria-hidden="true"></span> <?php esc_html_e( 'Probe slugs', 'luwipress' ); ?></h2>
+	<details class="lp-collapse" open>
+	<summary><span class="dashicons dashicons-search"></span> <span><?php esc_html_e( 'Probe slugs', 'luwipress' ); ?></span></summary>
+	<div class="lp-collapse-body">
 		<p class="lp-form-hint"><?php esc_html_e( 'Paste any slugs (one per line, or comma-separated) to verify each one resolves before swap day. Probe runs the same six-pass discovery the live redirect uses.', 'luwipress' ); ?></p>
 		<div class="lp-form-row">
 			<textarea id="lwp-sr-probe-input" class="lp-form-textarea" rows="3"
@@ -159,12 +162,14 @@ $last_build    = is_array( $diag['last_build'] ?? null ) ? $diag['last_build'] :
 			<span id="lwp-sr-probe-status" class="lp-form-hint"></span>
 		</div>
 		<div id="lwp-sr-probe-results" class="lwp-sr-probe-results"></div>
-	</div>
+	</div><!-- .lp-collapse-body -->
+	</details>
 
 	<!-- Map table -->
-	<div class="luwipress-card">
+	<details class="lp-collapse">
+	<summary><span class="dashicons dashicons-list-view"></span> <span><?php esc_html_e( 'Composed redirect map', 'luwipress' ); ?></span></summary>
+	<div class="lp-collapse-body">
 		<div class="lwp-sr-card-head">
-			<h2><?php esc_html_e( 'Composed redirect map', 'luwipress' ); ?></h2>
 			<input type="search" id="lwp-sr-map-filter"
 			       class="lp-form-input lwp-sr-filter"
 			       placeholder="<?php esc_attr_e( 'Filter slugs…', 'luwipress' ); ?>">
@@ -184,11 +189,13 @@ $last_build    = is_array( $diag['last_build'] ?? null ) ? $diag['last_build'] :
 			</thead>
 			<tbody><tr><td colspan="4" class="lwp-sr-empty"><?php esc_html_e( 'Loading…', 'luwipress' ); ?></td></tr></tbody>
 		</table>
-	</div>
+	</div><!-- .lp-collapse-body -->
+	</details>
 
 	<!-- Add override -->
-	<div class="luwipress-card luwipress-card--muted">
-		<h2><span class="dashicons dashicons-plus-alt2" aria-hidden="true"></span> <?php esc_html_e( 'Add manual override', 'luwipress' ); ?></h2>
+	<details class="lp-collapse">
+	<summary><span class="dashicons dashicons-plus-alt2"></span> <span><?php esc_html_e( 'Add manual override', 'luwipress' ); ?></span></summary>
+	<div class="lp-collapse-body">
 		<p class="lp-form-hint">
 			<?php esc_html_e( 'Use this when the auto-discovery picks the wrong target, or for legacy slugs not in the live site map (e.g. retired URLs you still want to 301).', 'luwipress' ); ?>
 		</p>
@@ -220,7 +227,10 @@ $last_build    = is_array( $diag['last_build'] ?? null ) ? $diag['last_build'] :
 			</div>
 		</form>
 		<div id="lwp-sr-override-status" class="lp-form-hint lwp-sr-override-status"></div>
-	</div>
+	</div><!-- .lp-collapse-body -->
+	</details>
+
+	</div><!-- .lwp-collapse-stack -->
 <?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
 <?php endif; ?>

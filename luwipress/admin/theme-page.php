@@ -132,43 +132,13 @@ $companion_state   = $is_official_companion ? 'stat-success' : ( $is_third_party
 	</div>
 	<?php endif; ?>
 
-	<!-- ═══ TAB NAV — hub-aware URLs + Status + Tools merged into Overview ═══ -->
-	<?php
-	$lwp_theme_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' );
-	$lwp_theme_tab_url  = function ( $sub ) use ( $lwp_theme_hub_mode ) {
-		if ( $lwp_theme_hub_mode ) {
-			return add_query_arg(
-				array( 'page' => 'luwipress-site', 'tab' => 'theme', 'sub' => $sub ),
-				admin_url( 'admin.php' )
-			);
-		}
-		return add_query_arg(
-			array( 'page' => 'luwipress-theme', 'tab' => $sub ),
-			admin_url( 'admin.php' )
-		);
-	};
-	$lwp_theme_total = (int) count( $tools ) + (int) count( $settings );
-	?>
-	<nav class="lp-hub-tabs lwp-theme-subtabs" role="tablist" aria-label="<?php esc_attr_e( 'Theme bridge sections', 'luwipress' ); ?>">
-		<a href="<?php echo esc_url( $lwp_theme_tab_url( 'overview' ) ); ?>"
-		   class="lp-hub-tab <?php echo $active_tab === 'overview' ? 'lp-hub-tab--active' : ''; ?>"
-		   role="tab"
-		   aria-selected="<?php echo $active_tab === 'overview' ? 'true' : 'false'; ?>">
-			<span class="dashicons dashicons-chart-pie"></span>
-			<span><?php esc_html_e( 'Overview', 'luwipress' ); ?></span>
-			<?php if ( $tools ) : ?><span class="lp-hub-tab-badge"><?php echo (int) count( $tools ); ?></span><?php endif; ?>
-		</a>
-		<a href="<?php echo esc_url( $lwp_theme_tab_url( 'settings' ) ); ?>"
-		   class="lp-hub-tab <?php echo $active_tab === 'settings' ? 'lp-hub-tab--active' : ''; ?>"
-		   role="tab"
-		   aria-selected="<?php echo $active_tab === 'settings' ? 'true' : 'false'; ?>">
-			<span class="dashicons dashicons-admin-generic"></span>
-			<span><?php esc_html_e( 'Settings', 'luwipress' ); ?></span>
-			<?php if ( $settings ) : ?><span class="lp-hub-tab-badge"><?php echo (int) count( $settings ); ?></span><?php endif; ?>
-		</a>
-	</nav>
+	<!-- ═══ Overview + Settings as collapsible sections (3.7.3) ═══ -->
+	<div class="lwp-collapse-stack lwp-theme-collapse">
 
-	<?php if ( $active_tab === 'overview' ) : ?>
+	<!-- Overview -->
+	<details class="lp-collapse"<?php echo $active_tab === 'overview' ? ' open' : ''; ?>>
+	<summary><span class="dashicons dashicons-chart-pie"></span> <span><?php esc_html_e( 'Overview', 'luwipress' ); ?></span><?php if ( $tools ) : ?> <span class="lp-hub-tab-badge"><?php echo (int) count( $tools ); ?></span><?php endif; ?></summary>
+	<div class="lp-collapse-body">
 
 		<!-- ═══ STAT CARDS ═══ -->
 		<!-- Mirrors the Dashboard / KG hero pattern — semantic left-border colour
@@ -362,7 +332,13 @@ $companion_state   = $is_official_companion ? 'stat-success' : ( $is_third_party
 			</div>
 		<?php endif; ?>
 
-	<?php elseif ( $active_tab === 'settings' ) : ?>
+	</div><!-- .lp-collapse-body -->
+	</details>
+
+	<!-- Settings -->
+	<details class="lp-collapse"<?php echo $active_tab === 'settings' ? ' open' : ''; ?>>
+	<summary><span class="dashicons dashicons-admin-generic"></span> <span><?php esc_html_e( 'Settings', 'luwipress' ); ?></span><?php if ( $settings ) : ?> <span class="lp-hub-tab-badge"><?php echo (int) count( $settings ); ?></span><?php endif; ?></summary>
+	<div class="lp-collapse-body">
 
 		<?php if ( empty( $settings ) ) : ?>
 			<div class="luwipress-card luwipress-card--muted">
@@ -459,7 +435,10 @@ $companion_state   = $is_official_companion ? 'stat-success' : ( $is_third_party
 			</form>
 		<?php endif; ?>
 
-	<?php endif; ?>
+	</div><!-- .lp-collapse-body -->
+	</details>
+
+	</div><!-- .lwp-theme-collapse -->
 <?php if ( ! $luwipress_hub_mode ) : ?>
 </div>
 <?php endif; ?>

@@ -6052,6 +6052,41 @@ body.luwipress_page_luwipress-scheduler #wpbody-content > .updated:not(.luwipres
        "üst border çıkmıyor"). */
     overflow: visible;
 }
+
+/* ── Grouped tab strip (combined Site hub, 3.7.3) ───────────────────
+   When one hub carries ~10 tabs (Content folded into Site) the flat
+   strip is hard to scan. The grouped variant stacks labelled sections
+   (Site / Content) vertically — each is a small uppercase heading over
+   its own wrapping row of tab buttons. Keeps the same .lp-hub-tab look,
+   just adds section structure. Minimal: no new tab styling. */
+.lp-hub-tabs--grouped {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 14px;
+}
+.lp-hub-tabgroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.lp-hub-tabgroup + .lp-hub-tabgroup {
+    padding-top: 12px;
+    border-top: 1px solid color-mix(in srgb, var(--lp-border) 60%, transparent);
+}
+.lp-hub-tabgroup-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--lp-text-secondary);
+    padding-left: 2px;
+}
+.lp-hub-tabgroup-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
 .lp-hub-tab {
     display: inline-flex;
     align-items: center;
@@ -6206,6 +6241,12 @@ details.lp-collapse {
     overflow: hidden;
 }
 details.lp-collapse + details.lp-collapse { margin-top: 12px; }
+/* Settings AI + General each host TWO collapsible sections that are separate
+   .luwipress-tab-content blocks — and for General the two halves are not even
+   DOM-adjacent (other tab panels sit between them, display:none). The sibling
+   gap above can't reach across those hidden panels, so give each visible
+   settings accordion its own bottom gap for an even rhythm (3.7.3). */
+details.luwipress-tab-content.lp-collapse.tab-active { margin-bottom: 12px; }
 details.lp-collapse > summary {
     display: flex; align-items: center; gap: 10px;
     cursor: pointer; user-select: none;
@@ -6223,6 +6264,16 @@ details.lp-collapse > summary::before {
 }
 details.lp-collapse[open] > summary::before { transform: rotate(90deg); }
 details.lp-collapse > summary:hover { background: var(--lp-surface-hover); }
+/* Focus: the browser's default near-black ring gets clipped oddly by the
+   rounded, overflow:hidden card. Replace it with a soft branded INSET ring
+   (negative offset so it stays inside the clip) — keyboard users still get a
+   clear focus cue, mouse users no longer see a black box. Applies to every
+   lp-collapse accordion across the admin (3.7.3). */
+details.lp-collapse > summary:focus { outline: none; }
+details.lp-collapse > summary:focus-visible {
+    outline: 2px solid var(--lp-primary);
+    outline-offset: -2px;
+}
 details.lp-collapse > summary .dashicons {
     color: var(--lp-primary, var(--lp-text));
     font-size: 17px; width: 17px; height: 17px;

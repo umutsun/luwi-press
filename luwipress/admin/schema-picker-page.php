@@ -215,7 +215,7 @@ $type_catalog = array(
 		</ul>
 		<p class="lp-form-hint">
 			<?php esc_html_e( 'After saving, use', 'luwipress' ); ?>
-			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-content&tab=preview' ) ); ?>"><?php esc_html_e( 'Schema Preview', 'luwipress' ); ?></a>
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-site&tab=schema' ) ); ?>"><?php esc_html_e( 'Schema Preview', 'luwipress' ); ?></a>
 			<?php esc_html_e( 'to confirm the JSON-LD block renders on the live URL, then', 'luwipress' ); ?>
 			<a href="https://search.google.com/test/rich-results" target="_blank" rel="noopener"><?php esc_html_e( 'Google Rich Results Test', 'luwipress' ); ?></a>
 			<?php esc_html_e( 'to validate it.', 'luwipress' ); ?>
