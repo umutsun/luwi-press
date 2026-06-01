@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.7.5
+Stable tag: 3.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.8.0 — CPT Engine: translate + display any content type =
+* **Custom content types are now first-class in the Translation Manager.** Every content type managed by the LuwiPress CPT Engine — Vendors today, plus operator-defined types (Team, Events, …) — and its taxonomies now appear in the Translation Manager's steps alongside Products / Posts / Pages, so they translate the same way (engine post types join the translatable whitelist via the `luwipress_translatable_post_types` filter).
+* **New "CPT Grid" Elementor widget** (LuwiPress Gold theme) renders any engine content type as a responsive card grid on any page — pick a content type, optionally filter by a taxonomy term, map up to two meta fields onto each card. Reuses the Master Grid card chrome; the vendor-specific Master Grid widget is unchanged.
+* Engine taxonomies surface in the "Translate Taxonomies" step using the same WPML visibility gate as the core taxonomies, so no no-op "Translate" buttons appear for types WPML isn't yet tracking.
 
 = 3.7.5 — Per-group vendor URLs + slug-pattern cleanup =
 * **Per-group archive slugs for Vendors.** Each vendor group (Vendor Groups taxonomy) can now carry its own URL base — set "Archive slug" on the group's edit screen (e.g. `team` → `/team/<vendor>/`, `music-academy-teachers` → `/music-academy-teachers/<vendor>/`). On the vendor edit screen, pick the **Primary group** to choose that vendor's canonical URL base. Vendors with no primary group keep the global Vendors archive slug, so existing vendor URLs don't change.

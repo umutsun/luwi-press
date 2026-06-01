@@ -82,6 +82,24 @@ if ( isset( $_POST['luwipress_trigger_translation'] ) && check_admin_referer( 'l
 // ── Taxonomy types ──
 $tax_types = array( 'product_cat' => 'Product Categories', 'product_tag' => 'Product Tags', 'category' => 'Post Categories', 'post_tag' => 'Post Tags' );
 
+// Phase 2 (CPT Engine) — surface engine-managed CPT taxonomies (Vendor Groups,
+// Team departments, Event types, …) in the same "Translate Taxonomies" step.
+// Only translatable taxonomies are added; core slugs keep their curated labels.
+// They surface using the same WPML "total > 0" gate as the core taxonomies, so
+// no no-op "Translate" button can appear for a taxonomy WPML isn't yet tracking.
+// Vendor Groups (lwp_vendor_group) ship in wpml-config.xml so they show today;
+// operator-defined types become visible once Phase 5 wires their WPML config.
+if ( class_exists( 'LuwiPress_CPT_Engine' ) ) {
+	foreach ( LuwiPress_CPT_Engine::get_instance()->get_taxonomies() as $engine_tax ) {
+		if ( empty( $engine_tax['slug'] ) || empty( $engine_tax['translatable'] ) ) {
+			continue;
+		}
+		if ( ! isset( $tax_types[ $engine_tax['slug'] ] ) ) {
+			$tax_types[ $engine_tax['slug'] ] = $engine_tax['label'];
+		}
+	}
+}
+
 // ── Handle taxonomy translation trigger ──
 if ( isset( $_POST['luwipress_trigger_taxonomy_translation'] ) && check_admin_referer( 'luwipress_translation_nonce' ) ) {
 	$tax_slug      = sanitize_text_field( $_POST['translate_taxonomy'] ?? '' );
@@ -111,6 +129,22 @@ if ( isset( $_POST['luwipress_trigger_taxonomy_translation'] ) && check_admin_re
 // ── Calculate coverage ──
 global $wpdb;
 $content_types = array( 'product' => 'var(--lp-primary)', 'post' => 'var(--lp-blue)', 'page' => 'var(--lp-success)' );
+
+// Phase 2 (CPT Engine) — surface engine-managed CPT content (Vendors and any
+// operator-defined type) as additional content steps after product/post/page.
+// Each gets a distinct accent cycled from existing --lp-* tokens (cosmetic only).
+if ( class_exists( 'LuwiPress_CPT_Engine' ) ) {
+	$engine_accents = array( 'var(--lp-info)', 'var(--lp-warning)', 'var(--lp-blue)', 'var(--lp-primary)' );
+	$engine_i       = 0;
+	foreach ( LuwiPress_CPT_Engine::get_instance()->get_post_types() as $engine_pt ) {
+		if ( isset( $content_types[ $engine_pt ] ) || ! post_type_exists( $engine_pt ) ) {
+			continue;
+		}
+		$content_types[ $engine_pt ] = $engine_accents[ $engine_i % count( $engine_accents ) ];
+		$engine_i++;
+	}
+}
+
 $coverage = array();
 
 foreach ( $content_types as $pt => $color ) {

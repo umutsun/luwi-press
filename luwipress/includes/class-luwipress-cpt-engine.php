@@ -63,6 +63,11 @@ class LuwiPress_CPT_Engine {
 
 		// Type-definition CRUD surface.
 		add_action( 'rest_api_init', array( $this, 'register_rest' ) );
+
+		// Phase 2: every enabled engine-managed post type is translatable. This is
+		// the pipeline-side gate behind the Translation Manager content steps —
+		// without it LuwiPress_Translation::request_translation() 404s engine CPTs.
+		add_filter( 'luwipress_translatable_post_types', array( $this, 'add_translatable_post_types' ) );
 	}
 
 	/**
@@ -223,6 +228,27 @@ class LuwiPress_CPT_Engine {
 			}
 		}
 		return array_values( array_unique( $out ) );
+	}
+
+	/**
+	 * Filter callback for `luwipress_translatable_post_types` — appends every
+	 * enabled engine-managed post type to the translatable whitelist so the
+	 * Translation Manager pipeline accepts them. Idempotent (de-dupes against
+	 * post types another caller already listed, e.g. the hardcoded lwp_vendor).
+	 *
+	 * @param array $types
+	 * @return array
+	 */
+	public function add_translatable_post_types( $types ) {
+		if ( ! is_array( $types ) ) {
+			$types = array();
+		}
+		foreach ( $this->get_post_types() as $pt ) {
+			if ( '' !== $pt && ! in_array( $pt, $types, true ) ) {
+				$types[] = $pt;
+			}
+		}
+		return $types;
 	}
 
 	/**
