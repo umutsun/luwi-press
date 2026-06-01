@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.8.2
+Stable tag: 3.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.9.0 — CPT Engine: Events + automatic multilingual config =
+* **NEW Events content type (CPT Engine preset #2).** Turn concerts, workshops and classes into a first-class content type with structured fields (date/time, venue, online link, ticketing) — disabled by default; enable it under LuwiPress → Events. Each event emits valid schema.org Event JSON-LD for rich results and offers a one-click downloadable `.ics` calendar file.
+* **Link events to your Vendors** as organizers and performers — the relationship flows straight into the event's structured data, reusing your existing vendor profiles (supports multiple performers per event).
+* **Automatic WPML & Polylang configuration.** LuwiPress now ships a language-configuration file and registers its content types with Polylang automatically, so Vendors, Events and their taxonomies + fields become translatable in the Translation Manager with no manual setup. Operator-defined content types are surfaced to Polylang too, and a ready-to-paste WPML configuration can be generated on demand.
 
 = 3.8.2 — CPT Engine: WPML / Polylang-aware attribution terms =
 * On multilingual stores the WooCommerce attribution taxonomy now keeps **one term per content entry** (keyed to its source language) instead of one per translation — so the Products filter lists each vendor once, not once per language. A one-time background sweep collapses any duplicate language-sibling terms a previous version created; products are never detached and the canonical data is untouched.

@@ -69,6 +69,16 @@ class LuwiPress_CPT_Engine {
 		// without it LuwiPress_Translation::request_translation() 404s engine CPTs.
 		add_filter( 'luwipress_translatable_post_types', array( $this, 'add_translatable_post_types' ) );
 
+		// Phase 5: WPML / Polylang auto-config. WPML + Polylang both read the
+		// shipped wpml-config.xml (plugin root) for the presets. For Polylang we
+		// ALSO register every enabled engine post type + translatable taxonomy
+		// via its filters so operator-defined CPTs become translatable without
+		// any manual settings toggling. (WPML's runtime config has no public,
+		// stable filter — operator-defined CPTs are emitted as pasteable XML by
+		// build_wpml_config_xml() / GET /cpt-engine/wpml-config instead.)
+		add_filter( 'pll_get_post_types', array( $this, 'register_polylang_post_types' ), 10, 2 );
+		add_filter( 'pll_get_taxonomies', array( $this, 'register_polylang_taxonomies' ), 10, 2 );
+
 		// Phase 3: promote each type's WooCommerce attribution (e.g. the Vendors
 		// module's `_lwp_vendor_ids` product meta) to a first-class hidden
 		// taxonomy on `product`, so WC-native term queries / Store API / feeds /
@@ -1115,10 +1125,139 @@ class LuwiPress_CPT_Engine {
 		}
 	}
 
+	/* ── Phase 5: WPML / Polylang auto-config ──────────────────────────── */
+
+	/**
+	 * Polylang filter: register every enabled engine post type so it appears
+	 * in Polylang's translation settings AND is language-managed. Idempotent.
+	 *
+	 * @param array $post_types
+	 * @param bool  $is_settings Unused — we register in both contexts so the CPT
+	 *                           is both translatable and visible in the settings list.
+	 * @return array
+	 */
+	public function register_polylang_post_types( $post_types, $is_settings = false ) {
+		if ( ! is_array( $post_types ) ) {
+			$post_types = array();
+		}
+		foreach ( $this->get_post_types() as $pt ) {
+			if ( '' !== $pt ) {
+				$post_types[ $pt ] = $pt;
+			}
+		}
+		return $post_types;
+	}
+
+	/**
+	 * Polylang filter: register every enabled engine taxonomy flagged translatable.
+	 *
+	 * @param array $taxonomies
+	 * @param bool  $is_settings Unused (see register_polylang_post_types).
+	 * @return array
+	 */
+	public function register_polylang_taxonomies( $taxonomies, $is_settings = false ) {
+		if ( ! is_array( $taxonomies ) ) {
+			$taxonomies = array();
+		}
+		foreach ( $this->get_taxonomies() as $t ) {
+			$slug = isset( $t['slug'] ) ? (string) $t['slug'] : '';
+			if ( '' !== $slug && ! empty( $t['translatable'] ) ) {
+				$taxonomies[ $slug ] = $slug;
+			}
+		}
+		return $taxonomies;
+	}
+
+	/**
+	 * Build the language-configuration payload for every enabled engine type:
+	 * each post type + its translatable taxonomies + custom fields (translatable
+	 * → translate, structural → copy) + any WooCommerce attribution meta (copy).
+	 *
+	 * @return array{custom_types:string[],taxonomies:string[],custom_fields:array<string,string>}
+	 */
+	public function build_wpml_config() {
+		$this->maybe_collect();
+		$types  = array();
+		$taxes  = array();
+		$fields = array(); // meta_key => action (translate|copy)
+		foreach ( $this->types as $def ) {
+			if ( empty( $def['enabled'] ) ) {
+				continue;
+			}
+			$pt = (string) $def['post_type'];
+			if ( '' !== $pt ) {
+				$types[ $pt ] = $pt;
+			}
+			foreach ( $def['taxonomies'] as $t ) {
+				if ( ! empty( $t['translatable'] ) && ! empty( $t['slug'] ) ) {
+					$taxes[ $t['slug'] ] = $t['slug'];
+				}
+			}
+			foreach ( $def['field_schema'] as $f ) {
+				$key = isset( $f['key'] ) ? (string) $f['key'] : '';
+				if ( '' === $key ) {
+					continue;
+				}
+				$fields[ $key ] = ! empty( $f['translatable'] ) ? 'translate' : 'copy';
+			}
+			$wc = ( isset( $def['woocommerce'] ) && is_array( $def['woocommerce'] ) ) ? $def['woocommerce'] : array();
+			if ( ! empty( $wc['attribution_meta'] ) ) {
+				$fields[ (string) $wc['attribution_meta'] ] = 'copy';
+			}
+		}
+		return array(
+			'custom_types'  => array_values( $types ),
+			'taxonomies'    => array_values( $taxes ),
+			'custom_fields' => $fields,
+		);
+	}
+
+	/**
+	 * Render build_wpml_config() as a wpml-config.xml string — the format BOTH
+	 * WPML and Polylang parse. Operators paste this into WPML → Settings →
+	 * Custom XML Configuration for operator-defined CPTs the shipped static
+	 * wpml-config.xml (presets only) doesn't cover.
+	 *
+	 * @return string
+	 */
+	public function build_wpml_config_xml() {
+		$cfg   = $this->build_wpml_config();
+		$lines = array( '<wpml-config>' );
+		if ( ! empty( $cfg['custom_types'] ) ) {
+			$lines[] = '	<custom-types>';
+			foreach ( $cfg['custom_types'] as $pt ) {
+				$lines[] = '		<custom-type translate="1">' . esc_html( $pt ) . '</custom-type>';
+			}
+			$lines[] = '	</custom-types>';
+		}
+		if ( ! empty( $cfg['taxonomies'] ) ) {
+			$lines[] = '	<taxonomies>';
+			foreach ( $cfg['taxonomies'] as $tx ) {
+				$lines[] = '		<taxonomy translate="1">' . esc_html( $tx ) . '</taxonomy>';
+			}
+			$lines[] = '	</taxonomies>';
+		}
+		if ( ! empty( $cfg['custom_fields'] ) ) {
+			$lines[] = '	<custom-fields>';
+			foreach ( $cfg['custom_fields'] as $key => $action ) {
+				$action  = ( 'translate' === $action ) ? 'translate' : 'copy';
+				$lines[] = '		<custom-field action="' . esc_attr( $action ) . '">' . esc_html( $key ) . '</custom-field>';
+			}
+			$lines[] = '	</custom-fields>';
+		}
+		$lines[] = '</wpml-config>';
+		return implode( "\n", $lines ) . "\n";
+	}
+
 	/* ── Type-definition CRUD (REST) ── */
 
 	public function register_rest() {
 		$ns = 'luwipress/v1';
+		register_rest_route( $ns, '/cpt-engine/wpml-config', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'rest_wpml_config' ),
+			'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+		) );
 		register_rest_route( $ns, '/cpt-engine/types', array(
 			array(
 				'methods'             => 'GET',
@@ -1141,6 +1280,25 @@ class LuwiPress_CPT_Engine {
 	public function rest_list_types( $request ) {
 		return rest_ensure_response( array(
 			'types' => array_values( $this->get_types() ),
+		) );
+	}
+
+	/**
+	 * Phase 5 diagnostic: the WPML/Polylang language config derived from the
+	 * registry, plus the pasteable wpml-config.xml and a note on what is applied
+	 * automatically vs. needs a manual paste (operator-defined CPTs on WPML).
+	 */
+	public function rest_wpml_config( $request ) {
+		return rest_ensure_response( array(
+			'config'           => $this->build_wpml_config(),
+			'xml'              => $this->build_wpml_config_xml(),
+			'wpml_active'      => defined( 'ICL_SITEPRESS_VERSION' ),
+			'polylang_active'  => function_exists( 'pll_languages_list' ),
+			'applied'          => array(
+				'presets_static_file' => 'Vendors + Events presets ship in luwipress/wpml-config.xml, auto-read by both WPML and Polylang.',
+				'polylang_filters'    => 'Every enabled engine post type + translatable taxonomy is registered via pll_get_post_types / pll_get_taxonomies (covers operator-defined CPTs automatically).',
+				'wpml_operator_cpts'  => 'For operator-defined CPTs on WPML, paste the "xml" payload into WPML → Settings → Custom XML Configuration (the shipped file covers only the built-in presets).',
+			),
 		) );
 	}
 

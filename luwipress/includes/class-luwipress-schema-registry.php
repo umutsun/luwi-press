@@ -1011,15 +1011,40 @@ class LuwiPress_Schema_Registry {
 			$agent = $data[ $agent_key ];
 			// Organizer defaults to Organization; performer to Person — but both
 			// accept either; Organization is the safe default for a string name.
-			$at_type = ( 'organizer' === $agent_key ) ? 'Organization' : 'Person';
-			if ( is_string( $agent ) ) {
-				$schema[ $agent_key ] = array( '@type' => $at_type, 'name' => $agent );
-			} elseif ( is_array( $agent ) && ! empty( $agent['name'] ) ) {
-				$node = array( '@type' => $at_type, 'name' => $agent['name'] );
-				if ( ! empty( $agent['url'] ) ) {
-					$node['url'] = $agent['url'];
+			$at_type   = ( 'organizer' === $agent_key ) ? 'Organization' : 'Person';
+			$to_node   = static function ( $a ) use ( $at_type ) {
+				if ( is_string( $a ) && '' !== $a ) {
+					return array( '@type' => $at_type, 'name' => $a );
 				}
-				$schema[ $agent_key ] = $node;
+				if ( is_array( $a ) && ! empty( $a['name'] ) ) {
+					$node = array( '@type' => ( ! empty( $a['@type'] ) ? $a['@type'] : $at_type ), 'name' => $a['name'] );
+					if ( ! empty( $a['url'] ) ) {
+						$node['url'] = $a['url'];
+					}
+					return $node;
+				}
+				return null;
+			};
+			// A sequential list of agents → multiple organizers/performers (a
+			// concert with several musicians). A single string / {name,url} node
+			// keeps its original single-node behaviour (backward compatible).
+			$is_list = is_array( $agent ) && empty( $agent['name'] ) && array_keys( $agent ) === range( 0, count( $agent ) - 1 );
+			if ( $is_list ) {
+				$nodes = array();
+				foreach ( $agent as $a ) {
+					$n = $to_node( $a );
+					if ( null !== $n ) {
+						$nodes[] = $n;
+					}
+				}
+				if ( ! empty( $nodes ) ) {
+					$schema[ $agent_key ] = count( $nodes ) === 1 ? $nodes[0] : $nodes;
+				}
+			} else {
+				$n = $to_node( $agent );
+				if ( null !== $n ) {
+					$schema[ $agent_key ] = $n;
+				}
 			}
 		}
 

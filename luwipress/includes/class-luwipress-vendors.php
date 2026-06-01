@@ -203,6 +203,18 @@ class LuwiPress_Vendors {
 			);
 		}
 
+		// Per-vendor Schema @type override — a structural enum, not profile text:
+		// kept OUT of Elementor + not translated, but declared so the WPML/Polylang
+		// config generator emits the same `copy` rule the shipped wpml-config.xml
+		// carries (single source of truth, no static-vs-generated drift).
+		$fields[] = array(
+			'key'          => self::ENTITY_TYPE_META,
+			'type'         => 'select',
+			'label'        => __( 'Schema entity type', 'luwipress' ),
+			'translatable' => false,
+			'in_elementor' => false,
+		);
+
 		$engine->register_type( 'vendors', array(
 			'post_type'      => self::POST_TYPE,
 			'source'         => 'preset',

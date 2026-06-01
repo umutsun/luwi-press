@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.39
+Stable tag: 1.0.40
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,12 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.40 — Events tools + WPML/Polylang config generator (paired with core 3.9.0) =
+* **NEW `event_settings_get` / `event_settings_set`** — read and configure the Events module (enable it, set the archive slug + labels). Setting writes are explicit; reads are safe for the autonomous agent loop.
+* **NEW `events_list` / `event_meta_set`** — list events with their date / venue / ticketing / organizer / performer data, and write event fields (dates accept ISO 8601; organizer / performer take vendor IDs).
+* **NEW `event_ics`** — fetch the iCalendar (.ics) text + public download URL for any event. Read-only.
+* **NEW `cpt_wpml_config_get`** — get the WPML / Polylang language configuration the CPT Engine derives for every content type, including a ready-to-paste wpml-config.xml for operator-defined CPTs. Read-only.
 
 = 1.0.39 — Health Score, AI-tell audit, CRM settings + KG queue tools (paired with core 3.7.4) =
 * **NEW `health_score_get`** — read the composite Content Health Score plus its six-pillar breakdown and per-pillar config in one call. Read-only.

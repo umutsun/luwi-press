@@ -2,10 +2,12 @@
 
 	<custom-types>
 		<custom-type translate="1">lwp_vendor</custom-type>
+		<custom-type translate="1">lwp_event</custom-type>
 	</custom-types>
 
 	<taxonomies>
 		<taxonomy translate="1">lwp_vendor_group</taxonomy>
+		<taxonomy translate="1">lwp_event_category</taxonomy>
 	</taxonomies>
 
 	<custom-fields>
@@ -24,6 +26,20 @@
 		<custom-field action="copy">_lwp_vendor_website</custom-field>
 		<custom-field action="copy">_lwp_vendor_ids</custom-field>
 		<custom-field action="copy">_lwp_vendor_entity_type</custom-field>
+
+		<!-- Events (preset #2): translate venue text; copy dates / enums / URLs / vendor refs. -->
+		<custom-field action="translate">_lwp_event_venue_name</custom-field>
+		<custom-field action="translate">_lwp_event_venue_address</custom-field>
+		<custom-field action="copy">_lwp_event_start</custom-field>
+		<custom-field action="copy">_lwp_event_end</custom-field>
+		<custom-field action="copy">_lwp_event_status</custom-field>
+		<custom-field action="copy">_lwp_event_attendance</custom-field>
+		<custom-field action="copy">_lwp_event_online_url</custom-field>
+		<custom-field action="copy">_lwp_event_ticket_url</custom-field>
+		<custom-field action="copy">_lwp_event_price</custom-field>
+		<custom-field action="copy">_lwp_event_currency</custom-field>
+		<custom-field action="copy">_lwp_event_organizer_ids</custom-field>
+		<custom-field action="copy">_lwp_event_performer_ids</custom-field>
 	</custom-fields>
 
 </wpml-config>

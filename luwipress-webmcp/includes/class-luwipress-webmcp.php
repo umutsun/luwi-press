@@ -1067,6 +1067,114 @@ class LuwiPress_WebMCP {
             return $this->proxy_rest_post( 'LuwiPress_CPT_Engine', 'rest_delete_type', $args );
         } );
 
+        $this->register_tool( 'cpt_wpml_config_get', array(
+            'description' => 'Get the WPML/Polylang language configuration the CPT Engine derives from every enabled type (Vendors, Events, and any operator-defined CPTs): translatable post types, taxonomies, and custom fields (translate vs copy). Returns a ready-to-paste wpml-config.xml string. Presets ship in the plugin\'s wpml-config.xml (auto-read by WPML + Polylang) and Polylang gets all engine types via filters; this payload is for pasting operator-defined CPTs into WPML → Settings → Custom XML Configuration. Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'WPML/Polylang Config', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_CPT_Engine' ) ) {
+                return array( 'error' => 'CPT Engine is not available on this site.' );
+            }
+            $engine = LuwiPress_CPT_Engine::get_instance();
+            return array(
+                'config'          => $engine->build_wpml_config(),
+                'xml'             => $engine->build_wpml_config_xml(),
+                'wpml_active'     => defined( 'ICL_SITEPRESS_VERSION' ),
+                'polylang_active' => function_exists( 'pll_languages_list' ),
+            );
+        } );
+
+        // ─── Events — CPT Engine preset #2 (3.9.0+; dormant until enabled) ───
+        $this->register_tool( 'event_settings_get', array(
+            'description' => 'Read the LuwiPress Events module config (CPT Engine preset #2): enabled state, archive slug, labels, field toggles, and published event count. Events is dormant by default — enable it with event_settings_set. Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Events Settings', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Events' ) ) {
+                return array( 'error' => 'Events module is not available on this site.' );
+            }
+            $data = LuwiPress_Events::get_instance()->rest_get_settings();
+            return ( $data instanceof WP_REST_Response ) ? $data->get_data() : $data;
+        } );
+
+        $this->register_tool( 'event_settings_set', array(
+            'description' => 'Create/update the LuwiPress Events module config. Set { "enabled": true } to register the lwp_event CPT (flushes rewrite rules). Other keys: archive_slug, singular_label, plural_label, menu_icon, archive_enabled, category_enabled, show_venue/show_online/show_offers/show_organizer/show_performer (booleans).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'enabled'        => array( 'type' => 'boolean', 'description' => 'Register the Events CPT + menu.' ),
+                    'archive_slug'   => array( 'type' => 'string',  'description' => 'URL base, e.g. "events".' ),
+                    'singular_label' => array( 'type' => 'string' ),
+                    'plural_label'   => array( 'type' => 'string' ),
+                    'menu_icon'      => array( 'type' => 'string',  'description' => 'A dashicons-* class.' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Set Events Settings', 'readOnlyHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Events', 'rest_update_settings', $args );
+        } );
+
+        $this->register_tool( 'events_list', array(
+            'description' => 'List LuwiPress events (lwp_event) with their date/venue/ticketing meta and attached organizer/performer vendor IDs. Returns empty when the Events module is disabled. Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'limit'   => array( 'type' => 'integer', 'description' => '1-200, default 50.' ),
+                    'orderby' => array( 'type' => 'string',  'description' => 'date (default) | title | menu_order.' ),
+                    'order'   => array( 'type' => 'string',  'description' => 'ASC | DESC (default).' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'List Events', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Events', 'rest_list', $args );
+        } );
+
+        $this->register_tool( 'event_meta_set', array(
+            'description' => 'Write event fields on a single lwp_event post. Date fields are ISO 8601 (e.g. "2026-07-15T19:30" or "2026-07-15"). Vendor links are arrays of lwp_vendor IDs.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'id'            => array( 'type' => 'integer', 'description' => 'Event post ID (required).' ),
+                    'start'         => array( 'type' => 'string',  'description' => 'Start (ISO 8601) — required for schema + ICS.' ),
+                    'end'           => array( 'type' => 'string',  'description' => 'End (ISO 8601).' ),
+                    'status'        => array( 'type' => 'string',  'description' => 'EventScheduled|EventCancelled|EventPostponed|EventRescheduled|EventMovedOnline.' ),
+                    'attendance'    => array( 'type' => 'string',  'description' => 'offline | online | mixed.' ),
+                    'venue_name'    => array( 'type' => 'string' ),
+                    'venue_address' => array( 'type' => 'string' ),
+                    'online_url'    => array( 'type' => 'string' ),
+                    'ticket_url'    => array( 'type' => 'string' ),
+                    'price'         => array( 'type' => 'string' ),
+                    'currency'      => array( 'type' => 'string',  'description' => '3-letter code, e.g. USD.' ),
+                    'organizers'    => array( 'type' => 'array',   'description' => 'lwp_vendor IDs organizing the event.' ),
+                    'performers'    => array( 'type' => 'array',   'description' => 'lwp_vendor IDs performing at the event.' ),
+                ),
+                'required'   => array( 'id' ),
+            ),
+            'annotations' => array( 'title' => 'Set Event Meta', 'readOnlyHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Events', 'rest_set_meta', $args );
+        } );
+
+        $this->register_tool( 'event_ics', array(
+            'description' => 'Return the RFC 5545 iCalendar (.ics) text for a single event plus a public download URL. Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'id' => array( 'type' => 'integer', 'description' => 'Event post ID (required).' ),
+                ),
+                'required'   => array( 'id' ),
+            ),
+            'annotations' => array( 'title' => 'Event ICS', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Events', 'rest_get_ics', $args );
+        } );
+
         $this->register_tool( 'cache_purge', array(
             'description' => 'Purge caches across LiteSpeed, WP Rocket, W3TC, WP Super Cache, Elementor CSS, and WordPress object cache. Use after bulk content or style updates to make new output visible immediately.',
             'inputSchema' => array(

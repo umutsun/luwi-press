@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.8.2
+ * Version: 3.9.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.8.2');
+define('LUWIPRESS_VERSION', '3.9.0');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -268,6 +268,15 @@ class LuwiPress {
         // `_lwp_vendor_ids` meta key feeds Schema.org `manufacturer`.
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-vendors.php';
         LuwiPress_Vendors::get_instance();
+
+        // Events CPT — CPT Engine preset #2 (3.9.0+). Concerts / workshops /
+        // classes as a first-class content type (lwp_event) with structured
+        // fields, organizer/performer links to Vendors, Schema.org Event JSON-LD
+        // (reuses the Schema Registry `event` type), and .ics calendar export.
+        // DORMANT by default — registers nothing until the operator enables it
+        // (LuwiPress → Events, REST /events/settings, or MCP event_settings_set).
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-events.php';
+        LuwiPress_Events::get_instance();
 
     }
 
