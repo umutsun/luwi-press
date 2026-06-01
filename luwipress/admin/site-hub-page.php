@@ -4,11 +4,11 @@
  *
  * Single submenu that houses every site-infrastructure AND content tool.
  * The former standalone "Content" hub was folded in here in 3.7.3 so the
- * sidebar carries one fewer row — the tab strip groups the tools under two
- * labelled sections (Site / Content). Each tab renders its existing page
- * file with LUWIPRESS_HUB_INCLUDED defined so the included page drops its
- * outer wrap + h1 and emits tab-body only. A tab may declare one `file` or
- * several `files` (Schema stacks the Picker + Preview pages).
+ * sidebar carries one fewer row — all tools live in one flat tab strip.
+ * Each tab renders its existing page file with LUWIPRESS_HUB_INCLUDED
+ * defined so the included page drops its outer wrap + h1 and emits tab-body
+ * only. A tab may declare one `file` or several `files` (Schema stacks the
+ * Picker + Preview pages).
  *
  * @package LuwiPress
  * @since   3.5.7
@@ -32,52 +32,38 @@ if ( class_exists( 'LuwiPress' ) ) {
 	$theme_companion_active = (bool) LuwiPress::get_instance()->theme_companion_present();
 }
 
-// Group labels keep the strip readable now that ~10 tabs live in one hub.
-// 'site'  = infrastructure / migration / compliance tools.
-// 'content' = content-quality / schema / media / scheduling tools.
-$lwp_hub_groups = array(
-	'site'    => __( 'Site', 'luwipress' ),
-	'content' => __( 'Content', 'luwipress' ),
-);
-
+// Order: site-infrastructure tools first, then the folded-in content tools.
 $tabs = array(
-	// ── Site group ───────────────────────────────────────────────
 	'slug-resolver' => array(
-		'group' => 'site',
 		'label' => __( 'Slug Resolver', 'luwipress' ),
 		'icon'  => 'dashicons-randomize',
 		'file'  => $plugin_dir . 'admin/slug-resolver-page.php',
 		'guard' => 'LuwiPress_Slug_Resolver',
 	),
 	'vendors'       => array(
-		'group' => 'site',
 		'label' => __( 'Vendors', 'luwipress' ),
 		'icon'  => 'dashicons-store',
 		'file'  => $plugin_dir . 'admin/vendors-page.php',
 		'guard' => 'LuwiPress_Vendors',
 	),
 	'theme'         => array(
-		'group'      => 'site',
 		'label'      => __( 'Theme', 'luwipress' ),
 		'icon'       => 'dashicons-admin-appearance',
 		'file'       => $plugin_dir . 'admin/theme-page.php',
 		'visible_if' => $theme_companion_active,
 	),
 	'bot-defense'   => array(
-		'group' => 'site',
 		'label' => __( 'Bot Defense', 'luwipress' ),
 		'icon'  => 'dashicons-shield-alt',
 		'file'  => $plugin_dir . 'admin/bot-defense-page.php',
 	),
 	'cookies'       => array(
-		'group' => 'site',
 		'label' => __( 'Cookie Consent', 'luwipress' ),
 		'icon'  => 'dashicons-privacy',
 		'file'  => $plugin_dir . 'admin/cookies-page.php',
 	),
-	// ── Content group (folded in 3.7.3) ──────────────────────────
+	// ── Content tools (folded in 3.7.3) ──────────────────────────
 	'audit'     => array(
-		'group' => 'content',
 		'label' => __( 'Health Audit', 'luwipress' ),
 		'icon'  => 'dashicons-shield',
 		'file'  => $plugin_dir . 'admin/content-audit-page.php',
@@ -85,7 +71,6 @@ $tabs = array(
 	// Schema = the editor (Picker) + the live inspector (Preview) stacked in
 	// one tab. Both pages suppress their own wrap/h1 under LUWIPRESS_HUB_INCLUDED.
 	'schema'    => array(
-		'group' => 'content',
 		'label' => __( 'Schema', 'luwipress' ),
 		'icon'  => 'dashicons-screenoptions',
 		'files' => array(
@@ -95,20 +80,17 @@ $tabs = array(
 		'guard' => 'LuwiPress_Schema_Registry',
 	),
 	'taxonomy'  => array(
-		'group' => 'content',
 		'label' => __( 'Taxonomy', 'luwipress' ),
 		'icon'  => 'dashicons-category',
 		'file'  => $plugin_dir . 'admin/taxonomy-editor-page.php',
 		'guard' => 'LuwiPress_Taxonomy_Editor',
 	),
 	'alt'       => array(
-		'group' => 'content',
 		'label' => __( 'Image Alt', 'luwipress' ),
 		'icon'  => 'dashicons-format-image',
 		'file'  => $plugin_dir . 'admin/image-alt-bulk-page.php',
 	),
 	'scheduler' => array(
-		'group' => 'content',
 		'label' => __( 'Scheduler', 'luwipress' ),
 		'icon'  => 'dashicons-calendar-alt',
 		'file'  => $plugin_dir . 'admin/scheduler-page.php',
@@ -176,44 +158,25 @@ $current = $available[ $requested ] ?? null;
 	</div>
 
 	<p class="lp-hub-intro">
-		<?php esc_html_e( 'Site infrastructure and content tools in one place. Site: migration safety, vendor identity, theme bridge, security. Content: quality, schema, taxonomy, media, and scheduling.', 'luwipress' ); ?>
+		<?php esc_html_e( 'Site infrastructure and content tools in one place — migration safety, vendor identity, theme bridge, security, plus content quality, schema, taxonomy, media, and scheduling.', 'luwipress' ); ?>
 	</p>
 
-	<nav class="lp-hub-tabs lp-hub-tabs--grouped" role="tablist" aria-label="<?php esc_attr_e( 'Site & content tools', 'luwipress' ); ?>">
-		<?php
-		foreach ( $lwp_hub_groups as $group_key => $group_label ) :
-			// Tabs that belong to this group AND survived availability filtering.
-			$group_tabs = array();
-			foreach ( $available as $key => $tab ) {
-				if ( $tab['group'] === $group_key ) {
-					$group_tabs[ $key ] = $tab;
-				}
-			}
-			if ( empty( $group_tabs ) ) {
-				continue;
-			}
-			?>
-			<div class="lp-hub-tabgroup">
-				<span class="lp-hub-tabgroup-label"><?php echo esc_html( $group_label ); ?></span>
-				<div class="lp-hub-tabgroup-items">
-					<?php foreach ( $group_tabs as $key => $tab ) :
-						$url    = add_query_arg(
-							array( 'page' => 'luwipress-site', 'tab' => $key ),
-							admin_url( 'admin.php' )
-						);
-						$is_act = ( $key === $requested );
-						$cls    = 'lp-hub-tab' . ( $is_act ? ' lp-hub-tab--active' : '' );
-					?>
-					<a class="<?php echo esc_attr( $cls ); ?>"
-					   href="<?php echo esc_url( $url ); ?>"
-					   role="tab"
-					   aria-selected="<?php echo $is_act ? 'true' : 'false'; ?>">
-						<span class="dashicons <?php echo esc_attr( $tab['icon'] ); ?>"></span>
-						<span><?php echo esc_html( $tab['label'] ); ?></span>
-					</a>
-					<?php endforeach; ?>
-				</div>
-			</div>
+	<nav class="lp-hub-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Site & content tools', 'luwipress' ); ?>">
+		<?php foreach ( $available as $key => $tab ) :
+			$url    = add_query_arg(
+				array( 'page' => 'luwipress-site', 'tab' => $key ),
+				admin_url( 'admin.php' )
+			);
+			$is_act = ( $key === $requested );
+			$cls    = 'lp-hub-tab' . ( $is_act ? ' lp-hub-tab--active' : '' );
+		?>
+		<a class="<?php echo esc_attr( $cls ); ?>"
+		   href="<?php echo esc_url( $url ); ?>"
+		   role="tab"
+		   aria-selected="<?php echo $is_act ? 'true' : 'false'; ?>">
+			<span class="dashicons <?php echo esc_attr( $tab['icon'] ); ?>"></span>
+			<span><?php echo esc_html( $tab['label'] ); ?></span>
+		</a>
 		<?php endforeach; ?>
 	</nav>
 

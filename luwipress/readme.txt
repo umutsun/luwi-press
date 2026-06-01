@@ -131,7 +131,7 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 == Changelog ==
 
 = 3.7.3 — One Site hub + collapsible admin everywhere =
-* **Content tools folded into the Site hub.** The separate "Content" sidebar item is gone — the **Site** page now hosts every tool in one grouped tab strip: a **Site** group (Slug Resolver, Vendors, Theme, Bot Defense, Cookie Consent) and a **Content** group (Health Audit, Schema, Taxonomy, Image Alt, Scheduler). One fewer sidebar row, nothing lost. Old `?page=luwipress-content` links (and every old tab deep-link) still resolve.
+* **Content tools folded into the Site hub.** The separate "Content" sidebar item is gone — the **Site** page now hosts every tool in one tab strip (Slug Resolver, Vendors, Theme, Bot Defense, Cookie Consent, Health Audit, Schema, Taxonomy, Image Alt, Scheduler). One fewer sidebar row, nothing lost. Old `?page=luwipress-content` links (and every old tab deep-link) still resolve onto the Site hub.
 * **Consistent collapsible UI across the admin.** Vendors, Slug Resolver and Theme pages — plus the Settings **AI** (API Keys + AI Content) and **General** (General + Content Health) tabs — now use the same clean accordion sections as Bot Defense and Cookie Consent. Top buttons, content opens below, collapse what you're not using.
 * CSS now cache-busts on file modification time so admin styling updates appear immediately.
 
