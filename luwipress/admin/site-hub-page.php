@@ -3,27 +3,19 @@
  * LuwiPress Site Hub (3.5.7+, Content folded in 3.7.3, grouped IA 3.7.3)
  *
  * One submenu ("Site") that houses every site + content tool, organised into
- * a small set of top tabs (groups). Each group renders its tools as
- * collapsible accordion sections. Two render modes keep the one-page-per-
- * request invariant intact:
+ * a small set of top tabs (groups). A multi-tool group shows a light SECONDARY
+ * tab strip for its tools and renders ONE tool's page directly below — never
+ * wrapped in an outer accordion. This is deliberate: many tool pages already
+ * use their own internal accordions (Cookie Consent, Slug Resolver, Bot
+ * Defense, Vendors, Theme, Settings…), so wrapping them in a group-level
+ * accordion would nest accordions-in-accordions and force several heavy pages
+ * to load at once. One tool per request keeps it flat and fast; each tool's own
+ * collapsibles stay intact.
  *
- *   - co-load : all the group's tool page-files render at once as real
- *               <details> accordions (operator can expand several at once).
- *               Used ONLY for groups whose tools are inert on load (no REST
- *               fired on render, uniquely-prefixed DOM ids).
- *   - lazy    : the open tool renders its page-file; the others are link rows
- *               that navigate (?tool=) to load themselves. Used when a group
- *               contains a tool that auto-fetches on load or is heavy, so they
- *               never co-render and can't cause a REST storm / id clash.
- *   - single  : one tool, included directly (it already ships its own
- *               internal accordions).
- *
- * URL scheme: ?tab=<group> selects the group; ?tool=<tool> selects which tool
- * is open inside a lazy/co-load group; a tool's OWN inner sub-tab (only Health
- * Audit has one) rides ?sub= so it never collides with ?tool=.
- *
- * Legacy deep-links (?tab=<toolkey>, e.g. the pre-grouping ?tab=audit or the
- * compat-redirected old flat slugs) resolve to their owning group automatically.
+ * URL: ?tab=<group> picks the group; ?tool=<tool> picks which tool shows; a
+ * tool's OWN inner sub-tab (only Health Audit has one) rides ?sub=. Legacy
+ * deep-links (?tab=<toolkey> — the pre-grouping value or a compat redirect
+ * target) resolve to the owning group automatically.
  *
  * @package LuwiPress
  * @since   3.5.7
@@ -107,36 +99,31 @@ $lwp_tools = array(
 	),
 );
 
-// ── Group registry (the 5 top tabs). `mode` per load-safety analysis. ─
+// ── Group registry (the top tabs). ──────────────────────────────────
 $lwp_groups = array(
 	'content'  => array(
 		'label' => __( 'Content', 'luwipress' ),
 		'icon'  => 'dashicons-edit',
-		'mode'  => 'coload', // audit + alt + scheduler are inert on load
 		'tools' => array( 'audit', 'alt', 'scheduler' ),
 	),
 	'seo'      => array(
 		'label' => __( 'SEO & Taxonomy', 'luwipress' ),
 		'icon'  => 'dashicons-search',
-		'mode'  => 'lazy',   // taxonomy + slug-resolver auto-fetch on load
 		'tools' => array( 'schema', 'taxonomy', 'slug-resolver' ),
 	),
 	'security' => array(
 		'label' => __( 'Security', 'luwipress' ),
 		'icon'  => 'dashicons-shield-alt',
-		'mode'  => 'lazy',   // bot-defense is heavy + auto-fetches
 		'tools' => array( 'bot-defense', 'cookies' ),
 	),
 	'theme'    => array(
 		'label' => __( 'Theme', 'luwipress' ),
 		'icon'  => 'dashicons-admin-appearance',
-		'mode'  => 'single',
 		'tools' => array( 'theme' ),
 	),
 	'vendors'  => array(
 		'label' => __( 'Vendors', 'luwipress' ),
 		'icon'  => 'dashicons-store',
-		'mode'  => 'single',
 		'tools' => array( 'vendors' ),
 	),
 );
@@ -158,7 +145,7 @@ foreach ( $lwp_tools as $tk => $tool ) {
 	$lwp_tool_files[ $tk ] = $files;
 }
 
-// ── Build available groups (drop empty ones, filter tools to available). ─
+// ── Build available groups (drop empty, filter tools to available). ──
 $available_groups = array();
 foreach ( $lwp_groups as $gk => $group ) {
 	$tools_in = array();
@@ -170,18 +157,17 @@ foreach ( $lwp_groups as $gk => $group ) {
 	if ( empty( $tools_in ) ) {
 		continue;
 	}
-	$group['tool_keys']   = $tools_in;
+	$group['tool_keys']      = $tools_in;
 	$available_groups[ $gk ] = $group;
 }
 
-// ── Resolve the requested group + open tool. ─────────────────────────
+// ── Resolve requested group + tool. ─────────────────────────────────
 // phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only routing.
 $requested_group = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
 $requested_tool  = isset( $_GET['tool'] ) ? sanitize_key( wp_unslash( $_GET['tool'] ) ) : '';
 // phpcs:enable WordPress.Security.NonceVerification.Recommended
 
-// Legacy: ?tab=<toolkey> (pre-grouping deep-link / compat redirect target)
-// maps to the tool's owning group, opening that tool.
+// Legacy: ?tab=<toolkey> maps to the tool's owning group, opening that tool.
 if ( ! isset( $available_groups[ $requested_group ] ) && isset( $lwp_tool_files[ $requested_group ] ) ) {
 	foreach ( $available_groups as $gk => $group ) {
 		if ( in_array( $requested_group, $group['tool_keys'], true ) ) {
@@ -206,17 +192,6 @@ if ( ! in_array( $requested_tool, $tool_keys, true ) ) {
 if ( ! defined( 'LUWIPRESS_HUB_INCLUDED' ) ) {
 	define( 'LUWIPRESS_HUB_INCLUDED', true );
 }
-
-/**
- * Include a tool's page file(s).
- *
- * @param array $files string[] of absolute file paths.
- */
-$lwp_render_tool = function ( $files ) {
-	foreach ( $files as $f ) {
-		include $f;
-	}
-};
 ?>
 <div class="wrap luwipress-hub luwipress-hub-site">
 
@@ -248,10 +223,6 @@ $lwp_render_tool = function ( $files ) {
 		</div>
 	</div>
 
-	<p class="lp-hub-intro">
-		<?php esc_html_e( 'Site infrastructure and content tools, grouped — pick a section above; its tools open as collapsible panels below.', 'luwipress' ); ?>
-	</p>
-
 	<nav class="lp-hub-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Site sections', 'luwipress' ); ?>">
 		<?php foreach ( $available_groups as $gk => $g ) :
 			$url    = add_query_arg(
@@ -279,44 +250,37 @@ $lwp_render_tool = function ( $files ) {
 				<p><?php esc_html_e( 'No tools available — required modules are not active.', 'luwipress' ); ?></p>
 			</div>
 			<?php
-		} elseif ( 'single' === $group['mode'] ) {
-			// One tool, no accordion wrapper — it ships its own internal sections.
-			$lwp_render_tool( $lwp_tool_files[ $tool_keys[0] ] );
 		} else {
-			// co-load or lazy: render an accordion stack.
-			$is_lazy = ( 'lazy' === $group['mode'] );
-			echo '<div class="lwp-collapse-stack">';
-			foreach ( $tool_keys as $tk ) {
-				$tool    = $lwp_tools[ $tk ];
-				$is_open = ( $tk === $requested_tool );
-				if ( $is_lazy && ! $is_open ) {
-					// Collapsed sibling = a link that loads this tool on click.
-					$turl = add_query_arg(
-						array( 'page' => 'luwipress-site', 'tab' => $group_key, 'tool' => $tk ),
-						admin_url( 'admin.php' )
-					);
+			// Multi-tool group → a light secondary tab strip; single-tool group
+			// → no strip, just the tool.
+			if ( count( $tool_keys ) > 1 ) {
+				?>
+				<nav class="lp-hub-tabs lwp-group-subtabs" role="tablist" aria-label="<?php echo esc_attr( $group['label'] ); ?>">
+					<?php foreach ( $tool_keys as $tk ) :
+						$tool   = $lwp_tools[ $tk ];
+						$turl   = add_query_arg(
+							array( 'page' => 'luwipress-site', 'tab' => $group_key, 'tool' => $tk ),
+							admin_url( 'admin.php' )
+						);
+						$is_t   = ( $tk === $requested_tool );
+						$tcls   = 'lp-hub-tab' . ( $is_t ? ' lp-hub-tab--active' : '' );
 					?>
-					<a class="lp-collapse lp-collapse-link" href="<?php echo esc_url( $turl ); ?>">
-						<span class="lp-collapse-link-summary">
-							<span class="dashicons <?php echo esc_attr( $tool['icon'] ); ?>"></span>
-							<span><?php echo esc_html( $tool['label'] ); ?></span>
-						</span>
+					<a class="<?php echo esc_attr( $tcls ); ?>"
+					   href="<?php echo esc_url( $turl ); ?>"
+					   role="tab"
+					   aria-selected="<?php echo $is_t ? 'true' : 'false'; ?>">
+						<span class="dashicons <?php echo esc_attr( $tool['icon'] ); ?>"></span>
+						<span><?php echo esc_html( $tool['label'] ); ?></span>
 					</a>
-					<?php
-				} else {
-					// co-load: every tool renders (open one expanded). lazy: only
-					// the open tool reaches here (its file IS included).
-					?>
-					<details class="lp-collapse"<?php echo $is_open ? ' open' : ''; ?>>
-					<summary><span class="dashicons <?php echo esc_attr( $tool['icon'] ); ?>"></span> <span><?php echo esc_html( $tool['label'] ); ?></span></summary>
-					<div class="lp-collapse-body">
-						<?php $lwp_render_tool( $lwp_tool_files[ $tk ] ); ?>
-					</div><!-- .lp-collapse-body -->
-					</details>
-					<?php
-				}
+					<?php endforeach; ?>
+				</nav>
+				<?php
 			}
-			echo '</div><!-- .lwp-collapse-stack -->';
+			// Render the active tool's page directly (it keeps its own internal
+			// accordions / sub-tabs — no outer wrapper, no nesting).
+			foreach ( $lwp_tool_files[ $requested_tool ] as $lwp_tool_file ) {
+				include $lwp_tool_file;
+			}
 		}
 		?>
 	</div>
