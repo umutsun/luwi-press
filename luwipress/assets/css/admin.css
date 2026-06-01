@@ -6255,6 +6255,58 @@ details.lp-collapse > .lp-collapse-body {
    drop its own top margin so the body padding controls spacing. */
 details.lp-collapse > .lp-collapse-body > .luwipress-card:first-child { margin-top: 0; }
 
+/* Lazy-nav collapsed row — an <a> styled to read exactly like a collapsed
+   accordion header (the open tool in the group is a real <details>; the rest
+   are these links). Clicking navigates (?tool=) to load that tool's page,
+   so heavy / auto-fetching tools never co-render and can't storm the REST
+   API or clash ids. (3.7.3) */
+.lp-collapse-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--lp-text);
+    text-decoration: none;
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 10px;
+    box-shadow: var(--lp-shadow-sm);
+    transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.lp-collapse-link::before {
+    content: '\f345';
+    font-family: 'dashicons';
+    font-size: 16px;
+    color: var(--lp-gray);
+    flex: 0 0 auto;
+}
+.lp-collapse-link:hover {
+    background: var(--lp-surface-hover);
+    border-color: var(--lp-primary);
+    color: var(--lp-primary);
+}
+.lp-collapse-link:hover::before { color: var(--lp-primary); }
+.lp-collapse-link:focus { outline: none; }
+.lp-collapse-link:focus-visible {
+    outline: 2px solid var(--lp-primary);
+    outline-offset: -2px;
+}
+.lp-collapse-link .lp-collapse-link-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.lp-collapse-link .dashicons {
+    color: var(--lp-primary);
+    font-size: 17px; width: 17px; height: 17px;
+}
+/* Even spacing in a mixed <details> + <a.lp-collapse-link> stack — the
+   details+details sibling rule above can't see the link rows. */
+.lwp-collapse-stack > * + .lp-collapse-link,
+.lwp-collapse-stack > .lp-collapse-link + * { margin-top: 12px; }
+
 /* Sub-tab variant — sits inside a tab body, so it reads as one notch
    smaller and lighter than the outer KG-style button row. Pill-shaped,
    ghost background, primary tint on active rather than the full

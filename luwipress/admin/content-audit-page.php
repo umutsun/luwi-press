@@ -35,7 +35,18 @@ if ( ! current_user_can( 'manage_options' ) ) {
 	wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'luwipress' ) );
 }
 
-$active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'promotional';
+// Inner sub-tab. Inside the Site hub the hub owns ?tab= (group) + ?tool=
+// (which tool is open), so this page reads its own sub-tab from ?sub=; the
+// standalone compat slug (luwipress-content-audit&tab=X) still works via the
+// ?tab= fallback.
+// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only routing.
+$active_tab = '';
+if ( isset( $_GET['sub'] ) ) {
+	$active_tab = sanitize_key( wp_unslash( $_GET['sub'] ) );
+} elseif ( isset( $_GET['tab'] ) ) {
+	$active_tab = sanitize_key( wp_unslash( $_GET['tab'] ) );
+}
+// phpcs:enable WordPress.Security.NonceVerification.Recommended
 if ( ! in_array( $active_tab, array( 'promotional', 'ai-tell', 'word-count' ), true ) ) {
 	$active_tab = 'promotional';
 }
@@ -182,10 +193,12 @@ $wc_targets = class_exists( 'LuwiPress_Health_Score' )
 	// when this page is rendered inside `luwipress-content`.
 	$ca_tab_url = function ( $sub ) use ( $luwipress_hub_mode ) {
 		if ( $luwipress_hub_mode ) {
-			// Content folded into the Site hub (3.7.3): audit lives at
-			// page=luwipress-site&tab=audit. Keep &sub= for the inner strip.
+			// Content folded into the Site hub (3.7.3): Health Audit lives in
+			// the "Content" group as the `audit` tool. ?tab=content keeps the
+			// group, ?tool=audit keeps this panel open, ?sub=<x> is our inner
+			// sub-tab (promotional / ai-tell / word-count).
 			return add_query_arg(
-				array( 'page' => 'luwipress-site', 'tab' => 'audit', 'sub' => $sub ),
+				array( 'page' => 'luwipress-site', 'tab' => 'content', 'tool' => 'audit', 'sub' => $sub ),
 				admin_url( 'admin.php' )
 			);
 		}
