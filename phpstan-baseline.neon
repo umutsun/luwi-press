@@ -5,22 +5,9 @@ parameters:
 			count: 2
 			path: luwipress/admin/admin-page.php
 
-		# WP 7.0 Consumer pattern (class-luwipress-connectors.php) — the
-		# functions wp_ai_client_get_api_key / wp_ai_client_register_provider
-		# and the class WP_AI_Client are introduced by WordPress 7.0; runtime
-		# guarded with function_exists() / class_exists() / method_exists().
-		# PHPStan can't see WP 7.0 stubs from a 6.x environment. The function
-		# name in the error is display-truncated with an ellipsis so we match
-		# loosely (any quoted symbol after `mixed,`).
-		-
-			message: "#^Parameter \\#1 \\$callback of function call_user_func expects callable\\(\\): mixed, '.+' given\\.$#"
-			count: 2
-			path: luwipress/includes/class-luwipress-connectors.php
-
-		-
-			message: "#^Call to function method_exists\\(\\) with 'WP_AI_Client' and '.+' will always evaluate to false\\.$#"
-			count: 2
-			path: luwipress/includes/class-luwipress-connectors.php
+		# (Removed 3.7.3: two stale ignores for the deleted
+		# class-luwipress-connectors.php — the file no longer exists, so the
+		# patterns matched nothing and PHPStan reported them as unmatched.)
 
 		-
 			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
