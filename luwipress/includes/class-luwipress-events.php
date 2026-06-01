@@ -113,10 +113,10 @@ class LuwiPress_Events {
 		// ICS download: /?lwp_ics=1 on a single event permalink.
 		add_action( 'template_redirect', array( $this, 'maybe_serve_ics' ), 1 );
 
-		// Always-visible settings submenu so the operator can ENABLE the module
-		// even while the CPT menu is still hidden (dormant default). p11 = after
-		// the core LuwiPress menu (p10).
-		add_action( 'admin_menu', array( $this, 'register_settings_page' ), 11 );
+		// Settings live in the Site hub (LuwiPress → Site → Events, via
+		// admin/events-page.php) which saves over REST — no own submenu/menu-load
+		// handler. The legacy `luwipress-events` slug 301s into the hub through
+		// the core $compat_redirects map.
 
 		// Auto-flush rewrite rules when permalink-affecting options change.
 		foreach ( array( 'archive_slug', 'with_front', 'enabled', 'archive_enabled' ) as $opt ) {
@@ -1171,67 +1171,6 @@ class LuwiPress_Events {
 			'performers' => $this->decode_ref_ids( get_post_meta( $p->ID, self::PERFORMER_META, true ) ),
 			'categories' => $cats,
 		);
-	}
-
-	/* ─── ADMIN SETTINGS PAGE ─────────────────────────────────────────── */
-
-	public function register_settings_page() {
-		$hook = add_submenu_page(
-			'luwipress',
-			__( 'Events', 'luwipress' ),
-			__( 'Events', 'luwipress' ),
-			'manage_options',
-			'luwipress-events',
-			array( $this, 'render_settings_page' )
-		);
-		if ( $hook ) {
-			add_action( 'load-' . $hook, array( $this, 'handle_settings_post' ) );
-		}
-	}
-
-	/** Handle the settings form POST (nonce-checked) before the page renders. */
-	public function handle_settings_post() {
-		if ( ! isset( $_POST['lwp_events_settings_nonce'] ) ) {
-			return;
-		}
-		if ( ! current_user_can( 'manage_options' )
-			|| ! wp_verify_nonce( sanitize_key( wp_unslash( $_POST['lwp_events_settings_nonce'] ) ), 'lwp_events_settings_save' ) ) {
-			return;
-		}
-		$was_enabled  = self::is_enabled();
-		$slug_changed = false;
-		foreach ( self::DEFAULTS as $key => $default ) {
-			if ( is_int( $default ) ) {
-				// Checkbox: present = 1, absent = 0.
-				$this->update_setting( $key, isset( $_POST[ 'lwp_events_' . $key ] ) ? 1 : 0 );
-			} elseif ( isset( $_POST[ 'lwp_events_' . $key ] ) ) {
-				$raw = sanitize_text_field( wp_unslash( $_POST[ 'lwp_events_' . $key ] ) );
-				if ( 'archive_slug' === $key ) {
-					$raw = sanitize_title( $raw ) ?: 'events';
-					if ( $raw !== self::get_setting( 'archive_slug' ) ) {
-						$slug_changed = true;
-					}
-				}
-				$this->update_setting( $key, $raw );
-			}
-		}
-		$now_enabled = self::is_enabled();
-		if ( $slug_changed || ( ! $was_enabled && $now_enabled ) ) {
-			$this->register_cpt();
-			$this->register_meta_fields();
-			flush_rewrite_rules( false );
-		}
-		add_settings_error( 'luwipress_events', 'saved', __( 'Events settings saved.', 'luwipress' ), 'success' );
-	}
-
-	public function render_settings_page() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'luwipress' ) );
-		}
-		$settings = self::get_all_settings();
-		$enabled  = self::is_enabled();
-		$cpt_url  = admin_url( 'edit.php?post_type=' . self::POST_TYPE );
-		require LUWIPRESS_PLUGIN_DIR . 'admin/events-page.php';
 	}
 
 	/* ─── SLUG CHANGE HOOK ────────────────────────────────────────────── */

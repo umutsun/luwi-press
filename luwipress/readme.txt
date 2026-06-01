@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.9.0
+Stable tag: 3.9.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,10 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.9.1 — Events in the Site hub + clearer protected-account UI =
+* **Events settings now live in LuwiPress → Site** (a new "Events" tab beside Vendors) instead of a separate menu, keeping every site tool in one place. The Events post type keeps its own top-level menu for adding and editing events.
+* **Bot Defense → Accounts** now clearly marks accounts that are protected from deletion (a real first + last name, a verified email, or an existing order): they show a "Protected" badge, can't be selected, and are skipped by "Select all" — so it's obvious why a delete leaves them in place. Behaviour is unchanged (these accounts were always protected); the list just makes it visible instead of silently skipping them.
 
 = 3.9.0 — CPT Engine: Events + automatic multilingual config =
 * **NEW Events content type (CPT Engine preset #2).** Turn concerts, workshops and classes into a first-class content type with structured fields (date/time, venue, online link, ticketing) — disabled by default; enable it under LuwiPress → Events. Each event emits valid schema.org Event JSON-LD for rich results and offers a one-click downloadable `.ics` calendar file.

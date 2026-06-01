@@ -642,16 +642,25 @@ $tab_url = function ( $tab ) use ( $lwp_bd_hub_mode ) {
 				tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--lp-text-muted);"><?php echo esc_js( __( 'No accounts at this tier. Try a lower tier or run a fresh scan.', 'luwipress' ) ); ?></td></tr>';
 				return;
 			}
+			var protTitle = '<?php echo esc_js( __( 'Protected by a safety tier — never deleted, regardless of score. Re-scan to refresh stored flags.', 'luwipress' ) ); ?>';
+			var protWord  = '<?php echo esc_js( __( 'Protected', 'luwipress' ) ); ?>';
 			tbody.innerHTML = items.map(function (it) {
+				var prot     = !!it.protected;
 				var userLine = '<strong>' + (it.display_name || it.user_login) + '</strong><br><small style="color:var(--lp-text-muted);">' + it.user_login + ' · #' + it.user_id + '</small>';
+				var cbCell   = prot
+					? '<th class="check-column"><input type="checkbox" class="lwp-bot-cb" value="' + it.user_id + '" disabled title="' + protTitle + '" /></th>'
+					: '<th class="check-column"><input type="checkbox" class="lwp-bot-cb" value="' + it.user_id + '" /></th>';
+				var protBadge = prot
+					? '<br><span class="lp-pill pill-success" style="font-size:10px; padding:2px 8px; line-height:1.4;" title="' + protTitle + '"><span class="dashicons dashicons-shield" style="font-size:12px; width:12px; height:12px; vertical-align:text-bottom;"></span> ' + protWord + ': ' + sweepReasonLabel(it.reason) + '</span>'
+					: '';
 				return (
-					'<tr data-uid="' + it.user_id + '">' +
-					'<th class="check-column"><input type="checkbox" class="lwp-bot-cb" value="' + it.user_id + '" /></th>' +
+					'<tr data-uid="' + it.user_id + '"' + ( prot ? ' style="opacity:.62;"' : '' ) + '>' +
+					cbCell +
 					'<td>' + fmtScore(it.score) + '</td>' +
 					'<td>' + userLine + '</td>' +
 					'<td><code>' + it.user_email + '</code></td>' +
 					'<td>' + (it.user_registered || '').split(' ')[0] + '</td>' +
-					'<td>' + fmtSignals(it.signals) + '</td>' +
+					'<td>' + fmtSignals(it.signals) + protBadge + '</td>' +
 					'<td><button class="button button-small lwp-bot-whitelist" data-uid="' + it.user_id + '"><?php echo esc_js( __( 'Whitelist', 'luwipress' ) ); ?></button></td>' +
 					'</tr>'
 				);
@@ -690,7 +699,8 @@ $tab_url = function ( $tab ) use ( $lwp_bd_hub_mode ) {
 		document.addEventListener('change', function (e) {
 			if (e.target && e.target.classList && e.target.classList.contains('lwp-bot-cb')) updateDeleteBtn();
 			if (e.target && e.target.id === 'lwp-bot-select-all') {
-				document.querySelectorAll('.lwp-bot-cb').forEach(function (cb) { cb.checked = e.target.checked; });
+				// Never select protected rows (their checkbox is disabled) — a delete would only skip them.
+				document.querySelectorAll('.lwp-bot-cb').forEach(function (cb) { if (!cb.disabled) cb.checked = e.target.checked; });
 				updateDeleteBtn();
 			}
 			if (e.target && e.target.id === 'lwp-bot-tier') loadList();

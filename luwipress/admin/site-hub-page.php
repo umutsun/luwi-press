@@ -50,6 +50,12 @@ $lwp_tools = array(
 		'file'  => $plugin_dir . 'admin/vendors-page.php',
 		'guard' => 'LuwiPress_Vendors',
 	),
+	'events'        => array(
+		'label' => __( 'Events', 'luwipress' ),
+		'icon'  => 'dashicons-calendar-alt',
+		'file'  => $plugin_dir . 'admin/events-page.php',
+		'guard' => 'LuwiPress_Events',
+	),
 	'theme'         => array(
 		'label'      => __( 'Theme', 'luwipress' ),
 		'icon'       => 'dashicons-admin-appearance',
@@ -125,6 +131,11 @@ $lwp_groups = array(
 		'label' => __( 'Vendors', 'luwipress' ),
 		'icon'  => 'dashicons-store',
 		'tools' => array( 'vendors' ),
+	),
+	'events'   => array(
+		'label' => __( 'Events', 'luwipress' ),
+		'icon'  => 'dashicons-calendar-alt',
+		'tools' => array( 'events' ),
 	),
 );
 

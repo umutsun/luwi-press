@@ -767,6 +767,12 @@ class LuwiPress_Bot_Account_Cleaner {
 		foreach ( (array) $rows as $r ) {
 			$u = get_user_by( 'id', (int) $r['user_id'] );
 			if ( ! $u ) continue;
+			// Surface the LIVE protection verdict (re-scored now) so the UI can
+			// flag accounts a delete would skip — the stored row may predate a
+			// protection tier (e.g. realistic_name, added 3.2.7) and report
+			// nothing, which made protected accounts look deletable.
+			$sc        = $this->score_user( $u );
+			$protected = ! empty( $sc['protected'] );
 			$out[] = array(
 				'user_id'         => (int) $r['user_id'],
 				'score'           => (int) $r['score'],
@@ -778,6 +784,8 @@ class LuwiPress_Bot_Account_Cleaner {
 				'display_name'    => $u->display_name,
 				'user_registered' => $u->user_registered,
 				'roles'           => $u->roles,
+				'protected'       => $protected,
+				'reason'          => $protected ? (string) ( $sc['reason'] ?? '' ) : '',
 			);
 		}
 
