@@ -83,6 +83,11 @@ class LuwiPress_CPT_Engine {
 		// attribution — never blocks a page load or retry-storms on timeout.
 		add_action( 'init', array( $this, 'maybe_schedule_wc_attribution_backfill' ), 20 );
 		add_action( 'luwipress_cpt_attr_backfill', array( $this, 'run_wc_attribution_backfill' ), 10, 1 );
+		// One-time WPML/Polylang dedup: collapse language-sibling mirror terms left
+		// by a pre-3.8.2 backfill into the single source-language term. No-op when
+		// no translation plugin is active. Runs out-of-band on cron.
+		add_action( 'init', array( $this, 'maybe_schedule_wpml_term_dedup' ), 21 );
+		add_action( 'luwipress_cpt_attr_wpml_dedup', array( $this, 'run_wpml_term_dedup' ), 10, 1 );
 		// Mirror one hidden term per CPT post (slug = post id, name = title).
 		add_action( 'save_post', array( $this, 'mirror_cpt_post_to_term' ), 20, 2 );
 		add_action( 'untrashed_post', array( $this, 'mirror_cpt_post_on_untrash' ) );
@@ -555,22 +560,64 @@ class LuwiPress_CPT_Engine {
 	}
 
 	/**
+	 * Resolve a CPT post to its WPML/Polylang source-language (default-language)
+	 * sibling, so every translation of one vendor maps to a SINGLE mirror term.
+	 * Product attribution meta (`_lwp_vendor_ids`) references the source id, so
+	 * the source-keyed term is the one that carries the product relationships.
+	 * Returns the input id unchanged when no translation plugin is active.
+	 *
+	 * @param int    $post_id
+	 * @param string $post_type
+	 * @return int source-language post id.
+	 */
+	private function source_post_id( $post_id, $post_type ) {
+		$post_id = (int) $post_id;
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			$default = apply_filters( 'wpml_default_language', null );
+			if ( $default ) {
+				// $return_original_if_missing = true → falls back to $post_id.
+				$resolved = apply_filters( 'wpml_object_id', $post_id, $post_type, true, $default );
+				if ( $resolved ) {
+					return (int) $resolved;
+				}
+			}
+		}
+		if ( function_exists( 'pll_get_post' ) && function_exists( 'pll_default_language' ) ) {
+			$default = pll_default_language();
+			if ( $default ) {
+				$resolved = pll_get_post( $post_id, $default );
+				if ( $resolved ) {
+					return (int) $resolved;
+				}
+			}
+		}
+		return $post_id;
+	}
+
+	/**
 	 * Get (creating if needed) the mirror term_id for a CPT post in $taxonomy.
-	 * Term slug == CPT post id (stable across renames); term name == post title.
+	 * The post is first resolved to its WPML/Polylang source sibling, so the
+	 * term slug == SOURCE post id (one term per vendor regardless of languages);
+	 * term name == source post title.
 	 *
 	 * @param int    $cpt_post_id
 	 * @param string $taxonomy
 	 * @return int term_id, or 0 on failure.
 	 */
 	private function ensure_term_id_for_cpt_post( $cpt_post_id, $taxonomy ) {
-		$slug = (string) (int) $cpt_post_id;
-		$term = get_term_by( 'slug', $slug, $taxonomy );
+		$post = get_post( (int) $cpt_post_id );
+		if ( ! $post ) {
+			return 0;
+		}
+		$source_id = $this->source_post_id( (int) $cpt_post_id, $post->post_type );
+		$slug      = (string) $source_id;
+		$term      = get_term_by( 'slug', $slug, $taxonomy );
 		if ( $term instanceof WP_Term ) {
 			return (int) $term->term_id;
 		}
-		$post = get_post( (int) $cpt_post_id );
-		$name = ( $post && '' !== $post->post_title ) ? $post->post_title : $slug;
-		$res  = wp_insert_term( $name, $taxonomy, array( 'slug' => $slug ) );
+		$src_post = ( $source_id === (int) $cpt_post_id ) ? $post : get_post( $source_id );
+		$name     = ( $src_post && '' !== $src_post->post_title ) ? $src_post->post_title : $slug;
+		$res      = wp_insert_term( $name, $taxonomy, array( 'slug' => $slug ) );
 		if ( is_wp_error( $res ) ) {
 			// Our (post-id) slug may already exist (race / re-entry) — reuse it.
 			$term = get_term_by( 'slug', $slug, $taxonomy );
@@ -612,25 +659,33 @@ class LuwiPress_CPT_Engine {
 			if ( ! taxonomy_exists( $info['taxonomy'] ) ) {
 				return;
 			}
-			$slug = (string) (int) $post_id;
+			// Map every language sibling to the SINGLE source-language term.
+			$source_id = $this->source_post_id( (int) $post_id, $post->post_type );
+			$src_post  = ( $source_id === (int) $post_id ) ? $post : get_post( $source_id );
+			if ( ! $src_post ) {
+				return;
+			}
+			$slug = (string) $source_id;
 			$term = get_term_by( 'slug', $slug, $info['taxonomy'] );
-			if ( 'publish' !== $post->post_status ) {
+			// The term exists iff the SOURCE vendor is published — a translation
+			// sibling going to draft must NOT drop the term while the source is live.
+			if ( 'publish' !== $src_post->post_status ) {
 				if ( $term instanceof WP_Term ) {
 					wp_delete_term( (int) $term->term_id, $info['taxonomy'] );
 				}
 				return;
 			}
 			if ( $term instanceof WP_Term ) {
-				if ( $term->name !== $post->post_title && '' !== $post->post_title ) {
-					$res = wp_update_term( $term->term_id, $info['taxonomy'], array( 'name' => $post->post_title ) );
+				if ( $term->name !== $src_post->post_title && '' !== $src_post->post_title ) {
+					$res = wp_update_term( $term->term_id, $info['taxonomy'], array( 'name' => $src_post->post_title ) );
 					if ( is_wp_error( $res ) ) {
 						// Name collision with another vendor's term — keep the slug
 						// (the sync key) and disambiguate the display name.
-						wp_update_term( $term->term_id, $info['taxonomy'], array( 'name' => $post->post_title . ' (#' . $slug . ')' ) );
+						wp_update_term( $term->term_id, $info['taxonomy'], array( 'name' => $src_post->post_title . ' (#' . $slug . ')' ) );
 					}
 				}
 			} else {
-				$this->ensure_term_id_for_cpt_post( $post_id, $info['taxonomy'] );
+				$this->ensure_term_id_for_cpt_post( $source_id, $info['taxonomy'] );
 			}
 			return;
 		}
@@ -913,6 +968,109 @@ class LuwiPress_CPT_Engine {
 			LuwiPress_Logger::log( sprintf(
 				'CPT Engine: backfilled "%s" attribution taxonomy (%d terms, %d products).',
 				$tax, count( $posts ), $products
+			), 'info' );
+		}
+	}
+
+	/* ── WPML / Polylang sibling-term dedup (one-time) ── */
+
+	/**
+	 * Schedule the one-time sibling-term dedup (per post_type) on cron. Only
+	 * relevant when a translation plugin is active — a pre-3.8.2 backfill created
+	 * one mirror term per language sibling; this collapses them to the source term.
+	 */
+	public function maybe_schedule_wpml_term_dedup() {
+		if ( ! post_type_exists( 'product' ) ) {
+			return;
+		}
+		if ( ! defined( 'ICL_SITEPRESS_VERSION' ) && ! function_exists( 'pll_get_post' ) ) {
+			return; // no translation plugin — one term per vendor already.
+		}
+		foreach ( $this->wc_attribution_map() as $info ) {
+			$pt = $info['post_type'];
+			if ( get_option( 'luwipress_cpt_attr_wpml_dedup_' . $pt, false ) ) {
+				continue;
+			}
+			if ( ! wp_next_scheduled( 'luwipress_cpt_attr_wpml_dedup', array( $pt ) ) ) {
+				wp_schedule_single_event( time() + 45, 'luwipress_cpt_attr_wpml_dedup', array( $pt ) );
+			}
+		}
+	}
+
+	/**
+	 * Cron handler: dedup one post_type's mirror terms, then set the flag.
+	 *
+	 * @param string $post_type
+	 */
+	public function run_wpml_term_dedup( $post_type ) {
+		$post_type = sanitize_key( (string) $post_type );
+		$flag      = 'luwipress_cpt_attr_wpml_dedup_' . $post_type;
+		if ( get_option( $flag, false ) ) {
+			return;
+		}
+		foreach ( $this->wc_attribution_map() as $info ) {
+			if ( $info['post_type'] !== $post_type || ! taxonomy_exists( $info['taxonomy'] ) ) {
+				continue;
+			}
+			$this->dedup_one_taxonomy( $info );
+			update_option( $flag, current_time( 'c' ), false );
+			return;
+		}
+	}
+
+	/**
+	 * Collapse language-sibling terms into their source-language term: for every
+	 * term whose slug (post id) resolves to a DIFFERENT source id, reassign any
+	 * products it carries to the source term, then delete the sibling term.
+	 *
+	 * @param array{post_type:string,meta:string,taxonomy:string,label:string} $info
+	 */
+	private function dedup_one_taxonomy( array $info ) {
+		$tax   = $info['taxonomy'];
+		$pt    = $info['post_type'];
+		$terms = get_terms( array( 'taxonomy' => $tax, 'hide_empty' => false ) );
+		if ( is_wp_error( $terms ) ) {
+			return;
+		}
+		$removed = 0;
+		foreach ( $terms as $term ) {
+			if ( ! $term instanceof WP_Term ) {
+				continue;
+			}
+			$term_post_id = (int) $term->slug;
+			if ( $term_post_id <= 0 ) {
+				continue;
+			}
+			$source_id = $this->source_post_id( $term_post_id, $pt );
+			if ( $source_id <= 0 || $source_id === $term_post_id ) {
+				continue; // already the source term — keep it.
+			}
+			// Ensure the canonical source term exists before merging into it.
+			$source_term_id = $this->ensure_term_id_for_cpt_post( $source_id, $tax );
+			if ( ! $source_term_id ) {
+				continue; // can't resolve a target — leave the sibling untouched.
+			}
+			// Reassign any products on the sibling term onto the source term
+			// (sibling terms are normally empty, but never drop a relationship).
+			$objects = get_objects_in_term( (int) $term->term_id, $tax );
+			if ( ! is_wp_error( $objects ) ) {
+				foreach ( $objects as $product_id ) {
+					$prev          = $this->syncing;
+					$this->syncing = true;
+					try {
+						wp_set_object_terms( (int) $product_id, array( (int) $source_term_id ), $tax, true );
+					} finally {
+						$this->syncing = $prev;
+					}
+				}
+			}
+			wp_delete_term( (int) $term->term_id, $tax );
+			$removed++;
+		}
+		if ( $removed > 0 && class_exists( 'LuwiPress_Logger' ) ) {
+			LuwiPress_Logger::log( sprintf(
+				'CPT Engine: WPML dedup collapsed %d language-sibling mirror terms in "%s".',
+				$removed, $tax
 			), 'info' );
 		}
 	}

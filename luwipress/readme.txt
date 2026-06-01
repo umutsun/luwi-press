@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.8.1
+Stable tag: 3.8.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.8.2 — CPT Engine: WPML / Polylang-aware attribution terms =
+* On multilingual stores the WooCommerce attribution taxonomy now keeps **one term per content entry** (keyed to its source language) instead of one per translation — so the Products filter lists each vendor once, not once per language. A one-time background sweep collapses any duplicate language-sibling terms a previous version created; products are never detached and the canonical data is untouched.
 
 = 3.8.1 — CPT Engine: WooCommerce attribution as a first-class taxonomy =
 * **Products are now indexed by their attributed content type (e.g. Vendors) as a real WooCommerce taxonomy**, not just a hidden meta field. Each CPT Engine type that attributes to products gets a `product_<type>` taxonomy mirroring its entries, so you can filter the Products list by vendor and feeds / Store API / term queries see the relationship natively (no more slow meta scans).
