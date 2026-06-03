@@ -181,8 +181,42 @@ if ( ! current_user_can( 'manage_options' ) ) {
 	<!-- Graph Canvas -->
 	<div class="kg-graph-container" id="kg-graph-container">
 		<div class="kg-loading" id="kg-loading">
-			<div class="kg-spinner"></div>
-			<p><?php esc_html_e( 'Building knowledge graph...', 'luwipress' ); ?></p>
+			<div class="kg-xray-wrap" aria-hidden="true">
+				<svg class="kg-xray" viewBox="0 0 360 200" preserveAspectRatio="xMidYMid meet">
+					<g class="kg-xray-edges">
+						<line x1="180" y1="100" x2="92" y2="54"/>
+						<line x1="180" y1="100" x2="270" y2="52"/>
+						<line x1="180" y1="100" x2="306" y2="120"/>
+						<line x1="180" y1="100" x2="250" y2="162"/>
+						<line x1="180" y1="100" x2="120" y2="158"/>
+						<line x1="180" y1="100" x2="58" y2="116"/>
+						<line x1="180" y1="100" x2="196" y2="40"/>
+						<line x1="92" y1="54" x2="58" y2="116"/>
+						<line x1="270" y1="52" x2="306" y2="120"/>
+						<line x1="120" y1="158" x2="250" y2="162"/>
+					</g>
+					<g class="kg-xray-nodes">
+						<circle cx="180" cy="100" r="16"/>
+						<circle cx="92" cy="54" r="10"/>
+						<circle cx="270" cy="52" r="11"/>
+						<circle cx="306" cy="120" r="9"/>
+						<circle cx="250" cy="162" r="8"/>
+						<circle cx="120" cy="158" r="9"/>
+						<circle cx="58" cy="116" r="8"/>
+						<circle cx="196" cy="40" r="7"/>
+					</g>
+				</svg>
+			</div>
+			<div class="kg-loading-panel">
+				<div class="kg-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+				     aria-label="<?php esc_attr_e( 'Building knowledge graph', 'luwipress' ); ?>">
+					<div class="kg-progress-bar" id="kg-progress-bar"></div>
+				</div>
+				<div class="kg-loading-row">
+					<span class="kg-loading-phase" id="kg-loading-phase"><?php esc_html_e( 'Reading your catalog…', 'luwipress' ); ?></span>
+					<span class="kg-loading-pct" id="kg-loading-pct">0%</span>
+				</div>
+			</div>
 		</div>
 		<svg id="kg-svg" role="img" aria-label="<?php esc_attr_e( 'Interactive knowledge graph of store content', 'luwipress' ); ?>"></svg>
 		<!-- Tooltip -->

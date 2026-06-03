@@ -56,6 +56,12 @@ $lwp_tools = array(
 		'file'  => $plugin_dir . 'admin/events-page.php',
 		'guard' => 'LuwiPress_Events',
 	),
+	'cpt-manager'   => array(
+		'label' => __( 'Content Types', 'luwipress' ),
+		'icon'  => 'dashicons-screenoptions',
+		'file'  => $plugin_dir . 'admin/cpt-manager-page.php',
+		'guard' => 'LuwiPress_CPT_Engine',
+	),
 	'theme'         => array(
 		'label'      => __( 'Theme', 'luwipress' ),
 		'icon'       => 'dashicons-admin-appearance',
@@ -126,6 +132,11 @@ $lwp_groups = array(
 		'label' => __( 'Theme', 'luwipress' ),
 		'icon'  => 'dashicons-admin-appearance',
 		'tools' => array( 'theme' ),
+	),
+	'content-types' => array(
+		'label' => __( 'Content Types', 'luwipress' ),
+		'icon'  => 'dashicons-screenoptions',
+		'tools' => array( 'cpt-manager' ),
 	),
 	'vendors'  => array(
 		'label' => __( 'Vendors', 'luwipress' ),

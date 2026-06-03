@@ -333,6 +333,40 @@ class LuwiPress_Vendors {
 		);
 	}
 
+	/**
+	 * Resolve a vendor to its WPML/Polylang source-language (default-language)
+	 * sibling id. Mirrors LuwiPress_CPT_Engine::source_post_id() so the
+	 * attribution metabox lists + saves the canonical source id (FR-016) — one
+	 * entry per vendor regardless of how many languages it is translated into.
+	 * Returns the input id unchanged when no translation plugin is active.
+	 *
+	 * @param int $vendor_id
+	 * @return int
+	 */
+	private function source_vendor_id( $vendor_id ) {
+		$vendor_id = (int) $vendor_id;
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			$default = apply_filters( 'wpml_default_language', null );
+			if ( $default ) {
+				// $return_original_if_missing = true → falls back to $vendor_id.
+				$resolved = apply_filters( 'wpml_object_id', $vendor_id, self::POST_TYPE, true, $default );
+				if ( $resolved ) {
+					return (int) $resolved;
+				}
+			}
+		}
+		if ( function_exists( 'pll_get_post' ) && function_exists( 'pll_default_language' ) ) {
+			$default = pll_default_language();
+			if ( $default ) {
+				$resolved = pll_get_post( $vendor_id, $default );
+				if ( $resolved ) {
+					return (int) $resolved;
+				}
+			}
+		}
+		return $vendor_id;
+	}
+
 	public function render_product_vendor_metabox( $post ) {
 		$attached_raw = get_post_meta( $post->ID, self::PRODUCT_VENDORS_META, true );
 		$attached     = is_string( $attached_raw ) && $attached_raw !== ''
@@ -347,6 +381,35 @@ class LuwiPress_Vendors {
 			'orderby'        => 'title',
 			'order'          => 'ASC',
 		) );
+
+		// Collapse WPML/Polylang language siblings to ONE entry per vendor. The
+		// query can return every translation (each language a separate row), so
+		// without this the checkbox list shows the same vendor N× (once per lang).
+		// We also normalize the checkbox value to the SOURCE-language id, because
+		// product attribution meta (_lwp_vendor_ids) is canonically keyed to the
+		// source id (FR-016) — saving a translation id would break the theme
+		// REGEXP match, the KG made_by edge, and the CPT-engine mirror term.
+		$seen   = array();
+		$unique = array();
+		foreach ( $all as $v ) {
+			$src = $this->source_vendor_id( (int) $v->ID );
+			if ( isset( $seen[ $src ] ) ) {
+				continue;
+			}
+			$seen[ $src ] = true;
+			if ( $src !== (int) $v->ID ) {
+				$src_post = get_post( $src );
+				$unique[] = ( $src_post instanceof WP_Post && $src_post->post_type === self::POST_TYPE )
+					? $src_post
+					: $v;
+			} else {
+				$unique[] = $v;
+			}
+		}
+		usort( $unique, static function ( $a, $b ) {
+			return strcasecmp( (string) $a->post_title, (string) $b->post_title );
+		} );
+		$all = $unique;
 
 		$singular = (string) self::get_setting( 'singular_label' );
 		$plural   = (string) self::get_setting( 'plural_label' );

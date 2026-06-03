@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.9.1
+Stable tag: 3.10.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,12 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.10.0 — Content Types manager (CPT Engine UI) =
+* **NEW Content Types manager** under LuwiPress → Site → Content Types. See every content type your store runs — Vendors, Events and any custom one — with its fields, taxonomies, Schema.org mapping and (when WooCommerce is active) product attribution, all in one place.
+* **Build your own content types from the UI.** Add a custom type (Team, Artists, Venues, Recipes…) with a visual field builder over ten attribute types (text, number, URL, image, date, select, relationship and more), optional taxonomies, a Schema.org type mapping, and a one-field WooCommerce product binding — no code, no REST calls. New types are translatable and Elementor-ready automatically, and a ready-to-paste WPML configuration is generated for you.
+* **Cleaner vendor attribution on multilingual stores.** The "Attribute this product to…" box on the product editor now lists each vendor once (previously it repeated the same vendor for every language), and always saves the canonical vendor reference so the storefront, Knowledge Graph and product filters stay in sync.
+* **Friendlier Knowledge Graph loading.** While the graph builds for the first time, the canvas now shows an animated "x-ray" of the graph forming plus a progress bar with live status ("Reading your catalog…", "Scoring store health…") instead of a bare spinner — so a long first build no longer feels frozen.
 
 = 3.9.1 — Events in the Site hub + clearer protected-account UI =
 * **Events settings now live in LuwiPress → Site** (a new "Events" tab beside Vendors) instead of a separate menu, keeping every site tool in one place. The Events post type keeps its own top-level menu for adding and editing events.

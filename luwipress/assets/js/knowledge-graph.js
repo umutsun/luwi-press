@@ -33,6 +33,57 @@ function animateCounter(el, target, suffix) {
 	requestAnimationFrame(step);
 }
 
+// ── KG loader: simulated progress + rotating phase labels ──
+// Phase A is a single server request (the graph is built monolithically), so
+// there is no real per-step signal to report. We ease a progress bar toward a
+// 92% asymptote so the wait always feels like it's advancing, then snap to 100%
+// when the data lands. Pairs with the x-ray skeleton graph (CSS) so the canvas
+// looks like it's materialising instead of frozen behind a spinner.
+var _kgLoaderRAF = null;
+var KG_LOADER_PHASES = [
+	{ upto: 24,  text: 'Reading your catalog…' },
+	{ upto: 46,  text: 'Mapping categories & vendors…' },
+	{ upto: 68,  text: 'Analyzing SEO & translations…' },
+	{ upto: 88,  text: 'Scoring store health…' },
+	{ upto: 101, text: 'Drawing the graph…' }
+];
+function _kgNow() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+function kgLoaderStart() {
+	if (!document.getElementById('kg-progress-bar')) return;
+	if (_kgLoaderRAF) cancelAnimationFrame(_kgLoaderRAF);
+	var t0 = _kgNow();
+	var TAU = 14000, CAP = 92;
+	function step() {
+		var bar = document.getElementById('kg-progress-bar');
+		if (!bar) { _kgLoaderRAF = null; return; } // loader hidden/replaced — stop.
+		var p = CAP * (1 - Math.exp(-(_kgNow() - t0) / TAU));
+		if (p > CAP) p = CAP;
+		bar.style.width = p.toFixed(1) + '%';
+		var pct = document.getElementById('kg-loading-pct');
+		if (pct) pct.textContent = Math.round(p) + '%';
+		var phase = document.getElementById('kg-loading-phase');
+		if (phase) {
+			for (var i = 0; i < KG_LOADER_PHASES.length; i++) {
+				if (p <= KG_LOADER_PHASES[i].upto) {
+					if (phase.textContent !== KG_LOADER_PHASES[i].text) {
+						phase.textContent = KG_LOADER_PHASES[i].text;
+					}
+					break;
+				}
+			}
+		}
+		_kgLoaderRAF = requestAnimationFrame(step);
+	}
+	_kgLoaderRAF = requestAnimationFrame(step);
+}
+function kgLoaderDone() {
+	if (_kgLoaderRAF) { cancelAnimationFrame(_kgLoaderRAF); _kgLoaderRAF = null; }
+	var bar = document.getElementById('kg-progress-bar');
+	if (bar) bar.style.width = '100%';
+	var pct = document.getElementById('kg-loading-pct');
+	if (pct) pct.textContent = '100%';
+}
+
 // ── Fetch Knowledge Graph ──
 // Progressive (two-phase) load: phase A is the light sections that drive
 // the graph + most stat cards (renders in ~5-15s on Tapadum-class stores);
@@ -77,8 +128,9 @@ function fetchGraphSections(sections, forceFresh, cb) {
 // caller wants one merged response synchronously.
 function fetchGraph(cb, forceFresh) {
 	var loading = document.getElementById('kg-loading');
-	if (loading) loading.style.display = 'flex';
+	if (loading) { loading.style.display = 'flex'; kgLoaderStart(); }
 	fetchGraphSections(KG_ALL_SECTIONS, forceFresh, function(err, data) {
+		kgLoaderDone();
 		if (loading) loading.style.display = 'none';
 		cb(err, data);
 	});
@@ -90,9 +142,10 @@ function fetchGraph(cb, forceFresh) {
 // failure means we never fire phase B (no point).
 function fetchGraphProgressive(onPhaseA, onPhaseB, forceFresh) {
 	var loading = document.getElementById('kg-loading');
-	if (loading) loading.style.display = 'flex';
+	if (loading) { loading.style.display = 'flex'; kgLoaderStart(); }
 
 	fetchGraphSections(KG_PHASE_A_SECTIONS, forceFresh, function(err, dataA) {
+		kgLoaderDone();
 		if (loading) loading.style.display = 'none';
 		if (err || !dataA) { onPhaseA(err || new Error('phase_a_failed')); return; }
 		onPhaseA(null, dataA);
