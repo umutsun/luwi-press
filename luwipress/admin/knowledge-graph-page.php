@@ -256,41 +256,80 @@ if ( ! current_user_can( 'manage_options' ) ) {
 		</summary>
 		<div class="kg-autopilot-body" id="kg-autopilot-body">
 			<div class="kg-autopilot-settings" id="kg-autopilot-settings">
-				<div class="kg-autopilot-row">
-					<label class="kg-autopilot-toggle">
-						<input type="checkbox" id="kg-autopilot-enabled" />
-						<span><?php esc_html_e( 'Enable autopilot', 'luwipress' ); ?></span>
-					</label>
-					<label class="kg-autopilot-toggle">
-						<input type="checkbox" id="kg-autopilot-dry-run" checked />
-						<span><?php esc_html_e( 'Dry-run only (no real dispatch)', 'luwipress' ); ?></span>
-					</label>
+				<p class="kg-ap-intro">
+					<?php esc_html_e( 'Autopilot quietly improves your lowest-health content on a schedule — enriching descriptions, writing SEO meta and translating — staying inside the limits you set. Start in Dry-run to preview what it would do, then switch to Live.', 'luwipress' ); ?>
+				</p>
+
+				<!-- Step 1 — Mode (Off / Dry-run / Live). The radio cards drive the
+				     two hidden checkboxes below, which stay the JS source of truth. -->
+				<div class="kg-ap-step">
+					<div class="kg-ap-step-head"><span class="kg-ap-step-n">1</span> <span class="kg-ap-step-title"><?php esc_html_e( 'Mode', 'luwipress' ); ?></span></div>
+					<div class="kg-ap-modes" role="radiogroup" aria-label="<?php esc_attr_e( 'Autopilot mode', 'luwipress' ); ?>">
+						<label class="kg-ap-mode">
+							<input type="radio" name="kg-ap-mode" value="off">
+							<span class="kg-ap-mode-card">
+								<span class="kg-ap-mode-name"><?php esc_html_e( 'Off', 'luwipress' ); ?></span>
+								<span class="kg-ap-mode-desc"><?php esc_html_e( 'Does nothing — you act manually from the graph.', 'luwipress' ); ?></span>
+							</span>
+						</label>
+						<label class="kg-ap-mode">
+							<input type="radio" name="kg-ap-mode" value="dry" checked>
+							<span class="kg-ap-mode-card">
+								<span class="kg-ap-mode-name"><?php esc_html_e( 'Dry-run', 'luwipress' ); ?> <span class="kg-ap-mode-tag"><?php esc_html_e( 'recommended', 'luwipress' ); ?></span></span>
+								<span class="kg-ap-mode-desc"><?php esc_html_e( 'Runs on schedule but only logs what it would do — no AI spend, no changes.', 'luwipress' ); ?></span>
+							</span>
+						</label>
+						<label class="kg-ap-mode">
+							<input type="radio" name="kg-ap-mode" value="live">
+							<span class="kg-ap-mode-card">
+								<span class="kg-ap-mode-name"><?php esc_html_e( 'Live', 'luwipress' ); ?></span>
+								<span class="kg-ap-mode-desc"><?php esc_html_e( 'Actually enriches, writes SEO and translates within your daily budget.', 'luwipress' ); ?></span>
+							</span>
+						</label>
+					</div>
+					<input type="checkbox" id="kg-autopilot-enabled" class="kg-ap-srccbx" hidden />
+					<input type="checkbox" id="kg-autopilot-dry-run" class="kg-ap-srccbx" checked hidden />
 				</div>
-				<div class="kg-autopilot-row">
-					<label class="kg-autopilot-field">
-						<span><?php esc_html_e( 'Min confidence', 'luwipress' ); ?></span>
-						<input type="number" id="kg-autopilot-min-confidence" min="0" max="100" value="60" />
-					</label>
-					<label class="kg-autopilot-field">
-						<span><?php esc_html_e( 'Window (h)', 'luwipress' ); ?></span>
-						<input type="number" id="kg-autopilot-window" min="1" max="720" value="24" />
-					</label>
-					<label class="kg-autopilot-field">
-						<span><?php esc_html_e( 'Enrich/d', 'luwipress' ); ?></span>
-						<input type="number" id="kg-autopilot-cap-enrich" min="0" max="100" value="5" />
-					</label>
-					<label class="kg-autopilot-field">
-						<span><?php esc_html_e( 'SEO/d', 'luwipress' ); ?></span>
-						<input type="number" id="kg-autopilot-cap-seo" min="0" max="100" value="5" />
-					</label>
-					<label class="kg-autopilot-field">
-						<span><?php esc_html_e( 'Translate/d', 'luwipress' ); ?></span>
-						<input type="number" id="kg-autopilot-cap-translate" min="0" max="100" value="3" />
-					</label>
+
+				<!-- Step 2 — What it acts on -->
+				<div class="kg-ap-step">
+					<div class="kg-ap-step-head"><span class="kg-ap-step-n">2</span> <span class="kg-ap-step-title"><?php esc_html_e( 'What it acts on', 'luwipress' ); ?></span></div>
+					<div class="kg-ap-fields">
+						<label class="kg-ap-field">
+							<span class="kg-ap-field-label"><?php esc_html_e( 'Minimum confidence', 'luwipress' ); ?></span>
+							<span class="kg-ap-input"><input type="number" id="kg-autopilot-min-confidence" min="0" max="100" value="60" /><span class="kg-ap-unit">%</span></span>
+							<span class="kg-ap-help"><?php esc_html_e( 'Only act on opportunities the graph scores at or above this.', 'luwipress' ); ?></span>
+						</label>
+						<label class="kg-ap-field">
+							<span class="kg-ap-field-label"><?php esc_html_e( 'Look-back window', 'luwipress' ); ?></span>
+							<span class="kg-ap-input"><input type="number" id="kg-autopilot-window" min="1" max="720" value="24" /><span class="kg-ap-unit"><?php esc_html_e( 'hours', 'luwipress' ); ?></span></span>
+							<span class="kg-ap-help"><?php esc_html_e( 'How far back to look for recently changed content to refresh.', 'luwipress' ); ?></span>
+						</label>
+					</div>
 				</div>
+
+				<!-- Step 3 — Daily budget -->
+				<div class="kg-ap-step">
+					<div class="kg-ap-step-head"><span class="kg-ap-step-n">3</span> <span class="kg-ap-step-title"><?php esc_html_e( 'Daily budget', 'luwipress' ); ?></span> <span class="kg-ap-step-sub"><?php esc_html_e( 'caps AI spend per day · 0 turns that action off', 'luwipress' ); ?></span></div>
+					<div class="kg-ap-fields kg-ap-fields--3">
+						<label class="kg-ap-field">
+							<span class="kg-ap-field-label"><?php esc_html_e( 'Enrich descriptions', 'luwipress' ); ?></span>
+							<span class="kg-ap-input"><input type="number" id="kg-autopilot-cap-enrich" min="0" max="100" value="5" /><span class="kg-ap-unit">/<?php esc_html_e( 'day', 'luwipress' ); ?></span></span>
+						</label>
+						<label class="kg-ap-field">
+							<span class="kg-ap-field-label"><?php esc_html_e( 'Write SEO meta', 'luwipress' ); ?></span>
+							<span class="kg-ap-input"><input type="number" id="kg-autopilot-cap-seo" min="0" max="100" value="5" /><span class="kg-ap-unit">/<?php esc_html_e( 'day', 'luwipress' ); ?></span></span>
+						</label>
+						<label class="kg-ap-field">
+							<span class="kg-ap-field-label"><?php esc_html_e( 'Translate', 'luwipress' ); ?></span>
+							<span class="kg-ap-input"><input type="number" id="kg-autopilot-cap-translate" min="0" max="100" value="3" /><span class="kg-ap-unit">/<?php esc_html_e( 'day', 'luwipress' ); ?></span></span>
+						</label>
+					</div>
+				</div>
+
 				<div class="kg-autopilot-actions">
-					<button type="button" class="button button-secondary" id="kg-autopilot-save"><?php esc_html_e( 'Save', 'luwipress' ); ?></button>
-					<button type="button" class="button" id="kg-autopilot-run-now"><?php esc_html_e( 'Run cycle now', 'luwipress' ); ?></button>
+					<button type="button" class="button button-primary" id="kg-autopilot-save"><?php esc_html_e( 'Save settings', 'luwipress' ); ?></button>
+					<button type="button" class="button" id="kg-autopilot-run-now"><?php esc_html_e( 'Run one cycle now', 'luwipress' ); ?></button>
 					<span class="kg-autopilot-msg" id="kg-autopilot-msg"></span>
 				</div>
 			</div>

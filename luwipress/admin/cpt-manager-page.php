@@ -196,7 +196,7 @@ $luwipress_hub_mode = defined( 'LUWIPRESS_HUB_INCLUDED' );
 
 		<!-- Fields (attributes) -->
 		<h3 class="lwp-ct-sub"><span class="dashicons dashicons-list-view" aria-hidden="true"></span> <?php esc_html_e( 'Fields (attributes)', 'luwipress' ); ?></h3>
-		<p class="description"><?php esc_html_e( 'Each field is registered as post meta + exposed to REST. "Translatable" fields are sent to translation; "Elementor" fields become dynamic tags. "Schema prop" maps the value into the JSON-LD output (optional).', 'luwipress' ); ?></p>
+		<p class="description"><?php esc_html_e( 'Each field is registered as post meta + exposed to REST. "Translatable" fields are sent to translation; "Elementor" fields become dynamic tags. "Schema prop" maps the value onto the type\'s Schema.org JSON-LD (needs a Schema.org @type set in Advanced) — e.g. jobTitle. Use sameAs on several fields (Facebook, Instagram…) to collect them into one array; knowsAbout / keywords comma-split into an array; address.addressLocality nests into a PostalAddress.', 'luwipress' ); ?></p>
 		<table class="widefat lwp-ct-fields">
 			<thead>
 				<tr>

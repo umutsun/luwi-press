@@ -69,6 +69,11 @@ class LuwiPress_WebMCP {
 
     private function __construct() {
         add_action( 'rest_api_init', array( $this, 'register_mcp_endpoint' ) );
+        // Deferred term-edit cascade — fired off-request by taxonomy_update_term's
+        // description-only path so a slow 3rd-party edited_term listener (WPML
+        // term-sync, Rank Math sitemap regeneration) can't blow the MCP client's
+        // ~4-minute response timeout. See defer_term_edit_cascade().
+        add_action( 'luwipress_webmcp_term_edit_cascade', array( $this, 'run_term_edit_cascade' ), 10, 3 );
         $this->register_all_tools();
     }
 
@@ -1085,6 +1090,123 @@ class LuwiPress_WebMCP {
                 'wpml_active'     => defined( 'ICL_SITEPRESS_VERSION' ),
                 'polylang_active' => function_exists( 'pll_languages_list' ),
             );
+        } );
+
+        $this->register_tool( 'cpt_type_get', array(
+            'description' => 'Read a single CPT Engine type definition by its engine key (e.g. "team", "vendors"): post_type, labels, field_schema, taxonomies, schema_mapping, woocommerce. Use this before cpt_field_set / cpt_schema_map to see the current field keys. Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'key' => array( 'type' => 'string', 'description' => 'Engine key (required).' ),
+                ),
+                'required'   => array( 'key' ),
+            ),
+            'annotations' => array( 'title' => 'Get CPT Type', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_CPT_Engine' ) ) {
+                return array( 'error' => 'CPT Engine is not available on this site.' );
+            }
+            $key = isset( $args['key'] ) ? sanitize_key( (string) $args['key'] ) : '';
+            $def = LuwiPress_CPT_Engine::get_instance()->get_type( $key );
+            if ( ! $def ) {
+                return array( 'error' => "No CPT type with key '{$key}'." );
+            }
+            return array( 'type' => $def );
+        } );
+
+        $this->register_tool( 'cpt_field_set', array(
+            'description' => 'Add or update ONE field (attribute) on an operator-defined CPT WITHOUT resending the whole definition (unlike cpt_type_set, which is full-replace and drops any omitted field). Fetches the type, upserts the field by key, and saves. field: { key (required), type (text|textarea|number|url|email|image|date|datetime|select|relationship), label, translatable, in_elementor, schema_prop }. Only operator-defined types can be edited (Vendors / Events presets are protected).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'type_key' => array( 'type' => 'string', 'description' => 'Engine key of the CPT to edit (required).' ),
+                    'field'    => array( 'type' => 'object', 'description' => 'Field to add/update; must include "key".' ),
+                ),
+                'required'   => array( 'type_key', 'field' ),
+            ),
+            'annotations' => array( 'title' => 'Set CPT Field', 'readOnlyHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_CPT_Engine' ) ) {
+                return array( 'error' => 'CPT Engine is not available on this site.' );
+            }
+            $key   = isset( $args['type_key'] ) ? sanitize_key( (string) $args['type_key'] ) : '';
+            $field = ( isset( $args['field'] ) && is_array( $args['field'] ) ) ? $args['field'] : array();
+            if ( '' === $key || empty( $field['key'] ) ) {
+                return array( 'error' => 'type_key and field.key are required.' );
+            }
+            $engine = LuwiPress_CPT_Engine::get_instance();
+            $def    = $engine->get_type( $key );
+            if ( ! $def ) {
+                return array( 'error' => "No CPT type with key '{$key}'." );
+            }
+            if ( 'option' !== ( $def['source'] ?? '' ) ) {
+                return array( 'error' => "Type '{$key}' is a preset and cannot be edited via MCP — configure it in its own settings." );
+            }
+            $fields = ( isset( $def['field_schema'] ) && is_array( $def['field_schema'] ) ) ? $def['field_schema'] : array();
+            $fkey   = sanitize_key( (string) $field['key'] );
+            $found  = false;
+            foreach ( $fields as &$f ) {
+                if ( isset( $f['key'] ) && $f['key'] === $fkey ) {
+                    $f        = array_merge( $f, $field );
+                    $f['key'] = $fkey;
+                    $found    = true;
+                    break;
+                }
+            }
+            unset( $f );
+            if ( ! $found ) {
+                $field['key'] = $fkey;
+                $fields[]     = $field;
+            }
+            $def['field_schema'] = $fields;
+            return $this->proxy_rest_post( 'LuwiPress_CPT_Engine', 'rest_set_type', $def );
+        } );
+
+        $this->register_tool( 'cpt_schema_map', array(
+            'description' => 'Make an operator-defined CPT emit Schema.org JSON-LD on the front-end: set its schema_mapping @type (Person, Organization, LocalBusiness, Event, …) and, optionally, map each field onto a schema.org property — in ONE call, without resending the whole definition. field_props is { field_key: schema_property }, e.g. { "_lwp_team_role":"jobTitle", "_lwp_team_specialty":"knowsAbout", "_lwp_team_facebook":"sameAs", "_lwp_team_instagram":"sameAs", "_lwp_team_location":"address.addressLocality" }. Several fields mapped to sameAs collect into one array; knowsAbout/keywords comma-split into arrays; dotted props (address.addressLocality) nest into objects (an address parent is typed PostalAddress). Only operator-defined types.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'type_key'    => array( 'type' => 'string', 'description' => 'Engine key of the CPT (required).' ),
+                    'schema_type' => array( 'type' => 'string', 'description' => 'Schema.org @type, e.g. "Person" (required).' ),
+                    'field_props' => array( 'type' => 'object', 'description' => 'Optional { field_key: schema_property } map.' ),
+                ),
+                'required'   => array( 'type_key', 'schema_type' ),
+            ),
+            'annotations' => array( 'title' => 'Map CPT Schema', 'readOnlyHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_CPT_Engine' ) ) {
+                return array( 'error' => 'CPT Engine is not available on this site.' );
+            }
+            $key    = isset( $args['type_key'] ) ? sanitize_key( (string) $args['type_key'] ) : '';
+            $stype  = isset( $args['schema_type'] ) ? trim( (string) $args['schema_type'] ) : '';
+            $fprops = ( isset( $args['field_props'] ) && is_array( $args['field_props'] ) ) ? $args['field_props'] : array();
+            if ( '' === $key || '' === $stype ) {
+                return array( 'error' => 'type_key and schema_type are required.' );
+            }
+            $engine = LuwiPress_CPT_Engine::get_instance();
+            $def    = $engine->get_type( $key );
+            if ( ! $def ) {
+                return array( 'error' => "No CPT type with key '{$key}'." );
+            }
+            if ( 'option' !== ( $def['source'] ?? '' ) ) {
+                return array( 'error' => "Type '{$key}' is a preset and cannot be edited via MCP." );
+            }
+            $mapping               = ( isset( $def['schema_mapping'] ) && is_array( $def['schema_mapping'] ) ) ? $def['schema_mapping'] : array();
+            $mapping['type']       = sanitize_text_field( $stype );
+            $def['schema_mapping'] = $mapping;
+            if ( ! empty( $fprops ) ) {
+                $fields = ( isset( $def['field_schema'] ) && is_array( $def['field_schema'] ) ) ? $def['field_schema'] : array();
+                foreach ( $fields as &$f ) {
+                    $fk = isset( $f['key'] ) ? (string) $f['key'] : '';
+                    if ( '' !== $fk && array_key_exists( $fk, $fprops ) ) {
+                        $f['schema_prop'] = sanitize_text_field( (string) $fprops[ $fk ] );
+                    }
+                }
+                unset( $f );
+                $def['field_schema'] = $fields;
+            }
+            return $this->proxy_rest_post( 'LuwiPress_CPT_Engine', 'rest_set_type', $def );
         } );
 
         // ─── Events — CPT Engine preset #2 (3.9.0+; dormant until enabled) ───
@@ -5751,6 +5873,56 @@ class LuwiPress_WebMCP {
     }
 
     /**
+     * Schedule the generic edited_term cascade to run off the current request.
+     *
+     * taxonomy_update_term's description-only path used to fire
+     * do_action('edited_term') synchronously so cache + sync listeners run. On a
+     * multilingual catalog a 3rd-party listener (WPML term-sync, Rank Math
+     * sitemap regeneration) can run for minutes — long enough to blow the MCP
+     * client's ~4-minute response timeout even though the DB write already
+     * succeeded. We defer the cascade to WP-Cron so the tool returns
+     * immediately; the listeners still run, just out-of-band. If cron can't be
+     * scheduled we fire inline as a last resort (preserves correctness).
+     *
+     * @param int    $term_id
+     * @param int    $tt_id
+     * @param string $taxonomy
+     * @return bool  True if deferred to cron, false if fired inline.
+     */
+    private function defer_term_edit_cascade( $term_id, $tt_id, $taxonomy ) {
+        $args = array( (int) $term_id, (int) $tt_id, (string) $taxonomy );
+        if ( wp_next_scheduled( 'luwipress_webmcp_term_edit_cascade', $args ) ) {
+            return true; // already queued for this exact term.
+        }
+        if ( false !== wp_schedule_single_event( time(), 'luwipress_webmcp_term_edit_cascade', $args ) ) {
+            return true;
+        }
+        // Cron unavailable — fire inline so listeners are not silently skipped.
+        $this->run_term_edit_cascade( $term_id, $tt_id, $taxonomy );
+        return false;
+    }
+
+    /**
+     * Cron handler: fire the generic edited_term cascade for a deferred
+     * description write. This is where any 3rd-party edited_term listener
+     * (WPML / Rank Math / …) runs, off the MCP request.
+     *
+     * @param int    $term_id
+     * @param int    $tt_id
+     * @param string $taxonomy
+     */
+    public function run_term_edit_cascade( $term_id, $tt_id, $taxonomy ) {
+        $term_id  = (int) $term_id;
+        $tt_id    = (int) $tt_id;
+        $taxonomy = (string) $taxonomy;
+        if ( $term_id <= 0 || '' === $taxonomy ) {
+            return;
+        }
+        do_action( 'edited_term', $term_id, $tt_id, $taxonomy );
+        do_action( "edited_{$taxonomy}", $term_id, $tt_id );
+    }
+
+    /**
      * Internal post query (bypasses webhook auth for MCP context).
      */
     private function query_posts( $args ) {
@@ -6398,13 +6570,21 @@ class LuwiPress_WebMCP {
                     throw new Exception( 'Direct description update failed: ' . $wpdb->last_error );
                 }
                 clean_term_cache( $term_id, $taxonomy );
-                do_action( 'edited_term', $term_id, $term->term_taxonomy_id, $taxonomy );
-                do_action( "edited_{$taxonomy}", $term_id, $term->term_taxonomy_id );
+                // Defer the generic edited_term cascade off this request. A
+                // description-only write changes no slug/structure, but some
+                // 3rd-party listeners (WPML term-sync, Rank Math sitemap regen)
+                // hook edited_term and can run for MINUTES on a multilingual
+                // catalog — long enough to blow the MCP client's ~4-minute
+                // response timeout even though the DB write already succeeded.
+                // Scheduling the cascade on cron returns the tool immediately;
+                // the listeners still run, just out-of-band.
+                $deferred = $this->defer_term_edit_cascade( $term_id, (int) $term->term_taxonomy_id, $taxonomy );
                 return array(
                     'term_id'  => $term_id,
                     'taxonomy' => $taxonomy,
                     'updated'  => true,
                     'method'   => 'direct_description_write',
+                    'sync'     => $deferred ? 'deferred' : 'inline',
                 );
             }
 

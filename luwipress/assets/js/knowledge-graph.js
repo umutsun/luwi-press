@@ -7,6 +7,22 @@ var CONFIG = {
 	nonce:    (window.lpKgConfig && window.lpKgConfig.nonce)    || ''
 };
 
+// ── Auth headers for every KG REST call ──
+// Sends the cookie nonce AND (when configured) the Bearer API token, exactly
+// like fetchGraphSections. The action endpoints accept token-or-admin auth, so
+// carrying the token means a stale/expired cookie nonce no longer breaks the
+// sidebar actions with "Cookie check failed — retry?" (the graph already loaded
+// fine because it sent the token; the action buttons previously did not).
+function kgAuthHeaders(json) {
+	var cfg = window.lpKgConfig || {};
+	var nonce = cfg.nonce || (typeof lpKgNonce !== 'undefined' ? lpKgNonce : '') || CONFIG.nonce;
+	var h = { 'X-WP-Nonce': nonce };
+	var tok = cfg.apiToken || CONFIG.apiToken || '';
+	if (tok) { h['Authorization'] = 'Bearer ' + tok; }
+	if (json) { h['Content-Type'] = 'application/json'; }
+	return h;
+}
+
 // ── D3.js Loader ──
 function loadD3(cb) {
 	if (window.d3) return cb();
@@ -3526,7 +3542,7 @@ function handleCsvFile(file) {
 }
 
 function submitBulkSeoMeta(rows) {
-	var headers = { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce };
+	var headers = kgAuthHeaders(true);
 	var apiToken = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
 	if (apiToken) headers['Authorization'] = 'Bearer ' + apiToken;
 
@@ -3906,7 +3922,7 @@ function kgCandidateAction(action, candidateId, payload, cb) {
 	var body = Object.assign({ id: candidateId }, payload || {});
 	fetch(lpKgRestUrl + 'knowledge-graph/candidate/' + action, {
 		method:  'POST',
-		headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce },
+		headers: kgAuthHeaders(true),
 		credentials: 'same-origin',
 		body: JSON.stringify(body)
 	})
@@ -3979,7 +3995,7 @@ function kgStopBatchMonitor(hideImmediately) {
 
 function kgPollBatchOnce(batchId) {
 	var url = lpKgRestUrl + 'product/enrich-batch/status?batch_id=' + encodeURIComponent(batchId);
-	var headers = { 'X-WP-Nonce': lpKgNonce };
+	var headers = kgAuthHeaders(false);
 	var apiToken = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
 	if (apiToken) headers['Authorization'] = 'Bearer ' + apiToken;
 
@@ -4202,7 +4218,7 @@ function kgAction(action, productId, btn, langs) {
 		var promises = types.map(function(tax) {
 			return fetch(lpKgRestUrl + 'translation/taxonomy', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce },
+				headers: kgAuthHeaders(true),
 				body: JSON.stringify({ taxonomy: tax, target_languages: [targetLang], limit: 50 }),
 				credentials: 'same-origin'
 			}).then(function(r) { return r.json().then(function(d){ return { ok: r.ok, data: d, tax: tax }; }); });
@@ -4245,7 +4261,7 @@ function kgAction(action, productId, btn, langs) {
 
 	fetch(lpKgRestUrl + endpoint, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce },
+		headers: kgAuthHeaders(true),
 		body: JSON.stringify(body),
 		credentials: 'same-origin'
 	})
@@ -4321,7 +4337,7 @@ function kgPollJobStatus(jobId, btn, onDone) {
 	var poll = function() {
 		attempts++;
 		fetch(lpKgRestUrl + 'job/status?job_id=' + encodeURIComponent(jobId), {
-			headers: { 'X-WP-Nonce': lpKgNonce },
+			headers: kgAuthHeaders(false),
 			credentials: 'same-origin'
 		}).then(function(r) {
 			return r.json().then(function(data) { return { ok: r.ok, data: data }; });
@@ -4368,7 +4384,7 @@ function kgRefreshAndReopen(nodeId, nodeType, langCode) {
 	if (!window.lpKg || !window.lpKg.buildGraph) {
 		return;
 	}
-	var headers = { 'X-WP-Nonce': lpKgNonce };
+	var headers = kgAuthHeaders(false);
 	var apiToken = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
 	if (apiToken) headers['Authorization'] = 'Bearer ' + apiToken;
 
@@ -4453,7 +4469,7 @@ function kgExportSegmentCsv(segKey, btn) {
 	btn.disabled = true;
 	btn.innerHTML = '<span class="kg-action-spinner"></span> Exporting...';
 
-	var headers = { 'X-WP-Nonce': lpKgNonce };
+	var headers = kgAuthHeaders(false);
 	var apiToken = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
 	if (apiToken) headers['Authorization'] = 'Bearer ' + apiToken;
 
@@ -4521,12 +4537,13 @@ function kgAutopilotInit() {
 
 	function load() {
 		fetch(lpKgRestUrl + 'knowledge-graph/autopilot/settings', {
-			headers: { 'X-WP-Nonce': lpKgNonce }, credentials: 'same-origin'
+			headers: kgAuthHeaders(false), credentials: 'same-origin'
 		})
 		.then(function (r) { return r.json(); })
 		.then(function (s) {
 			$('kg-autopilot-enabled').checked        = !!s.enabled;
 			$('kg-autopilot-dry-run').checked        = !!s.dry_run;
+			if (typeof syncModeUI === 'function') { syncModeUI(); }
 			$('kg-autopilot-min-confidence').value   = s.min_confidence || 60;
 			$('kg-autopilot-window').value           = s.dispatch_window_hours || 24;
 			$('kg-autopilot-cap-enrich').value       = (s.caps && s.caps.enrich) || 0;
@@ -4582,7 +4599,7 @@ function kgAutopilotInit() {
 		};
 		fetch(lpKgRestUrl + 'knowledge-graph/autopilot/settings', {
 			method:  'POST',
-			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce },
+			headers: kgAuthHeaders(true),
 			credentials: 'same-origin',
 			body: JSON.stringify(body)
 		})
@@ -4611,12 +4628,35 @@ function kgAutopilotInit() {
 		if (el) el.addEventListener('change', autoSave);
 	});
 
+	// Mode cards (Off / Dry-run / Live) are the modern front-end for the two
+	// hidden checkboxes, which stay the source of truth for save(). Picking a
+	// card sets both checkboxes and fires the existing debounced auto-save;
+	// syncModeUI() reflects the server/checkbox state back onto the cards on load.
+	var modeRadios = document.querySelectorAll('input[name="kg-ap-mode"]');
+	function syncModeUI() {
+		var en  = $('kg-autopilot-enabled').checked;
+		var dry = $('kg-autopilot-dry-run').checked;
+		var m   = !en ? 'off' : (dry ? 'dry' : 'live');
+		Array.prototype.forEach.call(modeRadios, function (r) { r.checked = (r.value === m); });
+	}
+	Array.prototype.forEach.call(modeRadios, function (r) {
+		r.addEventListener('change', function () {
+			if (!r.checked) { return; }
+			var en = $('kg-autopilot-enabled'), dry = $('kg-autopilot-dry-run');
+			if (r.value === 'off')      { en.checked = false; }
+			else if (r.value === 'dry') { en.checked = true;  dry.checked = true;  }
+			else                        { en.checked = true;  dry.checked = false; }
+			en.dispatchEvent(new Event('change')); // triggers the debounced auto-save
+		});
+	});
+	syncModeUI(); // reflect the default checkbox state onto the cards immediately
+
 	function runNow() {
 		runBtn.disabled = true;
 		if (msg) msg.textContent = 'Running…';
 		fetch(lpKgRestUrl + 'knowledge-graph/autopilot/run-now', {
 			method:  'POST',
-			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce },
+			headers: kgAuthHeaders(true),
 			credentials: 'same-origin',
 			body: JSON.stringify({ force: true })
 		})
@@ -4638,7 +4678,7 @@ function kgAutopilotInit() {
 
 	function loadLog() {
 		fetch(lpKgRestUrl + 'knowledge-graph/autopilot/log?limit=20', {
-			headers: { 'X-WP-Nonce': lpKgNonce }, credentials: 'same-origin'
+			headers: kgAuthHeaders(false), credentials: 'same-origin'
 		})
 		.then(function (r) { return r.json(); })
 		.then(function (j) {
@@ -4729,7 +4769,7 @@ function openCampaignModal(segment, count, sourceBtn) {
 	modal.querySelector('.luwipress-modal-close').addEventListener('click', closeModal);
 	modal.addEventListener('click', function (ev) { if (ev.target === modal) closeModal(); });
 
-	var headers = { 'X-WP-Nonce': lpKgNonce };
+	var headers = kgAuthHeaders(false);
 	var token = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
 	if (token) headers['Authorization'] = 'Bearer ' + token;
 
@@ -4822,7 +4862,7 @@ function renderCampaignForm(modal, segment, displayCount, preview, closeModal) {
 			dry_run: modal.querySelector('#kg-camp-dry').checked
 		};
 
-		var sendHeaders = { 'Content-Type': 'application/json', 'X-WP-Nonce': lpKgNonce };
+		var sendHeaders = kgAuthHeaders(true);
 		var token = (window.lpKgConfig && window.lpKgConfig.apiToken) || '';
 		if (token) sendHeaders['Authorization'] = 'Bearer ' + token;
 

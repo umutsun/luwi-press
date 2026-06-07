@@ -64,6 +64,22 @@ class LuwiPress_CPT_Engine {
 		// Type-definition CRUD surface.
 		add_action( 'rest_api_init', array( $this, 'register_rest' ) );
 
+		// FR-031: bridge operator-defined CPT schema_mapping into the Schema
+		// Registry so a custom type's @type + per-field `schema_prop` mappings
+		// actually render as JSON-LD on the frontend. Without this the mapping is
+		// stored (UI + registry) but never queried at render — only the presets
+		// (Vendors → person, Events → event) self-register their own richer schema
+		// hooks.
+		//
+		// MUST run on init p6 — AFTER collect_types (p1) populates the engine type
+		// list — NOT on `luwipress_schema_registry_init`. The Schema Registry is
+		// instantiated inline in LuwiPress's constructor at plugins_loaded, so its
+		// init action fires BEFORE init p1; hooking there would loop an EMPTY type
+		// list and register nothing (the preset person/event types still work
+		// because they register statically, not by looping). render_for_request is
+		// wp_head p6, so init p6 is comfortably early enough.
+		add_action( 'init', array( $this, 'wire_engine_schema_on_init' ), 6 );
+
 		// Phase 2: every enabled engine-managed post type is translatable. This is
 		// the pipeline-side gate behind the Translation Manager content steps —
 		// without it LuwiPress_Translation::request_translation() 404s engine CPTs.
@@ -1247,6 +1263,207 @@ class LuwiPress_CPT_Engine {
 		}
 		$lines[] = '</wpml-config>';
 		return implode( "\n", $lines ) . "\n";
+	}
+
+	/* ── FR-031: operator-defined CPT → Schema Registry bridge ──────────── */
+
+	/**
+	 * Register a Schema Registry type for every enabled OPERATOR-DEFINED CPT that
+	 * declares a `schema_mapping.type`. Presets (Vendors, Events) self-register
+	 * their own richer schema hooks and are skipped here. This is what makes the
+	 * CPT Manager's "Schema.org @type" + per-field "schema_prop" settings actually
+	 * emit JSON-LD on the frontend (without it the mapping is stored but never
+	 * rendered — FR-031). Each type gets a DISTINCT slug (`cpt_<post_type>`) and a
+	 * `post:<post_type>` context so it never clobbers a preset's own type.
+	 *
+	 * @param object $registry LuwiPress_Schema_Registry instance.
+	 */
+	/**
+	 * init p6 entry point. Runs after collect_types (init p1) so the engine type
+	 * list is populated, then registers each operator-defined type's schema into
+	 * the Schema Registry. get_instance() returns the registry already created at
+	 * plugins_loaded (or instantiates it on a build that hasn't yet) — either way
+	 * the new types land before render_for_request (wp_head p6).
+	 */
+	public function wire_engine_schema_on_init() {
+		if ( ! class_exists( 'LuwiPress_Schema_Registry' ) ) {
+			return;
+		}
+		$this->wire_engine_schema( LuwiPress_Schema_Registry::get_instance() );
+	}
+
+	public function wire_engine_schema( $registry ) {
+		if ( ! is_object( $registry ) || ! method_exists( $registry, 'register_type' ) ) {
+			return;
+		}
+		$this->maybe_collect();
+		foreach ( $this->types as $def ) {
+			// Presets register their own schema (richer — makesOffer, hasOccupation,
+			// multi-organizer, etc.); only bridge operator-defined, enabled types.
+			if ( 'option' !== ( $def['source'] ?? '' ) || empty( $def['enabled'] ) ) {
+				continue;
+			}
+			$mapped = isset( $def['schema_mapping']['type'] ) ? (string) $def['schema_mapping']['type'] : '';
+			if ( '' === $mapped ) {
+				continue;
+			}
+			$pt = (string) $def['post_type'];
+			if ( '' === $pt ) {
+				continue;
+			}
+			$at = $this->normalize_schema_type( $mapped );
+			// Capture $def + $at by value (PHP closures bind `use` at definition —
+			// each registered type keeps its own definition; no late-binding trap).
+			$registry->register_type( 'cpt_' . $pt, array(
+				'schema_type' => $at,
+				'meta_key'    => '_lwp_cpt_schema_' . $pt, // optional manual override
+				'contexts'    => array( 'post:' . $pt ),
+				'sanitizer'   => array( $this, 'engine_schema_sanitize' ),
+				'renderer'    => function ( $data, $ctx ) {
+					return $data; // auto_data already returns a full schema node.
+				},
+				'auto_data'   => function ( $ctx ) use ( $def, $at ) {
+					$id = (int) ( $ctx['object_id'] ?? 0 );
+					return $this->build_engine_cpt_schema( $id, $def, $at );
+				},
+				'description' => 'Operator-defined content type schema (CPT Engine) — auto-built from field schema_prop mappings',
+			) );
+		}
+	}
+
+	/**
+	 * Map a stored schema_mapping type (which may be lowercase like "person") to
+	 * its canonical schema.org @type ("Person"). Unknown values pass through with
+	 * a leading uppercase so an operator can map to any schema.org type.
+	 *
+	 * @param string $type
+	 * @return string
+	 */
+	private function normalize_schema_type( $type ) {
+		$type  = trim( (string) $type );
+		$known = array(
+			'person'        => 'Person',
+			'organization'  => 'Organization',
+			'localbusiness' => 'LocalBusiness',
+			'event'         => 'Event',
+			'product'       => 'Product',
+			'service'       => 'Service',
+			'course'        => 'Course',
+			'recipe'        => 'Recipe',
+			'article'       => 'Article',
+			'place'         => 'Place',
+		);
+		$lc = strtolower( $type );
+		return isset( $known[ $lc ] ) ? $known[ $lc ] : ucfirst( $type );
+	}
+
+	/**
+	 * Build the JSON-LD node for one operator-defined CPT post from its field
+	 * schema. Each field whose `schema_prop` is set maps its post-meta value onto
+	 * that schema.org property:
+	 *   - `sameAs` / `knowsAbout` / `keywords` → array (comma-split + merged across
+	 *     fields, so e.g. a Facebook + Instagram field both mapped to `sameAs`
+	 *     collect into one array)
+	 *   - dot-notation `address.addressLocality` → nested object (an `address`
+	 *     parent is typed `PostalAddress`)
+	 *   - everything else → scalar (folds into an array if the same prop repeats)
+	 * A featured image becomes `image`. Returns array() when the post type doesn't
+	 * match / isn't published. The node always carries @type + name + url, which
+	 * is a valid (if minimal) typed node — better than emitting nothing.
+	 *
+	 * @param int    $post_id
+	 * @param array  $def Engine type definition.
+	 * @param string $at  Canonical schema.org @type.
+	 * @return array
+	 */
+	public function build_engine_cpt_schema( $post_id, array $def, $at ) {
+		$post = get_post( (int) $post_id );
+		if ( ! $post instanceof WP_Post
+			|| $post->post_type !== $def['post_type']
+			|| 'publish' !== $post->post_status ) {
+			return array();
+		}
+		$node = array(
+			'@context' => 'https://schema.org',
+			'@type'    => $at,
+			'name'     => get_the_title( $post_id ),
+			'url'      => get_permalink( $post_id ),
+		);
+		$array_props = array( 'sameas' => 'sameAs', 'knowsabout' => 'knowsAbout', 'keywords' => 'keywords' );
+
+		foreach ( $def['field_schema'] as $f ) {
+			$prop = isset( $f['schema_prop'] ) ? trim( (string) $f['schema_prop'] ) : '';
+			$key  = isset( $f['key'] ) ? (string) $f['key'] : '';
+			if ( '' === $prop || '' === $key ) {
+				continue;
+			}
+			$val = get_post_meta( $post_id, $key, true );
+			if ( '' === $val || null === $val || array() === $val ) {
+				continue;
+			}
+
+			// Nested (dot-notation), e.g. address.addressLocality.
+			if ( false !== strpos( $prop, '.' ) ) {
+				list( $parent, $child ) = array_pad( explode( '.', $prop, 2 ), 2, '' );
+				if ( '' === $parent || '' === $child ) {
+					continue;
+				}
+				if ( ! isset( $node[ $parent ] ) || ! is_array( $node[ $parent ] ) ) {
+					$node[ $parent ] = ( 'address' === $parent ) ? array( '@type' => 'PostalAddress' ) : array();
+				}
+				$node[ $parent ][ $child ] = $this->engine_schema_sanitize( $val );
+				continue;
+			}
+
+			// Array-valued props (comma-split + merge across fields).
+			$lc = strtolower( $prop );
+			if ( isset( $array_props[ $lc ] ) ) {
+				$canon = $array_props[ $lc ];
+				$items = is_array( $val ) ? $val : preg_split( '/\s*,\s*/', (string) $val );
+				$items = array_map( 'trim', array_map( 'strval', (array) $items ) );
+				$items = array_values( array_filter( $items, static function ( $s ) {
+					return '' !== $s;
+				} ) );
+				$items = array_map( array( $this, 'engine_schema_sanitize' ), $items );
+				$node[ $canon ] = isset( $node[ $canon ] ) && is_array( $node[ $canon ] )
+					? array_values( array_merge( $node[ $canon ], $items ) )
+					: $items;
+				continue;
+			}
+
+			// Scalar prop — fold into an array if the same prop repeats.
+			$clean = $this->engine_schema_sanitize( $val );
+			$node[ $prop ] = isset( $node[ $prop ] )
+				? array_merge( (array) $node[ $prop ], array( $clean ) )
+				: $clean;
+		}
+
+		$thumb = get_the_post_thumbnail_url( $post_id, 'full' );
+		if ( $thumb ) {
+			$node['image'] = esc_url_raw( $thumb );
+		}
+		return $node;
+	}
+
+	/**
+	 * Recursive sanitize for schema values — URLs through esc_url_raw, other
+	 * strings through wp_kses_post, arrays walked.
+	 *
+	 * @param mixed $node
+	 * @return mixed
+	 */
+	public function engine_schema_sanitize( $node ) {
+		if ( is_array( $node ) ) {
+			return array_map( array( $this, 'engine_schema_sanitize' ), $node );
+		}
+		if ( is_string( $node ) ) {
+			$t = trim( $node );
+			if ( preg_match( '#^https?://#i', $t ) ) {
+				return esc_url_raw( $t );
+			}
+			return wp_kses_post( $t );
+		}
+		return $node;
 	}
 
 	/* ── Type-definition CRUD (REST) ── */

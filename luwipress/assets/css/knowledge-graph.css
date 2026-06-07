@@ -1328,6 +1328,92 @@
     .kg-xray-edges line { opacity: .2; }
 }
 
+/* ── AI Autopilot — guided 3-step panel (3.10.1) ──
+   Replaces the cryptic flat row (MIN CONFIDENCE / WINDOW(H) / ENRICH/D…) with
+   numbered steps, an Off/Dry-run/Live mode picker and plain-language fields, so
+   the important controls aren't buried. Token-based; reduced-motion safe. */
+.kg-ap-intro {
+    margin: 0 0 16px;
+    color: var(--lp-text-secondary);
+    font-size: 13px;
+    line-height: 1.55;
+    max-width: 72ch;
+}
+.kg-ap-step { margin: 0 0 18px; }
+.kg-ap-step-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--lp-text);
+}
+.kg-ap-step-n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--lp-primary);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    flex: 0 0 auto;
+}
+.kg-ap-step-sub { font-weight: 400; color: var(--lp-text-secondary); font-size: 12px; }
+
+/* Mode cards */
+.kg-ap-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.kg-ap-mode { cursor: pointer; margin: 0; }
+.kg-ap-mode input { position: absolute; opacity: 0; pointer-events: none; }
+.kg-ap-mode-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    height: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--lp-border);
+    border-radius: 10px;
+    background: var(--lp-surface);
+    transition: border-color .15s, box-shadow .15s;
+}
+.kg-ap-mode:hover .kg-ap-mode-card { border-color: var(--lp-text-secondary); }
+.kg-ap-mode input:checked + .kg-ap-mode-card {
+    border-color: var(--lp-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--lp-primary) 18%, transparent);
+}
+.kg-ap-mode input:focus-visible + .kg-ap-mode-card { outline: 2px solid var(--lp-primary); outline-offset: 2px; }
+.kg-ap-mode-name { font-weight: 700; font-size: 13px; color: var(--lp-text); display: flex; align-items: center; gap: 6px; }
+.kg-ap-mode-tag {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--lp-success);
+    background: color-mix(in srgb, var(--lp-success) 14%, transparent);
+    padding: 1px 6px; border-radius: 999px;
+}
+.kg-ap-mode-desc { font-size: 11.5px; color: var(--lp-text-secondary); line-height: 1.45; }
+
+/* Field rows */
+.kg-ap-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.kg-ap-fields--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kg-ap-field { display: flex; flex-direction: column; gap: 5px; margin: 0; }
+.kg-ap-field-label { font-size: 12.5px; font-weight: 600; color: var(--lp-text); }
+.kg-ap-input { display: inline-flex; align-items: center; gap: 6px; }
+.kg-ap-input input[type="number"] {
+    width: 84px;
+    padding: 5px 8px;
+    border: 1px solid var(--lp-border);
+    border-radius: 6px;
+}
+.kg-ap-unit { font-size: 12px; color: var(--lp-text-secondary); }
+.kg-ap-help { font-size: 11px; color: var(--lp-text-secondary); line-height: 1.4; }
+.kg-autopilot-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+
+@media (max-width: 782px) {
+    .kg-ap-modes { grid-template-columns: 1fr; }
+    .kg-ap-fields, .kg-ap-fields--3 { grid-template-columns: 1fr; }
+}
+
 /* Pulse ring for high-score nodes */
 .kg-pulse-ring {
     animation: kg-pulse 2s ease-in-out infinite;

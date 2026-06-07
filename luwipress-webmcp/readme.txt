@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.40
+Stable tag: 1.0.41
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,11 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.41 — CPT Engine schema + field tools (paired with core 3.11.0) =
+* **NEW `cpt_schema_map`** — make an operator-defined content type emit Schema.org JSON-LD: set its @type (Person, Organization, …) and map each field onto a schema property in one call (sameAs collects, knowsAbout comma-splits, dotted props nest). Pairs with core 3.11.0, where custom types now render their mapped JSON-LD on the front-end.
+* **NEW `cpt_field_set`** — add or update a single field on a custom content type WITHOUT resending the whole definition (merges into the existing type, avoiding the full-replace behaviour of `cpt_type_set`).
+* **NEW `cpt_type_get`** — read one content-type definition by key. Read-only. Both write tools are restricted to operator-defined types; the Vendors / Events presets are protected.
 
 = 1.0.40 — Events tools + WPML/Polylang config generator (paired with core 3.9.0) =
 * **NEW `event_settings_get` / `event_settings_set`** — read and configure the Events module (enable it, set the archive slug + labels). Setting writes are explicit; reads are safe for the autonomous agent loop.

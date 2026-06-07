@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.10.0
+Stable tag: 3.11.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,14 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.11.1 — Fix: custom content types now actually emit their Schema.org JSON-LD =
+* Fixes a 3.11.0 timing bug where a custom content type's Schema.org mapping was wired up too early (before the type list had loaded), so no JSON-LD was emitted on the front-end. Custom types that have a Schema.org @type set now correctly output their structured data. The built-in Vendors and Events schema were unaffected.
+
+= 3.11.0 — Custom content types emit Schema.org JSON-LD + Knowledge Graph polish =
+* **Your own content types now output Schema.org structured data.** Set a Schema.org type (Person, Organization, LocalBusiness, Event…) on a custom content type and map each field to a schema property in the Content Types manager — LuwiPress now emits valid JSON-LD on that type's pages, the same rich-results signal the built-in Vendors and Events presets already produce. Several fields can collect into `sameAs` (social links), comma lists become arrays (e.g. `knowsAbout`), and dotted properties nest (e.g. a location into a postal address). Until now the mapping was saved but never rendered on the front-end.
+* **Knowledge Graph sidebar actions are reliable again.** The quick actions on a node (enrich, write SEO, translate, run a category batch, Autopilot save/run…) no longer fail with "Cookie check failed" after a page has been open for a while — they now carry your API token alongside the session cookie, so a stale cookie no longer blocks them.
+* **Friendlier AI Autopilot panel.** Autopilot settings are now a short guided panel — an Off / Dry-run / Live mode picker plus plainly-labelled "what it acts on" and "daily budget" steps — instead of a cramped row of abbreviations. The first Knowledge Graph load also shows an animated graph "x-ray" with a progress bar instead of a bare spinner.
 
 = 3.10.0 — Content Types manager (CPT Engine UI) =
 * **NEW Content Types manager** under LuwiPress → Site → Content Types. See every content type your store runs — Vendors, Events and any custom one — with its fields, taxonomies, Schema.org mapping and (when WooCommerce is active) product attribution, all in one place.
