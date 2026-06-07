@@ -774,13 +774,15 @@ class LuwiPress_CPT_Engine {
 
 	/** Term IDs (vendor post ids) a product carries in an attribution taxonomy. */
 	private function attribution_term_ids( $product_id, $tax ) {
-		$terms = get_the_terms( (int) $product_id, $tax );
-		if ( ! is_array( $terms ) ) {
-			return array();
-		}
+		global $wpdb;
+		// Direct term_relationships read -- WPML-safe (get_the_terms is language-scoped).
+		$slugs = $wpdb->get_col( $wpdb->prepare(
+			"SELECT t.slug FROM {$wpdb->term_relationships} tr INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id INNER JOIN {$wpdb->terms} t ON t.term_id = tt.term_id WHERE tr.object_id = %d AND tt.taxonomy = %s",
+			(int) $product_id, $tax
+		) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- prepared immediately above.
 		$out = array();
-		foreach ( $terms as $term ) {
-			$vid = (int) $term->slug; // mirror term slug = source vendor post id
+		foreach ( (array) $slugs as $slug ) {
+			$vid = (int) $slug;
 			if ( $vid > 0 ) {
 				$out[] = $vid;
 			}
@@ -790,14 +792,14 @@ class LuwiPress_CPT_Engine {
 
 	/** Products carrying any term in an attribution taxonomy. */
 	private function products_with_attribution_terms( $tax ) {
-		return get_posts( array(
-			'post_type'        => 'product',
-			'post_status'      => 'any',
-			'fields'           => 'ids',
-			'numberposts'      => -1,
-			'tax_query'        => array( array( 'taxonomy' => $tax, 'operator' => 'EXISTS' ) ),
-			'suppress_filters' => true,
-		) );
+		global $wpdb;
+		// All products (any language) carrying a term in this taxonomy, read straight
+		// from term_relationships so WPML language scoping doesn't drop translations.
+		$ids = $wpdb->get_col( $wpdb->prepare(
+			"SELECT DISTINCT tr.object_id FROM {$wpdb->term_relationships} tr INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id INNER JOIN {$wpdb->posts} p ON p.ID = tr.object_id WHERE tt.taxonomy = %s AND p.post_type = 'product'",
+			$tax
+		) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- prepared immediately above.
+		return array_map( 'intval', (array) $ids );
 	}
 
 	/**

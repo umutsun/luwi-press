@@ -659,13 +659,19 @@ class LuwiPress_Vendors {
 		// with the vendor-side makesOffer, which already resolves via this taxonomy.
 		$tax = 'product_' . self::POST_TYPE;
 		if ( taxonomy_exists( $tax ) ) {
-			$terms = get_the_terms( $product_id, $tax );
-			if ( is_array( $terms ) ) {
-				foreach ( $terms as $term ) {
-					$vid = (int) $term->slug;
-					if ( $vid > 0 ) {
-						$ids[] = $vid;
-					}
+			global $wpdb;
+			// Read DIRECTLY from term_relationships so WPML's term-language filter
+			// can't hide the mirror term: get_the_terms() is language-scoped and
+			// returns nothing when the term is keyed to a different language than the
+			// current render context (the makesOffer side already resolves WPML-free).
+			$slugs = $wpdb->get_col( $wpdb->prepare(
+				"SELECT t.slug FROM {$wpdb->term_relationships} tr INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id INNER JOIN {$wpdb->terms} t ON t.term_id = tt.term_id WHERE tr.object_id = %d AND tt.taxonomy = %s",
+				(int) $product_id, $tax
+			) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- prepared immediately above.
+			foreach ( (array) $slugs as $slug ) {
+				$vid = (int) $slug; // mirror term slug = vendor post id
+				if ( $vid > 0 ) {
+					$ids[] = $vid;
 				}
 			}
 		}

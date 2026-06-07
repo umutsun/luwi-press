@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.12.0
+Stable tag: 3.12.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.12.1 — Vendor rich-result fix now WPML-safe =
+* The vendor "made by" manufacturer/author structured data and the attribution repair tool now read the product↔vendor link directly, so they work on multilingual (WPML) sites where the attribution was set only through the vendor category. Closes a case where, after 3.12.0, the rich result still stayed missing on multilingual product pages because the language filter hid the category link.
 
 = 3.12.0 — Redirect manager, link audit, product snapshots, related-content fields =
 * **Redirect manager (Rank Math):** create, bulk-create, list, update and delete URL redirects remotely — built for post-migration cleanup so old indexed links 301 to their new home. Bulk-seed up to 200 redirects in one call. Requires Rank Math with its Redirections module; degrades gracefully on sites without it.
