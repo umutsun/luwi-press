@@ -136,6 +136,7 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 * **Product snapshot & rollback (WooCommerce):** capture a full snapshot of a product (content, all custom fields, gallery, categories and every variation) before a risky bulk edit, then roll it back in one step if something breaks. Keeps the last 10 snapshots per product; a safety snapshot is taken automatically before each rollback.
 * **Related-content fields:** custom content types can now link to each other with a "relationship" field you can query in both directions (e.g. "which courses list this teacher?").
 * **Vendor rich-result fix:** the "made by" manufacturer/author structured data now appears whenever a product is attributed to a vendor — whether the attribution was set through the product's vendor field or the vendor category — so it no longer goes missing on some products.
+* **Attribution repair tool:** a scan-and-repair pass finds products linked to a vendor through the vendor category but missing the matching vendor field, and fills it in (preview first, additive — never removes a link) so vendor "their work" grids and the Knowledge Graph see every attributed product.
 * **WPML auto-config (optional):** an opt-in setting can register operator-defined content types with WPML at runtime (the recommended path remains the ready-to-paste config on the Content Types screen).
 
 = 3.11.2 — Custom content type Schema.org polish =

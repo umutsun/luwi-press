@@ -770,6 +770,144 @@ class LuwiPress_CPT_Engine {
 		return array_values( array_unique( $out ) );
 	}
 
+	/* -- FR-017 follow-up: term->meta attribution reconcile ------ */
+
+	/** Term IDs (vendor post ids) a product carries in an attribution taxonomy. */
+	private function attribution_term_ids( $product_id, $tax ) {
+		$terms = get_the_terms( (int) $product_id, $tax );
+		if ( ! is_array( $terms ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( $terms as $term ) {
+			$vid = (int) $term->slug; // mirror term slug = source vendor post id
+			if ( $vid > 0 ) {
+				$out[] = $vid;
+			}
+		}
+		return array_values( array_unique( $out ) );
+	}
+
+	/** Products carrying any term in an attribution taxonomy. */
+	private function products_with_attribution_terms( $tax ) {
+		return get_posts( array(
+			'post_type'        => 'product',
+			'post_status'      => 'any',
+			'fields'           => 'ids',
+			'numberposts'      => -1,
+			'tax_query'        => array( array( 'taxonomy' => $tax, 'operator' => 'EXISTS' ) ),
+			'suppress_filters' => true,
+		) );
+	}
+
+	/**
+	 * Scan (read-only) for products whose attribution TAXONOMY term is not fully
+	 * reflected in the canonical attribution META. These are products attributed
+	 * term-first (admin filter / seed / Store API) whose meta is empty or
+	 * divergent -- invisible to meta readers (theme work grid, KG, grids). Target
+	 * meta = union(current meta ids, term ids) (additive, never removes).
+	 *
+	 * @param string $only_post_type
+	 * @return array
+	 */
+	public function reconcile_attribution_scan( $only_post_type = '' ) {
+		$report = array( 'types' => array(), 'totals' => array( 'scanned' => 0, 'missing' => 0, 'divergent' => 0, 'ok' => 0 ) );
+		foreach ( $this->wc_attribution_map() as $info ) {
+			if ( '' !== $only_post_type && $info['post_type'] !== $only_post_type ) {
+				continue;
+			}
+			$tax = $info['taxonomy'];
+			if ( ! taxonomy_exists( $tax ) ) {
+				continue;
+			}
+			$meta_key = $info['meta'];
+			$t = array( 'post_type' => $info['post_type'], 'taxonomy' => $tax, 'meta' => $meta_key, 'scanned' => 0, 'missing' => 0, 'divergent' => 0, 'ok' => 0, 'sample' => array() );
+			foreach ( $this->products_with_attribution_terms( $tax ) as $pid ) {
+				$term_ids = $this->attribution_term_ids( $pid, $tax );
+				if ( empty( $term_ids ) ) {
+					continue;
+				}
+				$t['scanned']++;
+				$meta_ids = $this->parse_attribution_meta_value( get_post_meta( $pid, $meta_key, true ) );
+				$union    = array_values( array_unique( array_merge( $meta_ids, $term_ids ) ) );
+				sort( $union );
+				$cur = $meta_ids;
+				sort( $cur );
+				if ( $cur === $union ) {
+					$t['ok']++;
+					continue;
+				}
+				if ( empty( $meta_ids ) ) {
+					$t['missing']++;
+				} else {
+					$t['divergent']++;
+				}
+				if ( count( $t['sample'] ) < 10 ) {
+					$t['sample'][] = array( 'product_id' => (int) $pid, 'meta_ids' => $meta_ids, 'term_ids' => $term_ids, 'target' => $union );
+				}
+			}
+			$report['types'][] = $t;
+			foreach ( array( 'scanned', 'missing', 'divergent', 'ok' ) as $k ) {
+				$report['totals'][ $k ] += $t[ $k ];
+			}
+		}
+		return $report;
+	}
+
+	/**
+	 * Write canonical attribution META from the TAXONOMY terms for products where
+	 * they diverge (additive union -- never removes attribution). Dry-run by
+	 * default. Each write goes through the registered meta sanitize_callback
+	 * (canonical ["123"] form) and the meta->term dual-write keeps both sides in
+	 * sync. Operator-triggered, batched ($limit); never auto-runs.
+	 *
+	 * @param string $only_post_type
+	 * @param bool   $dry_run
+	 * @param int    $limit
+	 * @return array
+	 */
+	public function reconcile_attribution_run( $only_post_type = '', $dry_run = true, $limit = 500 ) {
+		$limit   = max( 1, min( 5000, (int) $limit ) );
+		$changes = array();
+		$count   = 0;
+		foreach ( $this->wc_attribution_map() as $info ) {
+			if ( '' !== $only_post_type && $info['post_type'] !== $only_post_type ) {
+				continue;
+			}
+			$tax = $info['taxonomy'];
+			if ( ! taxonomy_exists( $tax ) ) {
+				continue;
+			}
+			$meta_key = $info['meta'];
+			foreach ( $this->products_with_attribution_terms( $tax ) as $pid ) {
+				if ( $count >= $limit ) {
+					break 2;
+				}
+				$term_ids = $this->attribution_term_ids( $pid, $tax );
+				if ( empty( $term_ids ) ) {
+					continue;
+				}
+				$meta_ids = $this->parse_attribution_meta_value( get_post_meta( $pid, $meta_key, true ) );
+				$union    = array_values( array_unique( array_merge( $meta_ids, $term_ids ) ) );
+				sort( $union );
+				$cur = $meta_ids;
+				sort( $cur );
+				if ( $cur === $union ) {
+					continue;
+				}
+				$count++;
+				if ( ! $dry_run ) {
+					update_post_meta( (int) $pid, $meta_key, wp_json_encode( array_map( 'strval', $union ) ) );
+				}
+				$changes[] = array( 'product_id' => (int) $pid, 'from' => $meta_ids, 'to' => $union );
+			}
+		}
+		if ( ! $dry_run && $count > 0 ) {
+			LuwiPress_Logger::log( 'CPT attribution reconcile: wrote meta for ' . $count . ' product(s)', 'info' );
+		}
+		return array( 'dry_run' => (bool) $dry_run, 'changed' => $count, 'limit' => $limit, 'changes' => $changes );
+	}
+
 	/**
 	 * Resolve a CPT post to its WPML/Polylang source-language (default-language)
 	 * sibling, so every translation of one vendor maps to a SINGLE mirror term.
@@ -1744,6 +1882,18 @@ class LuwiPress_CPT_Engine {
 				'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
 			),
 		) );
+		register_rest_route( $ns, '/cpt-engine/attribution/reconcile', array(
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'rest_reconcile_scan' ),
+				'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+			),
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'rest_reconcile_run' ),
+				'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+			),
+		) );
 		register_rest_route( $ns, '/cpt-engine/types', array(
 			array(
 				'methods'             => 'GET',
@@ -1850,6 +2000,25 @@ class LuwiPress_CPT_Engine {
 			'value'   => $canonical,
 			'related' => $this->get_related( $post_id, $field ),
 		) );
+	}
+
+	/** GET /cpt-engine/attribution/reconcile -- scan (read-only). */
+	public function rest_reconcile_scan( $request ) {
+		$pt = sanitize_key( (string) $request->get_param( 'post_type' ) );
+		return rest_ensure_response( $this->reconcile_attribution_scan( $pt ) );
+	}
+
+	/** POST /cpt-engine/attribution/reconcile -- run (dry-run by default). */
+	public function rest_reconcile_run( $request ) {
+		$body = $request->get_json_params();
+		if ( empty( $body ) ) {
+			$body = $request->get_body_params();
+		}
+		$body    = is_array( $body ) ? $body : array();
+		$pt      = sanitize_key( (string) ( isset( $body['post_type'] ) ? $body['post_type'] : '' ) );
+		$dry_run = ! isset( $body['dry_run'] ) ? true : (bool) $body['dry_run'];
+		$limit   = isset( $body['limit'] ) ? (int) $body['limit'] : 500;
+		return rest_ensure_response( $this->reconcile_attribution_run( $pt, $dry_run, $limit ) );
 	}
 
 	/** Reserved / built-in post types an operator type may never override. */

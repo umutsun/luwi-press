@@ -64,6 +64,7 @@ Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress
 * **`product_snapshot_create` / `product_snapshot_list` / `product_rollback`** — snapshot a WooCommerce product (fields, meta, gallery, terms, every variation) before risky edits and roll back safely.
 * **`cpt_related_get` / `cpt_related_set`** — read and write bidirectional relationship fields between content types.
 * **`cpt_wpml_autoregister_set`** — opt-in toggle for best-effort runtime WPML registration of operator-defined CPTs.
+* **`cpt_attribution_reconcile_scan` / `cpt_attribution_reconcile_run`** — find and repair WooCommerce products whose vendor-category attribution isn't mirrored into the canonical vendor field (dry-run by default; additive).
 
 = 1.0.42 — Safer term meta + bulk meta + any-CPT create (paired with core 3.11.2) =
 * **`taxonomy_meta_set` now REFUSES the structured-array schema keys** (`_luwipress_faq` / `_luwipress_howto` / `_luwipress_speakable`) that it would silently corrupt into a string, and points you to `aeo_save_faq` / `aeo_save_schema` instead. Closes a silent-data-corruption path.

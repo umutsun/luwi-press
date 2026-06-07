@@ -1311,6 +1311,44 @@ class LuwiPress_WebMCP {
             );
         } );
 
+        $this->register_tool( 'cpt_attribution_reconcile_scan', array(
+            'description' => 'Scan (read-only) for WooCommerce products whose vendor/CPT attribution TAXONOMY term is not reflected in the canonical attribution META (e.g. _lwp_vendor_ids). These are products attributed term-first whose meta is empty/divergent, so meta readers (theme work grid, Knowledge Graph, grids) miss them. Returns per-type counts (missing/divergent/ok) + a sample. Pairs with the FR-017 schema fix.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_type' => array( 'type' => 'string', 'description' => 'Limit to one CPT post type (e.g. lwp_vendor); omit for all attribution types.' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Attribution Reconcile Scan', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_CPT_Engine' ) ) {
+                return array( 'error' => 'CPT Engine is not available on this site.' );
+            }
+            $pt = isset( $args['post_type'] ) ? sanitize_key( (string) $args['post_type'] ) : '';
+            return LuwiPress_CPT_Engine::get_instance()->reconcile_attribution_scan( $pt );
+        } );
+
+        $this->register_tool( 'cpt_attribution_reconcile_run', array(
+            'description' => 'Write canonical attribution META from the TAXONOMY terms for products where they diverge -- additive union, never removes attribution. DRY-RUN BY DEFAULT (set dry_run=false to apply). Batched via limit. Fixes the meta side so theme work grids + Knowledge Graph see term-attributed products. Run cpt_attribution_reconcile_scan first.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_type' => array( 'type' => 'string',  'description' => 'Limit to one CPT post type; omit for all.' ),
+                    'dry_run'   => array( 'type' => 'boolean', 'description' => 'Preview without writing (default true).' ),
+                    'limit'     => array( 'type' => 'integer', 'description' => 'Max products to change per call (default 500).' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Attribution Reconcile Run', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            if ( ! class_exists( 'LuwiPress_CPT_Engine' ) ) {
+                return array( 'error' => 'CPT Engine is not available on this site.' );
+            }
+            $pt      = isset( $args['post_type'] ) ? sanitize_key( (string) $args['post_type'] ) : '';
+            $dry_run = ! isset( $args['dry_run'] ) ? true : (bool) $args['dry_run'];
+            $limit   = isset( $args['limit'] ) ? (int) $args['limit'] : 500;
+            return LuwiPress_CPT_Engine::get_instance()->reconcile_attribution_run( $pt, $dry_run, $limit );
+        } );
+
         $this->register_tool( 'cpt_type_get', array(
             'description' => 'Read a single CPT Engine type definition by its engine key (e.g. "team", "vendors"): post_type, labels, field_schema, taxonomies, schema_mapping, woocommerce. Use this before cpt_field_set / cpt_schema_map to see the current field keys. Read-only.',
             'inputSchema' => array(
