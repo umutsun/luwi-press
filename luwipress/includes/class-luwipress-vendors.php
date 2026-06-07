@@ -643,12 +643,34 @@ class LuwiPress_Vendors {
 	 * @return array Array of [id, title, link, image, location, specialty]
 	 */
 	public function get_product_vendors( $product_id ) {
+		// Source 1: canonical _lwp_vendor_ids meta (JSON array of vendor post IDs).
+		$ids = array();
 		$raw = get_post_meta( $product_id, self::PRODUCT_VENDORS_META, true );
-		if ( ! is_string( $raw ) || $raw === '' ) {
-			return array();
+		if ( is_string( $raw ) && '' !== $raw ) {
+			$ids = array_map( 'intval', (array) json_decode( $raw, true ) );
 		}
-		$ids = (array) json_decode( $raw, true );
-		$ids = array_filter( array_map( 'intval', $ids ) );
+
+		// Source 2 (FR-017): the WC attribution taxonomy mirror term. The CPT Engine
+		// (Phase 3) promotes attribution to a hidden product_<post_type> taxonomy and
+		// dual-writes meta<->terms; a product attributed term-first (admin filter /
+		// seed / Store API) can carry the TERM without the meta. The mirror term's slug
+		// IS the vendor post id, so reading terms here makes the manufacturer/author
+		// schema fire regardless of which write path attributed the product -- symmetric
+		// with the vendor-side makesOffer, which already resolves via this taxonomy.
+		$tax = 'product_' . self::POST_TYPE;
+		if ( taxonomy_exists( $tax ) ) {
+			$terms = get_the_terms( $product_id, $tax );
+			if ( is_array( $terms ) ) {
+				foreach ( $terms as $term ) {
+					$vid = (int) $term->slug;
+					if ( $vid > 0 ) {
+						$ids[] = $vid;
+					}
+				}
+			}
+		}
+
+		$ids = array_values( array_unique( array_filter( $ids ) ) );
 		if ( empty( $ids ) ) {
 			return array();
 		}

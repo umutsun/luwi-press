@@ -727,6 +727,168 @@ class LuwiPress_WebMCP {
      * crm, email, system, workflow, elementor.
      */
 
+    /**
+     * Migration / SEO-ops tools (3.12.0+): Rank Math Redirections CRUD,
+     * internal-link audit, and WooCommerce product snapshot / rollback.
+     * Built for DNS-swap + bulk-edit safety.
+     */
+    private function register_migration_tools() {
+        // ── FR-042: Rank Math Redirections CRUD ──────────────────────────
+        $this->register_tool( 'redirect_diag', array(
+            'description' => 'Rank Math Redirections availability + counts (active/inactive/all) and supported header codes / comparisons. Use before/after a DNS swap to confirm the redirect engine is reachable. Read-only.',
+            'inputSchema' => array( 'type' => 'object', 'properties' => new stdClass() ),
+            'annotations' => array( 'title' => 'Redirect Diag', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            return $this->proxy_rest_post( 'LuwiPress_Redirections', 'handle_diag', array() );
+        } );
+
+        $this->register_tool( 'redirect_list', array(
+            'description' => 'List Rank Math redirects (paginated). Filter by status (all|active|inactive) and a search string; order by id/url_to/hits/created. Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'search'   => array( 'type' => 'string',  'description' => 'Match source/target substring.' ),
+                    'status'   => array( 'type' => 'string',  'description' => 'all (default) | active | inactive.' ),
+                    'per_page' => array( 'type' => 'integer', 'description' => '1..200 (default 50).' ),
+                    'paged'    => array( 'type' => 'integer', 'description' => 'Page (default 1).' ),
+                    'orderby'  => array( 'type' => 'string',  'description' => 'id|url_to|header_code|hits|last_accessed|created|updated.' ),
+                    'order'    => array( 'type' => 'string',  'description' => 'ASC|DESC (default DESC).' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'List Redirects', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Redirections', 'handle_list', $args );
+        } );
+
+        $this->register_tool( 'redirect_create', array(
+            'description' => 'Create a Rank Math redirect. sources: a path/slug string, a list of strings, or {pattern, comparison} objects (comparison: exact|contains|start|end|regex, default exact). url_to: target (relative or absolute; omit for 410/451). header_code: 301|302|307|410|451 (default 301). status: active|inactive.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'sources'     => array( 'description' => 'Source pattern(s): string, string[], or {pattern,comparison}[].' ),
+                    'url_to'      => array( 'type' => 'string',  'description' => 'Target URL/path (required unless 410/451).' ),
+                    'header_code' => array( 'type' => 'integer', 'description' => '301|302|307|410|451 (default 301).' ),
+                    'status'      => array( 'type' => 'string',  'description' => 'active (default) | inactive.' ),
+                ),
+                'required'   => array( 'sources' ),
+            ),
+            'annotations' => array( 'title' => 'Create Redirect', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Redirections', 'handle_create', $args );
+        } );
+
+        $this->register_tool( 'redirect_batch', array(
+            'description' => 'Bulk-create Rank Math redirects in one call (max 200). The DNS-swap workhorse: pass rows of { sources, url_to, header_code?, status? }. Returns per-row created ids + any errors. Each row is validated independently; a bad row is skipped, not fatal.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'rows' => array( 'type' => 'array', 'description' => 'Array of { sources, url_to, header_code?, status? } (<=200).' ),
+                ),
+                'required'   => array( 'rows' ),
+            ),
+            'annotations' => array( 'title' => 'Batch Redirects', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Redirections', 'handle_batch', $args );
+        } );
+
+        $this->register_tool( 'redirect_update', array(
+            'description' => 'Update a Rank Math redirect by id (partial: send only the fields to change — sources, url_to, header_code, status).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'id'          => array( 'type' => 'integer', 'description' => 'Redirection id (required).' ),
+                    'sources'     => array( 'description' => 'New source pattern(s).' ),
+                    'url_to'      => array( 'type' => 'string',  'description' => 'New target.' ),
+                    'header_code' => array( 'type' => 'integer', 'description' => '301|302|307|410|451.' ),
+                    'status'      => array( 'type' => 'string',  'description' => 'active|inactive.' ),
+                ),
+                'required'   => array( 'id' ),
+            ),
+            'annotations' => array( 'title' => 'Update Redirect', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Redirections', 'handle_update', $args );
+        } );
+
+        $this->register_tool( 'redirect_delete', array(
+            'description' => 'Delete one or more Rank Math redirects by id. DESTRUCTIVE — the redirect rows are removed.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'ids' => array( 'type' => 'array', 'description' => 'Redirection ids to delete.' ),
+                ),
+                'required'   => array( 'ids' ),
+            ),
+            'annotations' => array( 'title' => 'Delete Redirects', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Redirections', 'handle_delete', $args );
+        } );
+
+        // ── FR-044: internal-link audit ─────────────────────────────────
+        $this->register_tool( 'internal_link_search_audit', array(
+            'description' => 'Find every post that links to a target URL / path / slug (content, and optionally meta — Elementor/ACF). Multi-needle: a full URL also matches its relative-path + bare-slug forms. Returns matches with occurrence counts, a context snippet, and edit links. Read-only. Use before a slug change or DNS swap to see what points at the old URL.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'target'       => array( 'type' => 'string',  'description' => 'URL / path / slug to search for (required).' ),
+                    'post_types'   => array( 'type' => 'string',  'description' => 'CSV of post types (default post,page,product).' ),
+                    'status'       => array( 'type' => 'string',  'description' => 'Post status (default publish; "any" widens it).' ),
+                    'per_page'     => array( 'type' => 'integer', 'description' => '1..200 (default 50).' ),
+                    'include_meta' => array( 'type' => 'boolean', 'description' => 'Also scan post meta (default false).' ),
+                ),
+                'required'   => array( 'target' ),
+            ),
+            'annotations' => array( 'title' => 'Internal Link Audit', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Internal_Link_Audit', 'handle_audit', $args );
+        } );
+
+        // ── FR-043: WooCommerce product snapshot / rollback ─────────────
+        $this->register_tool( 'product_snapshot_create', array(
+            'description' => 'Snapshot a WooCommerce product before a risky edit: captures post fields, ALL meta, gallery, term assignments, and every variation into a 10-deep ring buffer. Non-destructive. Returns a snapshot_id for rollback.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'product_id' => array( 'type' => 'integer', 'description' => 'Product post id (required).' ),
+                    'label'      => array( 'type' => 'string',  'description' => 'Optional snapshot label.' ),
+                ),
+                'required'   => array( 'product_id' ),
+            ),
+            'annotations' => array( 'title' => 'Snapshot Product', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Product_Snapshot', 'handle_create', $args );
+        } );
+
+        $this->register_tool( 'product_snapshot_list', array(
+            'description' => 'List the snapshots stored for a WooCommerce product (id, label, timestamp, variation/meta counts). Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'product_id' => array( 'type' => 'integer', 'description' => 'Product post id (required).' ),
+                ),
+                'required'   => array( 'product_id' ),
+            ),
+            'annotations' => array( 'title' => 'List Snapshots', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Product_Snapshot', 'handle_list', $args );
+        } );
+
+        $this->register_tool( 'product_rollback', array(
+            'description' => 'Roll a WooCommerce product back to a snapshot (most recent if snapshot_id omitted). DESTRUCTIVE — overwrites current post fields, meta, terms and variations. A pre-rollback snapshot is taken automatically. replace_meta=true wipes meta keys absent from the snapshot (default false = overlay).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'product_id'   => array( 'type' => 'integer', 'description' => 'Product post id (required).' ),
+                    'snapshot_id'  => array( 'type' => 'string',  'description' => 'Snapshot id (default: most recent).' ),
+                    'replace_meta' => array( 'type' => 'boolean', 'description' => 'Full meta replace vs overlay (default false).' ),
+                ),
+                'required'   => array( 'product_id' ),
+            ),
+            'annotations' => array( 'title' => 'Rollback Product', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Product_Snapshot', 'handle_rollback', $args );
+        } );
+    }
+
     private function register_all_tools() {
         // Category → register method. Iterating instead of straight-line calls
         // so we can wrap each method in a count diff for the deploy audit
@@ -758,6 +920,7 @@ class LuwiPress_WebMCP {
             'attribution'      => 'register_attribution_tools',
             'ucp'              => 'register_ucp_tools',
             'vendors'          => 'register_vendors_tools',
+            'migration'        => 'register_migration_tools',
         );
 
         foreach ( $categories as $cat => $method ) {
@@ -1089,6 +1252,62 @@ class LuwiPress_WebMCP {
                 'xml'             => $engine->build_wpml_config_xml(),
                 'wpml_active'     => defined( 'ICL_SITEPRESS_VERSION' ),
                 'polylang_active' => function_exists( 'pll_languages_list' ),
+            );
+        } );
+
+        // ─── FR-035 + FR-034: relationship fields + WPML auto-register ──────
+        $this->register_tool( 'cpt_related_get', array(
+            'description' => 'Query a CPT Engine relationship field. direction=forward returns the posts a given post references via the field; direction=reverse returns the posts that reference the given post via that field (bidirectional, e.g. "which products list this teacher"). Read-only.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'          => array( 'type' => 'integer', 'description' => 'Post to look up (required).' ),
+                    'field'            => array( 'type' => 'string',  'description' => 'Relationship meta key (required).' ),
+                    'direction'        => array( 'type' => 'string',  'description' => 'forward (default) or reverse.' ),
+                    'source_post_type' => array( 'type' => 'string',  'description' => 'reverse only: constrain referencing posts to this type.' ),
+                ),
+                'required'   => array( 'post_id', 'field' ),
+            ),
+            'annotations' => array( 'title' => 'Get Related', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_CPT_Engine', 'rest_related_get', $args );
+        } );
+
+        $this->register_tool( 'cpt_related_set', array(
+            'description' => 'Set the forward references of a CPT Engine relationship field on a post (e.g. attach teachers to a course, set a vendor\'s parent atelier). Each id is validated against the field\'s target post type; the value is stored as a canonical JSON id array. Pass an empty ids array to clear.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Post to write to (required).' ),
+                    'field'   => array( 'type' => 'string',  'description' => 'Relationship meta key (required).' ),
+                    'ids'     => array( 'type' => 'array',   'description' => 'Referenced post IDs.' ),
+                ),
+                'required'   => array( 'post_id', 'field' ),
+            ),
+            'annotations' => array( 'title' => 'Set Related', 'readOnlyHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_CPT_Engine', 'rest_related_set', $args );
+        } );
+
+        $this->register_tool( 'cpt_wpml_autoregister_set', array(
+            'description' => 'Toggle the BEST-EFFORT WPML runtime auto-register for operator-defined CPTs (the wpml_config_array filter). LOW-CONFIDENCE: WPML has no stable runtime API and its config array shape is version-sensitive — OFF by default. The supported path is cpt_wpml_config_get (pasteable XML). Enable only to test on a specific WPML version; verify translations register before relying on it.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'enabled' => array( 'type' => 'boolean', 'description' => 'true to enable runtime injection, false to disable (default).' ),
+                ),
+                'required'   => array( 'enabled' ),
+            ),
+            'annotations' => array( 'title' => 'WPML Auto-register', 'readOnlyHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $on = ! empty( $args['enabled'] );
+            update_option( 'luwipress_cpt_wpml_autoregister', $on );
+            return array(
+                'success'           => true,
+                'wpml_autoregister' => $on,
+                'note'              => $on
+                    ? 'Runtime wpml_config_array injection enabled (applies next request). Verify your operator CPTs become translatable on this WPML version; if not, disable and paste cpt_wpml_config_get XML instead.'
+                    : 'Runtime injection disabled (default). Use cpt_wpml_config_get for the pasteable XML.',
             );
         } );
 

@@ -95,6 +95,18 @@ class LuwiPress_CPT_Engine {
 		add_filter( 'pll_get_post_types', array( $this, 'register_polylang_post_types' ), 10, 2 );
 		add_filter( 'pll_get_taxonomies', array( $this, 'register_polylang_taxonomies' ), 10, 2 );
 
+		// FR-034 (best-effort, low-confidence, opt-in): runtime WPML auto-register
+		// for operator-defined CPTs via the `wpml_config_array` filter — the only
+		// hook that injects translation config without a manual XML paste. WPML's
+		// parsed-config array shape is undocumented + version-sensitive (single vs.
+		// list entries), so this is OFF by default; the supported path stays the
+		// pasteable XML from GET /cpt-engine/wpml-config. Enable only after
+		// verifying on the target WPML version:
+		//   update_option('luwipress_cpt_wpml_autoregister', true)
+		if ( get_option( 'luwipress_cpt_wpml_autoregister', false ) ) {
+			add_filter( 'wpml_config_array', array( $this, 'inject_wpml_config_array' ) );
+		}
+
 		// Phase 3: promote each type's WooCommerce attribution (e.g. the Vendors
 		// module's `_lwp_vendor_ids` product meta) to a first-class hidden
 		// taxonomy on `product`, so WC-native term queries / Store API / feeds /
@@ -211,6 +223,8 @@ class LuwiPress_CPT_Engine {
 					'translatable' => ! empty( $f['translatable'] ),
 					'in_elementor' => ! isset( $f['in_elementor'] ) ? true : (bool) $f['in_elementor'],
 					'schema_prop'  => isset( $f['schema_prop'] ) ? (string) $f['schema_prop'] : '',
+					'relation_post_type' => isset( $f['relation_post_type'] ) ? (string) $f['relation_post_type'] : '',
+					'relation_multiple'  => ! isset( $f['relation_multiple'] ) ? true : (bool) $f['relation_multiple'],
 				);
 			}
 		}
@@ -418,11 +432,23 @@ class LuwiPress_CPT_Engine {
 		}
 
 		foreach ( $def['field_schema'] as $f ) {
+			$sanitize = $this->sanitize_cb_for( $f['type'] );
+			if ( 'relationship' === $f['type'] ) {
+				// FR-035: relationship fields store a canonical JSON array of post
+				// IDs (["123","456"]). The per-field closure validates each ID
+				// against the declared target post type so every write (REST / MCP
+				// / wp-cli / metabox) is normalized at the meta-API boundary.
+				$target_pt = isset( $f['relation_post_type'] ) ? (string) $f['relation_post_type'] : '';
+				$multiple  = ! isset( $f['relation_multiple'] ) ? true : (bool) $f['relation_multiple'];
+				$sanitize  = static function ( $value ) use ( $target_pt, $multiple ) {
+					return LuwiPress_CPT_Engine::sanitize_relationship( $value, $target_pt, $multiple );
+				};
+			}
 			register_post_meta( $pt, $f['key'], array(
 				'type'              => $this->meta_type_for( $f['type'] ),
 				'single'            => true,
 				'show_in_rest'      => true,
-				'sanitize_callback' => $this->sanitize_cb_for( $f['type'] ),
+				'sanitize_callback' => $sanitize,
 				'auth_callback'     => function () {
 					return current_user_can( 'edit_posts' );
 				},
@@ -466,6 +492,165 @@ class LuwiPress_CPT_Engine {
 			default:
 				return 'sanitize_text_field';
 		}
+	}
+
+	/* -- FR-035: relationship field data layer ------------------ */
+
+	/**
+	 * Sanitize a relationship value into the canonical JSON array of post IDs
+	 * (["123","456"]). Accepts any shape (JSON / array / comma list / int). Each
+	 * ID must reference an existing, non-trashed post; when $target_pt is set the
+	 * post type must match. Used as the per-field meta sanitize_callback so every
+	 * write (REST / MCP / wp-cli / metabox) is normalized at the meta-API boundary.
+	 *
+	 * @param mixed  $value
+	 * @param string $target_pt
+	 * @param bool   $multiple
+	 * @return string canonical JSON, or '' when empty
+	 */
+	public static function sanitize_relationship( $value, $target_pt = '', $multiple = true ) {
+		$ids   = self::decode_relationship_ids( $value );
+		$valid = array();
+		foreach ( $ids as $id ) {
+			$post = get_post( $id );
+			if ( ! $post ) {
+				continue;
+			}
+			if ( in_array( $post->post_status, array( 'trash', 'auto-draft' ), true ) ) {
+				continue;
+			}
+			if ( '' !== $target_pt && $post->post_type !== $target_pt ) {
+				continue;
+			}
+			$valid[] = (string) $id;
+		}
+		$valid = array_values( array_unique( $valid ) );
+		if ( ! $multiple && count( $valid ) > 1 ) {
+			$valid = array_slice( $valid, 0, 1 );
+		}
+		return empty( $valid ) ? '' : wp_json_encode( $valid );
+	}
+
+	/**
+	 * Decode a relationship value (any shape) into a deduped int[] of post IDs.
+	 *
+	 * @param mixed $value
+	 * @return int[]
+	 */
+	public static function decode_relationship_ids( $value ) {
+		if ( is_string( $value ) ) {
+			$trim = trim( $value );
+			if ( '' === $trim ) {
+				return array();
+			}
+			$decoded = json_decode( $trim, true );
+			if ( is_array( $decoded ) ) {
+				$value = $decoded;
+			} else {
+				$value = preg_split( '/\s*[,;]\s*/', $trim );
+			}
+		}
+		if ( ! is_array( $value ) ) {
+			$value = array( $value );
+		}
+		$ids = array();
+		foreach ( $value as $v ) {
+			$id = (int) ( is_array( $v ) ? ( isset( $v['id'] ) ? $v['id'] : 0 ) : $v );
+			if ( $id > 0 ) {
+				$ids[] = $id;
+			}
+		}
+		return array_values( array_unique( $ids ) );
+	}
+
+	/**
+	 * Forward relationship: the posts a post references via $field_key.
+	 *
+	 * @param int    $post_id
+	 * @param string $field_key
+	 * @return array<int,array>
+	 */
+	public function get_related( $post_id, $field_key ) {
+		$raw = get_post_meta( (int) $post_id, (string) $field_key, true );
+		return $this->resolve_posts( self::decode_relationship_ids( $raw ) );
+	}
+
+	/**
+	 * Reverse relationship: posts that reference $target_id via $field_key. Uses a
+	 * JSON-array-element-aware boundary so 36633 never false-matches 366331.
+	 *
+	 * @param int    $target_id
+	 * @param string $field_key
+	 * @param string $source_pt optional post-type constraint
+	 * @return array<int,array>
+	 */
+	public function get_referencing( $target_id, $field_key, $source_pt = '' ) {
+		global $wpdb;
+		$target_id = (int) $target_id;
+		$field_key = (string) $field_key;
+		if ( $target_id <= 0 || '' === $field_key ) {
+			return array();
+		}
+		$regex = '(\\[|,)[[:space:]]*"?' . $target_id . '"?[[:space:]]*(,|\\])';
+		if ( '' !== $source_pt ) {
+			$sql = $wpdb->prepare(
+				"SELECT pm.post_id FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE pm.meta_key = %s AND pm.meta_value REGEXP %s AND p.post_type = %s AND p.post_status NOT IN ('trash','auto-draft')",
+				$field_key, $regex, $source_pt
+			);
+		} else {
+			$sql = $wpdb->prepare(
+				"SELECT pm.post_id FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE pm.meta_key = %s AND pm.meta_value REGEXP %s AND p.post_status NOT IN ('trash','auto-draft')",
+				$field_key, $regex
+			);
+		}
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- prepared immediately above.
+		$ids = array_map( 'intval', (array) $wpdb->get_col( $sql ) );
+		return $this->resolve_posts( $ids );
+	}
+
+	/**
+	 * Resolve post IDs into {id,title,link,post_type,status}.
+	 *
+	 * @param int[] $ids
+	 * @return array<int,array>
+	 */
+	private function resolve_posts( $ids ) {
+		$out = array();
+		foreach ( $ids as $id ) {
+			$post = get_post( $id );
+			if ( ! $post ) {
+				continue;
+			}
+			$out[] = array(
+				'id'        => (int) $id,
+				'title'     => get_the_title( $id ),
+				'link'      => get_permalink( $id ),
+				'post_type' => $post->post_type,
+				'status'    => $post->post_status,
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * Look up a field definition by post type + key.
+	 *
+	 * @param string $post_type
+	 * @param string $field_key
+	 * @return array|null
+	 */
+	public function get_field_def( $post_type, $field_key ) {
+		foreach ( $this->get_types() as $def ) {
+			if ( (string) $def['post_type'] !== (string) $post_type ) {
+				continue;
+			}
+			foreach ( $def['field_schema'] as $f ) {
+				if ( (string) $f['key'] === (string) $field_key ) {
+					return $f;
+				}
+			}
+		}
+		return null;
 	}
 
 	/* ── Phase 3: WooCommerce attribution taxonomy ──────────────────────── */
@@ -1265,6 +1450,75 @@ class LuwiPress_CPT_Engine {
 		return implode( "\n", $lines ) . "\n";
 	}
 
+	/* -- FR-034: WPML runtime auto-register (best-effort, opt-in) ----- */
+
+	/**
+	 * Inject operator-defined CPT translation config into WPML at runtime via
+	 * the `wpml_config_array` filter. WPML exposes no documented runtime
+	 * registration API; this filter's parsed-config array shape is version-
+	 * sensitive (single vs. list entries), so this path is opt-in + low-
+	 * confidence. Only ADDS entries (never edits/removes existing), de-dupes by
+	 * value, and tolerates the single-vs-list inconsistency. The supported path
+	 * stays the pasteable XML from GET /cpt-engine/wpml-config.
+	 *
+	 * @param array $config WPML parsed config array.
+	 * @return array
+	 */
+	public function inject_wpml_config_array( $config ) {
+		if ( ! is_array( $config ) ) {
+			return $config;
+		}
+		$cfg = $this->build_wpml_config();
+		if ( ! isset( $config['wpml-config'] ) || ! is_array( $config['wpml-config'] ) ) {
+			$config['wpml-config'] = array();
+		}
+		foreach ( $cfg['custom_types'] as $pt ) {
+			$config['wpml-config'] = $this->wpml_append( $config['wpml-config'], 'custom-types', 'custom-type', array( 'value' => $pt, 'attr' => array( 'translate' => 1 ) ) );
+		}
+		foreach ( $cfg['taxonomies'] as $tx ) {
+			$config['wpml-config'] = $this->wpml_append( $config['wpml-config'], 'taxonomies', 'taxonomy', array( 'value' => $tx, 'attr' => array( 'translate' => 1 ) ) );
+		}
+		foreach ( $cfg['custom_fields'] as $key => $action ) {
+			$action = ( 'translate' === $action ) ? 'translate' : 'copy';
+			$config['wpml-config'] = $this->wpml_append( $config['wpml-config'], 'custom-fields', 'custom-field', array( 'value' => $key, 'attr' => array( 'action' => $action ) ) );
+		}
+		return $config;
+	}
+
+	/**
+	 * Append one entry to a WPML config group, normalizing a single assoc entry
+	 * into a list first and skipping a duplicate `value`. Returns the new root.
+	 *
+	 * @param array  $root  wpml-config root.
+	 * @param string $group e.g. 'custom-types'.
+	 * @param string $item  e.g. 'custom-type'.
+	 * @param array  $entry { value, attr }.
+	 * @return array
+	 */
+	private function wpml_append( $root, $group, $item, $entry ) {
+		if ( ! isset( $root[ $group ] ) || ! is_array( $root[ $group ] ) ) {
+			$root[ $group ] = array();
+		}
+		$node  = $root[ $group ];
+		$items = isset( $node[ $item ] ) ? $node[ $item ] : array();
+		if ( is_array( $items ) && ( isset( $items['value'] ) || isset( $items['attr'] ) ) ) {
+			$items = array( $items );
+		}
+		if ( ! is_array( $items ) ) {
+			$items = array();
+		}
+		foreach ( $items as $existing ) {
+			$ev = is_array( $existing ) ? ( isset( $existing['value'] ) ? $existing['value'] : null ) : $existing;
+			if ( (string) $ev === (string) $entry['value'] ) {
+				return $root;
+			}
+		}
+		$items[]        = $entry;
+		$node[ $item ]  = $items;
+		$root[ $group ] = $node;
+		return $root;
+	}
+
 	/* ── FR-031: operator-defined CPT → Schema Registry bridge ──────────── */
 
 	/**
@@ -1478,6 +1732,18 @@ class LuwiPress_CPT_Engine {
 			'callback'            => array( $this, 'rest_wpml_config' ),
 			'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
 		) );
+		register_rest_route( $ns, '/cpt-engine/related', array(
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'rest_related_get' ),
+				'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+			),
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'rest_related_set' ),
+				'permission_callback' => array( 'LuwiPress_Permission', 'check_token_or_admin' ),
+			),
+		) );
 		register_rest_route( $ns, '/cpt-engine/types', array(
 			array(
 				'methods'             => 'GET',
@@ -1518,7 +1784,71 @@ class LuwiPress_CPT_Engine {
 				'presets_static_file' => 'Vendors + Events presets ship in luwipress/wpml-config.xml, auto-read by both WPML and Polylang.',
 				'polylang_filters'    => 'Every enabled engine post type + translatable taxonomy is registered via pll_get_post_types / pll_get_taxonomies (covers operator-defined CPTs automatically).',
 				'wpml_operator_cpts'  => 'For operator-defined CPTs on WPML, paste the "xml" payload into WPML → Settings → Custom XML Configuration (the shipped file covers only the built-in presets).',
+				'wpml_autoregister'   => get_option( 'luwipress_cpt_wpml_autoregister', false ) ? 'ON (opt-in): operator CPTs also injected at runtime via wpml_config_array -- verify on your WPML version.' : 'OFF (default): runtime injection disabled; use the pasteable XML above.',
 			),
+		) );
+	}
+
+	/**
+	 * GET /cpt-engine/related -- forward or reverse relationship lookup.
+	 */
+	public function rest_related_get( $request ) {
+		$post_id   = (int) $request->get_param( 'post_id' );
+		$field     = sanitize_key( (string) $request->get_param( 'field' ) );
+		$direction = ( 'reverse' === $request->get_param( 'direction' ) ) ? 'reverse' : 'forward';
+		$source_pt = sanitize_key( (string) $request->get_param( 'source_post_type' ) );
+		if ( $post_id <= 0 || '' === $field ) {
+			return new WP_Error( 'bad_request', 'post_id and field are required.', array( 'status' => 400 ) );
+		}
+		$results = ( 'reverse' === $direction )
+			? $this->get_referencing( $post_id, $field, $source_pt )
+			: $this->get_related( $post_id, $field );
+		return rest_ensure_response( array(
+			'post_id'   => $post_id,
+			'field'     => $field,
+			'direction' => $direction,
+			'count'     => count( $results ),
+			'related'   => $results,
+		) );
+	}
+
+	/**
+	 * POST /cpt-engine/related -- set a relationship field's forward references.
+	 */
+	public function rest_related_set( $request ) {
+		$body = $request->get_json_params();
+		if ( empty( $body ) ) {
+			$body = $request->get_body_params();
+		}
+		$body    = is_array( $body ) ? $body : array();
+		$post_id = (int) ( isset( $body['post_id'] ) ? $body['post_id'] : 0 );
+		$field   = sanitize_key( (string) ( isset( $body['field'] ) ? $body['field'] : '' ) );
+		if ( $post_id <= 0 || '' === $field ) {
+			return new WP_Error( 'bad_request', 'post_id and field are required.', array( 'status' => 400 ) );
+		}
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			return new WP_Error( 'not_found', 'Post not found.', array( 'status' => 404 ) );
+		}
+		$def = $this->get_field_def( $post->post_type, $field );
+		if ( null === $def || 'relationship' !== ( isset( $def['type'] ) ? $def['type'] : '' ) ) {
+			return new WP_Error( 'not_relationship', 'That field is not a relationship field on this post type.', array( 'status' => 400 ) );
+		}
+		$target_pt = (string) ( isset( $def['relation_post_type'] ) ? $def['relation_post_type'] : '' );
+		$multiple  = ! isset( $def['relation_multiple'] ) ? true : (bool) $def['relation_multiple'];
+		$ids       = isset( $body['ids'] ) ? $body['ids'] : ( isset( $body['value'] ) ? $body['value'] : array() );
+		$canonical = self::sanitize_relationship( $ids, $target_pt, $multiple );
+		if ( '' === $canonical ) {
+			delete_post_meta( $post_id, $field );
+		} else {
+			update_post_meta( $post_id, $field, $canonical );
+		}
+		return rest_ensure_response( array(
+			'success' => true,
+			'post_id' => $post_id,
+			'field'   => $field,
+			'value'   => $canonical,
+			'related' => $this->get_related( $post_id, $field ),
 		) );
 	}
 
@@ -1625,6 +1955,8 @@ class LuwiPress_CPT_Engine {
 					'translatable' => ! empty( $f['translatable'] ),
 					'in_elementor' => ! isset( $f['in_elementor'] ) ? true : (bool) $f['in_elementor'],
 					'schema_prop'  => isset( $f['schema_prop'] ) ? sanitize_text_field( (string) $f['schema_prop'] ) : '',
+					'relation_post_type' => isset( $f['relation_post_type'] ) ? sanitize_key( (string) $f['relation_post_type'] ) : '',
+					'relation_multiple'  => ! isset( $f['relation_multiple'] ) ? true : (bool) $f['relation_multiple'],
 				);
 			}
 		}

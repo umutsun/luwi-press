@@ -9,6 +9,14 @@ parameters:
         - luwipress/languages/
     bootstrapFiles:
         - phpstan-bootstrap.php
+    ignoreErrors:
+        # Rank Math is an optional third-party plugin (not in our autoload or
+        # stubs). The Redirections bridge (FR-042) guards every call with
+        # class_exists() and degrades to a 503 when RM is absent, so these
+        # "unknown class" reports are an expected external-dependency boundary.
+        -
+            message: '#on an unknown class RankMath#'
+            path: luwipress/includes/class-luwipress-redirections.php
     # All existing errors tracked in phpstan-baseline.neon
     # New code must pass Level 5 clean
 

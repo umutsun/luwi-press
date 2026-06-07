@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.11.2
+ * Version: 3.12.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.11.2');
+define('LUWIPRESS_VERSION', '3.12.0');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -250,6 +250,26 @@ class LuwiPress {
         // and rendering audits.
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-frontend-inspector.php';
 
+        // Redirections — Rank Math Redirections CRUD bridge (3.12.0+). Wraps the
+        // RankMath\Redirections\DB data layer so redirects can be listed /
+        // created / batch-seeded / updated / deleted via REST + WebMCP. Built
+        // for post-migration (DNS swap) redirect management. Degrades to a 503
+        // with a clear message when Rank Math (or its Redirections module) is
+        // not active, so it's safe to ship on every site.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-redirections.php';
+
+        // Internal Link Audit — read-only WP_Query + body/meta scan that surfaces
+        // where (and how often) a target URL / slug is linked across the site
+        // (3.12.0+). Powers pre/post-migration link hygiene without server log
+        // access. Pure-read; no third-party plugin dependency.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-internal-link-audit.php';
+
+        // Product Snapshot — WooCommerce product snapshot / rollback mirroring
+        // the Elementor snapshot pattern (3.12.0+). Captures post fields + all
+        // meta + variations + gallery + term assignments before risky edits;
+        // rollback is auth-gated. WC soft-dep: routes 503 when WC is inactive.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-product-snapshot.php';
+
         // CPT Engine — generic custom-post-type registry (3.7.x+). The single
         // source of truth for what content types exist (Vendors = preset #1;
         // Events / Team = future presets). Loaded before Vendors so presets can
@@ -390,6 +410,9 @@ class LuwiPress {
         LuwiPress_FAQ_Editor::get_instance();
         LuwiPress_Taxonomy_Editor::get_instance();
         LuwiPress_Frontend_Inspector::get_instance();
+        LuwiPress_Redirections::get_instance();
+        LuwiPress_Internal_Link_Audit::get_instance();
+        LuwiPress_Product_Snapshot::get_instance();
 
         // Elementor integration (only if Elementor is active)
         if ( LuwiPress_Elementor::is_elementor_active() || is_admin() ) {

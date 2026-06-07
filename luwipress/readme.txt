@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.11.2
+Stable tag: 3.12.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,14 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.12.0 — Redirect manager, link audit, product snapshots, related-content fields =
+* **Redirect manager (Rank Math):** create, bulk-create, list, update and delete URL redirects remotely — built for post-migration cleanup so old indexed links 301 to their new home. Bulk-seed up to 200 redirects in one call. Requires Rank Math with its Redirections module; degrades gracefully on sites without it.
+* **Internal link audit:** find every page that links to a given URL, path or slug — with occurrence counts and a context preview — before you change a slug or move a domain. Read-only.
+* **Product snapshot & rollback (WooCommerce):** capture a full snapshot of a product (content, all custom fields, gallery, categories and every variation) before a risky bulk edit, then roll it back in one step if something breaks. Keeps the last 10 snapshots per product; a safety snapshot is taken automatically before each rollback.
+* **Related-content fields:** custom content types can now link to each other with a "relationship" field you can query in both directions (e.g. "which courses list this teacher?").
+* **Vendor rich-result fix:** the "made by" manufacturer/author structured data now appears whenever a product is attributed to a vendor — whether the attribution was set through the product's vendor field or the vendor category — so it no longer goes missing on some products.
+* **WPML auto-config (optional):** an opt-in setting can register operator-defined content types with WPML at runtime (the recommended path remains the ready-to-paste config on the Content Types screen).
 
 = 3.11.2 — Custom content type Schema.org polish =
 * JSON-LD for custom content types: array properties (knowsAbout, sameAs, keywords) now split on semicolons as well as commas, and string values are HTML-entity-decoded so e.g. "Founder & CEO" emits correctly instead of "Founder &amp; CEO". Pairs with WebMCP 1.0.42 (safer term meta + bulk meta + any-CPT create).

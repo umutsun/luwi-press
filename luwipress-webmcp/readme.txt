@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.42
+Stable tag: 1.0.43
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,13 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.43 — Migration & SEO-ops toolset (paired with core 3.12.0) =
+* **Redirect tools** — `redirect_list` / `redirect_create` / `redirect_batch` / `redirect_update` / `redirect_delete` / `redirect_diag`: full Rank Math redirect CRUD for post-migration redirect setup (bulk-seed up to 200 at once; diag confirms the engine is reachable before/after a DNS swap).
+* **`internal_link_search_audit`** — find every post linking to a URL / path / slug (content + optional meta), with occurrence counts and a context snippet. Read-only.
+* **`product_snapshot_create` / `product_snapshot_list` / `product_rollback`** — snapshot a WooCommerce product (fields, meta, gallery, terms, every variation) before risky edits and roll back safely.
+* **`cpt_related_get` / `cpt_related_set`** — read and write bidirectional relationship fields between content types.
+* **`cpt_wpml_autoregister_set`** — opt-in toggle for best-effort runtime WPML registration of operator-defined CPTs.
 
 = 1.0.42 — Safer term meta + bulk meta + any-CPT create (paired with core 3.11.2) =
 * **`taxonomy_meta_set` now REFUSES the structured-array schema keys** (`_luwipress_faq` / `_luwipress_howto` / `_luwipress_speakable`) that it would silently corrupt into a string, and points you to `aeo_save_faq` / `aeo_save_schema` instead. Closes a silent-data-corruption path.
