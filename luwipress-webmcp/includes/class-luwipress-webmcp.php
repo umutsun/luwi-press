@@ -1331,7 +1331,7 @@ class LuwiPress_WebMCP {
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
-                    'post_type' => array( 'type' => 'string', 'enum' => array( 'post', 'page', 'product', 'lwp_vendor' ), 'description' => 'Post type (default: post; lwp_vendor = LuwiPress Vendor CPT)' ),
+                    'post_type' => array( 'type' => 'string', 'description' => 'Post type slug — any registered public type: post, page, product, lwp_vendor, lwp_event, lwp_team, or any operator-defined CPT Engine type (cpt_types_list shows them). Default: post.' ),
                     'status'    => array( 'type' => 'string', 'enum' => array( 'publish', 'draft', 'pending', 'private', 'any' ), 'description' => 'Post status (default: any)' ),
                     'search'    => array( 'type' => 'string', 'description' => 'Search query for title/content' ),
                     'per_page'  => array( 'type' => 'integer', 'description' => 'Results per page (max 100)' ),
@@ -1369,7 +1369,7 @@ class LuwiPress_WebMCP {
                     'content'   => array( 'type' => 'string', 'description' => 'Post content (HTML)' ),
                     'excerpt'   => array( 'type' => 'string', 'description' => 'Post excerpt' ),
                     'status'    => array( 'type' => 'string', 'enum' => array( 'draft', 'publish', 'private', 'pending' ), 'description' => 'Post status' ),
-                    'post_type' => array( 'type' => 'string', 'enum' => array( 'post', 'page', 'product', 'lwp_vendor' ), 'description' => 'Post type (lwp_vendor = LuwiPress Vendor CPT)' ),
+                    'post_type' => array( 'type' => 'string', 'description' => 'Post type slug — any registered public type: post, page, product, lwp_vendor, lwp_event, lwp_team, or any operator-defined CPT Engine type (cpt_types_list shows them). Default: post.' ),
                     'categories' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Category IDs' ),
                     'tags'       => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Tag names' ),
                 ),
@@ -8506,6 +8506,44 @@ class LuwiPress_WebMCP {
             return array( 'post_id' => $post_id, 'key' => $key, 'updated' => true );
         } );
 
+        $this->register_tool( 'meta_set_bulk', array(
+            'description' => 'Set MANY custom fields on ONE post/product in a single call — the bulk form of meta_set. Pass { "post_id": N, "meta": { "key1": "v1", "key2": "v2", … } }. Ideal for filling a CPT field schema (10-16 fields) in one round-trip instead of N sequential meta_set calls. Values are stored as strings. Structured-array keys (_luwipress_faq / _luwipress_howto / _luwipress_speakable) are skipped — use aeo_save_faq / aeo_save_schema for those.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id' => array( 'type' => 'integer', 'description' => 'Post ID (required)' ),
+                    'meta'    => array( 'type' => 'object', 'description' => '{ meta_key: value, … } — at least one pair (required).' ),
+                ),
+                'required' => array( 'post_id', 'meta' ),
+            ),
+            'annotations' => array( 'title' => 'Set Meta (bulk)', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $post_id = intval( $args['post_id'] );
+            if ( ! get_post( $post_id ) ) {
+                throw new Exception( 'Post not found' );
+            }
+            $meta = ( isset( $args['meta'] ) && is_array( $args['meta'] ) ) ? $args['meta'] : array();
+            if ( empty( $meta ) ) {
+                throw new Exception( 'meta must be a non-empty object of { key: value } pairs.' );
+            }
+            $structured_keys = array( '_luwipress_faq', '_luwipress_howto', '_luwipress_speakable' );
+            $set     = array();
+            $skipped = array();
+            foreach ( $meta as $k => $v ) {
+                $key = sanitize_text_field( (string) $k );
+                if ( '' === $key ) {
+                    continue;
+                }
+                if ( in_array( $key, $structured_keys, true ) ) {
+                    $skipped[] = $key; // structured array — use aeo_save_faq / aeo_save_schema.
+                    continue;
+                }
+                update_post_meta( $post_id, $key, sanitize_text_field( (string) $v ) );
+                $set[] = $key;
+            }
+            return array( 'post_id' => $post_id, 'set' => $set, 'count' => count( $set ), 'skipped' => $skipped );
+        } );
+
         $this->register_tool( 'meta_delete', array(
             'description' => 'Delete a custom field from a post/product',
             'inputSchema' => array(
@@ -8607,6 +8645,18 @@ class LuwiPress_WebMCP {
                 throw new Exception( 'Term not found in taxonomy ' . $taxonomy );
             }
             $key   = sanitize_text_field( $args['key'] );
+            // FR-023: these keys store a structured ARRAY consumed by the Schema
+            // Registry (FAQPage / HowTo / Speakable). taxonomy_meta_set writes a
+            // plain STRING, which silently corrupts them (the value lands as a
+            // literal JSON string, not an array, and the schema never renders).
+            // Refuse + route the caller to the dedicated, validating pipeline.
+            $structured_keys = array( '_luwipress_faq', '_luwipress_howto', '_luwipress_speakable' );
+            if ( in_array( $key, $structured_keys, true ) ) {
+                throw new Exception( sprintf(
+                    'Refused: "%s" stores a structured array, not a string — writing it here corrupts the schema. Use aeo_save_faq (term_id + taxonomy) or the generic aeo_save_schema so the value is validated and stored in the canonical shape.',
+                    $key
+                ) );
+            }
             // Rank Math keys accept HTML in description; use wp_kses_post for description-shaped keys,
             // sanitize_text_field for title/keyword.
             $is_desc = ( false !== strpos( $key, 'description' ) || false !== strpos( $key, '_desc' ) );

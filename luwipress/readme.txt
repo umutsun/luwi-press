@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.11.1
+Stable tag: 3.11.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.11.2 — Custom content type Schema.org polish =
+* JSON-LD for custom content types: array properties (knowsAbout, sameAs, keywords) now split on semicolons as well as commas, and string values are HTML-entity-decoded so e.g. "Founder & CEO" emits correctly instead of "Founder &amp; CEO". Pairs with WebMCP 1.0.42 (safer term meta + bulk meta + any-CPT create).
 
 = 3.11.1 — Fix: custom content types now actually emit their Schema.org JSON-LD =
 * Fixes a 3.11.0 timing bug where a custom content type's Schema.org mapping was wired up too early (before the type list had loaded), so no JSON-LD was emitted on the front-end. Custom types that have a Schema.org @type set now correctly output their structured data. The built-in Vendors and Events schema were unaffected.

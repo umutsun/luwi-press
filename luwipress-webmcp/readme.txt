@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.41
+Stable tag: 1.0.42
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,11 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.42 — Safer term meta + bulk meta + any-CPT create (paired with core 3.11.2) =
+* **`taxonomy_meta_set` now REFUSES the structured-array schema keys** (`_luwipress_faq` / `_luwipress_howto` / `_luwipress_speakable`) that it would silently corrupt into a string, and points you to `aeo_save_faq` / `aeo_save_schema` instead. Closes a silent-data-corruption path.
+* **NEW `meta_set_bulk`** — set many custom fields on one post in a single call (the bulk form of `meta_set`), ideal for filling a CPT's field schema (10-16 fields) in one round-trip. Skips the structured-array keys above.
+* **`content_create_post` / `content_get_posts` no longer restrict `post_type` to a fixed list** — any registered public type works, including operator-defined CPT Engine types (lwp_team, lwp_mat, …).
 
 = 1.0.41 — CPT Engine schema + field tools (paired with core 3.11.0) =
 * **NEW `cpt_schema_map`** — make an operator-defined content type emit Schema.org JSON-LD: set its @type (Person, Organization, …) and map each field onto a schema property in one call (sameAs collects, knowsAbout comma-splits, dotted props nest). Pairs with core 3.11.0, where custom types now render their mapped JSON-LD on the front-end.

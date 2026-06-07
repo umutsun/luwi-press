@@ -1419,7 +1419,7 @@ class LuwiPress_CPT_Engine {
 			$lc = strtolower( $prop );
 			if ( isset( $array_props[ $lc ] ) ) {
 				$canon = $array_props[ $lc ];
-				$items = is_array( $val ) ? $val : preg_split( '/\s*,\s*/', (string) $val );
+				$items = is_array( $val ) ? $val : preg_split( '/\s*[,;]\s*/', (string) $val );
 				$items = array_map( 'trim', array_map( 'strval', (array) $items ) );
 				$items = array_values( array_filter( $items, static function ( $s ) {
 					return '' !== $s;
@@ -1461,7 +1461,10 @@ class LuwiPress_CPT_Engine {
 			if ( preg_match( '#^https?://#i', $t ) ) {
 				return esc_url_raw( $t );
 			}
-			return wp_kses_post( $t );
+			// JSON-LD values are plain text — decode HTML entities so e.g.
+			// "Founder &amp; CEO" emits as "Founder & CEO" (json_encode re-escapes
+			// safely on output). kses first to drop anything unsafe.
+			return html_entity_decode( wp_kses_post( $t ), ENT_QUOTES, 'UTF-8' );
 		}
 		return $node;
 	}
