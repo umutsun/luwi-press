@@ -2380,6 +2380,7 @@ function renderActionQueue(data) {
 					if (preset) preset.click();
 					return;
 				}
+				var ctaHref = sc.cta_url || (sc.cta && sc.cta.href); if (ctaHref) { window.location.href = ctaHref; return; }
 				console.warn('[lpKg] v2 candidate has no resolvable target', sc);
 			}
 		});

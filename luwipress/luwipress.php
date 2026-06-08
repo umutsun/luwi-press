@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.12.1
+ * Version: 3.13.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.12.1');
+define('LUWIPRESS_VERSION', '3.13.0');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -158,9 +158,6 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-seo-writer.php';
 
         // AI Engine: provider interface, providers, prompts, dispatcher, image handler
-        // WordPress 7.0 Connectors bridge — must load BEFORE providers so each
-        // provider constructor can call LuwiPress_Connectors::get_api_key().
-        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-connectors.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-ai-provider.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/providers/class-luwipress-provider-anthropic.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/providers/class-luwipress-provider-openai.php';

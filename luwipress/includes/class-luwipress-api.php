@@ -206,25 +206,19 @@ class LuwiPress_API {
             ),
         ) );
 
-        // WordPress 7.0 Connectors migration — preview which legacy API keys
-        // can be moved into native WP Connectors (no writes happen here).
-        register_rest_route( 'luwipress/v1', '/connectors/migrate-preview', array(
-            'methods'             => 'GET',
-            'callback'            => array( $this, 'handle_connectors_migrate_preview' ),
-            'permission_callback' => array( $this, 'check_admin_permission' ),
-        ) );
-
-        // WordPress 7.0 Connectors migration — execute. Requires explicit
-        // per-provider confirmation flags from the admin modal.
-        register_rest_route( 'luwipress/v1', '/connectors/migrate-execute', array(
+        // AI alt-text generation (3.7.4+) — describe ONE image via the
+        // operator's default AI provider (vision) and return suggested alt
+        // text. Does NOT save: the Image Alt Bulk admin page drops the result
+        // into the textarea so the operator reviews before the bulk save.
+        // One attachment per call; the UI batches with limited concurrency.
+        register_rest_route( 'luwipress/v1', '/media/alt-generate', array(
             'methods'             => 'POST',
-            'callback'            => array( $this, 'handle_connectors_migrate_execute' ),
+            'callback'            => array( $this, 'handle_media_alt_generate' ),
             'permission_callback' => array( $this, 'check_admin_permission' ),
             'args'                => array(
-                'providers' => array(
-                    'required'    => true,
-                    'type'        => 'array',
-                    'description' => 'Whitelist of provider slugs to migrate. Allowed: openai, anthropic, google.',
+                'attachment_id' => array(
+                    'required' => true,
+                    'type'     => 'integer',
                 ),
             ),
         ) );
@@ -887,168 +881,6 @@ class LuwiPress_API {
     }
 
     /**
-     * GET /connectors/migrate-preview
-     *
-     * Shows what would happen if the operator migrates legacy LuwiPress API
-     * keys into WordPress 7.0 native Connectors. No writes. Used by the admin
-     * UI's confirmation modal so the user sees exactly which keys move where
-     * before approving.
-     */
-    public function handle_connectors_migrate_preview( $request ) {
-        if ( ! class_exists( 'LuwiPress_Connectors' ) ) {
-            return new WP_Error( 'not_available', 'Connectors bridge not loaded', array( 'status' => 500 ) );
-        }
-
-        $active = LuwiPress_Connectors::is_active();
-        $state  = LuwiPress_Connectors::list_active_connectors();
-
-        $rows = array();
-        foreach ( $state as $provider => $info ) {
-            $action = 'skip';
-            if ( $info['has_legacy'] && ! $info['in_connectors'] ) {
-                $action = 'migrate';
-            } elseif ( $info['has_legacy'] && $info['in_connectors'] ) {
-                // Connectors already has a key — never overwrite silently.
-                $action = 'keep_connectors';
-            } elseif ( ! $info['has_legacy'] && $info['in_connectors'] ) {
-                $action = 'already_native';
-            }
-
-            $rows[] = array(
-                'provider'      => $provider,
-                'has_legacy'    => $info['has_legacy'],
-                'in_connectors' => $info['in_connectors'],
-                'action'        => $action,
-            );
-        }
-
-        return rest_ensure_response( array(
-            'wp7_connectors_active' => $active,
-            'rows'                  => $rows,
-        ) );
-    }
-
-    /**
-     * POST /connectors/migrate-execute { providers: ['openai', 'anthropic', ...] }
-     *
-     * For each whitelisted provider:
-     *   1. Calls LuwiPress_Connectors::write_native_key() to push the legacy
-     *      key into native WP Connectors.
-     *   2. On success, deletes the legacy luwipress_{provider}_api_key option
-     *      and logs an audit record.
-     *   3. On failure, leaves the legacy option intact and reports the error
-     *      back in the per-provider result.
-     *
-     * Returns a per-provider report. Partial success is normal — caller
-     * inspects `results[*].status` to render OK/warning/error in the modal.
-     */
-    public function handle_connectors_migrate_execute( $request ) {
-        if ( ! class_exists( 'LuwiPress_Connectors' ) ) {
-            return new WP_Error( 'not_available', 'Connectors bridge not loaded', array( 'status' => 500 ) );
-        }
-
-        if ( ! LuwiPress_Connectors::is_active() ) {
-            return new WP_Error(
-                'connectors_inactive',
-                'WordPress 7.0 Connectors is not active — migration unavailable.',
-                array( 'status' => 409 )
-            );
-        }
-
-        $requested = $request->get_param( 'providers' );
-        if ( ! is_array( $requested ) || empty( $requested ) ) {
-            return new WP_Error(
-                'invalid_input',
-                'Provide a non-empty `providers` array (allowed: openai, anthropic, google).',
-                array( 'status' => 400 )
-            );
-        }
-
-        $allowed = LuwiPress_Connectors::native_providers();
-        $results = array();
-
-        foreach ( $requested as $provider ) {
-            $provider = sanitize_key( $provider );
-
-            if ( ! in_array( $provider, $allowed, true ) ) {
-                $results[ $provider ] = array(
-                    'status'  => 'error',
-                    'message' => 'Unsupported provider (not in WP Connectors scope).',
-                );
-                continue;
-            }
-
-            $option_name = LuwiPress_Connectors::legacy_option_name( $provider );
-            $legacy_key  = (string) get_option( $option_name, '' );
-            $alias_hit   = '';
-            if ( '' === $legacy_key ) {
-                // Walk historical aliases (Google: luwipress_google_api_key).
-                foreach ( LuwiPress_Connectors::legacy_option_name_aliases( $provider ) as $alias ) {
-                    $alt = (string) get_option( $alias, '' );
-                    if ( '' !== $alt ) {
-                        $legacy_key = $alt;
-                        $alias_hit  = $alias;
-                        break;
-                    }
-                }
-            }
-
-            if ( '' === $legacy_key ) {
-                $results[ $provider ] = array(
-                    'status'  => 'skipped',
-                    'message' => 'No legacy key stored — nothing to migrate.',
-                );
-                continue;
-            }
-
-            $write = LuwiPress_Connectors::write_native_key( $provider, $legacy_key );
-
-            if ( is_wp_error( $write ) ) {
-                $results[ $provider ] = array(
-                    'status'  => 'error',
-                    'message' => $write->get_error_message(),
-                );
-                if ( class_exists( 'LuwiPress_Logger' ) ) {
-                    LuwiPress_Logger::log(
-                        sprintf( 'Connectors migration failed for %s: %s', $provider, $write->get_error_message() ),
-                        'warning',
-                        array( 'provider' => $provider )
-                    );
-                }
-                continue;
-            }
-
-            delete_option( $option_name );
-            // Also wipe any historical alias names (e.g. Google's old
-            // luwipress_google_api_key) so the UI badge clears completely.
-            foreach ( LuwiPress_Connectors::legacy_option_name_aliases( $provider ) as $alias ) {
-                delete_option( $alias );
-            }
-
-            $results[ $provider ] = array(
-                'status'    => 'migrated',
-                'message'   => 'Moved to WordPress Connectors and removed from LuwiPress options.',
-                'alias_hit' => $alias_hit,
-            );
-
-            if ( class_exists( 'LuwiPress_Logger' ) ) {
-                LuwiPress_Logger::log(
-                    sprintf( 'Connectors migration succeeded for %s', $provider ),
-                    'info',
-                    array( 'provider' => $provider )
-                );
-            }
-        }
-
-        LuwiPress_Connectors::flush_cache();
-
-        return rest_ensure_response( array(
-            'results' => $results,
-            'state'   => LuwiPress_Connectors::list_active_connectors(),
-        ) );
-    }
-
-    /**
      * Permission check: WordPress admin (manage_options)
      */
     public function check_admin_permission( $request ) {
@@ -1544,5 +1376,244 @@ class LuwiPress_API {
             'error_rows' => array_slice( $errors, 0, 20 ),
             'total'      => count( $rows ),
         ) );
+    }
+
+    /**
+     * POST /media/alt-generate — Generate suggested alt text for ONE image
+     * using the operator's default AI provider (vision).
+     *
+     * Body: { attachment_id }
+     * Returns: { success, attachment_id, alt_text, provider, model }
+     *
+     * Does NOT persist the alt text — the Image Alt Bulk admin page drops the
+     * suggestion into the textarea so the operator reviews before saving via
+     * the existing /media/alt-bulk flow. One image per call keeps each request
+     * fast; the admin page batches with limited concurrency.
+     *
+     * @since 3.7.4
+     */
+    public function handle_media_alt_generate( $request ) {
+        if ( ! class_exists( 'LuwiPress_AI_Engine' ) ) {
+            return new WP_Error( 'ai_unavailable', 'AI engine not available.', array( 'status' => 500 ) );
+        }
+
+        $id   = absint( $request->get_param( 'attachment_id' ) );
+        $post = $id ? get_post( $id ) : null;
+        if ( ! $post || 'attachment' !== $post->post_type ) {
+            return new WP_Error( 'not_attachment', 'attachment_id does not reference an attachment.', array( 'status' => 404 ) );
+        }
+
+        // Build the base64 image payload (prefers an intermediate size).
+        $image = $this->build_alt_image_payload( $id );
+        if ( is_wp_error( $image ) ) {
+            return $image;
+        }
+
+        // Language: match the parent post's language when detectable, else site locale.
+        $lang_name = $this->detect_alt_language_name( $post );
+
+        // Context the model may lean on (only when it matches what it sees).
+        $parent_title = $post->post_parent ? get_the_title( $post->post_parent ) : '';
+        $filename     = wp_basename( (string) get_attached_file( $id ) );
+        $site_name    = wp_strip_all_tags( (string) get_bloginfo( 'name' ) );
+
+        // Collapse whitespace/newlines + cap length so a crafted post title or
+        // site name can't smuggle prompt-injection line breaks into the message.
+        $parent_title = trim( mb_substr( (string) preg_replace( '/\s+/u', ' ', $parent_title ), 0, 150 ) );
+        $filename     = trim( mb_substr( (string) preg_replace( '/\s+/u', ' ', $filename ), 0, 150 ) );
+        $site_name    = trim( mb_substr( (string) preg_replace( '/\s+/u', ' ', $site_name ), 0, 100 ) );
+
+        $system = sprintf(
+            'You write concise, accurate, SEO-friendly alt text for e-commerce images. '
+            . 'Describe ONLY what is visibly in the image, in ONE short sentence (ideally under 125 characters). '
+            . 'Do not begin with "image of", "photo of" or "picture of". Do not use quotation marks. '
+            . 'Do not invent brand names, prices, model numbers or any text that is not clearly visible. '
+            . 'Write the alt text in %s. Output only the alt text, nothing else.',
+            $lang_name
+        );
+
+        $ctx = array();
+        if ( '' !== $parent_title ) {
+            $ctx[] = '- Used on page/product: ' . $parent_title;
+        }
+        if ( '' !== $filename ) {
+            $ctx[] = '- Image file name: ' . $filename;
+        }
+        if ( '' !== $site_name ) {
+            $ctx[] = '- Store: ' . $site_name;
+        }
+        $user = 'Describe this image as alt text.';
+        if ( ! empty( $ctx ) ) {
+            $user .= "\n\nContext (use only if it matches what you actually see):\n" . implode( "\n", $ctx );
+        }
+
+        /**
+         * Filter the message pair sent to the AI for image alt-text generation.
+         *
+         * @since 3.7.4
+         * @param array $messages [ system, user ] pair.
+         * @param int   $id       Attachment ID.
+         */
+        $messages = apply_filters( 'luwipress_image_alt_messages', array(
+            array( 'role' => 'system', 'content' => $system ),
+            array( 'role' => 'user',   'content' => $user ),
+        ), $id );
+
+        $result = LuwiPress_AI_Engine::dispatch( 'image-alt', $messages, array(
+            'images'      => array( $image ),
+            'max_tokens'  => 200,
+            'temperature' => 0.4,
+            'timeout'     => 60,
+        ) );
+
+        if ( is_wp_error( $result ) ) {
+            // Preserve the original code (e.g. budget_exceeded from the daily
+            // cap) so the UI can react instead of showing a generic failure.
+            $code = $result->get_error_code() ? $result->get_error_code() : 'ai_failed';
+            return new WP_Error( $code, $result->get_error_message(), array( 'status' => 502 ) );
+        }
+
+        $alt = $this->clean_generated_alt( $result['content'] ?? '' );
+        if ( '' === $alt ) {
+            return new WP_Error( 'empty_alt', 'The AI returned no usable alt text.', array( 'status' => 502 ) );
+        }
+
+        return rest_ensure_response( array(
+            'success'       => true,
+            'attachment_id' => $id,
+            'alt_text'      => $alt,
+            'provider'      => $result['provider'] ?? '',
+            'model'         => $result['model'] ?? '',
+        ) );
+    }
+
+    /**
+     * Read an attachment into a base64 payload for vision input, preferring an
+     * intermediate size so the upload stays small and fast.
+     *
+     * @since 3.7.4
+     * @param int $id Attachment ID.
+     * @return array|WP_Error [ 'mime' => string, 'data' => base64 ]
+     */
+    private function build_alt_image_payload( $id ) {
+        $mime    = (string) get_post_mime_type( $id );
+        $allowed = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp' );
+        if ( ! in_array( $mime, $allowed, true ) ) {
+            return new WP_Error(
+                'unsupported_image',
+                sprintf( 'Alt-text generation supports JPEG, PNG, GIF and WebP — not "%s".', $mime ? $mime : 'unknown' ),
+                array( 'status' => 422 )
+            );
+        }
+
+        $orig = get_attached_file( $id );
+        $file = '';
+        if ( $orig ) {
+            $meta = wp_get_attachment_metadata( $id );
+            if ( is_array( $meta ) && ! empty( $meta['sizes'] ) ) {
+                $base = trailingslashit( dirname( $orig ) );
+                foreach ( array( 'medium_large', 'large', 'medium' ) as $size ) {
+                    if ( ! empty( $meta['sizes'][ $size ]['file'] ) ) {
+                        $candidate = $base . wp_basename( $meta['sizes'][ $size ]['file'] );
+                        if ( file_exists( $candidate ) ) {
+                            $file = $candidate;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if ( '' === $file ) {
+            $file = $orig;
+        }
+        if ( ! $file || ! file_exists( $file ) ) {
+            return new WP_Error( 'no_file', 'Image file not found on disk.', array( 'status' => 404 ) );
+        }
+
+        $bytes = file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+        if ( false === $bytes || '' === $bytes ) {
+            return new WP_Error( 'read_failed', 'Could not read the image file.', array( 'status' => 500 ) );
+        }
+        // Guard against oversized payloads (the provider down-scales anyway).
+        // Filterable so operators on providers with higher limits can raise it.
+        $max_bytes = (int) apply_filters( 'luwipress_alt_image_max_bytes', 8 * 1024 * 1024 );
+        if ( $max_bytes > 0 && strlen( $bytes ) > $max_bytes ) {
+            return new WP_Error(
+                'image_too_large',
+                sprintf( 'Image is too large to analyse (over %d MB). Use a smaller source image or raise the luwipress_alt_image_max_bytes filter.', (int) round( $max_bytes / 1048576 ) ),
+                array( 'status' => 413 )
+            );
+        }
+
+        return array(
+            'mime' => $mime,
+            'data' => base64_encode( $bytes ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+        );
+    }
+
+    /**
+     * Human-readable language name for the alt text — the parent post's
+     * language when WPML/Polylang knows it, otherwise the site locale.
+     *
+     * @since 3.7.4
+     * @param WP_Post $attachment
+     * @return string e.g. 'Turkish', 'English'.
+     */
+    private function detect_alt_language_name( $attachment ) {
+        $code   = '';
+        $parent = (int) $attachment->post_parent;
+        if ( $parent ) {
+            $wpml = apply_filters( 'wpml_post_language_details', null, $parent );
+            if ( is_array( $wpml ) && ! empty( $wpml['language_code'] ) ) {
+                $code = (string) $wpml['language_code'];
+            }
+            if ( '' === $code && function_exists( 'pll_get_post_language' ) ) {
+                $pl = pll_get_post_language( $parent, 'slug' );
+                if ( $pl ) {
+                    $code = (string) $pl;
+                }
+            }
+        }
+        if ( '' === $code ) {
+            $code = substr( (string) get_locale(), 0, 2 );
+        }
+        $code = strtolower( $code );
+
+        $names = array(
+            'en' => 'English',    'tr' => 'Turkish', 'fr' => 'French',     'it' => 'Italian',
+            'es' => 'Spanish',    'de' => 'German',  'pt' => 'Portuguese', 'nl' => 'Dutch',
+            'ru' => 'Russian',    'ar' => 'Arabic',  'ja' => 'Japanese',   'zh' => 'Chinese',
+        );
+        return isset( $names[ $code ] ) ? $names[ $code ] : 'the site default language';
+    }
+
+    /**
+     * Tidy a raw AI alt-text response into a single clean sentence.
+     *
+     * @since 3.7.4
+     * @param string $raw
+     * @return string
+     */
+    private function clean_generated_alt( $raw ) {
+        $alt = trim( wp_strip_all_tags( (string) $raw ) );
+        $alt = preg_replace( '/\s+/u', ' ', $alt );
+        $alt = trim( (string) $alt );
+        // Strip a single layer of wrapping straight/smart quotes.
+        $alt = preg_replace( '/^["\'\x{201C}\x{201D}\x{2018}\x{2019}]+|["\'\x{201C}\x{201D}\x{2018}\x{2019}]+$/u', '', $alt );
+        $alt = trim( (string) $alt );
+        // Drop boilerplate openers like "Image of …" / "A photo showing …".
+        $alt = preg_replace( '/^(an?\s+)?(image|photo|picture|photograph|close-?up)\s+(of|showing)\s+/iu', '', (string) $alt );
+        $alt = trim( (string) $alt );
+        // Hard length cap (~160 chars) at a word boundary.
+        $len = function_exists( 'mb_strlen' ) ? mb_strlen( $alt ) : strlen( $alt );
+        if ( $len > 160 ) {
+            $alt = function_exists( 'mb_substr' ) ? mb_substr( $alt, 0, 160 ) : substr( $alt, 0, 160 );
+            $sp  = strrpos( $alt, ' ' );
+            if ( false !== $sp && $sp > 80 ) {
+                $alt = substr( $alt, 0, $sp );
+            }
+            $alt = rtrim( $alt, ' ,;:-' );
+        }
+        return $alt;
     }
 }

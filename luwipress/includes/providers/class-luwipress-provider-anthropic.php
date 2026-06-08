@@ -23,15 +23,10 @@ class LuwiPress_Provider_Anthropic implements LuwiPress_AI_Provider {
 	/**
 	 * Constructor.
 	 *
-	 * Resolves the API key through LuwiPress_Connectors (WP 7.0 native
-	 * Connectors first, legacy `luwipress_anthropic_api_key` option fallback).
+	 * Reads the API key from the `luwipress_anthropic_api_key` option.
 	 */
 	public function __construct() {
-		if ( class_exists( 'LuwiPress_Connectors' ) ) {
-			$this->api_key = LuwiPress_Connectors::get_api_key( 'anthropic' );
-		} else {
-			$this->api_key = get_option( 'luwipress_anthropic_api_key', '' );
-		}
+		$this->api_key = get_option( 'luwipress_anthropic_api_key', '' );
 	}
 
 	/**
@@ -58,6 +53,33 @@ class LuwiPress_Provider_Anthropic implements LuwiPress_AI_Provider {
 					'role'    => $msg['role'],
 					'content' => $msg['content'],
 				);
+			}
+		}
+
+		// Vision: fold attached images into the last user message as Claude
+		// image blocks (base64 source). Claude Haiku/Sonnet/Opus 4.x all see images.
+		if ( ! empty( $options['images'] ) && is_array( $options['images'] ) ) {
+			for ( $i = count( $chat_messages ) - 1; $i >= 0; $i-- ) {
+				if ( 'user' !== $chat_messages[ $i ]['role'] ) {
+					continue;
+				}
+				$blocks = array( array( 'type' => 'text', 'text' => (string) $chat_messages[ $i ]['content'] ) );
+				foreach ( $options['images'] as $img ) {
+					if ( empty( $img['data'] ) ) {
+						continue;
+					}
+					$mime     = ! empty( $img['mime'] ) ? $img['mime'] : 'image/jpeg';
+					$blocks[] = array(
+						'type'   => 'image',
+						'source' => array(
+							'type'       => 'base64',
+							'media_type' => $mime,
+							'data'       => $img['data'],
+						),
+					);
+				}
+				$chat_messages[ $i ]['content'] = $blocks;
+				break;
 			}
 		}
 

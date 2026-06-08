@@ -43,6 +43,7 @@ class LuwiPress_AI_Engine {
 		'open-claw'              => 'openai',
 		'customer-chat'          => 'openai',
 		'image-generation'       => 'openai',
+		'image-alt'              => 'openai',
 	);
 
 	/**
@@ -60,6 +61,7 @@ class LuwiPress_AI_Engine {
 		'internal-linker'        => 1000,
 		'open-claw'              => 1000,
 		'customer-chat'          => 300,
+		'image-alt'              => 200,
 	);
 
 	// ─── PUBLIC API ───────────────────────────────────────────────
@@ -147,6 +149,12 @@ class LuwiPress_AI_Engine {
 
 		if ( ! empty( $options['json_mode'] ) ) {
 			$call_options['json_mode'] = true;
+		}
+
+		// Vision input — forward attached images (each ['mime' => …, 'data' => base64])
+		// so multimodal-capable providers can fold them into the last user message.
+		if ( ! empty( $options['images'] ) && is_array( $options['images'] ) ) {
+			$call_options['images'] = $options['images'];
 		}
 
 		return $call_options;

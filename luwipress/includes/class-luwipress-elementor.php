@@ -55,11 +55,26 @@ class LuwiPress_Elementor {
         // the snapshot list (`elementor-translation` workflow burned ~2.58M tokens/30d
         // in part because of this loop).
         if ( get_post_meta( $source_id, '_luwipress_no_translatable_text', true ) ) {
-            LuwiPress_Logger::log( sprintf(
-                'Cron: post #%d previously flagged no_translatable_text -- skipping %s translation cycle.',
-                $source_id, $target_language
-            ), 'info' );
-            return;
+            // SELF-HEAL: this flag short-circuits genuinely empty (shortcode-only)
+            // pages so the cron sweep stops re-queuing them. But an earlier transient
+            // AI timeout (cURL error 28) or a buggy prior version could leave it on a
+            // page that DOES have content -- which then gets skipped forever ("stuck
+            // queue"). Re-verify cheaply (no AI call): if the page actually has
+            // extractable text, clear the stale flag and proceed; else honour the skip.
+            $recheck = $this->extract_translatable_text( $source_id );
+            if ( ! is_wp_error( $recheck ) && ! empty( $recheck ) ) {
+                delete_post_meta( $source_id, '_luwipress_no_translatable_text' );
+                LuwiPress_Logger::log( sprintf(
+                    'Cron: post #%d was flagged no_translatable_text but has %d translatable widget(s) -- clearing stale flag and proceeding (%s).',
+                    $source_id, count( $recheck ), $target_language
+                ), 'warning' );
+            } else {
+                LuwiPress_Logger::log( sprintf(
+                    'Cron: post #%d confirmed no_translatable_text -- skipping %s translation cycle.',
+                    $source_id, $target_language
+                ), 'info' );
+                return;
+            }
         }
 
         // CRITICAL guard: refuse to translate a post that is itself a translation OR a
@@ -1227,6 +1242,12 @@ class LuwiPress_Elementor {
             return array( 'translated_id' => $tid, 'note' => 'structure_only_no_text' );
         }
 
+        // SELF-HEAL: we reached here, so the page HAS translatable text. Clear any
+        // stale "no translatable text" flag that an earlier transient failure (or a
+        // buggy prior version) may have left on the source -- otherwise the cron
+        // sweep would keep skipping this page forever.
+        delete_post_meta( $post_id, '_luwipress_no_translatable_text' );
+
         // Build a flat structure for AI translation
         $texts_for_ai = array();
         $long_texts   = array(); // Texts > 3000 chars — translated individually via chunking
@@ -1276,36 +1297,65 @@ class LuwiPress_Elementor {
 
         $trans_map = array();
 
-        // ── Short texts: batch translate via JSON ──
+        // ── Short texts: batch translate via JSON, CHUNKED ──
+        // A full page can carry 80-100+ short strings. Sending them all in ONE
+        // dispatch_json call builds a ~16k-token request that routinely exceeds the
+        // provider's 60s cURL timeout (cURL error 28) -- which left the whole page
+        // untranslated and, worst case, flagged as "no translatable text" so the cron
+        // sweep skipped it forever. Splitting into small fixed-size chunks keeps every
+        // call well under the timeout, and a slow/failed chunk fails in isolation
+        // (partial translation kept) instead of dropping the entire page.
         if ( ! empty( $texts_for_ai ) ) {
-            $prompt   = $this->build_translation_prompt( $texts_for_ai, $source_name, $target_name );
-            $messages = LuwiPress_AI_Engine::build_messages( $prompt );
+            $chunk_size = (int) apply_filters( 'luwipress_elementor_translate_chunk_size', 18 );
+            if ( $chunk_size < 1 ) {
+                $chunk_size = 18;
+            }
+            $text_chunks = array_chunk( $texts_for_ai, $chunk_size );
+            $chunk_total = count( $text_chunks );
+            $chunk_fails = 0;
 
-            $estimated_tokens = max( 4096, intval( array_sum( array_map( function ( $t ) { return strlen( $t['text'] ); }, $texts_for_ai ) ) / 3 ) );
-            $max_tokens = min( $estimated_tokens, 16000 );
+            foreach ( $text_chunks as $ci => $chunk ) {
+                $prompt   = $this->build_translation_prompt( $chunk, $source_name, $target_name );
+                $messages = LuwiPress_AI_Engine::build_messages( $prompt );
 
-            $ai_result = LuwiPress_AI_Engine::dispatch_json( 'elementor-translation', $messages, array(
-                'max_tokens' => $max_tokens,
-            ) );
+                $estimated_tokens = max( 2048, intval( array_sum( array_map( function ( $t ) { return strlen( $t['text'] ); }, $chunk ) ) / 3 ) );
+                $max_tokens       = min( $estimated_tokens, 8000 );
 
-            if ( is_wp_error( $ai_result ) ) {
-                LuwiPress_Logger::log( 'Elementor batch translation failed: ' . $ai_result->get_error_message(), 'error', array(
-                    'post_id'  => $post_id,
-                    'language' => $target_language,
+                $ai_result = LuwiPress_AI_Engine::dispatch_json( 'elementor-translation', $messages, array(
+                    'max_tokens' => $max_tokens,
+                    'timeout'    => 90,
                 ) );
-                // Don't return — still try long texts
-            } else {
+
+                if ( is_wp_error( $ai_result ) ) {
+                    $chunk_fails++;
+                    LuwiPress_Logger::log( sprintf(
+                        'Elementor translation chunk %d/%d failed: %s',
+                        $ci + 1, $chunk_total, $ai_result->get_error_message()
+                    ), 'error', array(
+                        'post_id'  => $post_id,
+                        'language' => $target_language,
+                    ) );
+                    continue; // isolate the failure to this chunk; keep the rest
+                }
+
                 $translations = $ai_result['translations'] ?? $ai_result;
                 if ( is_array( $translations ) ) {
                     foreach ( $translations as $item ) {
                         $wid   = $item['widget_id'] ?? '';
                         $field = $item['field'] ?? '';
                         $text  = $item['text'] ?? '';
-                        if ( $wid && $field && $text ) {
+                        if ( $wid && $field && '' !== (string) $text ) {
                             $trans_map[ $wid ][ $field ] = $text;
                         }
                     }
                 }
+            }
+
+            if ( $chunk_fails > 0 ) {
+                LuwiPress_Logger::log( sprintf(
+                    'Elementor translate #%d -> %s: %d/%d text chunks failed (partial translation kept; rerun to fill gaps)',
+                    $post_id, $target_language, $chunk_fails, $chunk_total
+                ), 'warning' );
             }
         }
 

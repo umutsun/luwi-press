@@ -27,6 +27,14 @@ if ( ! current_user_can( 'manage_options' ) ) {
 $rest_base  = esc_url_raw( rest_url( 'luwipress/v1/' ) );
 $rest_nonce = wp_create_nonce( 'wp_rest' );
 
+// AI alt generation availability — surface the ✨ buttons only when at least
+// one AI provider is configured. The endpoint uses the operator's default
+// selected provider via LuwiPress_AI_Engine::dispatch( 'image-alt', … ).
+$ai_available = false;
+if ( class_exists( 'LuwiPress_AI_Engine' ) && method_exists( 'LuwiPress_AI_Engine', 'get_configured_providers' ) ) {
+	$ai_available = ! empty( LuwiPress_AI_Engine::get_configured_providers() );
+}
+
 // Initial scan filter — default to "missing" so the page opens directly on
 // the work that needs doing. Operator can flip to "all" via filter pills.
 $filter = isset( $_GET['filter'] ) ? sanitize_key( $_GET['filter'] ) : 'missing';
@@ -114,10 +122,33 @@ $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), adm
 <div class="wrap luwipress-image-alt-bulk">
 <?php endif; ?>
 	<?php if ( ! $luwipress_hub_mode ) : ?>
-	<h1><span class="dashicons dashicons-format-image"></span> <?php esc_html_e( 'Image Alt Bulk', 'luwipress' ); ?></h1>
+	<div class="lp-header">
+			<div class="lp-header-left">
+				<h1 class="lp-title">
+					<img class="lp-logo" width="28" height="28"
+					     src="<?php echo esc_url( LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' ); ?>"
+					     alt="LuwiPress" />
+					<?php esc_html_e( 'Image Alt Bulk', 'luwipress' ); ?>
+				</h1>
+			</div>
+			<div class="lp-header-actions">
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress' ) ); ?>"
+				   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
+				   title="<?php esc_attr_e( 'Dashboard', 'luwipress' ); ?>">
+					<span class="dashicons dashicons-dashboard"></span>
+					<span class="screen-reader-text"><?php esc_html_e( 'Dashboard', 'luwipress' ); ?></span>
+				</a>
+				<span class="lp-pill pill-neutral" title="<?php esc_attr_e( 'Plugin version', 'luwipress' ); ?>">
+					v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
+				</span>
+			</div>
+		</div>
 	<?php endif; ?>
 	<p class="lp-page-intro">
 		<?php esc_html_e( 'Scan every image in your Media Library, fill in alt text inline, and save 50+ rows in one click. Missing-alt images are highlighted on first load. Use the "From parent title" button to fast-fill alt with the post/product title.', 'luwipress' ); ?>
+		<?php if ( $ai_available ) : ?>
+		<?php esc_html_e( 'Or click ✨ AI on any row to let your configured AI provider describe the image — the suggestion drops into the box for you to review before saving.', 'luwipress' ); ?>
+		<?php endif; ?>
 	</p>
 
 	<!-- Hero stat row -->
@@ -177,6 +208,11 @@ $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), adm
 		</form>
 		<div class="lwp-ab-save-row">
 			<span id="lwp-alt-dirty-count" class="lp-form-hint"><?php esc_html_e( '0 unsaved', 'luwipress' ); ?></span>
+			<?php if ( $ai_available ) : ?>
+			<button type="button" class="lp-btn lp-btn--outline lp-btn--lg" id="lwp-alt-ai-all">
+				<span aria-hidden="true">✨</span> <?php esc_html_e( 'Generate empty with AI', 'luwipress' ); ?>
+			</button>
+			<?php endif; ?>
 			<button type="button" class="lp-btn lp-btn--primary lp-btn--lg" id="lwp-alt-save-all" disabled>
 				<span class="dashicons dashicons-saved" aria-hidden="true"></span>
 				<?php esc_html_e( 'Save all changes', 'luwipress' ); ?>
@@ -251,6 +287,11 @@ $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), adm
 							</span>
 							<span class="lwp-alt-status"></span>
 						</div>
+						<?php if ( $ai_available ) : ?>
+						<button type="button" class="lp-btn lp-btn--ghost lp-btn--sm lwp-alt-ai">
+							<span aria-hidden="true">✨</span> <?php esc_html_e( 'AI', 'luwipress' ); ?>
+						</button>
+						<?php endif; ?>
 					</td>
 				</tr>
 				<?php endforeach; endif; ?>
@@ -381,6 +422,8 @@ $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), adm
 .lwp-alt-status.dirty  { color: var(--lp-warning); }
 .lwp-alt-status.saved  { color: var(--lp-success); }
 .lwp-alt-status.failed { color: var(--lp-error); }
+.lwp-alt-ai { margin-top: 6px; }
+#lwp-alt-ai-all { display: inline-flex; align-items: center; gap: 4px; }
 </style>
 
 <script>
@@ -400,7 +443,7 @@ $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), adm
 		}
 		return fetch(REST_BASE + path, opts).then(function (r) {
 			return r.json().then(function (j) {
-				if (!r.ok) throw new Error((j && (j.message || j.code)) || ('HTTP ' + r.status));
+				if (!r.ok) { var err = new Error((j && (j.message || j.code)) || ('HTTP ' + r.status)); err.code = (j && j.code) || ''; throw err; }
 				return j;
 			});
 		});
@@ -508,3 +551,101 @@ $base_url    = add_query_arg( array( 'page' => 'luwipress-image-alt-bulk' ), adm
 	});
 })();
 </script>
+
+<?php if ( $ai_available ) : ?>
+<script>
+/* AI alt-text generation — independent of the save IIFE above. It fills the
+   textarea and emits an `input` event so the existing dirty-tracking + bulk
+   save flow pick up the change. The operator always reviews before saving. */
+(function () {
+	'use strict';
+	var REST_BASE  = <?php echo wp_json_encode( $rest_base ); ?>;
+	var REST_NONCE = <?php echo wp_json_encode( $rest_nonce ); ?>;
+
+	function aiApi(path, body) {
+		var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+		var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 90000) : null;
+		var opts = {
+			method: 'POST',
+			headers: { 'X-WP-Nonce': REST_NONCE, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		};
+		if (ctrl) { opts.signal = ctrl.signal; }
+		return fetch(REST_BASE + path, opts).then(function (r) {
+			return r.json().then(function (j) {
+				if (!r.ok) { var err = new Error((j && (j.message || j.code)) || ('HTTP ' + r.status)); err.code = (j && j.code) || ''; throw err; }
+				return j;
+			});
+		}).finally(function () { if (timer) { clearTimeout(timer); } });
+	}
+
+	function fillAlt(row, text) {
+		var input = row.querySelector('.lwp-alt-input');
+		if (!input) return;
+		input.value = text;
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+	}
+
+	function setBusy(btn, busy) {
+		if (!btn) return;
+		btn.disabled = busy;
+		if (busy) {
+			if (!btn.dataset.lwpOrig) { btn.dataset.lwpOrig = btn.innerHTML; }
+			btn.innerHTML = '<span class="dashicons dashicons-update spin" style="line-height:1.4;"></span>';
+		} else if (btn.dataset.lwpOrig) {
+			btn.innerHTML = btn.dataset.lwpOrig;
+		}
+	}
+
+	function generate(row, btn) {
+		var id = parseInt(row.getAttribute('data-id'), 10);
+		if (!id) { return Promise.resolve(false); }
+		setBusy(btn, true);
+		return aiApi('media/alt-generate', { attachment_id: id }).then(function (j) {
+			if (j && j.alt_text) { fillAlt(row, j.alt_text); }
+			setBusy(btn, false);
+			return true;
+		}).catch(function (e) {
+			setBusy(btn, false);
+			var status = row.querySelector('.lwp-alt-status');
+			if (status) { status.textContent = 'AI: ' + e.message; status.className = 'lwp-alt-status failed'; }
+			return e.code || 'error';
+		});
+	}
+
+	Array.prototype.slice.call(document.querySelectorAll('.lwp-alt-ai')).forEach(function (btn) {
+		btn.addEventListener('click', function () {
+			var row = btn.closest('tr[data-id]');
+			if (row) { generate(row, btn); }
+		});
+	});
+
+	var allBtn = document.getElementById('lwp-alt-ai-all');
+	if (allBtn) {
+		allBtn.addEventListener('click', function () {
+			var rows = Array.prototype.slice.call(document.querySelectorAll('#lwp-alt-table tbody tr[data-id]'));
+			var targets = rows.filter(function (r) {
+				var input = r.querySelector('.lwp-alt-input');
+				return input && !(input.value || '').trim();
+			});
+			if (!targets.length) { alert('No empty rows on this page to generate.'); return; }
+			if (!confirm('Generate AI alt text for ' + targets.length + ' image(s)? This calls your AI provider once per image. Review the results, then click "Save all changes".')) { return; }
+			allBtn.disabled = true;
+			var orig = allBtn.innerHTML, done = 0, idx = 0, stopped = false;
+			function paint() { allBtn.innerHTML = '<span class="dashicons dashicons-update spin" style="line-height:1.6;"></span> ' + done + ' / ' + targets.length; }
+			paint();
+			function next() {
+				if (stopped || idx >= targets.length) { return Promise.resolve(); }
+				var row = targets[idx++];
+				return generate(row, row.querySelector('.lwp-alt-ai')).then(function (res) { if (res === 'budget_exceeded') { stopped = true; } else if (res === true) { done++; } paint(); return next(); });
+			}
+			Promise.all([ next(), next(), next() ]).then(function () {
+				allBtn.disabled = false;
+				allBtn.innerHTML = stopped ? ('<span class="dashicons dashicons-warning" style="line-height:1.6;"></span> Daily AI budget reached - ' + done + ' generated') : ('<span class="dashicons dashicons-yes" style="line-height:1.6;"></span> ' + done + ' generated');
+				setTimeout(function () { allBtn.innerHTML = orig; }, 3000);
+			});
+		});
+	}
+})();
+</script>
+<?php endif; ?>

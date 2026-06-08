@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.12.1
+Stable tag: 3.13.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -130,7 +130,16 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 
 == Changelog ==
 
-= 3.12.1 — Vendor rich-result fix now WPML-safe =
+= 3.13.0 — Licensing & automatic updates =
+* **NEW: license activation.** Activate your CodeCanyon purchase code or LuwiPress license key under LuwiPress → Settings → License. A daily background check keeps the activation in sync, and a 14-day grace window means a brief licensing-server outage never interrupts your site.
+* **NEW: one-click automatic updates.** Licensed sites receive LuwiPress updates straight from the dashboard — no manual ZIP uploads. Update packages are cryptographically signed (Ed25519) and verified before they install.
+* **NEW: plan tiers.** Activation unlocks features by plan (Starter / Pro / Studio / Marketplace / Enterprise); the companion plugins (WebMCP, Marketplace Sync, Agentic) enable themselves automatically based on your plan. Licensing enforcement is off by default and fully under your control.
+* AI provider API keys are now read directly from LuwiPress Settings (the experimental WordPress 7.0 Connectors bridge has been retired).
+
+= 3.12.2 — Reliable Elementor page translation (no more stuck queue) =
+* **Fixed: large pages failing to translate.** Page translation now sends text to the AI in small batches instead of one oversized request, so full pages (homepages with many sections, repeaters, FAQs) no longer hit the 60-second API timeout that previously left them untranslated. A slow or failed batch now only affects that batch — the rest of the page still translates.
+* **Fixed: pages permanently skipped by the translation queue.** A transient AI timeout could wrongly flag a page as "no translatable text," after which the background queue skipped it forever. The queue now re-checks and self-heals: if a flagged page actually has content, it clears the flag and proceeds.
+* Translating an Elementor page always rebuilds the translation's structure from the source language, so translations whose layout had drifted from the original are realigned automatically.
 * The vendor "made by" manufacturer/author structured data and the attribution repair tool now read the product↔vendor link directly, so they work on multilingual (WPML) sites where the attribution was set only through the vendor category. Closes a case where, after 3.12.0, the rich result still stayed missing on multilingual product pages because the language filter hid the category link.
 
 = 3.12.0 — Redirect manager, link audit, product snapshots, related-content fields =

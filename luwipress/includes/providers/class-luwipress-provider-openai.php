@@ -23,15 +23,10 @@ class LuwiPress_Provider_OpenAI implements LuwiPress_AI_Provider {
 	/**
 	 * Constructor.
 	 *
-	 * Resolves the API key through LuwiPress_Connectors (WP 7.0 native
-	 * Connectors first, legacy `luwipress_openai_api_key` option fallback).
+	 * Reads the API key from the `luwipress_openai_api_key` option.
 	 */
 	public function __construct() {
-		if ( class_exists( 'LuwiPress_Connectors' ) ) {
-			$this->api_key = LuwiPress_Connectors::get_api_key( 'openai' );
-		} else {
-			$this->api_key = get_option( 'luwipress_openai_api_key', '' );
-		}
+		$this->api_key = get_option( 'luwipress_openai_api_key', '' );
 	}
 
 	/**
@@ -53,6 +48,30 @@ class LuwiPress_Provider_OpenAI implements LuwiPress_AI_Provider {
 				'role'    => $msg['role'],
 				'content' => $msg['content'],
 			);
+		}
+
+		// Vision: fold any attached images into the last user message as
+		// image_url parts (data URIs). Needs a vision-capable model (gpt-4o,
+		// gpt-4o-mini, gpt-4-turbo all qualify).
+		if ( ! empty( $options['images'] ) && is_array( $options['images'] ) ) {
+			for ( $i = count( $formatted ) - 1; $i >= 0; $i-- ) {
+				if ( 'user' !== $formatted[ $i ]['role'] ) {
+					continue;
+				}
+				$parts = array( array( 'type' => 'text', 'text' => (string) $formatted[ $i ]['content'] ) );
+				foreach ( $options['images'] as $img ) {
+					if ( empty( $img['data'] ) ) {
+						continue;
+					}
+					$mime    = ! empty( $img['mime'] ) ? $img['mime'] : 'image/jpeg';
+					$parts[] = array(
+						'type'      => 'image_url',
+						'image_url' => array( 'url' => 'data:' . $mime . ';base64,' . $img['data'] ),
+					);
+				}
+				$formatted[ $i ]['content'] = $parts;
+				break;
+			}
 		}
 
 		$body = array(

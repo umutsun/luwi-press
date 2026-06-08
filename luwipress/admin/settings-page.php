@@ -64,9 +64,8 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 		wp_clear_scheduled_hook( 'luwipress_auto_enrich_thin_cron' );
 	}
 
-	// AI API Keys — guard with isset() so the WP 7.0 Connectors-managed view
-	// (where these inputs aren't rendered at all) doesn't wipe stored keys on
-	// every Settings save. Absent POST field = leave existing option untouched.
+	// AI API Keys — guard with isset() so an absent POST field leaves the
+	// stored key untouched instead of wiping it on save.
 	if ( isset( $_POST['luwipress_openai_api_key'] ) ) {
 		update_option( 'luwipress_openai_api_key', sanitize_text_field( wp_unslash( $_POST['luwipress_openai_api_key'] ) ) );
 	}
@@ -253,11 +252,12 @@ $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'con
 // Related settings sections are merged into collapsible groups for a less
 // cluttered nav: CRM + Customer Chat live under the `crm` (Customers) tab,
 // Security + Bot under the `security` tab, AI API Keys + AI Content under the
-// `ai` (AI) tab, and General + Content Health under the `general` tab. Old
-// deep-links to the now-merged sections still resolve — they map to the host
-// tab and auto-open the right collapsible via $open_section.
+// `ai` (AI) tab, and Connection + General + Content Health under the `general`
+// tab. Old deep-links to the now-merged sections still resolve — they map to
+// the host tab and auto-open the right collapsible via $open_section.
 $open_section    = '';
 $lwp_merged_into = array(
+	'connection'     => 'general',
 	'customer-chat'  => 'crm',
 	'bot'            => 'security',
 	'api-keys'       => 'ai',
@@ -310,11 +310,10 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 	<nav class="lp-hub-tabs lwp-settings-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Settings sections', 'luwipress' ); ?>">
 		<?php
 		$tabs_def = array(
-			// Grouped nav (3.7.2): AI API Keys folds into "AI" (with AI Content),
-			// Content Health folds into "General" — each as a collapsible section
-			// inside the host tab. Deep-links to the old slugs still resolve via
-			// $lwp_merged_into above.
-			'connection'     => array( 'label' => __( 'Connection', 'luwipress' ),  'icon' => 'dashicons-admin-links' ),
+			// Grouped nav (3.7.2 → 3.7.x): AI API Keys folds into "AI" (with AI
+			// Content); Connection + Content Health fold into "General" — each as
+			// a collapsible section inside the host tab. Deep-links to the old
+			// slugs still resolve via $lwp_merged_into above.
 			'general'        => array( 'label' => __( 'General', 'luwipress' ),     'icon' => 'dashicons-admin-settings' ),
 			'ai'             => array( 'label' => __( 'AI', 'luwipress' ),          'icon' => 'dashicons-admin-network' ),
 			'translation'    => array( 'label' => __( 'Translation', 'luwipress' ), 'icon' => 'dashicons-translation' ),
@@ -351,8 +350,10 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 	<form method="post" class="luwipress-settings-form">
 		<?php wp_nonce_field( 'luwipress_settings_nonce' ); ?>
 
-		<!-- CONNECTION -->
-		<div class="luwipress-tab-content <?php echo 'connection' === $active_tab ? 'tab-active' : ''; ?>" id="tab-connection">
+		<!-- CONNECTION — folded into the General tab as a collapsible (3.7.x) -->
+		<details class="luwipress-tab-content lp-collapse <?php echo 'general' === $active_tab ? 'tab-active' : ''; ?>" id="tab-connection"<?php echo 'connection' === $open_section ? ' open' : ''; ?>>
+		<summary><span class="dashicons dashicons-admin-links"></span> <span><?php esc_html_e( 'Connection', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'API token, MCP & REST', 'luwipress' ); ?></span></summary>
+		<div class="lp-collapse-body">
 
 			<?php
 			$webmcp_active   = class_exists( 'LuwiPress_WebMCP' ) || defined( 'LUWIPRESS_WEBMCP_VERSION' );
@@ -496,10 +497,11 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					</tr>
 				</table>
 			</div>
-		</div>
+		</div><!-- .lp-collapse-body -->
+		</details>
 
 		<!-- GENERAL -->
-		<details class="luwipress-tab-content lp-collapse <?php echo 'general' === $active_tab ? 'tab-active' : ''; ?>" id="tab-general"<?php echo 'content-health' !== $open_section ? ' open' : ''; ?>>
+		<details class="luwipress-tab-content lp-collapse <?php echo 'general' === $active_tab ? 'tab-active' : ''; ?>" id="tab-general"<?php echo '' === $open_section ? ' open' : ''; ?>>
 		<summary><span class="dashicons dashicons-admin-settings"></span> <span><?php esc_html_e( 'General', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'Logging, language & defaults', 'luwipress' ); ?></span></summary>
 		<div class="lp-collapse-body">
 			<div class="luwipress-card">
@@ -555,87 +557,6 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 		<details class="luwipress-tab-content lp-collapse <?php echo 'ai' === $active_tab ? 'tab-active' : ''; ?>" id="tab-api-keys"<?php echo 'api-keys' === $open_section ? ' open' : ''; ?>>
 		<summary><span class="dashicons dashicons-admin-network"></span> <span><?php esc_html_e( 'API Keys', 'luwipress' ); ?></span> <span class="lp-collapse-hint"><?php esc_html_e( 'Providers, models & limits', 'luwipress' ); ?></span></summary>
 		<div class="lp-collapse-body">
-			<?php
-			// WordPress 7.0 Connectors detection — when active, API keys live
-			// in the native WP Connectors UI. We keep the model picker + budget
-			// + per-workflow override (LuwiPress-specific moats) but hide the
-			// key inputs and offer a one-click migration of any legacy keys.
-			$wp7_connectors_active = class_exists( 'LuwiPress_Connectors' ) && LuwiPress_Connectors::is_active();
-			$wp7_state             = $wp7_connectors_active ? LuwiPress_Connectors::list_active_connectors() : array();
-			$wp7_has_legacy_keys   = false;
-			if ( $wp7_connectors_active ) {
-				foreach ( $wp7_state as $row ) {
-					if ( ! empty( $row['has_legacy'] ) && empty( $row['in_connectors'] ) ) {
-						$wp7_has_legacy_keys = true;
-						break;
-					}
-				}
-			}
-			?>
-
-			<?php if ( $wp7_connectors_active ) : ?>
-				<div class="luwipress-card lp-wp7-banner" data-wp7-banner>
-					<div class="lp-wp7-banner-head">
-						<span class="dashicons dashicons-info-outline"></span>
-						<strong><?php esc_html_e( 'WordPress 7.0 Connectors detected', 'luwipress' ); ?></strong>
-					</div>
-					<p class="description">
-						<?php
-						echo wp_kses(
-							sprintf(
-								/* translators: %s: link to Settings → Connectors */
-								__( 'API keys are now managed centrally under %s. LuwiPress reads keys from Connectors first, falling back to its own settings only when a provider is not configured natively. Model selection, per-workflow routing, and budget enforcement remain here.', 'luwipress' ),
-								'<a href="' . esc_url( admin_url( 'options-general.php' ) ) . '"><strong>' . esc_html__( 'Settings → Connectors', 'luwipress' ) . '</strong></a>'
-							),
-							array( 'a' => array( 'href' => array() ), 'strong' => array() )
-						);
-						?>
-					</p>
-
-					<div class="lp-wp7-pills" role="list">
-						<?php
-						$labels = array(
-							'openai'    => 'OpenAI',
-							'anthropic' => 'Anthropic',
-							'google'    => 'Google',
-						);
-						foreach ( $labels as $provider => $label ) :
-							$row    = isset( $wp7_state[ $provider ] ) ? $wp7_state[ $provider ] : array();
-							$source = isset( $row['source'] ) ? $row['source'] : 'none';
-							$pill   = 'pill-neutral';
-							$icon   = 'dashicons-marker';
-							$state_label = __( 'Not configured', 'luwipress' );
-							if ( 'connectors' === $source ) {
-								$pill        = 'pill-success';
-								$icon        = 'dashicons-yes-alt';
-								$state_label = __( 'Connectors', 'luwipress' );
-							} elseif ( 'legacy' === $source ) {
-								$pill        = 'pill-warning';
-								$icon        = 'dashicons-warning';
-								$state_label = __( 'Legacy (LuwiPress)', 'luwipress' );
-							}
-							?>
-							<span class="lp-pill <?php echo esc_attr( $pill ); ?>" role="listitem" data-provider-pill="<?php echo esc_attr( $provider ); ?>">
-								<span class="dashicons <?php echo esc_attr( $icon ); ?>"></span>
-								<strong><?php echo esc_html( $label ); ?></strong>
-								<span class="lp-pill-state"><?php echo esc_html( $state_label ); ?></span>
-							</span>
-						<?php endforeach; ?>
-					</div>
-
-					<?php if ( $wp7_has_legacy_keys ) : ?>
-						<div class="lp-wp7-actions">
-							<button type="button" class="button button-primary" id="luwipress-wp7-migrate-open" data-rest-url="<?php echo esc_attr( get_rest_url( null, 'luwipress/v1/connectors/migrate-preview' ) ); ?>">
-								<span class="dashicons dashicons-migrate"></span>
-								<?php esc_html_e( 'Move legacy keys into Connectors…', 'luwipress' ); ?>
-							</button>
-							<span class="description" style="margin-left:8px;">
-								<?php esc_html_e( 'A confirmation modal lists exactly which keys will move before any change is made.', 'luwipress' ); ?>
-							</span>
-						</div>
-					<?php endif; ?>
-				</div>
-			<?php endif; ?>
 
 			<?php
 			// Provider config map — drives the unified provider card.
@@ -768,43 +689,6 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 								<p class="description"><?php esc_html_e( 'Self-hosted servers only (Ollama, vLLM, LM Studio). Include /v1 if needed.', 'luwipress' ); ?></p>
 							</div>
 						<?php endif; ?>
-
-						<?php
-						// WP 7.0 Connectors managed-mode: hide native-scope key input
-						// (OpenAI/Anthropic/Google) when Connectors layer is active.
-						// OpenAI-Compatible (DeepSeek/Kimi/Groq/Together/self-hosted)
-						// always shows its own key input — out of Connectors scope.
-						$native_scope        = in_array( $key, array( 'openai', 'anthropic', 'google' ), true );
-						$hide_legacy_key_row = $wp7_connectors_active && $native_scope;
-						?>
-						<?php if ( $hide_legacy_key_row ) : ?>
-							<div class="lp-field lp-field-wp7-managed">
-								<label>
-									<?php
-									/* translators: %s: provider vendor name (Anthropic, OpenAI, etc.) */
-									echo esc_html( sprintf( __( '%s API Key', 'luwipress' ), $p['vendor'] ) );
-									?>
-								</label>
-								<div class="lp-wp7-managed-row" data-provider-row="<?php echo esc_attr( $key ); ?>">
-									<?php
-									$row    = isset( $wp7_state[ $key ] ) ? $wp7_state[ $key ] : array();
-									$source = isset( $row['source'] ) ? $row['source'] : 'none';
-									if ( 'connectors' === $source ) {
-										echo '<span class="lp-pill pill-success"><span class="dashicons dashicons-yes-alt"></span> ' . esc_html__( 'Managed by WordPress Connectors', 'luwipress' ) . '</span>';
-									} elseif ( 'legacy' === $source ) {
-										echo '<span class="lp-pill pill-warning"><span class="dashicons dashicons-warning"></span> ' . esc_html__( 'Stored in legacy LuwiPress option — migrate to Connectors above', 'luwipress' ) . '</span>';
-									} else {
-										echo '<span class="lp-pill pill-neutral"><span class="dashicons dashicons-marker"></span> ' . esc_html__( 'Not configured', 'luwipress' ) . '</span>';
-									}
-									?>
-								</div>
-								<p class="description">
-									<a href="<?php echo esc_url( admin_url( 'options-general.php' ) ); ?>">
-										<?php esc_html_e( 'Open Settings → Connectors to manage this key →', 'luwipress' ); ?>
-									</a>
-								</p>
-							</div>
-						<?php else : ?>
 							<div class="lp-field">
 								<label for="<?php echo esc_attr( $p['key_field'] ); ?>">
 									<?php
@@ -831,7 +715,6 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 									</p>
 								<?php endif; ?>
 							</div>
-						<?php endif; ?>
 
 						<?php if ( ! empty( $p['models'] ) ) : ?>
 						<?php

@@ -49,6 +49,11 @@ class LuwiPress_Content_Audit {
 
 	private function __construct() {
 		add_action( 'rest_api_init', array( $this, 'register_rest_endpoints' ) );
+
+		// Feed AI-tell + promotional-phrase findings into the KG Action Queue /
+		// Next Wins so they're actionable from the Knowledge Graph, not just the
+		// standalone Health Audit page. Cached 1h inside inject_kg_candidates().
+		add_filter( 'luwipress_kg_action_queue_external_candidates', array( $this, 'inject_kg_candidates' ) );
 	}
 
 	public function register_rest_endpoints() {
@@ -783,5 +788,132 @@ class LuwiPress_Content_Audit {
 			'next_offset'      => $post_id ? null : ( $offset + $scanned ),
 			'results'          => $violations,
 		) );
+	}
+
+	// ─── KG Action Queue integration ─────────────────────────────────────
+
+	/**
+	 * Feed AI-tell + promotional-phrase findings into the KG Action Queue as
+	 * Next Wins candidates. Hooked on `luwipress_kg_action_queue_external_candidates`.
+	 *
+	 * Cached 1h in `luwipress_content_audit_kg_candidates` so the dashboard never
+	 * re-scans content on every Knowledge Graph load. Each candidate carries a
+	 * cta_url deep-linking to the matching Health Audit sub-tab for the fix.
+	 *
+	 * @since 3.7.4
+	 * @param array $candidates Existing candidates.
+	 * @return array
+	 */
+	public function inject_kg_candidates( $candidates ) {
+		if ( ! is_array( $candidates ) ) {
+			$candidates = array();
+		}
+		$cache_key = 'luwipress_content_audit_kg_candidates';
+		$cached    = get_transient( $cache_key );
+		if ( is_array( $cached ) ) {
+			return array_merge( $candidates, $cached );
+		}
+
+		$out      = array();
+		$is_wc    = post_type_exists( 'product' );
+		$pt       = $is_wc ? 'product' : 'post';
+		$pt_label = $is_wc ? __( 'products', 'luwipress' ) : __( 'posts', 'luwipress' );
+		$base_cta = admin_url( 'admin.php?page=luwipress-site&tab=audit' );
+
+		// AI-Tell scanner — stock LLM phrasing (Helpful Content Update risk).
+		$ai = $this->run_audit_for_kg( 'ai_tell', $pt );
+		if ( $ai && ! empty( $ai['with_violations'] ) ) {
+			$n      = (int) $ai['with_violations'];
+			$find   = (int) ( $ai['total_findings'] ?? $n );
+			$scan   = max( 1, (int) ( $ai['scanned'] ?? 1 ) );
+			$ratio  = $n / $scan;
+			$tier   = $ratio >= 0.4 ? 'high' : ( $ratio >= 0.15 ? 'medium' : 'low' );
+			$impact = $ratio >= 0.4 ? 68 : ( $ratio >= 0.15 ? 52 : 38 );
+			$out[]  = array(
+				'id'         => 'content-audit:ai-tell',
+				'type'       => 'content_ai_tell',
+				'title'      => __( 'AI-tell phrasing flagged', 'luwipress' ),
+				'body'       => sprintf(
+					/* translators: 1: flagged count, 2: scanned count, 3: post-type label, 4: total findings */
+					__( '%1$d of %2$d scanned %3$s show stock LLM phrasing (%4$d findings). Rewrite for a proprietary voice — Helpful Content risk.', 'luwipress' ),
+					$n, $scan, $pt_label, $find
+				),
+				'detail'     => '',
+				'impact'     => $impact,
+				'effort_min' => 20,
+				'roi'        => $impact / 20,
+				'tier'       => $tier,
+				'workflow'   => 'content-audit',
+				'cta_url'    => add_query_arg( 'sub', 'ai-tell', $base_cta ),
+				'why'        => array(
+					'primary_signal'      => sprintf( '%d/%d %s flagged for AI-tells', $n, $scan, $pt_label ),
+					'supporting_signals'  => array(),
+					'baseline_comparison' => null,
+				),
+			);
+		}
+
+		// Promotional phrases — Google Merchant Center disapproval risk.
+		$promo = $this->run_audit_for_kg( 'promotional', $pt );
+		if ( $promo && ! empty( $promo['with_violations'] ) ) {
+			$n     = (int) $promo['with_violations'];
+			$find  = (int) ( $promo['total_findings'] ?? $n );
+			$scan  = max( 1, (int) ( $promo['scanned'] ?? 1 ) );
+			$out[] = array(
+				'id'         => 'content-audit:promotional',
+				'type'       => 'content_promotional_phrase',
+				'title'      => __( 'Promotional phrases (GMC risk)', 'luwipress' ),
+				'body'       => sprintf(
+					/* translators: 1: flagged count, 2: scanned count, 3: post-type label, 4: total findings */
+					__( '%1$d of %2$d scanned %3$s contain promotional / urgency language (%4$d flags) that can trigger Google Merchant Center disapproval.', 'luwipress' ),
+					$n, $scan, $pt_label, $find
+				),
+				'detail'     => '',
+				'impact'     => 72,
+				'effort_min' => 15,
+				'roi'        => 72 / 15,
+				'tier'       => 'high',
+				'workflow'   => 'content-audit',
+				'cta_url'    => add_query_arg( 'sub', 'promotional', $base_cta ),
+				'why'        => array(
+					'primary_signal'      => sprintf( '%d/%d %s with promotional phrases', $n, $scan, $pt_label ),
+					'supporting_signals'  => array(),
+					'baseline_comparison' => null,
+				),
+			);
+		}
+
+		set_transient( $cache_key, $out, HOUR_IN_SECONDS );
+		return array_merge( $candidates, $out );
+	}
+
+	/**
+	 * Run one audit scanner internally (no HTTP round-trip) for KG candidate
+	 * building. Returns the response data array, or null on failure.
+	 *
+	 * @since 3.7.4
+	 * @param string $kind      'ai_tell' | 'promotional'.
+	 * @param string $post_type Post type to sample.
+	 * @return array|null
+	 */
+	private function run_audit_for_kg( $kind, $post_type ) {
+		$method = ( 'promotional' === $kind ) ? 'rest_promotional_phrase_audit' : 'rest_ai_tell_audit';
+		$route  = ( 'promotional' === $kind )
+			? '/luwipress/v1/content/promotional-phrase-audit'
+			: '/luwipress/v1/content/ai-tell-audit';
+		try {
+			$req = new WP_REST_Request( 'POST', $route );
+			$req->set_param( 'post_type', $post_type );
+			$req->set_param( 'scope', 'all' );
+			$req->set_param( 'limit', 100 );
+			$req->set_param( 'only_violations', true );
+			$res = $this->{$method}( $req );
+		} catch ( \Throwable $e ) {
+			return null;
+		}
+		if ( is_wp_error( $res ) ) {
+			return null;
+		}
+		return ( $res instanceof WP_REST_Response ) ? (array) $res->get_data() : (array) $res;
 	}
 }

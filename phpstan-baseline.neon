@@ -10,11 +10,6 @@ parameters:
 		# patterns matched nothing and PHPStan reported them as unmatched.)
 
 		-
-			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
-			count: 1
-			path: luwipress/admin/admin-page.php
-
-		-
 			message: "#^Parameter \\#1 \\$text of function esc_attr expects string, float given\\.$#"
 			count: 1
 			path: luwipress/admin/settings-page.php

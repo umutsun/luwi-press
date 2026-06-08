@@ -20,22 +20,12 @@ $environment = $detector->get_environment();
 $wc_active   = class_exists( 'WooCommerce' );
 $ai_provider = get_option( 'luwipress_ai_provider', 'openai' );
 $ai_model    = get_option( 'luwipress_ai_model', 'gpt-4o-mini' );
-// Resolve AI key via Connectors bridge so the dashboard pill reflects WP 7.0
-// native Connectors first, falling back to LuwiPress's own option layer.
-$wp7_connectors_active = class_exists( 'LuwiPress_Connectors' ) && LuwiPress_Connectors::is_active();
-$ai_key                = '';
-if ( class_exists( 'LuwiPress_Connectors' ) ) {
-	$ai_key = LuwiPress_Connectors::get_api_key( 'openai' )
-		?: LuwiPress_Connectors::get_api_key( 'anthropic' )
-		?: LuwiPress_Connectors::get_api_key( 'google' );
-}
-if ( '' === $ai_key ) {
-	// OpenAI-compatible vendors stay outside Connectors scope, so this stays a direct read.
-	$ai_key = get_option( 'luwipress_oai_compat_api_key', '' )
-		?: get_option( 'luwipress_openai_api_key', '' )
-		?: get_option( 'luwipress_anthropic_api_key', '' )
-		?: get_option( 'luwipress_google_ai_api_key', '' );
-}
+// Resolve the configured AI key from the LuwiPress option layer for the
+// dashboard status pill (any one provider key counts as "configured").
+$ai_key = get_option( 'luwipress_openai_api_key', '' )
+	?: get_option( 'luwipress_anthropic_api_key', '' )
+	?: get_option( 'luwipress_google_ai_api_key', '' )
+	?: get_option( 'luwipress_oai_compat_api_key', '' );
 
 $provider_labels = array(
 	'openai'             => 'OpenAI',
@@ -167,33 +157,11 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			return $map[ $detected_slug ] ?? admin_url( 'plugins.php' );
 		};
 
-		// AI Engine — config slot, not a plugin. When WordPress 7.0 Connectors
-		// is active AND the key is sourced from Connectors, surface that
-		// distinction in the pill so the operator knows where to manage it.
-		$connectors_source = false;
-		if ( $wp7_connectors_active && class_exists( 'LuwiPress_Connectors' ) ) {
-			$wp7_state = LuwiPress_Connectors::list_active_connectors();
-			foreach ( $wp7_state as $row ) {
-				if ( ! empty( $row['in_connectors'] ) ) {
-					$connectors_source = true;
-					break;
-				}
-			}
-		}
-
-		if ( ! empty( $ai_key ) && $connectors_source ) {
-			$pills[] = array( 'ok', 'dashicons-admin-generic',
-				sprintf( __( 'Connectors · %s (%s)', 'luwipress' ), $provider_label, $ai_model ),
-				sprintf( __( 'AI key sourced from WordPress 7.0 Connectors. Provider: %1$s · model %2$s. Click to manage native Connectors.', 'luwipress' ), $provider_label, $ai_model ),
-				admin_url( 'options-general.php' ) );
-		} elseif ( ! empty( $ai_key ) ) {
+		// AI Engine — config slot, not a plugin.
+		if ( ! empty( $ai_key ) ) {
 			$pills[] = array( 'ok', 'dashicons-admin-generic', sprintf( '%s (%s)', $provider_label, $ai_model ),
 				sprintf( __( 'AI provider configured: %1$s · model %2$s. Click to manage in Settings.', 'luwipress' ), $provider_label, $ai_model ),
 				admin_url( 'admin.php?page=luwipress-settings' ) );
-		} elseif ( $wp7_connectors_active ) {
-			$pills[] = array( 'err', 'dashicons-admin-generic', __( 'No AI key (Connectors)', 'luwipress' ),
-				__( 'WordPress 7.0 Connectors detected but no AI provider configured. Click to open Settings → Connectors.', 'luwipress' ),
-				admin_url( 'options-general.php' ) );
 		} else {
 			$pills[] = array( 'err', 'dashicons-admin-generic', __( 'No AI key', 'luwipress' ),
 				__( 'No AI provider key set. Click to open Settings → API Keys (OpenAI, Anthropic, Google, or any OpenAI-compatible endpoint).', 'luwipress' ),

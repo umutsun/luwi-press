@@ -22,19 +22,16 @@ class LuwiPress_Provider_Google implements LuwiPress_AI_Provider {
 	/**
 	 * Constructor.
 	 *
-	 * Resolves the API key through LuwiPress_Connectors (WP 7.0 native
-	 * Connectors first, legacy `luwipress_google_api_key` option fallback).
-	 * Note: WP 7.0 Connectors has been observed to reject some Gemini keys
-	 * with "It was not possible to connect to the provider using this key" —
-	 * when that happens, leaving the key in the legacy LuwiPress option
-	 * also works because Connectors returns empty and we fall back.
+	 * Reads the API key from `luwipress_google_ai_api_key` — the option name
+	 * the Settings UI persists under — falling back to the historical
+	 * `luwipress_google_api_key` spelling so older installs keep working.
 	 */
 	public function __construct() {
-		if ( class_exists( 'LuwiPress_Connectors' ) ) {
-			$this->api_key = LuwiPress_Connectors::get_api_key( 'google' );
-		} else {
-			$this->api_key = get_option( 'luwipress_google_api_key', '' );
+		$key = get_option( 'luwipress_google_ai_api_key', '' );
+		if ( '' === $key ) {
+			$key = get_option( 'luwipress_google_api_key', '' );
 		}
+		$this->api_key = $key;
 	}
 
 	/**
@@ -63,6 +60,29 @@ class LuwiPress_Provider_Google implements LuwiPress_AI_Provider {
 					'role'  => $role,
 					'parts' => array( array( 'text' => $msg['content'] ) ),
 				);
+			}
+		}
+
+		// Vision: append attached images to the last user turn as inline_data
+		// parts. Gemini 2.0/2.5 Flash + Pro are all multimodal.
+		if ( ! empty( $options['images'] ) && is_array( $options['images'] ) ) {
+			for ( $i = count( $contents ) - 1; $i >= 0; $i-- ) {
+				if ( 'user' !== $contents[ $i ]['role'] ) {
+					continue;
+				}
+				foreach ( $options['images'] as $img ) {
+					if ( empty( $img['data'] ) ) {
+						continue;
+					}
+					$mime = ! empty( $img['mime'] ) ? $img['mime'] : 'image/jpeg';
+					$contents[ $i ]['parts'][] = array(
+						'inline_data' => array(
+							'mime_type' => $mime,
+							'data'      => $img['data'],
+						),
+					);
+				}
+				break;
 			}
 		}
 

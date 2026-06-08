@@ -147,6 +147,30 @@ class LuwiPress_Provider_OpenAI_Compatible implements LuwiPress_AI_Provider {
 			);
 		}
 
+		// Vision: fold attached images into the last user message as OpenAI
+		// image_url parts. Only vision-capable vendors/models will honour this
+		// (Together, Groq vision models, etc.); others return an API error.
+		if ( ! empty( $options['images'] ) && is_array( $options['images'] ) ) {
+			for ( $i = count( $formatted ) - 1; $i >= 0; $i-- ) {
+				if ( 'user' !== $formatted[ $i ]['role'] ) {
+					continue;
+				}
+				$parts = array( array( 'type' => 'text', 'text' => (string) $formatted[ $i ]['content'] ) );
+				foreach ( $options['images'] as $img ) {
+					if ( empty( $img['data'] ) ) {
+						continue;
+					}
+					$mime    = ! empty( $img['mime'] ) ? $img['mime'] : 'image/jpeg';
+					$parts[] = array(
+						'type'      => 'image_url',
+						'image_url' => array( 'url' => 'data:' . $mime . ';base64,' . $img['data'] ),
+					);
+				}
+				$formatted[ $i ]['content'] = $parts;
+				break;
+			}
+		}
+
 		$body = array(
 			'model'       => $model,
 			'max_tokens'  => (int) $max_tokens,
