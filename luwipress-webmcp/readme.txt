@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.43
+Stable tag: 1.0.44
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.44 — Retranslate-from-source tool (paired with core 3.12.2) =
+* **`elementor_retranslate_from_source`** — retranslate an Elementor page into one or more languages (or all active languages) directly from the source/default language. Re-syncs the page structure from the source so drifted translations are rebuilt, AI-translates every text field in safe chunks, clears any stale "no translatable text" guard, and queues one background job per language. Pairs with core 3.12.2's chunked, self-healing translation pipeline.
 
 = 1.0.43 — Migration & SEO-ops toolset (paired with core 3.12.0) =
 * **Redirect tools** — `redirect_list` / `redirect_create` / `redirect_batch` / `redirect_update` / `redirect_delete` / `redirect_diag`: full Rank Math redirect CRUD for post-migration redirect setup (bulk-seed up to 200 at once; diag confirms the engine is reachable before/after a DNS swap).

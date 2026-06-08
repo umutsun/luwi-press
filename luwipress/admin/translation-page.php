@@ -498,6 +498,37 @@ if ( $is_wpml ) {
 			<span class="lp-pill pill-neutral" title="<?php esc_attr_e( 'Plugin version', 'luwipress' ); ?>">
 				v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
 			</span>
+			<?php
+			// WP-Cron health. As of 3.12.3 the Translation Manager translates INLINE
+			// (browser-driven) so it no longer depends on wp-cron, but background sweeps +
+			// the queue fallback still do. Surface a stalled cron instead of letting jobs
+			// sit silently "queued" (the old "stuck queue" perception).
+			$lp_cron_disabled = defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON;
+			$lp_cron_overdue  = 0;
+			if ( function_exists( '_get_cron_array' ) ) {
+				$lp_crons = _get_cron_array();
+				if ( is_array( $lp_crons ) && ! empty( $lp_crons ) ) {
+					$lp_earliest = min( array_keys( $lp_crons ) );
+					if ( $lp_earliest && $lp_earliest < ( time() - 600 ) ) {
+						$lp_cron_overdue = time() - $lp_earliest;
+					}
+				}
+			}
+			if ( $lp_cron_disabled || $lp_cron_overdue > 0 ) :
+				$lp_cron_msg = $lp_cron_disabled
+					? __( 'WP-Cron is disabled. Translations here run instantly while this page is open; background sweeps need a real system cron.', 'luwipress' )
+					: sprintf( __( 'WP-Cron looks stalled (oldest job overdue ~%d min). Translations here still run instantly while this page is open.', 'luwipress' ), (int) round( $lp_cron_overdue / 60 ) );
+				?>
+				<span class="lp-pill pill-warning" title="<?php echo esc_attr( $lp_cron_msg ); ?>">
+					<span class="dashicons dashicons-clock" style="font-size:16px;width:16px;height:16px;"></span>
+					<?php esc_html_e( 'Cron: check', 'luwipress' ); ?>
+				</span>
+			<?php else : ?>
+				<span class="lp-pill pill-success" title="<?php esc_attr_e( 'Background processing (wp-cron) is healthy.', 'luwipress' ); ?>">
+					<span class="dashicons dashicons-clock" style="font-size:16px;width:16px;height:16px;"></span>
+					<?php esc_html_e( 'Cron OK', 'luwipress' ); ?>
+				</span>
+			<?php endif; ?>
 			<span class="tm-backend-pill">
 				<span class="dashicons dashicons-translation" style="font-size:16px;width:16px;height:16px;"></span>
 				<?php echo esc_html( $plugin_name ); ?>

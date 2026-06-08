@@ -3625,7 +3625,12 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
      * @return string|WP_Error Translated HTML.
      */
     private function translate_long_html( $html, $source_lang, $target_lang ) {
-        $chunks = $this->split_html_by_headings( $html, 3000 );
+        // 2200-char target keeps every per-chunk AI call comfortably under the
+        // provider timeout. A single oversized block (a long heading-less paragraph)
+        // used to become one giant chunk that timed out (cURL error 28) and silently
+        // fell back to the English original — the root cause of large blog posts
+        // staying untranslated. split_html_by_headings now hard-splits such blocks.
+        $chunks = $this->split_html_by_headings( $html, 2200 );
 
         LuwiPress_Logger::log( sprintf( 'Elementor long text: %d chunks from %d chars', count( $chunks ), strlen( $html ) ), 'info' );
 
@@ -3671,13 +3676,27 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
         }
 
         if ( empty( $parts ) || count( $parts ) <= 1 ) {
-            return array( $html );
+            // No headings or paragraph boundaries to split on — hard-split the whole
+            // blob so it never reaches the AI as one oversized (timeout-prone) call.
+            return $this->hard_split_html( $html, $max_chars );
         }
 
         $chunks  = array();
         $current = '';
 
         foreach ( $parts as $part ) {
+            // A single part can itself exceed max_chars (e.g. one very long <p>).
+            // Hard-split it instead of emitting an oversized chunk.
+            if ( strlen( $part ) > $max_chars ) {
+                if ( '' !== $current ) {
+                    $chunks[] = $current;
+                    $current  = '';
+                }
+                foreach ( $this->hard_split_html( $part, $max_chars ) as $piece ) {
+                    $chunks[] = $piece;
+                }
+                continue;
+            }
             if ( strlen( $current ) + strlen( $part ) > $max_chars && ! empty( $current ) ) {
                 $chunks[] = $current;
                 $current  = $part;
@@ -3690,6 +3709,53 @@ IMPORTANT: Return exactly the same number of items. Keep widget_id and field val
             $chunks[] = $current;
         }
 
+        return $chunks;
+    }
+
+    /**
+     * Hard-split an HTML string into <= $max_chars pieces, preferring safe
+     * boundaries (closing block tags, <br>, sentence ends) over raw character
+     * cuts. Guarantees no piece exceeds the limit so every AI call stays well
+     * under the provider timeout.
+     *
+     * @param string $html
+     * @param int    $max_chars
+     * @return array
+     */
+    private function hard_split_html( $html, $max_chars ) {
+        if ( strlen( $html ) <= $max_chars ) {
+            return array( $html );
+        }
+        // Split on closing block tags, <br>, or sentence terminators while keeping
+        // the delimiter attached to the preceding fragment.
+        $fragments = preg_split( '/(<\/(?:p|li|h[1-6]|div|blockquote|ul|ol)>|<br\s*\/?>|(?<=[.!?])\s+)/i', $html, -1, PREG_SPLIT_DELIM_CAPTURE );
+        $chunks  = array();
+        $current = '';
+        foreach ( $fragments as $frag ) {
+            if ( '' === $frag ) {
+                continue;
+            }
+            if ( strlen( $frag ) > $max_chars ) {
+                // A single unsplittable fragment longer than the limit — cut it raw.
+                if ( '' !== $current ) {
+                    $chunks[] = $current;
+                    $current  = '';
+                }
+                foreach ( str_split( $frag, $max_chars ) as $raw ) {
+                    $chunks[] = $raw;
+                }
+                continue;
+            }
+            if ( strlen( $current ) + strlen( $frag ) > $max_chars && '' !== $current ) {
+                $chunks[] = $current;
+                $current  = $frag;
+            } else {
+                $current .= $frag;
+            }
+        }
+        if ( '' !== $current ) {
+            $chunks[] = $current;
+        }
         return $chunks;
     }
 

@@ -3464,22 +3464,52 @@ class LuwiPress_Translation {
             }
         }
 
-        // For Elementor pages: use background job to avoid timeout
+        // For Elementor pages: translate INLINE (synchronously) so the Translation
+        // Manager's per-item AJAX loop drives real, visible progress instead of
+        // handing the work to wp-cron. wp-cron is traffic-dependent and routinely
+        // leaves jobs "queued" indefinitely, which reads as a stuck queue and makes
+        // operators distrust / avoid Translations. The chunked translator (3.12.2)
+        // plus hard-split long-HTML (3.12.3) keep every AI call short, so a single
+        // page completes within the AJAX request. On any failure we fall back to the
+        // background cron job so the work is never lost.
         if ( LuwiPress_Elementor::is_elementor_page( $post_id ) && class_exists( 'LuwiPress_Elementor' ) ) {
-            // Store queued status for progress polling
+            @set_time_limit( 0 );
+            if ( function_exists( 'ignore_user_abort' ) ) {
+                @ignore_user_abort( true );
+            }
             update_post_meta( $post_id, '_luwipress_translation_status', wp_json_encode( array(
-                'status'   => 'queued',
+                'status'   => 'translating',
                 'language' => $lang,
-                'queued'   => current_time( 'mysql' ),
+                'started'  => current_time( 'mysql' ),
             ) ) );
-            wp_schedule_single_event( time(), 'luwipress_elementor_translate_single', array( $post_id, $lang ) );
-            spawn_cron();
+
+            $elem   = LuwiPress_Elementor::get_instance();
+            $result = $elem->translate_page( $post_id, $lang );
+
+            if ( is_wp_error( $result ) ) {
+                LuwiPress_Logger::log( 'AJAX Elementor inline translate failed, falling back to background: ' . $result->get_error_message(), 'warning', array(
+                    'post_id' => $post_id, 'lang' => $lang, 'code' => $result->get_error_code(),
+                ) );
+                wp_schedule_single_event( time(), 'luwipress_elementor_translate_single', array( $post_id, $lang ) );
+                spawn_cron();
+                wp_send_json_success( array(
+                    'post_id' => $post_id,
+                    'title'   => $post->post_title,
+                    'status'  => 'queued',
+                ) );
+                return;
+            }
+
+            update_post_meta( $post_id, '_luwipress_translation_status', wp_json_encode( array(
+                'status'   => 'completed',
+                'language' => $lang,
+                'finished' => current_time( 'mysql' ),
+            ) ) );
             wp_send_json_success( array(
                 'post_id' => $post_id,
                 'title'   => $post->post_title,
-                'status'  => 'queued',
+                'status'  => 'completed',
             ) );
-            return;
         }
 
         $request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );

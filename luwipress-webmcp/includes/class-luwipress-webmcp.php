@@ -4870,6 +4870,74 @@ class LuwiPress_WebMCP {
             return $result;
         } );
 
+        $this->register_tool( 'elementor_retranslate_from_source', array(
+            'description' => 'Retranslate an Elementor page into one or more languages FROM THE SOURCE (default) language. Re-syncs the page STRUCTURE from the source — so diverged/stale translations (missing or extra sections) are rebuilt to match — AND AI-translates every text field (headings, buttons, repeaters: tabs/cards/stats/items) in safe chunks. Clears any stale "no translatable text" guard, then queues one background job per language via wp-cron (avoids long-request timeouts). Omit "languages" to target every active language except the source. Poll the page render or system_logs for completion.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'post_id'   => array( 'type' => 'integer', 'description' => 'Source post/page ID in the DEFAULT language (required)' ),
+                    'languages' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Target language codes, e.g. ["fr","it","es"]. Omit to retranslate into all active languages except the source.' ),
+                ),
+                'required'   => array( 'post_id' ),
+            ),
+            'annotations' => array(
+                'title'           => 'Retranslate Elementor Page From Source (structure + text)',
+                'readOnlyHint'    => false,
+                'destructiveHint' => false,
+                'idempotentHint'  => true,
+                'openWorldHint'   => true,
+            ),
+        ), function ( $args ) {
+            $post_id = intval( $args['post_id'] ?? 0 );
+            if ( ! $post_id ) {
+                return array( 'error' => 'post_id required' );
+            }
+            if ( ! class_exists( 'LuwiPress_Translation' ) || ! class_exists( 'LuwiPress_Elementor' ) ) {
+                return array( 'error' => 'Translation/Elementor module not available' );
+            }
+            $default = LuwiPress_Translation::get_default_language();
+
+            $requested = $args['languages'] ?? array();
+            if ( is_string( $requested ) ) {
+                $requested = array_filter( array_map( 'trim', explode( ',', $requested ) ) );
+            }
+            if ( ! empty( $requested ) ) {
+                $targets = array_map( 'sanitize_text_field', (array) $requested );
+            } else {
+                $targets = array_diff( LuwiPress_Translation::get_active_languages(), array( $default ) );
+            }
+            $targets = array_values( array_unique( array_filter( (array) $targets, function ( $l ) use ( $default ) {
+                return $l && $l !== $default;
+            } ) ) );
+            if ( empty( $targets ) ) {
+                return array( 'error' => 'No target languages resolved (only the default language is active, or none passed).' );
+            }
+
+            // Clear the stale guard so a wrongly-flagged page is not skipped by cron.
+            delete_post_meta( $post_id, '_luwipress_no_translatable_text' );
+
+            $offset = 0;
+            $queued = array();
+            foreach ( $targets as $lang ) {
+                // Dedupe any already-pending event for this (post, lang) pair.
+                wp_clear_scheduled_hook( 'luwipress_elementor_translate_single', array( $post_id, $lang ) );
+                wp_schedule_single_event( time() + $offset, 'luwipress_elementor_translate_single', array( $post_id, $lang ) );
+                $queued[] = $lang;
+                $offset  += 8; // stagger so cron does not collapse them into one process
+            }
+            if ( function_exists( 'spawn_cron' ) ) {
+                spawn_cron();
+            }
+
+            return array(
+                'status'           => 'queued',
+                'post_id'          => $post_id,
+                'source_language'  => $default,
+                'queued_languages' => $queued,
+                'note'             => 'Each language runs in the background: structure is re-synced from the source page and all text is AI-translated in safe chunks. Poll the page render or system_logs for completion.',
+            );
+        } );
+
         $this->register_tool( 'elementor_get_widget', array(
             'description' => 'Get a specific Elementor element (widget, section, or column) by its ID — returns full settings, text content, and style info',
             'inputSchema' => array(

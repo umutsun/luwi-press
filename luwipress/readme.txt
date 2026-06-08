@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.13.0
+Stable tag: 3.13.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.13.1 — Reliable, no-wait page translation =
+* **Translation Manager now translates pages instantly while open.** Elementor pages used to be handed to background processing (wp-cron), which on low-traffic sites could leave them showing "translating…" indefinitely. The Translation Manager now translates each page directly as you watch, with live per-item progress — no more stuck-looking queue. Background processing remains as an automatic fallback.
+* **Fixed: long articles silently staying in the source language.** Very long pages/posts split their text into small pieces for the AI; an oversized piece (a long heading-less section) could exceed the request timeout and quietly fall back to the original text. Content is now hard-split into safe sizes so even 2,000+ word articles translate completely.
+* **New WP-Cron health indicator** in the Translation Manager header — surfaces a stalled background scheduler instead of letting jobs sit silently.
 
 = 3.13.0 — Licensing & automatic updates =
 * **NEW: license activation.** Activate your CodeCanyon purchase code or LuwiPress license key under LuwiPress → Settings → License. A daily background check keeps the activation in sync, and a 14-day grace window means a brief licensing-server outage never interrupts your site.
