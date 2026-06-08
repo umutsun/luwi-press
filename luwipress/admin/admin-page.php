@@ -347,6 +347,15 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 				$install_url( 'wordfence' ) );
 		}
 
+		/**
+		 * Let modules (License, etc.) append their own status pill. Each entry
+		 * is [ state('ok'|'err'|'neutral'), dashicon, label, tooltip, url ].
+		 *
+		 * @param array<int,array> $pills
+		 * @since 3.13.0
+		 */
+		$pills = apply_filters( 'luwipress_dashboard_pills', $pills );
+
 		foreach ( $pills as $p ) :
 			$state = $p[0];
 			$icon  = $p[1];
@@ -374,6 +383,18 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 		</<?php echo esc_html( $tag ); ?>>
 		<?php endforeach; ?>
 	</div>
+
+	<?php if ( class_exists( 'LuwiPress_License' ) && LuwiPress_License::is_blocked() ) : ?>
+	<div class="luwipress-card luwipress-card--warning">
+		<h2><?php esc_html_e( 'License required', 'luwipress' ); ?></h2>
+		<p><?php esc_html_e( 'LuwiPress features are locked on this site. Activate your purchase code or license key to enable them.', 'luwipress' ); ?></p>
+		<p>
+			<a class="button button-primary" href="<?php echo esc_url( add_query_arg( array( 'page' => 'luwipress-settings', 'tab' => 'license' ), admin_url( 'admin.php' ) ) ); ?>">
+				<?php esc_html_e( 'Activate license', 'luwipress' ); ?>
+			</a>
+		</p>
+	</div>
+	<?php endif; ?>
 
 	<!-- ═══ HERO STATS (AJAX loaded with animated counters) ═══ -->
 	<div class="lp-hero" id="lp-hero">

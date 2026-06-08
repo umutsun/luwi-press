@@ -26,6 +26,15 @@ define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
 
+// Production Ed25519 public key for the luwi.dev license server (base64, 32-byte
+// raw). With this pinned, LuwiPress_License verifies every server response via
+// sodium_crypto_sign_verify_detached and rejects anything unsigned/forged. The
+// guarded define lets wp-config.php point a staging site at a different key
+// before the plugin loads. Verified end-to-end against https://luwi.dev/license/v1.
+if ( ! defined( 'LUWIPRESS_LICENSE_PUBKEY' ) ) {
+    define( 'LUWIPRESS_LICENSE_PUBKEY', 'pXWw2M8qKLWlsB65jw4+zT6GiM8x83XyJ6ca6s2w9Rc=' );
+}
+
 /**
  * Main LuwiPress Plugin Class
  */
@@ -133,6 +142,14 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-token-tracker.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-security.php';
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-hmac.php';
+
+        // License Manager — per-site activation, tier/entitlement resolution,
+        // and the daily heartbeat against the self-hosted luwi.dev license
+        // server (3.13.0+). Loaded early so every other module + companion can
+        // query the static capability gate (LuwiPress_License::can() / ::tier()
+        // / ::is_active()) at construct time. Phase 1 is informational only —
+        // nothing is gated yet; hard-block enforcement + auto-update follow.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-license.php';
 
         // Environment detection & bridge services
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-plugin-detector.php';
@@ -327,6 +344,12 @@ class LuwiPress {
             wp_schedule_event( time(), 'daily', 'luwipress_daily_cleanup' );
         }
 
+        // Schedule the daily license heartbeat (also self-heals on admin_init
+        // for ZIP-overwrite upgrades that skip this hook).
+        if ( class_exists( 'LuwiPress_License' ) ) {
+            LuwiPress_License::activate();
+        }
+
         // Flush rewrite rules
         flush_rewrite_rules();
 
@@ -344,6 +367,9 @@ class LuwiPress {
         // helpers. Add new module hooks here as they ship.
         if ( class_exists( 'LuwiPress_Health_Score' ) ) {
             LuwiPress_Health_Score::deactivate();
+        }
+        if ( class_exists( 'LuwiPress_License' ) ) {
+            LuwiPress_License::deactivate();
         }
 
         flush_rewrite_rules();
@@ -368,6 +394,10 @@ class LuwiPress {
      * on the first page load.
      */
     public function load_modules() {
+        // License Manager first — its static gate API must be callable before
+        // any other module constructs (Phase 4 companions will query can()).
+        LuwiPress_License::get_instance();
+
         // Core infrastructure
         LuwiPress_API::get_instance();
         LuwiPress_Auth::get_instance();

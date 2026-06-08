@@ -84,11 +84,55 @@ function luwipress_agentic_core_missing_notice() {
 }
 
 /**
+ * Is the Agentic companion licensed/entitled on this site?
+ *
+ * Forward-compatible: against a license-unaware core (or no core at all) this
+ * returns true, so behaviour is unchanged everywhere it ships today. Only a
+ * license-aware core with enforcement ON gates it — and even then only when the
+ * active tier excludes `agentic`. (Agentic exposes admin-ajax + UCP/AP2
+ * surfaces rather than luwipress/v1 REST routes, so core's REST 402 guard does
+ * not reach them — gating the instantiation here is the real lever.)
+ */
+function luwipress_agentic_feature_enabled() {
+	if ( ! class_exists( 'LuwiPress_License' ) ) {
+		return true;
+	}
+	return LuwiPress_License::feature_enabled( 'agentic' );
+}
+
+/**
+ * License-required notice — Plugins screen only.
+ */
+function luwipress_agentic_license_required_notice() {
+	$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+	if ( ! $screen || 'plugins' !== $screen->id ) {
+		return;
+	}
+	if ( ! current_user_can( 'activate_plugins' ) ) {
+		return;
+	}
+	?>
+	<div class="notice notice-warning">
+		<p>
+			<strong><?php esc_html_e( 'LuwiPress Agentic is locked.', 'luwipress-agentic' ); ?></strong>
+			<?php esc_html_e( 'Your LuwiPress license tier does not include the agentic assistant. Activate or upgrade your license under LuwiPress → Settings → License.', 'luwipress-agentic' ); ?>
+		</p>
+	</div>
+	<?php
+}
+
+/**
  * Bootstrap. Runs on plugins_loaded priority 20 so core (priority 10) is ready.
  */
 function luwipress_agentic_init() {
 	if ( ! luwipress_agentic_core_active() ) {
 		add_action( 'admin_notices', 'luwipress_agentic_core_missing_notice' );
+		return;
+	}
+
+	if ( ! luwipress_agentic_feature_enabled() ) {
+		// Core active + enforcement on + tier excludes the agentic assistant.
+		add_action( 'admin_notices', 'luwipress_agentic_license_required_notice' );
 		return;
 	}
 
@@ -151,7 +195,7 @@ add_action( 'plugins_loaded', 'luwipress_agentic_init', 20 );
  * Admin submenu — attaches to the core LuwiPress menu parent.
  */
 function luwipress_agentic_admin_menu() {
-	if ( ! luwipress_agentic_core_active() ) {
+	if ( ! luwipress_agentic_core_active() || ! luwipress_agentic_feature_enabled() ) {
 		return;
 	}
 	add_submenu_page(
@@ -224,6 +268,9 @@ function luwipress_agentic_render_settings_page() {
  * by the `luwipress_settings_render_tab_nav` / `_content` actions in core 3.2.4).
  */
 function luwipress_agentic_settings_tab_nav( $active_tab ) {
+	if ( ! luwipress_agentic_feature_enabled() ) {
+		return;
+	}
 	$is_active = ( 'agentic' === $active_tab ) ? 'nav-tab-active' : '';
 	?>
 	<a href="?page=luwipress-settings&tab=agentic" class="nav-tab <?php echo esc_attr( $is_active ); ?>">
@@ -234,6 +281,9 @@ function luwipress_agentic_settings_tab_nav( $active_tab ) {
 add_action( 'luwipress_settings_render_tab_nav', 'luwipress_agentic_settings_tab_nav' );
 
 function luwipress_agentic_settings_tab_content( $active_tab ) {
+	if ( ! luwipress_agentic_feature_enabled() ) {
+		return;
+	}
 	$classes = 'luwipress-tab-content' . ( 'agentic' === $active_tab ? ' tab-active' : '' );
 	?>
 	<div class="<?php echo esc_attr( $classes ); ?>" id="tab-agentic">

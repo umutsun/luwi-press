@@ -100,6 +100,43 @@ function luwipress_webmcp_lite_mode_notice() {
 }
 
 /**
+ * Is the WebMCP companion licensed/entitled on this site?
+ *
+ * Forward-compatible: against a license-unaware core (or no core at all) this
+ * returns true, so behaviour is unchanged everywhere it ships today. Only a
+ * license-aware core with enforcement ON can gate WebMCP — and even then only
+ * when the active tier excludes `webmcp`. (When the site is fully hard-blocked,
+ * core's own rest_pre_dispatch guard already 402s /luwipress/v1/mcp; this gate
+ * additionally covers the tier case, where the license is active but the tier
+ * simply doesn't include the tool server.)
+ */
+function luwipress_webmcp_feature_enabled() {
+	if ( ! class_exists( 'LuwiPress_License' ) ) {
+		return true;
+	}
+	return LuwiPress_License::feature_enabled( 'webmcp' );
+}
+
+/**
+ * License-required notice (Plugins screen only) — shown when core is active but
+ * the license tier does not include WebMCP.
+ */
+function luwipress_webmcp_license_required_notice() {
+	$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+	if ( ! $screen || 'plugins' !== $screen->id ) {
+		return;
+	}
+	if ( ! current_user_can( 'activate_plugins' ) ) {
+		return;
+	}
+	echo '<div class="notice notice-warning"><p><strong>'
+		. esc_html__( 'LuwiPress WebMCP is locked.', 'luwipress-webmcp' )
+		. '</strong> '
+		. esc_html__( 'Your LuwiPress license tier does not include the WebMCP tool server. Activate or upgrade your license under LuwiPress → Settings → License.', 'luwipress-webmcp' )
+		. '</p></div>';
+}
+
+/**
  * Bootstrap. Runs on plugins_loaded priority 20 so core (priority 10) is
  * ready when it's present. Standalone mode loads the same class with a
  * Permission shim — class_exists gates inside register_*_tools handle the
@@ -115,8 +152,15 @@ function luwipress_webmcp_init() {
 
 	require_once LUWIPRESS_WEBMCP_PLUGIN_DIR . 'includes/class-luwipress-webmcp.php';
 
-	if ( LuwiPress_WebMCP::is_enabled() ) {
+	if ( ! LuwiPress_WebMCP::is_enabled() ) {
+		return;
+	}
+
+	if ( luwipress_webmcp_feature_enabled() ) {
 		LuwiPress_WebMCP::get_instance();
+	} else {
+		// Core active + enforcement on + tier excludes WebMCP.
+		add_action( 'admin_notices', 'luwipress_webmcp_license_required_notice' );
 	}
 }
 add_action( 'plugins_loaded', 'luwipress_webmcp_init', 20 );

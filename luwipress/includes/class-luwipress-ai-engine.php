@@ -73,6 +73,15 @@ class LuwiPress_AI_Engine {
 	 * @return array|WP_Error      Normalized AI response or WP_Error.
 	 */
 	public static function dispatch( $workflow, array $messages, array $options = array() ) {
+		// License gate — every AI workflow funnels through here, so one check
+		// disables enrichment, translation, AEO, chat replies, and scheduled
+		// generation when the site is hard-blocked (no-op unless enforcement is
+		// enabled AND the license is inactive). dispatch_json() calls dispatch()
+		// too, so it is covered.
+		if ( class_exists( 'LuwiPress_License' ) && LuwiPress_License::is_blocked() ) {
+			return LuwiPress_License::blocked_error();
+		}
+
 		// Budget check.
 		if ( class_exists( 'LuwiPress_Token_Tracker' ) ) {
 			$budget = LuwiPress_Token_Tracker::check_budget( $workflow );

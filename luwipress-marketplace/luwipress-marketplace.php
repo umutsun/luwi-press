@@ -69,11 +69,50 @@ function luwipress_marketplace_woo_missing_notice() {
 }
 
 /**
+ * Is the Marketplace companion licensed/entitled on this site?
+ *
+ * Forward-compatible: against a license-unaware core (or no core at all) this
+ * returns true, so behaviour is unchanged everywhere it ships today. Only a
+ * license-aware core with enforcement ON gates it — and even then only when the
+ * active tier excludes `marketplace`.
+ */
+function luwipress_marketplace_feature_enabled() {
+    if ( ! class_exists( 'LuwiPress_License' ) ) {
+        return true;
+    }
+    return LuwiPress_License::feature_enabled( 'marketplace' );
+}
+
+/**
+ * License-required notice — Plugins screen only.
+ */
+function luwipress_marketplace_license_required_notice() {
+    $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+    if ( ! $screen || 'plugins' !== $screen->id ) {
+        return;
+    }
+    if ( ! current_user_can( 'activate_plugins' ) ) {
+        return;
+    }
+    echo '<div class="notice notice-warning"><p><strong>'
+        . esc_html__( 'LuwiPress Marketplace is locked.', 'luwipress-marketplace' )
+        . '</strong> '
+        . esc_html__( 'Your LuwiPress license tier does not include marketplace publishing. Activate or upgrade your license under LuwiPress → Settings → License.', 'luwipress-marketplace' )
+        . '</p></div>';
+}
+
+/**
  * Bootstrap. Runs on plugins_loaded p20 — after the core plugin (p10).
  */
 function luwipress_marketplace_init() {
     if ( ! luwipress_marketplace_core_loaded() ) {
         add_action( 'admin_notices', 'luwipress_marketplace_core_missing_notice' );
+        return;
+    }
+
+    if ( ! luwipress_marketplace_feature_enabled() ) {
+        // Core active + enforcement on + tier excludes marketplace publishing.
+        add_action( 'admin_notices', 'luwipress_marketplace_license_required_notice' );
         return;
     }
 
