@@ -180,6 +180,9 @@ class LuwiPress_Vendors {
 		if ( ! is_object( $engine ) || ! method_exists( $engine, 'register_type' ) ) {
 			return;
 		}
+		if ( ! self::is_available() ) {
+			return; // WC-less site: keep the dormant preset out of the Content Types list too.
+		}
 
 		$url_keys   = array( 'facebook', 'instagram', 'youtube', 'soundcloud', 'linkedin', 'x', 'behance', 'website' );
 		$translate  = array( 'location', 'specialty', 'quote', 'occupation' );
@@ -1012,6 +1015,35 @@ class LuwiPress_Vendors {
 		return $out;
 	}
 
+	/**
+	 * Should the Vendors module be OFFERED on this site at all? Vendors exists
+	 * to attribute WC products to their maker/atelier — on a WC-less site the
+	 * module reads as commerce noise (operator feedback 2026-06-10), so the
+	 * whole surface (CPT, admin tab, rewrites) stays dormant. A non-commerce
+	 * vertical (agency team page, gallery artist roster) can still opt in via
+	 * the filter. Distinct from is_active(): availability is the WC dimension
+	 * only, so the settings tab can stay reachable on WC sites where the
+	 * operator merely toggled `enabled` off.
+	 *
+	 * @return bool
+	 */
+	public static function is_available() {
+		$wc = ( class_exists( 'LuwiPress' ) && method_exists( 'LuwiPress', 'is_wc_active' ) )
+			? (bool) LuwiPress::is_wc_active()
+			: class_exists( 'WooCommerce' );
+		return $wc || (bool) apply_filters( 'luwipress_vendors_force_enabled', false );
+	}
+
+	/**
+	 * Is the module actually running (CPT + rewrites + frontend surfaces)?
+	 * Requires BOTH the operator toggle and availability (WC or filter opt-in).
+	 *
+	 * @return bool
+	 */
+	public static function is_active() {
+		return ( (int) self::get_setting( 'enabled' ) === 1 ) && self::is_available();
+	}
+
 	private function update_setting( $key, $value ) {
 		update_option( self::OPTION_PREFIX . $key, $value );
 	}
@@ -1019,8 +1051,8 @@ class LuwiPress_Vendors {
 	/* ─── CPT REGISTRATION ────────────────────────────────────────────── */
 
 	public function register_cpt() {
-		if ( (int) self::get_setting( 'enabled' ) !== 1 ) {
-			return;
+		if ( ! self::is_active() ) {
+			return; // disabled by operator, or dormant on a WC-less site.
 		}
 
 		$singular        = (string) self::get_setting( 'singular_label' );
@@ -1252,7 +1284,7 @@ class LuwiPress_Vendors {
 	 * matching actually uses them.
 	 */
 	public function register_group_rewrites() {
-		if ( (int) self::get_setting( 'enabled' ) !== 1 ) {
+		if ( ! self::is_active() ) {
 			return;
 		}
 		foreach ( $this->group_bases_map() as $base => $term_slug ) {

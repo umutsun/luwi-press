@@ -45,10 +45,16 @@ $lwp_tools = array(
 		'guard' => 'LuwiPress_Slug_Resolver',
 	),
 	'vendors'       => array(
-		'label' => __( 'Vendors', 'luwipress' ),
-		'icon'  => 'dashicons-store',
-		'file'  => $plugin_dir . 'admin/vendors-page.php',
-		'guard' => 'LuwiPress_Vendors',
+		'label'      => __( 'Vendors', 'luwipress' ),
+		'icon'       => 'dashicons-store',
+		'file'       => $plugin_dir . 'admin/vendors-page.php',
+		'guard'      => 'LuwiPress_Vendors',
+		// Vendors attributes WC products to makers/ateliers — on a WC-less
+		// site the tab is commerce noise, so it hides entirely (operator can
+		// opt back in via the luwipress_vendors_force_enabled filter). Uses
+		// is_available() not is_active() so the settings tab stays reachable
+		// on WC sites where the module is merely toggled off.
+		'visible_if' => class_exists( 'LuwiPress_Vendors' ) && LuwiPress_Vendors::is_available(),
 	),
 	'events'        => array(
 		'label' => __( 'Events', 'luwipress' ),
