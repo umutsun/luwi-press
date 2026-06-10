@@ -1,0 +1,87 @@
+name: Release
+
+# Tag-and-forget release pipeline for the LuwiPress plugin ecosystem.
+#
+# Push a tag → this builds the matching ZIP via build-zip.php and publishes a
+# GitHub Release whose asset is named {slug}-v{version}.zip. The luwi.dev
+# license server's GitHub webhook then verifies the sha256, Ed25519-signs the
+# package, and registers it — so licensed sites can one-click auto-update.
+#
+# Tag scheme (asset basename == release slug == install dir / plugin folder):
+#   v3.13.3                      → slug=luwipress           (core)
+#   luwipress-webmcp-v1.0.45     → slug=luwipress-webmcp    (companion)
+#   luwipress-agentic-v1.3.5     → slug=luwipress-agentic
+#   luwipress-marketplace-v1.0.2 → slug=luwipress-marketplace
+# A -beta / -rc version suffix (e.g. v3.14.0-beta1) → marked prerelease (beta channel).
+
+on:
+  push:
+    tags:
+      - 'v*'                 # core
+      - 'luwipress-*-v*'     # companions
+
+permissions:
+  contents: write            # create releases + upload assets
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: zip, mbstring
+          tools: composer
+
+      - name: Resolve slug + version from tag
+        id: meta
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$TAG" =~ ^v(.+)$ ]]; then
+            SLUG="luwipress"; VERSION="${BASH_REMATCH[1]}"
+          elif [[ "$TAG" =~ ^(luwipress-[a-z0-9-]+)-v(.+)$ ]]; then
+            SLUG="${BASH_REMATCH[1]}"; VERSION="${BASH_REMATCH[2]}"
+          else
+            echo "::error::Unrecognized tag '$TAG' (expected v<ver> or <slug>-v<ver>)"; exit 1
+          fi
+          if [ ! -d "$SLUG" ]; then
+            echo "::error::Plugin source folder '$SLUG' not found in repo"; exit 1
+          fi
+          PRERELEASE=false
+          case "$VERSION" in *-beta*|*-rc*) PRERELEASE=true;; esac
+          echo "slug=$SLUG"             >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"       >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "asset=releases/${SLUG}-v${VERSION}.zip" >> "$GITHUB_OUTPUT"
+          echo "Building $SLUG v$VERSION (prerelease=$PRERELEASE)"
+
+      - name: Composer install (enables build-zip's lint + PHPStan gate)
+        run: composer install --no-interaction --no-progress --prefer-dist || true
+
+      - name: Build ZIP
+        run: php build-zip.php "${{ steps.meta.outputs.version }}" "${{ steps.meta.outputs.slug }}"
+
+      - name: Verify asset exists
+        run: |
+          test -f "${{ steps.meta.outputs.asset }}" \
+            || { echo "::error::Expected asset ${{ steps.meta.outputs.asset }} was not produced"; exit 1; }
+          echo "sha256: $(sha256sum "${{ steps.meta.outputs.asset }}" | cut -d' ' -f1)"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FLAGS=""
+          [ "${{ steps.meta.outputs.prerelease }}" = "true" ] && FLAGS="--prerelease"
+          # Create the release if the tag has none yet; otherwise just attach the asset.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${{ steps.meta.outputs.asset }}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${{ steps.meta.outputs.asset }}" \
+              -t "${{ steps.meta.outputs.slug }} ${{ steps.meta.outputs.version }}" \
+              --generate-notes $FLAGS
+          fi
