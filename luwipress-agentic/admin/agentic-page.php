@@ -58,7 +58,7 @@ $lwp_area_url = function ( $area ) {
 				<?php endif; ?>
 				<?php esc_html_e( 'Agentic', 'luwipress' ); ?>
 			</h1>
-			<p class="lp-subtitle"><?php esc_html_e( 'Uniform admin chat surface. Pluggable agent backend — Open Claw, Hermes, or your own endpoint.', 'luwipress' ); ?></p>
+			<p class="lp-subtitle"><?php esc_html_e( 'Uniform admin chat surface. Pluggable agent backend — connect your own AI agent endpoint.', 'luwipress' ); ?></p>
 		</div>
 		<div class="lp-header-actions">
 			<span class="lp-pill <?php echo $is_configured ? 'pill-success' : 'pill-warning'; ?>" id="agentic-active-pill" title="<?php esc_attr_e( 'Active agent backend', 'luwipress-agentic' ); ?>">

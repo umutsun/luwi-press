@@ -4,22 +4,22 @@ Tags: ai, agent, woocommerce, chat, automation, admin, assistant, middleware
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.3.4
+Stable tag: 1.3.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Agentic middleware for LuwiPress. One admin chat surface, pluggable agent backend — Open Claw, Hermes, or your own endpoint.
+Agentic middleware for LuwiPress. One admin chat surface, pluggable agent backend — connect your own AI agent endpoint. Plus the Agentic Commerce hub (Google UCP feed, agent-native checkout, AP2 payment mandates).
 
 == Description ==
 
-**LuwiPress Agentic** is the in-admin agentic layer for LuwiPress. It gives store operators a single chat surface for managing WooCommerce content, SEO, translations, enrichment, CRM, and more — and lets them choose which agent runtime drives that surface.
+**LuwiPress Agentic** is the in-admin agentic layer for LuwiPress. It gives store operators a single chat surface for managing WooCommerce content, SEO, translations, enrichment, CRM, and more — driven by **your own AI agent endpoint**: paste the URL + token of any HTTP agent runtime (self-hosted or a provider of your choice) and the chat surface speaks to it through a uniform request shape.
 
-**Two backends ship by default:**
+**Bring your own agent:**
 
-* **Open Claw** — hosted at `https://oc.luwi.dev/agent` (override-able). General-purpose LuwiPress operator agent.
-* **Hermes** — hosted at `https://hermes.luwi.dev/agent` (override-able). Tool-calling agent runtime.
+* Two configurable backend slots ship out of the box — point each at your agent runtime's endpoint and pick which one is active. The admin UI is identical regardless of the backend — that's the point of the middleware layer.
+* Third parties can register additional adapters via the `luwipress_agent_register` action.
 
-Either backend can be pointed at a self-hosted or on-prem deployment. The admin UI is identical regardless of which one is active — that's the point of the middleware layer.
+**Agentic Commerce hub** — built for the emerging agent-driven shopping stack (Google's universal cart / agentic checkout initiative): a **UCP (Universal Commerce Protocol) product feed**, **agent-native checkout**, and **AP2 payment mandates**, so AI shopping agents and universal carts can discover your products and complete purchases on your store.
 
 **Requires:** LuwiPress core plugin 3.1.0 or newer.
 
@@ -36,7 +36,7 @@ Or just type — "how many at-risk customers do I have?", "generate a blog post 
 = Design =
 
 * Admin-only — no Telegram/WhatsApp bridge. Front-end customer chat is handled separately by the Customer Chat widget in LuwiPress core.
-* Backend-agnostic — same uniform request shape goes to whichever runtime you select (Open Claw, Hermes, future adapters).
+* Backend-agnostic — the same uniform request shape goes to whichever agent endpoint you select (your own runtime, or future adapters).
 * Pluggable — third parties can register additional adapters via the `luwipress_agent_register` action.
 * Conversation history stored per-user in options (50 messages rolling window).
 
@@ -49,6 +49,9 @@ Or just type — "how many at-risk customers do I have?", "generate a blog post 
 5. In the right-hand "Backend Runtime" panel, pick your active agent and enter the access token. Endpoints default to the hosted services; override them if you self-host.
 
 == Changelog ==
+
+= 1.3.5 — Bring-your-own-agent positioning =
+* **Repositioned the plugin description and admin copy around "connect your own AI agent endpoint."** The earlier copy presented Open Claw / Hermes hostnames as shipped runtimes — those were internal Luwi test deployments, not customer-facing services. The two backend slots are now described as what they are: configurable connections you point at your own agent runtime (the uniform request shape is unchanged). The Agentic Commerce description now spells out the agent-driven shopping stack it implements: Google UCP (Universal Commerce Protocol) product feed, agent-native checkout, and AP2 payment mandates for universal-cart / AI-shopping-agent purchases. Text-only release — no behavior, option, or endpoint changes.
 
 = 1.3.4 — Settings tab matches core styling =
 * The Settings "Agentic" tab now emits the core `lp-hub-tab` markup so it matches the other tabs (glassmorphism + active state) instead of the legacy nav-tab style.

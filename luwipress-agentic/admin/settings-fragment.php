@@ -35,8 +35,8 @@ $default_endpoint_for = static function ( $id ) {
 };
 $tagline_for = static function ( $id ) {
 	$map = array(
-		'open-claw' => __( 'LuwiPress operator agent — default at oc.luwi.dev, override-able with a self-hosted deployment.', 'luwipress-agentic' ),
-		'hermes'    => __( 'Tool-calling agent runtime — default at hermes.luwi.dev, override-able with a self-hosted deployment.', 'luwipress-agentic' ),
+		'open-claw' => __( 'Agent backend slot — point it at your own agent runtime\'s endpoint (URL + token).', 'luwipress-agentic' ),
+		'hermes'    => __( 'Agent backend slot — point it at your own agent runtime\'s endpoint (URL + token).', 'luwipress-agentic' ),
 	);
 	return isset( $map[ $id ] ) ? $map[ $id ] : __( 'Third-party agent runtime — register via the luwipress_agent_register action.', 'luwipress-agentic' );
 };
