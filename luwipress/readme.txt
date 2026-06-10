@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.13.1
+Stable tag: 3.13.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,13 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.13.2 — Auto-update for all packages + Knowledge Graph & admin fixes =
+* **Automatic updates now cover the companion plugins AND the LuwiPress themes**, not just the core plugin. Licensed sites now receive one-click, signature-verified updates for LuwiPress WebMCP, Agentic and Marketplace, and for the LuwiPress Gold / Emerald / Ruby themes — all from the same dashboard, with no manual ZIP uploads.
+* **Fixed: Knowledge Graph stuck on the loading skeleton.** On large multilingual catalogues the "opportunities" data did expensive cross-language scans inside the page request, exceeding the server timeout — which also meant the result never got cached, so every load timed out and the graph never appeared. That heavy work now runs in the background (and is cached), so the graph renders immediately and the Action Queue fills in once the background pass completes.
+* **Knowledge Graph: the Pages view now shows per-language coverage** like the Posts and Products views — pages cluster by language with translated/missing indicators instead of one undifferentiated group.
+* **Fixed: misaligned buttons / icons across several admin screens.** The unified button styling only reached a handful of pages, so the Vendors, Events, Security/Bot-defense, CPT, Schema, Taxonomy, Slug Resolver, Image Alt and WebMCP screens fell back to stock buttons with off-centre icons. The unified button system now applies consistently on every LuwiPress admin screen.
+* **New: AI menu translation.** The Translation Manager can now translate your navigation menu labels into every active language with one click ("Translate Menus"). Menu items that point to a page/category use that item's existing translation automatically; custom links and custom labels are AI-translated — so translated menus no longer show labels in the source language. (Run "Sync Menus" first so the translated menu items exist.)
 
 = 3.13.1 — Reliable, no-wait page translation =
 * **Translation Manager now translates pages instantly while open.** Elementor pages used to be handed to background processing (wp-cron), which on low-traffic sites could leave them showing "translating…" indefinitely. The Translation Manager now translates each page directly as you watch, with live per-item progress — no more stuck-looking queue. Background processing remains as an automatic fallback.

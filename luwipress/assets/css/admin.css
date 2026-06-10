@@ -2428,11 +2428,18 @@ a:focus-visible {
    exactly; .button-small drops to 26 (== .lp-btn--sm); .button-primary
    is recolored to the brand primary so blue WP buttons stop clashing with
    purple lp-btn--primary. Link-style buttons keep their chrome-less look
-   (we never set bg/border, only metrics). */
-.luwipress-dashboard .button,
-.luwipress-settings .button,
-.luwipress-hub .button,
-.lp-tm .button {
+   (we never set bg/border, only metrics).
+   Scoped to ANY LuwiPress content wrap — `.wrap[class*="luwipress"]` covers
+   every luwipress-* page (vendors, cpt-manager, content-audit, events,
+   kg, schema-*, slug-resolver, tax-editor, image-alt, dashboard, hub,
+   settings), plus `.lp-tm` (Translation Manager) and `.lpress-dashboard`
+   (WebMCP companion). The earlier 4-wrapper list (dashboard/settings/hub/tm)
+   missed ~10 standalone tool pages, whose dashicon buttons fell back to
+   stock inline-block and mis-centered (operator: "button ve ikon alignment
+   bozulmuş"). Content-scoped so WP chrome (Screen Options, etc.) is untouched. */
+.wrap[class*="luwipress"] .button,
+.lp-tm .button,
+.lpress-dashboard .button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2445,20 +2452,18 @@ a:focus-visible {
     vertical-align: middle;
     transition: all 0.2s var(--ease-out);
 }
-.luwipress-dashboard .button.button-small,
-.luwipress-settings .button.button-small,
-.luwipress-hub .button.button-small,
-.lp-tm .button.button-small {
+.wrap[class*="luwipress"] .button.button-small,
+.lp-tm .button.button-small,
+.lpress-dashboard .button.button-small {
     min-height: 26px;
     padding: 0 10px;
     font-size: 12px;
     font-weight: 500;
     gap: 4px;
 }
-.luwipress-dashboard .button-primary,
-.luwipress-settings .button-primary,
-.luwipress-hub .button-primary,
-.lp-tm .button-primary {
+.wrap[class*="luwipress"] .button-primary,
+.lp-tm .button-primary,
+.lpress-dashboard .button-primary {
     background: var(--lp-primary);
     border-color: var(--lp-primary);
     color: #fff;
@@ -2513,25 +2518,22 @@ body[class*="_page_luwipress"] .lp-hub-tab--active .dashicons,
     color: #fff;
 }
 .lp-hub-tabs .nav-tab.nav-tab-active .dashicons { color: #fff; }
-.luwipress-dashboard .button-primary:hover,
-.luwipress-settings .button-primary:hover,
-.luwipress-hub .button-primary:hover,
-.lp-tm .button-primary:hover {
+.wrap[class*="luwipress"] .button-primary:hover,
+.lp-tm .button-primary:hover,
+.lpress-dashboard .button-primary:hover {
     background: var(--lp-primary-dark);
     border-color: var(--lp-primary-dark);
     color: #fff;
 }
-.luwipress-dashboard .button:hover,
-.luwipress-settings .button:hover,
-.luwipress-hub .button:hover,
-.lp-tm .button:hover {
+.wrap[class*="luwipress"] .button:hover,
+.lp-tm .button:hover,
+.lpress-dashboard .button:hover {
     transform: translateY(-1px);
     box-shadow: var(--lp-shadow-sm);
 }
-.luwipress-dashboard .button:active,
-.luwipress-settings .button:active,
-.luwipress-hub .button:active,
-.lp-tm .button:active {
+.wrap[class*="luwipress"] .button:active,
+.lp-tm .button:active,
+.lpress-dashboard .button:active {
     transform: translateY(0);
     box-shadow: none;
 }

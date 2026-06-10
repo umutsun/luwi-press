@@ -46,6 +46,12 @@ class LuwiPress_KG_Opportunities {
 
 	const STALE_AFTER_DAYS = 90;
 
+	// External-candidate cache (see get_external_candidates()).
+	const EXTERNAL_CACHE = 'luwipress_kg_external_candidates';
+	const EXTERNAL_TTL   = HOUR_IN_SECONDS;
+	const WARM_HOOK      = 'luwipress_kg_warm_external_candidates';
+	const WARM_LOCK      = 'luwipress_kg_warm_external_lock';
+
 	private static $instance;
 
 	public static function get_instance() {
@@ -58,6 +64,11 @@ class LuwiPress_KG_Opportunities {
 	private function __construct() {
 		// Daily prune — drop dismissed entries older than DISMISS_TTL_DAYS.
 		add_action( 'luwipress_daily_cleanup', array( $this, 'prune_state' ) );
+
+		// Background warmer for the expensive external candidates (registered
+		// here so it's available on cron requests too — this class is
+		// instantiated unconditionally in the plugin bootstrap).
+		add_action( self::WARM_HOOK, array( $this, 'warm_external_candidates' ) );
 	}
 
 	/* ───────────────────────────────────────────────────────────────── *
@@ -100,7 +111,7 @@ class LuwiPress_KG_Opportunities {
 		 * @since 3.1.48
 		 * @param array $candidates Existing core candidates.
 		 */
-		$external = apply_filters( 'luwipress_kg_action_queue_external_candidates', array() );
+		$external = $this->get_external_candidates();
 		if ( is_array( $external ) ) {
 			foreach ( $external as $c ) {
 				if ( empty( $c['id'] ) || empty( $c['type'] ) ) {
@@ -147,6 +158,52 @@ class LuwiPress_KG_Opportunities {
 		unset( $c );
 
 		return array_slice( $out, 0, max( 1, (int) $limit ) );
+	}
+
+	/**
+	 * External candidates (Theme Bridge cross-language drift / SEO audits +
+	 * Translation Sync) can take >60s to compute on a large multilingual
+	 * catalogue. Building them synchronously inside the Knowledge Graph
+	 * request blew the front-proxy timeout, 504'd the whole `opportunities`
+	 * section, and — because the request died before the providers could
+	 * cache — meant the cache NEVER warmed: every KG load 504'd, and the graph
+	 * never rendered (the JS waits on the same response). We now serve them
+	 * from a transient and warm a cold cache in the BACKGROUND via wp-cron
+	 * (no 60s HTTP ceiling), so the synchronous KG request is always fast and
+	 * the heavy scan runs where it has room to finish.
+	 *
+	 * @return array
+	 */
+	private function get_external_candidates() {
+		$cached = get_transient( self::EXTERNAL_CACHE );
+		if ( is_array( $cached ) ) {
+			return $cached; // warmed (possibly an empty array — still authoritative).
+		}
+		// Cold / expired — never block this request on the heavy providers.
+		// Schedule a one-off background warm (guarded so we don't pile up).
+		if ( ! wp_next_scheduled( self::WARM_HOOK ) && ! get_transient( self::WARM_LOCK ) ) {
+			wp_schedule_single_event( time() + 5, self::WARM_HOOK );
+		}
+		return array();
+	}
+
+	/**
+	 * Cron handler: run the expensive external-candidate providers off the
+	 * HTTP request path and cache the result. Re-entrancy-guarded so
+	 * overlapping cron ticks don't double-scan.
+	 */
+	public function warm_external_candidates() {
+		if ( get_transient( self::WARM_LOCK ) ) {
+			return; // a warm is already in flight.
+		}
+		set_transient( self::WARM_LOCK, 1, 5 * MINUTE_IN_SECONDS );
+
+		$external = apply_filters( 'luwipress_kg_action_queue_external_candidates', array() );
+		if ( ! is_array( $external ) ) {
+			$external = array();
+		}
+		set_transient( self::EXTERNAL_CACHE, $external, self::EXTERNAL_TTL );
+		delete_transient( self::WARM_LOCK );
 	}
 
 	/**

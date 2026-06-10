@@ -361,10 +361,34 @@ function buildGraph(data, viewFilter) {
 		productNodes = [];
 		categoryNodes = [];
 		postNodes = [];
-		languageNodes = [];
 		segmentNodes = [];
 		vendorNodes = [];
 		customerNodes = [];
+		// Build page-specific language nodes from page translation data so the
+		// Pages view shows per-language coverage like Posts/Products (operator
+		// request). On a monolingual site pages carry no translation map → this
+		// stays empty and the view falls back to the "Site pages" hub only.
+		var pageLangStats = {};
+		pageNodes.forEach(function(p) {
+			var trans = p.translation || {};
+			Object.keys(trans).forEach(function(lang) {
+				if (!pageLangStats[lang]) pageLangStats[lang] = { translated: 0, missing: 0 };
+				if (trans[lang] === 'completed') pageLangStats[lang].translated++;
+				else pageLangStats[lang].missing++;
+			});
+		});
+		languageNodes = Object.keys(pageLangStats).map(function(lang) {
+			var s = pageLangStats[lang];
+			var total = s.translated + s.missing;
+			return {
+				id: 'lang_' + lang,
+				code: lang,
+				name: lang.toUpperCase(),
+				coverage_pct: total > 0 ? Math.round(s.translated / total * 100) : 0,
+				products_translated: s.translated,
+				products_missing: s.missing
+			};
+		});
 	} else if (viewFilter === 'customer') {
 		productNodes = [];
 		categoryNodes = [];
@@ -611,12 +635,15 @@ function buildGraph(data, viewFilter) {
 			label: p.title || ('Page #' + p.id),
 			radius: r,
 			score: score,
+			translation: p.translation || {},
 			data: p
 		};
 		nodes.push(node);
 		nodeMap[node.id] = node;
 	});
-	// Page edges: (1) real parent-child, (2) fallback hub edge for orphans in pages view.
+	// Page edges: (1) real parent-child, (2) fallback hub edge for orphans in
+	// pages view, (3) translation edges to language nodes (per-language view,
+	// parity with posts/products).
 	(pageNodes).forEach(function(p) {
 		if (p.parent_id && nodeMap['page:' + p.parent_id]) {
 			edges.push({ source: 'page:' + p.id, target: 'page:' + p.parent_id, type: 'child_of' });
@@ -625,6 +652,17 @@ function buildGraph(data, viewFilter) {
 			// simulation gives it structure instead of letting it drift alone.
 			edges.push({ source: 'page:' + p.id, target: pageHubId, type: 'member_of' });
 		}
+		var trans = p.translation || {};
+		Object.keys(trans).forEach(function(lang) {
+			var langKey = 'lang_' + lang;
+			if (nodeMap[langKey]) {
+				edges.push({
+					source: 'page:' + p.id,
+					target: langKey,
+					type: trans[lang] === 'completed' ? 'translated_to' : 'missing_translation'
+				});
+			}
+		});
 	});
 
 	// Vendor nodes — radius scales with product_count (more attributed

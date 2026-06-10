@@ -1269,6 +1269,11 @@ if ( $is_wpml ) {
 				<span class="tm-maint-btn-label"><?php esc_html_e( 'Sync Menus', 'luwipress' ); ?></span>
 				<span id="luwipress-sync-menus-result" class="tm-maint-btn-result"></span>
 			</button>
+			<button type="button" id="luwipress-translate-menus" class="tm-maint-btn" title="<?php esc_attr_e( 'AI-translates navigation menu labels (custom links + overrides) into every language. Run Sync Menus first so the translated items exist.', 'luwipress' ); ?>">
+				<span class="dashicons dashicons-translation"></span>
+				<span class="tm-maint-btn-label"><?php esc_html_e( 'Translate Menus', 'luwipress' ); ?></span>
+				<span id="luwipress-translate-menus-result" class="tm-maint-btn-result"></span>
+			</button>
 			<button type="button" id="luwipress-fix-excerpts" class="tm-maint-btn" title="<?php esc_attr_e( 'Extracts excerpts from Elementor content for posts with empty excerpts. Fixes shortcode display in blog lists.', 'luwipress' ); ?>">
 				<span class="dashicons dashicons-editor-justify"></span>
 				<span class="tm-maint-btn-label"><?php esc_html_e( 'Fix Excerpts', 'luwipress' ); ?></span>
@@ -1992,6 +1997,37 @@ if ( $is_wpml ) {
 				result.textContent = '';
 				var fd = new FormData();
 				fd.append('action', 'luwipress_sync_wpml_menus');
+				fd.append('nonce', nonce);
+				fetch(ajaxurl, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					mbtn.disabled = false; mbtn.classList.remove('tm-btn-loading');
+					if (d.success) {
+						result.textContent = d.data.message;
+						result.className = 'tm-tool-result result-ok';
+					} else {
+						result.textContent = d.data || 'Error';
+						result.className = 'tm-tool-result result-err';
+					}
+				})
+				.catch(function() {
+					mbtn.disabled = false; mbtn.classList.remove('tm-btn-loading');
+					result.textContent = 'Request failed';
+					result.className = 'tm-tool-result result-err';
+				});
+			});
+		})();
+
+		// ─── Translate WPML Menu Labels ───
+		(function() {
+			var mbtn = document.getElementById('luwipress-translate-menus');
+			if (!mbtn) return;
+			mbtn.addEventListener('click', function() {
+				var result = document.getElementById('luwipress-translate-menus-result');
+				mbtn.disabled = true; mbtn.classList.add('tm-btn-loading');
+				result.textContent = '';
+				var fd = new FormData();
+				fd.append('action', 'luwipress_translate_wpml_menus');
 				fd.append('nonce', nonce);
 				fetch(ajaxurl, { method: 'POST', body: fd })
 				.then(function(r) { return r.json(); })

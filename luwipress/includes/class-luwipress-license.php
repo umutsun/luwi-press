@@ -134,6 +134,21 @@ class LuwiPress_License {
 	private $blocked_memo = null;
 
 	/**
+	 * Per-request memo of the installed managed-plugin map (get_plugins() scans
+	 * the filesystem — don't repeat it per filter pass).
+	 *
+	 * @var array<string,array{basename:string,version:string,name:string}>|null
+	 */
+	private $managed_plugins_memo = null;
+
+	/**
+	 * Per-request memo of the installed managed-theme map.
+	 *
+	 * @var array<string,array{version:string,name:string}>|null
+	 */
+	private $managed_themes_memo = null;
+
+	/**
 	 * Get the singleton.
 	 *
 	 * @return LuwiPress_License
@@ -170,13 +185,20 @@ class LuwiPress_License {
 		add_filter( 'rest_pre_dispatch', array( $this, 'gate_rest_request' ), 5, 3 );
 		add_action( 'admin_init', array( $this, 'gate_admin_pages' ) );
 
-		// ── Phase 3: licensed auto-update. The plugin is not on WP.org, so we
-		// teach WP's updater to pull the manifest + signed/expiring ZIP from the
-		// luwi.dev license server. Gated on the `auto_update` entitlement + an
-		// activated key; the server is the final authority (returns version:null
-		// when the site isn't entitled).
+		// ── Phase 3: licensed auto-update. The luwi-family packages are not on
+		// WP.org, so we teach WP's updater to pull the manifest + signed/expiring
+		// ZIP from the luwi.dev license server. ONE updater here serves EVERY
+		// installed luwi package — the core plugin, the companion plugins
+		// (WebMCP / Agentic / Marketplace), and the luwi themes — each queried
+		// per-slug against the same `/update` endpoint. Gated on the `auto_update`
+		// entitlement + an activated key; the server is the final authority
+		// (returns version:null when the site isn't entitled or there's nothing
+		// newer). Companions/themes need NO updater of their own — core is the
+		// single license + update authority they already hard-depend on.
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'filter_update_transient' ) );
+		add_filter( 'pre_set_site_transient_update_themes', array( $this, 'filter_theme_update_transient' ) );
 		add_filter( 'plugins_api', array( $this, 'filter_plugins_api' ), 10, 3 );
+		add_filter( 'themes_api', array( $this, 'filter_themes_api' ), 10, 3 );
 		add_filter( 'upgrader_pre_download', array( $this, 'verify_package_download' ), 10, 4 );
 	}
 
@@ -837,7 +859,7 @@ class LuwiPress_License {
 		}
 
 		$this->blocked_memo = null; // state changed — drop the per-request memo.
-		delete_transient( self::UPDATE_CACHE ); // tier/status may have changed entitlement.
+		$this->flush_update_cache(); // tier/status may have changed entitlement.
 		return self::update_state( $patch );
 	}
 
@@ -1164,11 +1186,86 @@ class LuwiPress_License {
 	// Phase 3 — licensed auto-update (manifest + signed download)
 	// ------------------------------------------------------------------
 
-	const UPDATE_SLUG  = 'luwipress';
-	const UPDATE_CACHE = 'luwipress_update_manifest';
+	const UPDATE_SLUG         = 'luwipress';
+	const UPDATE_CACHE        = 'luwipress_update_manifest';   // legacy single-slug cache (flushed for back-compat).
+	const UPDATE_CACHE_PREFIX = 'luwipress_upd_';              // + md5(slug) — per-package manifest cache.
 
 	/**
-	 * Inject the available update into WP's plugin-update transient.
+	 * The luwi-family PLUGINS this site updates, keyed by server slug, limited to
+	 * those actually installed. The map (slug => plugin basename) is filterable
+	 * so a future companion opts in without a core edit. Memoised per request —
+	 * get_plugins() scans the filesystem.
+	 *
+	 * @return array<string,array{basename:string,version:string,name:string}>
+	 */
+	private function managed_plugins() {
+		if ( null !== $this->managed_plugins_memo ) {
+			return $this->managed_plugins_memo;
+		}
+		$map = array(
+			self::UPDATE_SLUG       => defined( 'LUWIPRESS_PLUGIN_BASENAME' ) ? LUWIPRESS_PLUGIN_BASENAME : 'luwipress/luwipress.php',
+			'luwipress-webmcp'      => 'luwipress-webmcp/luwipress-webmcp.php',
+			'luwipress-agentic'     => 'luwipress-agentic/luwipress-agentic.php',
+			'luwipress-marketplace' => 'luwipress-marketplace/luwipress-marketplace.php',
+		);
+		/** @var array<string,string> $map */
+		$map = (array) apply_filters( 'luwipress_license_managed_plugins', $map );
+
+		if ( ! function_exists( 'get_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		$installed = get_plugins();
+		$out       = array();
+		foreach ( $map as $slug => $basename ) {
+			$basename = (string) $basename;
+			if ( ! isset( $installed[ $basename ] ) ) {
+				continue; // not installed on this site — nothing to update.
+			}
+			$out[ (string) $slug ] = array(
+				'basename' => $basename,
+				'version'  => isset( $installed[ $basename ]['Version'] ) ? (string) $installed[ $basename ]['Version'] : '0',
+				'name'     => isset( $installed[ $basename ]['Name'] ) ? (string) $installed[ $basename ]['Name'] : (string) $slug,
+			);
+		}
+		$this->managed_plugins_memo = $out;
+		return $out;
+	}
+
+	/**
+	 * The luwi THEMES this site updates, keyed by stylesheet (== server slug).
+	 * Detected by the `luwipress-` stylesheet prefix or a `LuwiPress` author;
+	 * filterable. Memoised per request.
+	 *
+	 * @return array<string,array{version:string,name:string}>
+	 */
+	private function managed_themes() {
+		if ( null !== $this->managed_themes_memo ) {
+			return $this->managed_themes_memo;
+		}
+		$out = array();
+		if ( function_exists( 'wp_get_themes' ) ) {
+			foreach ( wp_get_themes() as $stylesheet => $theme ) {
+				$stylesheet = (string) $stylesheet;
+				$author     = (string) $theme->get( 'Author' );
+				$is_ours    = ( 0 === strpos( $stylesheet, 'luwipress-' ) ) || ( 'LuwiPress' === $author );
+				if ( ! $is_ours ) {
+					continue;
+				}
+				$out[ $stylesheet ] = array(
+					'version' => (string) $theme->get( 'Version' ),
+					'name'    => (string) $theme->get( 'Name' ),
+				);
+			}
+		}
+		/** @var array<string,array{version:string,name:string}> $out */
+		$out = (array) apply_filters( 'luwipress_license_managed_themes', $out );
+		$this->managed_themes_memo = $out;
+		return $out;
+	}
+
+	/**
+	 * Inject available updates into WP's plugin-update transient — one entry per
+	 * installed luwi plugin (core + companions).
 	 *
 	 * @param mixed $transient
 	 * @return mixed
@@ -1178,32 +1275,69 @@ class LuwiPress_License {
 			return $transient; // WP not ready to compare.
 		}
 		/** @var \stdClass $transient The update_plugins transient (dynamic props). */
-		$m = $this->update_check();
-		if ( empty( $m ) || empty( $m['version'] ) || empty( $m['download_url'] ) ) {
-			return $transient; // no update offered (or not entitled).
-		}
-		$current = defined( 'LUWIPRESS_VERSION' ) ? LUWIPRESS_VERSION : '0';
-		if ( version_compare( (string) $m['version'], $current, '<=' ) ) {
-			return $transient; // not newer.
-		}
 		if ( ! isset( $transient->response ) || ! is_array( $transient->response ) ) {
 			$transient->response = array();
 		}
-		$transient->response[ LUWIPRESS_PLUGIN_BASENAME ] = (object) array(
-			'slug'         => self::UPDATE_SLUG,
-			'plugin'       => LUWIPRESS_PLUGIN_BASENAME,
-			'new_version'  => (string) $m['version'],
-			'package'      => (string) $m['download_url'],
-			'url'          => 'https://luwi.dev/luwipress',
-			'tested'       => isset( $m['tested'] ) ? (string) $m['tested'] : '',
-			'requires'     => isset( $m['requires'] ) ? (string) $m['requires'] : '',
-			'requires_php' => isset( $m['requires_php'] ) ? (string) $m['requires_php'] : '7.4',
-		);
+		foreach ( $this->managed_plugins() as $slug => $pkg ) {
+			$m = $this->update_check( $slug, $pkg['version'] );
+			if ( empty( $m ) || empty( $m['version'] ) || empty( $m['download_url'] ) ) {
+				continue; // no update offered (or not entitled).
+			}
+			if ( version_compare( (string) $m['version'], $pkg['version'], '<=' ) ) {
+				continue; // not newer.
+			}
+			$transient->response[ $pkg['basename'] ] = (object) array(
+				'slug'         => (string) $slug,
+				'plugin'       => $pkg['basename'],
+				'new_version'  => (string) $m['version'],
+				'package'      => (string) $m['download_url'],
+				'url'          => isset( $m['homepage'] ) ? (string) $m['homepage'] : 'https://luwi.dev/luwipress',
+				'tested'       => isset( $m['tested'] ) ? (string) $m['tested'] : '',
+				'requires'     => isset( $m['requires'] ) ? (string) $m['requires'] : '',
+				'requires_php' => isset( $m['requires_php'] ) ? (string) $m['requires_php'] : '7.4',
+			);
+		}
 		return $transient;
 	}
 
 	/**
-	 * Provide the "View details" popup data for the plugin.
+	 * Inject available updates into WP's theme-update transient — one entry per
+	 * installed luwi theme. Theme transient entries are ARRAYS (not objects)
+	 * keyed by stylesheet.
+	 *
+	 * @param mixed $transient
+	 * @return mixed
+	 */
+	public function filter_theme_update_transient( $transient ) {
+		if ( ! is_object( $transient ) || empty( $transient->checked ) ) {
+			return $transient;
+		}
+		/** @var \stdClass $transient The update_themes transient (dynamic props). */
+		if ( ! isset( $transient->response ) || ! is_array( $transient->response ) ) {
+			$transient->response = array();
+		}
+		foreach ( $this->managed_themes() as $stylesheet => $pkg ) {
+			$m = $this->update_check( $stylesheet, $pkg['version'] );
+			if ( empty( $m ) || empty( $m['version'] ) || empty( $m['download_url'] ) ) {
+				continue;
+			}
+			if ( version_compare( (string) $m['version'], $pkg['version'], '<=' ) ) {
+				continue;
+			}
+			$transient->response[ $stylesheet ] = array(
+				'theme'        => $stylesheet,
+				'new_version'  => (string) $m['version'],
+				'url'          => isset( $m['homepage'] ) ? (string) $m['homepage'] : 'https://luwi.dev/luwipress',
+				'package'      => (string) $m['download_url'],
+				'requires'     => isset( $m['requires'] ) ? (string) $m['requires'] : '',
+				'requires_php' => isset( $m['requires_php'] ) ? (string) $m['requires_php'] : '7.4',
+			);
+		}
+		return $transient;
+	}
+
+	/**
+	 * Provide the "View details" popup data for any managed luwi plugin.
 	 *
 	 * @param mixed  $res
 	 * @param string $action
@@ -1211,19 +1345,24 @@ class LuwiPress_License {
 	 * @return mixed
 	 */
 	public function filter_plugins_api( $res, $action, $args ) {
-		if ( 'plugin_information' !== $action || empty( $args->slug ) || self::UPDATE_SLUG !== $args->slug ) {
+		if ( 'plugin_information' !== $action || empty( $args->slug ) ) {
 			return $res;
 		}
-		$m = $this->update_check();
+		$plugins = $this->managed_plugins();
+		if ( ! isset( $plugins[ $args->slug ] ) ) {
+			return $res; // not one of ours.
+		}
+		$pkg = $plugins[ $args->slug ];
+		$m   = $this->update_check( (string) $args->slug, $pkg['version'] );
 		if ( empty( $m ) || empty( $m['version'] ) ) {
 			return $res;
 		}
 		$info                = new stdClass();
-		$info->name          = 'LuwiPress';
-		$info->slug          = self::UPDATE_SLUG;
+		$info->name          = $pkg['name'];
+		$info->slug          = (string) $args->slug;
 		$info->version       = (string) $m['version'];
 		$info->author        = 'Luwi Developments LLC';
-		$info->homepage      = 'https://luwi.dev/luwipress';
+		$info->homepage      = isset( $m['homepage'] ) ? (string) $m['homepage'] : 'https://luwi.dev/luwipress';
 		$info->requires      = isset( $m['requires'] ) ? (string) $m['requires'] : '';
 		$info->tested        = isset( $m['tested'] ) ? (string) $m['tested'] : '';
 		$info->requires_php  = isset( $m['requires_php'] ) ? (string) $m['requires_php'] : '7.4';
@@ -1234,15 +1373,51 @@ class LuwiPress_License {
 	}
 
 	/**
-	 * Fetch + signature-verify the update manifest (cached 6h). Returns the
-	 * manifest array (which may carry version:null = no update available), or
-	 * null on any failure. Skips entirely when not entitled to `auto_update` or
-	 * never activated — the server is the final authority.
+	 * Provide the "Theme details" popup data for any managed luwi theme.
 	 *
-	 * @param bool $force Bypass the cache.
+	 * @param mixed  $res
+	 * @param string $action
+	 * @param object $args
+	 * @return mixed
+	 */
+	public function filter_themes_api( $res, $action, $args ) {
+		if ( 'theme_information' !== $action || empty( $args->slug ) ) {
+			return $res;
+		}
+		$themes = $this->managed_themes();
+		if ( ! isset( $themes[ $args->slug ] ) ) {
+			return $res;
+		}
+		$pkg = $themes[ $args->slug ];
+		$m   = $this->update_check( (string) $args->slug, $pkg['version'] );
+		if ( empty( $m ) || empty( $m['version'] ) ) {
+			return $res;
+		}
+		return (object) array(
+			'name'          => $pkg['name'],
+			'slug'          => (string) $args->slug,
+			'version'       => (string) $m['version'],
+			'author'        => 'LuwiPress',
+			'homepage'      => isset( $m['homepage'] ) ? (string) $m['homepage'] : 'https://luwi.dev/luwipress',
+			'requires'      => isset( $m['requires'] ) ? (string) $m['requires'] : '',
+			'requires_php'  => isset( $m['requires_php'] ) ? (string) $m['requires_php'] : '7.4',
+			'download_link' => isset( $m['download_url'] ) ? (string) $m['download_url'] : '',
+			'sections'      => ( isset( $m['sections'] ) && is_array( $m['sections'] ) ) ? $m['sections'] : array( 'changelog' => '' ),
+		);
+	}
+
+	/**
+	 * Fetch + signature-verify the update manifest for one slug (cached 6h per
+	 * slug). Returns the manifest array (which may carry version:null = no update
+	 * available), or null on any failure. Skips entirely when not entitled to
+	 * `auto_update` or never activated — the server is the final authority.
+	 *
+	 * @param string $slug            Server release slug (plugin folder or theme stylesheet).
+	 * @param string $current_version Installed version (sent so the server can decide "newer?").
+	 * @param bool   $force           Bypass the cache.
 	 * @return array<string,mixed>|null
 	 */
-	private function update_check( $force = false ) {
+	private function update_check( $slug = self::UPDATE_SLUG, $current_version = '', $force = false ) {
 		if ( ! self::feature_enabled( 'auto_update' ) ) {
 			return null;
 		}
@@ -1250,17 +1425,22 @@ class LuwiPress_License {
 		if ( empty( $state['key'] ) ) {
 			return null; // never activated — no licensed update channel.
 		}
+		$slug = (string) $slug;
+		if ( '' === $current_version && self::UPDATE_SLUG === $slug && defined( 'LUWIPRESS_VERSION' ) ) {
+			$current_version = LUWIPRESS_VERSION;
+		}
+		$cache_key = self::UPDATE_CACHE_PREFIX . md5( $slug );
 		if ( ! $force ) {
-			$cached = get_transient( self::UPDATE_CACHE );
+			$cached = get_transient( $cache_key );
 			if ( is_array( $cached ) ) {
 				return $cached;
 			}
 		}
 		$url = self::api_base() . '/update?' . http_build_query( array(
-			'slug'        => self::UPDATE_SLUG,
+			'slug'        => $slug,
 			'key'         => $state['key'],
 			'fingerprint' => self::fingerprint(),
-			'version'     => defined( 'LUWIPRESS_VERSION' ) ? LUWIPRESS_VERSION : '',
+			'version'     => (string) $current_version,
 			'channel'     => apply_filters( 'luwipress_update_channel', 'stable' ),
 		) );
 		$response = wp_remote_get( $url, array( 'timeout' => 15 ) );
@@ -1277,15 +1457,62 @@ class LuwiPress_License {
 		if ( ! is_array( $data ) ) {
 			return null;
 		}
-		set_transient( self::UPDATE_CACHE, $data, 6 * HOUR_IN_SECONDS );
+		set_transient( $cache_key, $data, 6 * HOUR_IN_SECONDS );
 		return $data;
 	}
 
 	/**
-	 * Defence-in-depth: verify the downloaded ZIP's Ed25519 signature
+	 * Drop every per-slug manifest cache (called when the verdict — and so the
+	 * entitlement — may have changed).
+	 */
+	private function flush_update_cache() {
+		$slugs = array( self::UPDATE_SLUG, 'luwipress-webmcp', 'luwipress-agentic', 'luwipress-marketplace' );
+		if ( function_exists( 'wp_get_themes' ) ) {
+			foreach ( array_keys( wp_get_themes() ) as $stylesheet ) {
+				if ( 0 === strpos( (string) $stylesheet, 'luwipress-' ) ) {
+					$slugs[] = (string) $stylesheet;
+				}
+			}
+		}
+		foreach ( array_unique( $slugs ) as $slug ) {
+			delete_transient( self::UPDATE_CACHE_PREFIX . md5( (string) $slug ) );
+		}
+		delete_transient( self::UPDATE_CACHE ); // legacy single-slug key.
+		$this->managed_plugins_memo = null;
+		$this->managed_themes_memo  = null;
+	}
+
+	/**
+	 * Resolve the server slug for a package WP is about to download, from the
+	 * upgrader's hook_extra (`plugin` basename or `theme` stylesheet). Falls back
+	 * to the core slug so the core path is byte-for-byte as before.
+	 *
+	 * @param mixed $hook_extra
+	 * @return string
+	 */
+	private function slug_from_hook_extra( $hook_extra ) {
+		if ( is_array( $hook_extra ) ) {
+			if ( ! empty( $hook_extra['plugin'] ) ) {
+				$basename = (string) $hook_extra['plugin'];
+				foreach ( $this->managed_plugins() as $slug => $pkg ) {
+					if ( $pkg['basename'] === $basename ) {
+						return (string) $slug;
+					}
+				}
+			}
+			if ( ! empty( $hook_extra['theme'] ) ) {
+				return (string) $hook_extra['theme']; // stylesheet == slug.
+			}
+		}
+		return self::UPDATE_SLUG;
+	}
+
+	/**
+	 * Defence-in-depth: verify a downloaded ZIP's Ed25519 signature
 	 * (`package_sig`) before WP installs it. Only intercepts our own signed
-	 * download URL; everything else passes through. If the manifest carries no
-	 * package_sig (or signatures aren't pinned) WP downloads normally.
+	 * download URLs (any managed slug); everything else passes through. If the
+	 * matching manifest carries no package_sig (or signatures aren't pinned) WP
+	 * downloads normally — the expiring server-signed URL is still the gate.
 	 *
 	 * @param mixed  $reply
 	 * @param string $package
@@ -1297,7 +1524,8 @@ class LuwiPress_License {
 		if ( ! is_string( $package ) || 0 !== strpos( $package, self::api_base() ) ) {
 			return $reply; // not our package.
 		}
-		$m = $this->update_check();
+		$slug = $this->slug_from_hook_extra( $hook_extra );
+		$m    = $this->update_check( $slug );
 		if ( empty( $m['package_sig'] ) ) {
 			return $reply; // nothing to verify against — let WP handle it.
 		}

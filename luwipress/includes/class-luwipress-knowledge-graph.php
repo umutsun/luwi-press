@@ -520,7 +520,7 @@ class LuwiPress_Knowledge_Graph {
 
 		// Static pages
 		if ( in_array( 'pages', $sections, true ) ) {
-			$response['nodes']['pages'] = $this->build_page_nodes();
+			$response['nodes']['pages'] = $this->build_page_nodes( $target_languages );
 		}
 
 		// Content taxonomy (all registered taxonomies)
@@ -2585,7 +2585,7 @@ class LuwiPress_Knowledge_Graph {
 		return $map;
 	}
 
-	private function build_page_nodes() {
+	private function build_page_nodes( $target_languages = array() ) {
 		global $wpdb;
 
 		$front_page_id = absint( get_option( 'page_on_front', 0 ) );
@@ -2637,12 +2637,26 @@ class LuwiPress_Knowledge_Graph {
 			}
 		}
 
+		// Bulk-load WPML translation status so pages carry the same per-language
+		// `translation` map as posts/products — drives language coloring,
+		// grouping and the translation_backlog preset in the Pages view.
+		$wpml_map = array();
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) && ! empty( $target_languages ) ) {
+			$wpml_map = $this->load_wpml_status_for_type( $page_ids, $target_languages, 'post_page' );
+		}
+
 		$nodes = array();
 		foreach ( $pages as $pg ) {
 			$id = absint( $pg->ID );
 			$template = $template_map[ $id ] ?? 'default';
 			if ( $template === '' || $template === 'default' ) {
 				$template = 'default';
+			}
+
+			// Translation status per language (parity with build_post_nodes).
+			$translation = array();
+			foreach ( $target_languages as $lang ) {
+				$translation[ $lang ] = isset( $wpml_map[ $id ][ $lang ] ) ? 'completed' : 'missing';
 			}
 
 			$nodes[] = array(
@@ -2658,6 +2672,7 @@ class LuwiPress_Knowledge_Graph {
 				'is_blog_page'    => $id === $blog_page_id,
 				'is_shop_page'    => $id === $shop_page_id,
 				'children_ids'    => $children_map[ $id ] ?? array(),
+				'translation'     => $translation,
 			);
 		}
 

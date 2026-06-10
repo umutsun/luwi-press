@@ -83,6 +83,7 @@ class LuwiPress_Translation {
         add_action('wp_ajax_luwipress_fix_excerpts', [$this, 'ajax_fix_excerpts']);
         add_action('wp_ajax_luwipress_fix_orphan_translations', [$this, 'ajax_fix_orphan_translations']);
         add_action('wp_ajax_luwipress_sync_wpml_menus', [$this, 'ajax_sync_wpml_menus']);
+        add_action('wp_ajax_luwipress_translate_wpml_menus', [$this, 'ajax_translate_wpml_menus']);
 
         // Cron worker for /translation/force-retranslate when async path is used.
         // Each (post_id, lang) tuple lands here and re-fires request_translation
@@ -3883,6 +3884,199 @@ class LuwiPress_Translation {
                 'message' => 'All menus are in sync. If menus are still broken, go to WPML â†’ Menu Sync manually.',
             ) );
         }
+    }
+
+    // â”€â”€â”€ AJAX: AI-translate WPML menu item LABELS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    //
+    // Sync Menus (above) only copies menu STRUCTURE to translated menus — it
+    // never translates the navigation labels, so custom-link items (and any
+    // item with a custom label override) stay in the source language on FR/IT/
+    // ES menus. This walks every default-language menu's items, finds each
+    // translated counterpart (WPML pairing), and sets a correct label:
+    //   • post/term items with a plain (non-overridden) label → the EXACT
+    //     translated object title (no AI — stays consistent with the term/post
+    //     translation);
+    //   • custom-link items, label overrides, or items whose object has no
+    //     translation → AI-translated (batched per menu+language).
+    // Fail-safe: a failed AI batch leaves those labels untouched (never blanks
+    // a menu). Run "Sync Menus" first so the translated items exist.
+
+    public function ajax_translate_wpml_menus() {
+        check_ajax_referer( 'luwipress_translation_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            wp_send_json_error( 'WPML not active' );
+        }
+
+        $default_lang = self::get_default_language();
+        $target_langs = apply_filters( 'wpml_active_languages', array() );
+        $lang_names   = array( 'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French', 'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch', 'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese', 'pt-pt' => 'Portuguese', 'ko' => 'Korean' );
+        $source_name  = $lang_names[ $default_lang ] ?? ucfirst( $default_lang );
+
+        $menus      = wp_get_nav_menus();
+        $updated    = 0;
+        $ai_batches = 0;
+        $needs_sync = 0;
+        $checked    = 0;
+
+        foreach ( $menus as $menu ) {
+            $menu_lang = apply_filters( 'wpml_element_language_code', null, array(
+                'element_id'   => $menu->term_id,
+                'element_type' => 'tax_nav_menu',
+            ) );
+            if ( $menu_lang !== $default_lang ) {
+                continue;
+            }
+            $source_items = wp_get_nav_menu_items( $menu->term_id );
+            if ( empty( $source_items ) ) {
+                continue;
+            }
+
+            foreach ( $target_langs as $lang_code => $info ) {
+                if ( $lang_code === $default_lang ) {
+                    continue;
+                }
+                $target_name        = $lang_names[ $lang_code ] ?? ucfirst( $lang_code );
+                $translated_menu_id = apply_filters( 'wpml_object_id', $menu->term_id, 'nav_menu', false, $lang_code );
+                if ( ! $translated_menu_id || (int) $translated_menu_id === (int) $menu->term_id ) {
+                    $needs_sync++; // whole translated menu missing — Sync Menus first.
+                    continue;
+                }
+
+                $assign      = array(); // titem_id => label (exact translated-object titles, no AI)
+                $ai_titems   = array(); // parallel arrays for the AI batch
+                $ai_strings  = array();
+
+                foreach ( $source_items as $sitem ) {
+                    $titem_id = apply_filters( 'wpml_object_id', $sitem->db_id, 'nav_menu_item', false, $lang_code );
+                    if ( ! $titem_id || (int) $titem_id === (int) $sitem->db_id ) {
+                        $needs_sync++; // this item has no translated counterpart yet.
+                        continue;
+                    }
+                    $checked++;
+
+                    $type      = (string) get_post_meta( $sitem->db_id, '_menu_item_type', true );
+                    $src_label = trim( (string) $sitem->title );
+                    $object    = (string) $sitem->object;
+                    $obj_id    = (int) get_post_meta( $sitem->db_id, '_menu_item_object_id', true );
+
+                    $src_obj_title = '';
+                    $tr_obj_title  = '';
+                    if ( 'taxonomy' === $type && $obj_id ) {
+                        $st = get_term( $obj_id, $object );
+                        if ( $st && ! is_wp_error( $st ) ) {
+                            $src_obj_title = (string) $st->name;
+                        }
+                        $tobj = apply_filters( 'wpml_object_id', $obj_id, $object, false, $lang_code );
+                        if ( $tobj ) {
+                            $tt = get_term( (int) $tobj, $object );
+                            if ( $tt && ! is_wp_error( $tt ) ) {
+                                $tr_obj_title = (string) $tt->name;
+                            }
+                        }
+                    } elseif ( 'post_type' === $type && $obj_id ) {
+                        $src_obj_title = (string) get_the_title( $obj_id );
+                        $tobj = apply_filters( 'wpml_object_id', $obj_id, $object, false, $lang_code );
+                        if ( $tobj ) {
+                            $tr_obj_title = (string) get_the_title( (int) $tobj );
+                        }
+                    }
+
+                    $is_override = ( 'custom' === $type )
+                        || ( '' !== $src_obj_title && $src_label !== trim( $src_obj_title ) )
+                        || ( '' === $src_obj_title && 'custom' !== $type );
+
+                    if ( ! $is_override && '' !== $tr_obj_title ) {
+                        // Plain post/term item with a translated object → use the exact
+                        // translated title (consistent with the object's translation).
+                        $assign[ (int) $titem_id ] = $tr_obj_title;
+                    } elseif ( '' !== $src_label ) {
+                        // Custom link, label override, or untranslated object → AI.
+                        $ai_titems[]  = (int) $titem_id;
+                        $ai_strings[] = $src_label;
+                    }
+                }
+
+                if ( ! empty( $ai_strings ) ) {
+                    $ai_batches++;
+                    $translated = $this->ai_translate_label_batch( $ai_strings, $source_name, $target_name );
+                    foreach ( $ai_titems as $i => $titem_id ) {
+                        $t = isset( $translated[ $i ] ) ? $translated[ $i ] : null;
+                        if ( $t ) {
+                            $assign[ $titem_id ] = $t;
+                        }
+                    }
+                }
+
+                foreach ( $assign as $titem_id => $label ) {
+                    $cur = (string) get_post_field( 'post_title', $titem_id );
+                    if ( trim( $cur ) === trim( (string) $label ) ) {
+                        continue; // already correct.
+                    }
+                    wp_update_post( array( 'ID' => (int) $titem_id, 'post_title' => (string) $label ) );
+                    $updated++;
+                }
+            }
+        }
+
+        LuwiPress_Logger::log( sprintf(
+            'Menu label translation: %d label(s) updated across %d item(s), %d AI batch(es)%s',
+            $updated, $checked, $ai_batches, $needs_sync ? "; {$needs_sync} item(s)/menu(s) need structural sync first" : ''
+        ), 'info' );
+
+        if ( 0 === $updated && 0 === $needs_sync ) {
+            $msg = 'All menu labels are already translated.';
+        } else {
+            $msg = sprintf( '%d menu label(s) translated.', $updated );
+            if ( $needs_sync ) {
+                $msg .= ' Some items have no translated counterpart yet — run "Sync Menus" first, then re-run.';
+            }
+        }
+        wp_send_json_success( array( 'message' => $msg, 'updated' => $updated, 'needs_sync' => $needs_sync ) );
+    }
+
+    /**
+     * AI-translate a list of short navigation labels in ONE call. Returns an
+     * array the same length as $labels (translated strings; null for any that
+     * could not be parsed). A failed batch returns all-null so the caller
+     * leaves the original labels untouched — never blanks a menu.
+     *
+     * @param string[] $labels
+     * @param string   $source_name
+     * @param string   $target_name
+     * @return array<int,string|null>
+     */
+    private function ai_translate_label_batch( $labels, $source_name, $target_name ) {
+        $labels = array_values( $labels );
+        $count  = count( $labels );
+        if ( 0 === $count ) {
+            return array();
+        }
+        $numbered = '';
+        foreach ( $labels as $i => $l ) {
+            $numbered .= ( $i + 1 ) . '. ' . $l . "\n";
+        }
+        $prompt = sprintf(
+            "Translate these website navigation menu labels from %s to %s. Keep each translation short and natural for a navigation menu (no trailing punctuation, no quotes). Return ONLY a JSON array of strings in the SAME ORDER and with EXACTLY %d items, nothing else.\n\nLabels:\n%s",
+            $source_name, $target_name, $count, $numbered
+        );
+        $messages = LuwiPress_AI_Engine::build_messages( array( 'user' => $prompt ) );
+        $res      = LuwiPress_AI_Engine::dispatch( 'translation-pipeline', $messages, array( 'max_tokens' => 1024, 'timeout' => 60 ) );
+        if ( is_wp_error( $res ) ) {
+            return array_fill( 0, $count, null );
+        }
+        $text   = (string) ( $res['content'] ?? '' );
+        $parsed = LuwiPress_AI_Engine::extract_json( $text );
+        if ( ! is_array( $parsed ) || count( $parsed ) !== $count ) {
+            return array_fill( 0, $count, null );
+        }
+        $out = array();
+        foreach ( array_values( $parsed ) as $s ) {
+            $out[] = is_string( $s ) ? sanitize_text_field( trim( $s, " \"'." ) ) : null;
+        }
+        return $out;
     }
 
     // â”€â”€â”€ AJAX: Stop active cron translations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
