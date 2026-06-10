@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.13.5
+Stable tag: 3.13.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,12 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.13.6 — Translation pipeline hardening: no more empty or truncated translations =
+* **Fixed: an empty or truncated AI translation could overwrite existing content.** When the AI response was cut short, the pipeline could save an empty body over a real translation. Translations whose body comes back empty or implausibly short versus the source are now rejected and the existing content is preserved — the run is marked failed instead, ready to retry.
+* **Fixed: long articles were translated with too small an output budget**, which caused exactly those truncated responses. The budget now scales correctly with content length.
+* **Fixed: "missing translations" reports always showed zero.** Two separate causes — an omitted limit parameter silently producing an empty scan, and an omitted language list matching nothing. The scan now defaults to sensible limits and falls back to the configured translation languages (or every active language) automatically.
+* **Fixed: large background translation batches could silently lose jobs.** Queued translation jobs are now spaced out so each one runs in a fresh worker — a mid-batch failure no longer takes the remaining jobs down with it.
 
 = 3.13.5 — Elementor translation: orphan-page fix + retry protection =
 * **Fixed: AI page translation could create orphan pages instead of linked WPML translations.** Creating a brand-new translation registered the WPML language record correctly, but WPML's per-request cache could re-stamp the new page as a default-language original on its own translation group during the final title update — the page looked translated but was invisible as a translation (and the next attempt created another copy). The language record is now registered through WPML's official API before any other lookup touches the new page, and re-verified after every save. Updating an existing translation was never affected.

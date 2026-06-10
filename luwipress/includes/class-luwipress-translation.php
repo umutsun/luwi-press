@@ -53,6 +53,22 @@ class LuwiPress_Translation {
     }
 
     /**
+     * Configured translation target languages with a sane fallback: the
+     * luwipress_translation_languages option when set, otherwise every active
+     * language except the default. Never returns the default language itself.
+     */
+    public static function get_configured_target_languages() {
+        $configured = array_values( array_filter( array_map( 'trim', (array) get_option( 'luwipress_translation_languages', array() ) ) ) );
+        $default    = self::get_default_language();
+        if ( empty( $configured ) ) {
+            $configured = self::get_active_languages();
+        }
+        return array_values( array_filter( $configured, static function ( $l ) use ( $default ) {
+            return '' !== $l && $l !== $default;
+        } ) );
+    }
+
+    /**
      * Normalize "en_US" / "pt_BR" to "en" / "pt-br" so codes match WPML/Polylang storage format.
      * Keeps real multi-region WPML codes (pt-br, zh-cn) intact while collapsing locale-only
      * forms (en_US -> en) that come from get_locale() fallback.
@@ -396,7 +412,11 @@ class LuwiPress_Translation {
     public function get_missing_translations($request) {
         $target_lang = $request->get_param('target_language');
         $post_type   = $request->get_param('post_type');
-        $limit       = min($request->get_param('limit'), 200);
+        // min(null, 200) is null -> SQL LIMIT 0 -> the scan silently returned ZERO
+        // rows whenever the caller omitted limit (the WebMCP proxy never sends it;
+        // tapadum 2026-06-10). Default to 50, clamp to 200.
+        $limit       = absint( $request->get_param('limit') );
+        $limit       = $limit > 0 ? min( $limit, 200 ) : 50;
 
         $translation_plugin = $this->detect_translation_plugin();
 
@@ -416,10 +436,25 @@ class LuwiPress_Translation {
      * AI clients use this to translate all missing languages in one pass.
      */
     public function get_missing_translations_all($request) {
-        $langs_str   = $request->get_param('target_languages');
+        $langs_str   = (string) $request->get_param('target_languages');
         $post_type   = $request->get_param('post_type');
-        $limit       = min( absint( $request->get_param('limit') ), 500 );
-        $target_langs = array_map('trim', explode(',', $langs_str));
+        $limit       = absint( $request->get_param('limit') );
+        $limit       = $limit > 0 ? min( $limit, 500 ) : 100;
+        $target_langs = array_values( array_filter( array_map( 'trim', explode( ',', $langs_str ) ) ) );
+
+        if ( empty( $target_langs ) ) {
+            // No explicit list (the WebMCP tool sends none): explode('') yielded ['']
+            // and every scan matched nothing -- missing-detection reported 0 forever
+            // (tapadum 2026-06-10). Fall back to the configured module setting, then
+            // to WPML's active languages minus the default.
+            $target_langs = self::get_configured_target_languages();
+        }
+        if ( empty( $target_langs ) ) {
+            return rest_ensure_response( array(
+                'count' => 0, 'products' => array(), 'target_languages' => array(),
+                'note'  => 'no target languages configured (set translation_languages in /translation/settings)',
+            ) );
+        }
 
         if (!defined('ICL_SITEPRESS_VERSION')) {
             return rest_ensure_response(['count' => 0, 'products' => []]);
@@ -750,9 +785,14 @@ class LuwiPress_Translation {
 
             // â”€â”€ Standard Translation Path (non-Elementor or short content) â”€â”€
 
-            // Calculate max_tokens based on content length
+            // Calculate max_tokens based on content length. chars/3 undersized the
+            // budget for long bodies: translated Romance-language HTML runs ~1 token
+            // per 2.5-3 chars, so an 11k-char article needs ~4.5k tokens and was
+            // truncated at the old 4096 floor -- which then parsed to an empty or
+            // invalid JSON payload (tapadum 2026-06-10). chars/2 + a 6000 floor
+            // leaves headroom; the 16k cap still bounds cost.
             $content_length = strlen( $payload['content']['description'] ?? '' );
-            $estimated_tokens = max( 4096, intval( $content_length / 3 ) );
+            $estimated_tokens = max( 6000, intval( $content_length / 2 ) );
             $max_tokens = min( $estimated_tokens, 16000 ); // GPT-4o-mini limit
 
             $prompt   = LuwiPress_Prompts::translation( $payload['content'], $source_name, $target_name, $product_id );
@@ -810,6 +850,22 @@ class LuwiPress_Translation {
             if ( empty( $translated_title ) ) {
                 $translated_title = $post ? ( $product ? $product->get_name() : $post->post_title ) : '';
                 LuwiPress_Logger::log( 'Translation title empty for ' . $lang . ', keeping original: "' . mb_substr( $translated_title, 0, 50 ) . '"', 'warning' );
+            }
+
+            // GUARD: never accept an empty/truncated body when the source has real
+            // content. A truncated AI response (max_tokens) can parse to an empty or
+            // tiny description, and the callback path would overwrite the existing
+            // translation with it -- data loss (tapadum 2026-06-10: post #33424 lost
+            // its 11k-char body to a content_len=0 write).
+            $src_desc_len = strlen( (string) ( $payload['content']['description'] ?? '' ) );
+            $tr_desc_len  = strlen( (string) ( $ai_result['description'] ?? '' ) );
+            if ( $src_desc_len > 500 && $tr_desc_len < max( 200, (int) ( $src_desc_len * 0.2 ) ) ) {
+                update_post_meta( $product_id, '_luwipress_translation_' . $lang . '_status', 'failed' );
+                LuwiPress_Logger::log( sprintf(
+                    'Translation rejected for %s (post #%d): translated body %d chars vs source %d -- empty/truncated AI output, existing content preserved.',
+                    $lang, $product_id, $tr_desc_len, $src_desc_len
+                ), 'error', array( 'product_id' => $product_id, 'language' => $lang ) );
+                continue;
             }
 
             $callback_request = new WP_REST_Request( 'POST', '/luwipress/v1/translation/callback' );
@@ -4025,7 +4081,9 @@ class LuwiPress_Translation {
 
             // Queue Elementor re-translation via cron (non-destructive â€” overwrites _elementor_data)
             if ( class_exists( 'LuwiPress_Elementor' ) && LuwiPress_Elementor::is_elementor_page( $source_id ) ) {
-                wp_schedule_single_event( time() + $queued, 'luwipress_elementor_translate_single', array( absint( $source_id ), $row->language_code ) );
+                // 90s spacing (not 1s) -- wp-cron dequeues events before running them;
+                // batched heavy units in one spawn are lost when PHP dies mid-batch.
+                wp_schedule_single_event( time() + ( $queued * 90 ), 'luwipress_elementor_translate_single', array( absint( $source_id ), $row->language_code ) );
                 $queued++;
             }
         }
@@ -5078,7 +5136,12 @@ class LuwiPress_Translation {
             foreach ( $resolved as $sid ) {
                 foreach ( $languages as $lang ) {
                     update_post_meta( $sid, '_luwipress_force_retranslate_' . $lang, current_time( 'mysql' ) );
-                    wp_schedule_single_event( time() + $dispatched, 'luwipress_force_retranslate_single', array( $sid, $lang ) );
+                    // 90s spacing, NOT 1s: wp-cron dequeues an event BEFORE running it,
+                    // so when several heavy translation units pile into one cron spawn
+                    // and PHP is killed mid-batch, every already-dequeued unit is LOST
+                    // silently (tapadum 2026-06-10: 8 of 18 units vanished). Spacing
+                    // them out means each spawn picks up ~one unit in a fresh process.
+                    wp_schedule_single_event( time() + ( $dispatched * 90 ), 'luwipress_force_retranslate_single', array( $sid, $lang ) );
                     $dispatched++;
                 }
             }
