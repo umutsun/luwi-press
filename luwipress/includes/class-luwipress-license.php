@@ -200,6 +200,10 @@ class LuwiPress_License {
 		add_filter( 'plugins_api', array( $this, 'filter_plugins_api' ), 10, 3 );
 		add_filter( 'themes_api', array( $this, 'filter_themes_api' ), 10, 3 );
 		add_filter( 'upgrader_pre_download', array( $this, 'verify_package_download' ), 10, 4 );
+		// "Check again" (update-core.php?force-check=1) must mean a REAL re-check:
+		// WP deletes its own update transients but our per-slug manifest cache
+		// (6h) would still answer stale — drop it so the refetch hits the server.
+		add_action( 'load-update-core.php', array( $this, 'maybe_flush_update_cache_on_force_check' ) );
 	}
 
 	// ------------------------------------------------------------------
@@ -1404,6 +1408,69 @@ class LuwiPress_License {
 			'download_link' => isset( $m['download_url'] ) ? (string) $m['download_url'] : '',
 			'sections'      => ( isset( $m['sections'] ) && is_array( $m['sections'] ) ) ? $m['sections'] : array( 'changelog' => '' ),
 		);
+	}
+
+	/**
+	 * Pending luwi-ecosystem updates already surfaced into WP's update
+	 * transients (core plugin + companions + themes). READ-ONLY: consumes the
+	 * cached `update_plugins` / `update_themes` site transients that
+	 * filter_update_transient / filter_theme_update_transient populated — no
+	 * extra HTTP, so it is safe to call on every dashboard render. Installing
+	 * is always a separate, user-triggered step (WP's native update.php flow);
+	 * this method only answers "is there something to offer?".
+	 *
+	 * @return array<int,array{type:string,slug:string,name:string,file:string,current:string,new:string}>
+	 */
+	public function ecosystem_pending_updates() {
+		$out = array();
+		$plugins = get_site_transient( 'update_plugins' );
+		if ( is_object( $plugins ) && ! empty( $plugins->response ) && is_array( $plugins->response ) ) {
+			foreach ( $this->managed_plugins() as $slug => $pkg ) {
+				if ( ! isset( $plugins->response[ $pkg['basename'] ] ) ) {
+					continue;
+				}
+				$r = $plugins->response[ $pkg['basename'] ];
+				$out[] = array(
+					'type'    => 'plugin',
+					'slug'    => (string) $slug,
+					'name'    => $pkg['name'],
+					'file'    => $pkg['basename'],
+					'current' => $pkg['version'],
+					'new'     => is_object( $r ) && isset( $r->new_version ) ? (string) $r->new_version : '',
+				);
+			}
+		}
+		$themes = get_site_transient( 'update_themes' );
+		if ( is_object( $themes ) && ! empty( $themes->response ) && is_array( $themes->response ) ) {
+			foreach ( $this->managed_themes() as $stylesheet => $pkg ) {
+				if ( ! isset( $themes->response[ $stylesheet ] ) ) {
+					continue;
+				}
+				$r = $themes->response[ $stylesheet ];
+				$out[] = array(
+					'type'    => 'theme',
+					'slug'    => $stylesheet,
+					'name'    => $pkg['name'],
+					'file'    => $stylesheet,
+					'current' => $pkg['version'],
+					'new'     => is_array( $r ) && isset( $r['new_version'] ) ? (string) $r['new_version'] : '',
+				);
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * On update-core.php?force-check=1 drop the per-slug manifest caches so the
+	 * transient rebuild that follows asks the license server fresh. Without
+	 * this, "Check again" re-reads a manifest cached up to 6h ago.
+	 */
+	public function maybe_flush_update_cache_on_force_check() {
+		// Nonce-checking is WP core's job on this screen; reading the flag is
+		// a cache-drop only (no state the user can abuse).
+		if ( ! empty( $_GET['force-check'] ) && current_user_can( 'update_plugins' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$this->flush_update_cache();
+		}
 	}
 
 	/**

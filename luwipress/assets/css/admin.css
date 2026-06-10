@@ -2832,6 +2832,30 @@ body[class*="_page_luwipress"] .lp-hub-tab--active .dashicons,
 .pill-danger { background: #fef2f2; color: #991b1b; }
 .pill-danger .lp-pill-dot { background: #ef4444; opacity: 1; }
 
+/* Ecosystem update offer (dashboard header, rightmost) — minimal pill that
+   opens a small "updates found — install?" popover. Install itself is always
+   the user's click through WP's native update.php flow. */
+.lp-update-offer { position: relative; display: inline-flex; }
+.lp-update-offer__toggle { border: 0; cursor: pointer; font: inherit; display: inline-flex; align-items: center; gap: 4px; }
+.lp-update-offer__toggle .dashicons { font-size: 14px; width: 14px; height: 14px; line-height: 14px; }
+.lp-update-offer__pop {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 9999;
+    min-width: 300px;
+    background: var(--lp-surface, #ffffff);
+    border: 1px solid var(--lp-border, #e5e7eb);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    padding: 10px 12px;
+}
+.lp-update-offer__head { font-weight: 600; font-size: 12px; color: var(--lp-text, #1e293b); padding-bottom: 6px; border-bottom: 1px solid var(--lp-border-light, #f3f4f6); margin-bottom: 6px; }
+.lp-update-offer__row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.lp-update-offer__name { flex: 1 1 auto; font-size: 12px; color: var(--lp-text, #1e293b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-update-offer__ver { font-size: 11px; color: var(--lp-text-secondary, #64748b); white-space: nowrap; }
+.lp-update-offer__foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--lp-border-light, #f3f4f6); font-size: 11px; }
+
 /* Hover/focus tooltip — one-line label is the at-a-glance signal,
    tooltip carries the "what does this enable / what's recommended" copy. */
 .lp-pill--has-tip { cursor: help; }

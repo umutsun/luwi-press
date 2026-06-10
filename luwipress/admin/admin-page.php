@@ -85,6 +85,85 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 				<span class="dashicons dashicons-admin-generic"></span>
 				<span class="screen-reader-text"><?php esc_html_e( 'Settings', 'luwipress' ); ?></span>
 			</a>
+			<?php
+			// Ecosystem update offer — minimal, USER-TRIGGERED only. Reads the
+			// updates the license layer already surfaced into WP's update
+			// transients (zero extra HTTP on render). Clicking "Update" goes
+			// through WP's native update.php flow (nonce + capability + the
+			// Ed25519 package-signature check in verify_package_download) —
+			// nothing installs without an explicit click.
+			if ( class_exists( 'LuwiPress_License' ) && current_user_can( 'update_plugins' ) ) {
+				$lp_pending = LuwiPress_License::get_instance()->ecosystem_pending_updates();
+				if ( ! empty( $lp_pending ) ) :
+					?>
+					<div class="lp-update-offer">
+						<button type="button" class="lp-pill pill-warning lp-update-offer__toggle"
+							aria-expanded="false" aria-controls="lp-update-offer-pop"
+							title="<?php esc_attr_e( 'LuwiPress updates are available — click to review and install.', 'luwipress' ); ?>">
+							<span class="dashicons dashicons-update"></span>
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: %d: number of available updates. */
+									_n( '%d update', '%d updates', count( $lp_pending ), 'luwipress' ),
+									count( $lp_pending )
+								)
+							);
+							?>
+						</button>
+						<div class="lp-update-offer__pop" id="lp-update-offer-pop" hidden>
+							<div class="lp-update-offer__head"><?php esc_html_e( 'Updates found — install?', 'luwipress' ); ?></div>
+							<?php foreach ( $lp_pending as $lp_u ) :
+								if ( 'theme' === $lp_u['type'] ) {
+									if ( ! current_user_can( 'update_themes' ) ) {
+										continue;
+									}
+									$lp_action_url = wp_nonce_url(
+										self_admin_url( 'update.php?action=upgrade-theme&theme=' . rawurlencode( $lp_u['file'] ) ),
+										'upgrade-theme_' . $lp_u['file']
+									);
+								} else {
+									$lp_action_url = wp_nonce_url(
+										self_admin_url( 'update.php?action=upgrade-plugin&plugin=' . rawurlencode( $lp_u['file'] ) ),
+										'upgrade-plugin_' . $lp_u['file']
+									);
+								}
+								?>
+								<div class="lp-update-offer__row">
+									<span class="lp-update-offer__name"><?php echo esc_html( $lp_u['name'] ); ?></span>
+									<span class="lp-update-offer__ver"><?php echo esc_html( $lp_u['current'] . ' → ' . $lp_u['new'] ); ?></span>
+									<a class="button button-primary button-small" href="<?php echo esc_url( $lp_action_url ); ?>"><?php esc_html_e( 'Update', 'luwipress' ); ?></a>
+								</div>
+							<?php endforeach; ?>
+							<div class="lp-update-offer__foot">
+								<a href="<?php echo esc_url( self_admin_url( 'update-core.php?force-check=1' ) ); ?>"><?php esc_html_e( 'Check again', 'luwipress' ); ?></a>
+								<a href="<?php echo esc_url( self_admin_url( 'update-core.php' ) ); ?>"><?php esc_html_e( 'All updates', 'luwipress' ); ?></a>
+							</div>
+						</div>
+					</div>
+					<script>
+					( function () {
+						var wrap = document.querySelector( '.lp-update-offer' );
+						if ( ! wrap ) { return; }
+						var btn = wrap.querySelector( '.lp-update-offer__toggle' );
+						var pop = wrap.querySelector( '.lp-update-offer__pop' );
+						btn.addEventListener( 'click', function () {
+							var open = pop.hasAttribute( 'hidden' );
+							if ( open ) { pop.removeAttribute( 'hidden' ); } else { pop.setAttribute( 'hidden', '' ); }
+							btn.setAttribute( 'aria-expanded', open ? 'true' : 'false' );
+						} );
+						document.addEventListener( 'click', function ( e ) {
+							if ( ! wrap.contains( e.target ) && ! pop.hasAttribute( 'hidden' ) ) {
+								pop.setAttribute( 'hidden', '' );
+								btn.setAttribute( 'aria-expanded', 'false' );
+							}
+						} );
+					} )();
+					</script>
+					<?php
+				endif;
+			}
+			?>
 		</div>
 	</div>
 
