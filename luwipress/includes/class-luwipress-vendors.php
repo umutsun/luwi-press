@@ -346,6 +346,33 @@ class LuwiPress_Vendors {
 	 * @param int $vendor_id
 	 * @return int
 	 */
+	/**
+	 * All WPML/Polylang sibling ids of a vendor (the passed id + its source-language
+	 * id + every translation), de-duplicated. `_lwp_vendor_ids` is canonically keyed
+	 * to the SOURCE-language vendor id (FR-016), so a translated vendor page must
+	 * match the source id (and any sibling) to find its attributed products —
+	 * otherwise IT/FR/ES vendor pages return zero products + empty makesOffer
+	 * (Vendor-FR-032).
+	 */
+	private function vendor_sibling_ids( $vendor_id ) {
+		$vendor_id = (int) $vendor_id;
+		$ids = array( $vendor_id, $this->source_vendor_id( $vendor_id ) );
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			$trid = apply_filters( 'wpml_element_trid', null, $vendor_id, 'post_' . self::POST_TYPE );
+			if ( $trid ) {
+				$translations = apply_filters( 'wpml_get_element_translations', null, $trid, 'post_' . self::POST_TYPE );
+				if ( is_array( $translations ) ) {
+					foreach ( $translations as $t ) {
+						if ( ! empty( $t->element_id ) ) {
+							$ids[] = (int) $t->element_id;
+						}
+					}
+				}
+			}
+		}
+		return array_values( array_unique( array_filter( array_map( 'intval', $ids ) ) ) );
+	}
+
 	private function source_vendor_id( $vendor_id ) {
 		$vendor_id = (int) $vendor_id;
 		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
@@ -714,12 +741,22 @@ class LuwiPress_Vendors {
 		}
 		$singular = strtolower( (string) self::get_setting( 'singular_label' ) );
 
-		echo '<p class="lwp-product-vendors">';
-		echo '<span class="lwp-product-vendors__label">' . esc_html( sprintf(
-			/* translators: %s: singular vendor label */
+		$attribution_line = sprintf(
+			/* translators: %s: singular vendor label, e.g. "luthier" */
 			__( 'Made by this %s:', 'luwipress' ),
 			$singular
-		) ) . '</span> ';
+		);
+		// The %s is an operator-defined CPT label ("luthier", "chef", "atelier"…),
+		// so a shipped .mo can't translate the line. Register the rendered phrase
+		// as a WPML String-Translation string so the operator translates it per
+		// language in WPML → String Translation; otherwise it stays in the default
+		// language. Without WPML the filters are no-ops and the default is used.
+		// (Vendor-FR-033)
+		do_action( 'wpml_register_single_string', 'luwipress-vendors', 'product_attribution_line', $attribution_line );
+		$attribution_line = (string) apply_filters( 'wpml_translate_single_string', $attribution_line, 'luwipress-vendors', 'product_attribution_line' );
+
+		echo '<p class="lwp-product-vendors">';
+		echo '<span class="lwp-product-vendors__label">' . esc_html( $attribution_line ) . '</span> ';
 		$links = array();
 		foreach ( $vendors as $v ) {
 			$links[] = '<a href="' . esc_url( $v['link'] ) . '" class="lwp-product-vendors__name" rel="author">' . esc_html( $v['title'] ) . '</a>';
@@ -1794,16 +1831,30 @@ class LuwiPress_Vendors {
 			return $cached;
 		}
 
-		// JSON-array-element-aware REGEXP — tolerates quoted "36633" and legacy
-		// bare 36633, and the boundaries stop 36633 false-matching 366331.
-		$regex = '(\\[|,)[[:space:]]*"?' . preg_quote( (string) $vendor_id, '/' ) . '"?[[:space:]]*(,|\\])';
+		// Match the canonical source id AND every sibling — on a translated vendor
+		// page $vendor_id is the translation id but the product meta carries the
+		// source id (FR-016/FR-032). JSON-array-element-aware boundaries also stop
+		// 36633 false-matching 366331; quoted + legacy-bare tolerated.
+		$match_ids = $this->vendor_sibling_ids( $vendor_id );
+		$alt       = implode( '|', array_map( function ( $id ) { return preg_quote( (string) $id, '/' ); }, $match_ids ) );
+		$regex     = '(\\[|,)[[:space:]]*"?(' . $alt . ')"?[[:space:]]*(,|\\])';
 
+		// Run the lookup language-neutral. WPML otherwise restricts the product
+		// query to the current page language, which excludes the source-language
+		// product that actually carries the canonical meta — existing translated
+		// products can have empty meta because WPML "copy" is not retroactive
+		// (Vendor-FR-032). We dedup per trid below and localize at the display layer.
+		$wpml_active = defined( 'ICL_SITEPRESS_VERSION' );
+		if ( $wpml_active ) {
+			do_action( 'wpml_switch_language', null ); // null = all languages
+		}
 		$q = new WP_Query( array(
 			'post_type'      => 'product',
 			'post_status'    => 'publish',
 			'posts_per_page' => (int) $limit,
 			'fields'         => 'ids',
 			'no_found_rows'  => true,
+			'suppress_filters' => false,
 			'meta_query'     => array(
 				array(
 					'key'     => self::PRODUCT_VENDORS_META,
@@ -1813,6 +1864,9 @@ class LuwiPress_Vendors {
 			),
 		) );
 		$ids = array_map( 'intval', (array) $q->posts );
+		if ( $wpml_active ) {
+			do_action( 'wpml_switch_language', ( $lang && 'all' !== $lang ) ? $lang : null );
+		}
 
 		// Collapse WPML language siblings to one canonical id per trid (no-op
 		// when WPML is inactive or the query already returned one language).
@@ -1834,6 +1888,31 @@ class LuwiPress_Vendors {
 
 		set_transient( $cache_key, $ids, HOUR_IN_SECONDS );
 		return $ids;
+	}
+
+	/**
+	 * Public: product IDs to DISPLAY for a vendor, resolved to the current page
+	 * language. Wraps the language-neutral canonical lookup (get_vendor_product_ids)
+	 * and maps each result to its current-language sibling so themes get localized
+	 * permalinks/titles. The luwipress-gold "their work" grid + master-grid widget
+	 * call this so translated vendor pages show products too (Vendor-FR-032).
+	 *
+	 * @param int $vendor_id
+	 * @param int $limit
+	 * @return int[]
+	 */
+	public function get_vendor_display_products( $vendor_id, $limit = 8 ) {
+		$ids = $this->get_vendor_product_ids( (int) $vendor_id, (int) $limit );
+		if ( empty( $ids ) ) {
+			return array();
+		}
+		$lang = $this->current_lang_code();
+		if ( $lang && 'all' !== $lang ) {
+			$ids = array_map( function ( $pid ) use ( $lang ) {
+				return (int) apply_filters( 'wpml_object_id', $pid, 'product', true, $lang );
+			}, $ids );
+		}
+		return array_values( array_unique( array_filter( $ids ) ) );
 	}
 
 	public function build_vendor_schema( $vendor_id ) {
@@ -1955,8 +2034,16 @@ class LuwiPress_Vendors {
 		// price/priceCurrency/availability filled from WooCommerce when known.
 		$offer_pids = $this->get_vendor_product_ids( $vendor_id, 50 );
 		if ( ! empty( $offer_pids ) && function_exists( 'wc_get_product' ) ) {
-			$offers = array();
+			$offers   = array();
+			$off_lang = $this->current_lang_code();
 			foreach ( $offer_pids as $pid ) {
+				// Emit the offer in the vendor page's language: resolve the matched
+				// (canonical) product to its current-language sibling so the Offer
+				// url + itemOffered.name are localized, not the source-language EN
+				// permalink/title (Vendor-FR-032).
+				if ( $off_lang && 'all' !== $off_lang ) {
+					$pid = apply_filters( 'wpml_object_id', $pid, 'product', true, $off_lang );
+				}
 				$wc = wc_get_product( $pid );
 				if ( ! is_object( $wc ) || ! method_exists( $wc, 'get_id' ) ) {
 					continue;

@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.13.2
+Stable tag: 3.13.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -130,7 +130,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 
 == Changelog ==
 
-= 3.13.2 — Auto-update for all packages + Knowledge Graph & admin fixes =
+= 3.13.3 — Vendor products + "Made by" line now multilingual (WPML) =
+* **Fixed: a vendor/maker profile page showed its products only in the default language.** On a multilingual (WPML) store the translated vendor pages (and their Schema.org `makesOffer` rich-result data) came up empty because the product↔vendor link is stored against the source-language vendor, while the translated page queried with the translated vendor ID. Vendor product lookups now resolve to the source vendor and run language-neutrally, then localize each product to the current language — so French/Italian/Spanish vendor pages list the same products (with localized titles + links) and emit complete `makesOffer` structured data. Powers the theme "their work" grid and the master-grid widget count too.
+* **The product page "Made by this …:" line is now translatable.** It is registered with WPML String Translation so the whole phrase (including your custom vendor label, e.g. "luthier") can be translated per language under WPML → String Translation, instead of always rendering in the default language.
 * **Automatic updates now cover the companion plugins AND the LuwiPress themes**, not just the core plugin. Licensed sites now receive one-click, signature-verified updates for LuwiPress WebMCP, Agentic and Marketplace, and for the LuwiPress Gold / Emerald / Ruby themes — all from the same dashboard, with no manual ZIP uploads.
 * **Fixed: Knowledge Graph stuck on the loading skeleton.** On large multilingual catalogues the "opportunities" data did expensive cross-language scans inside the page request, exceeding the server timeout — which also meant the result never got cached, so every load timed out and the graph never appeared. That heavy work now runs in the background (and is cached), so the graph renders immediately and the Action Queue fills in once the background pass completes.
 * **Knowledge Graph: the Pages view now shows per-language coverage** like the Posts and Products views — pages cluster by language with translated/missing indicators instead of one undifferentiated group.
