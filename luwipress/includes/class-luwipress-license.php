@@ -1600,14 +1600,28 @@ class LuwiPress_License {
 			return $reply; // not our package.
 		}
 		$slug = $this->slug_from_hook_extra( $hook_extra );
-		$m    = $this->update_check( $slug );
+		// FORCE a fresh manifest at install time. The manifest's download_url is
+		// a short-lived signed URL (`exp` + `sig` params), but the manifest sits
+		// in a 6h transient — by the time the operator clicks "update now" the
+		// cached URL can already be expired, and the server answers 403 →
+		// WP shows "Update failed: Forbidden" (seen live on tapadum 2026-06-10).
+		// Installing is a rare moment; one extra HTTP round-trip buys a URL that
+		// is always inside its validity window. Cached manifest is the fallback
+		// if the fresh fetch fails (server briefly unreachable).
+		$m = $this->update_check( $slug, '', true );
+		if ( empty( $m['package_sig'] ) ) {
+			$m = $this->update_check( $slug );
+		}
 		if ( empty( $m['package_sig'] ) ) {
 			return $reply; // nothing to verify against — let WP handle it.
 		}
+		// Prefer the just-issued download URL over the (possibly stale) one WP
+		// captured into the update transient earlier.
+		$dl_url = ( ! empty( $m['download_url'] ) && is_string( $m['download_url'] ) ) ? $m['download_url'] : $package;
 		if ( ! function_exists( 'download_url' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/file.php';
 		}
-		$tmp = download_url( $package );
+		$tmp = download_url( $dl_url );
 		if ( is_wp_error( $tmp ) ) {
 			return $tmp;
 		}
