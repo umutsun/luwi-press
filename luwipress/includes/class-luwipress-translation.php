@@ -1497,17 +1497,17 @@ class LuwiPress_Translation {
 
         $new_post_id = absint( $wpdb->insert_id );
 
-        // Update guid
-        $wpdb->update(
-            $wpdb->posts,
-            array( 'guid' => get_permalink( $new_post_id ) ?: ( home_url( '/?p=' . $new_post_id ) ) ),
-            array( 'ID' => $new_post_id ),
-            array( '%s' ),
-            array( '%d' )
-        );
-
         // Clean object cache
         clean_post_cache( $new_post_id );
+
+        // NOTE: the guid update (which calls get_permalink) deliberately runs
+        // AFTER the translation-plugin registration below. get_permalink() pipes
+        // through WPML's URL filters, which resolve AND CACHE the post's language
+        // details for the rest of the request; doing that before the
+        // icl_translations row exists caches "no language row", and WPML's
+        // save_post handler then re-stamps the post as a default-language
+        // original with a fresh trid on the next wp_update_post (the 2026-06-10
+        // orphan-page bug: 14 orphan "About us" copies on a production site).
 
         // â”€â”€ Register with translation plugin â”€â”€
         if ( 'wpml' === $plugin && $trid ) {
@@ -1525,18 +1525,54 @@ class LuwiPress_Translation {
                 array( '%d', '%s', '%s' )
             );
 
-            // Insert the correct WPML record
-            $wpdb->insert(
-                $wpdb->prefix . 'icl_translations',
-                array(
-                    'element_type'         => $element_type,
+            // Register via the OFFICIAL WPML action first -- unlike a direct DB
+            // insert it also updates WPML's per-request element-language caches,
+            // so a later save_post (e.g. the translated-title wp_update_post in
+            // translate_page) cannot re-stamp the post from a stale "no language
+            // row" cache read.
+            try {
+                do_action( 'wpml_set_element_language_details', array(
                     'element_id'           => $new_post_id,
+                    'element_type'         => $element_type,
                     'trid'                 => $trid,
                     'language_code'        => $language,
                     'source_language_code' => $default_lang,
-                ),
-                array( '%s', '%d', '%d', '%s', '%s' )
-            );
+                ) );
+            } catch ( \Throwable $e ) {
+                // WPML_Set_Language::set() can throw (e.g. InvalidArgumentException
+                // on duplicate checks). Swallow -- the fallback below writes the row.
+                LuwiPress_Logger::log( 'wpml_set_element_language_details threw: ' . $e->getMessage(), 'warning' );
+            }
+
+            // Direct-insert fallback for contexts where the action is not wired.
+            $landed = $wpdb->get_var( $wpdb->prepare(
+                "SELECT translation_id FROM {$wpdb->prefix}icl_translations
+                 WHERE element_id = %d AND element_type = %s",
+                $new_post_id, $element_type
+            ) );
+            if ( ! $landed ) {
+                $wpdb->insert(
+                    $wpdb->prefix . 'icl_translations',
+                    array(
+                        'element_type'         => $element_type,
+                        'element_id'           => $new_post_id,
+                        'trid'                 => $trid,
+                        'language_code'        => $language,
+                        'source_language_code' => $default_lang,
+                    ),
+                    array( '%s', '%d', '%d', '%s', '%s' )
+                );
+                // Raw SQL wrote behind WPML's back. WPML caches element language
+                // details in per-request PHP arrays (including NEGATIVE "no row"
+                // results); wp_cache_delete and 'wpml_cache_clear' do NOT touch
+                // them -- reload() is the only effective invalidation. Without it
+                // WPML's save_post re-stamps this post as a default-language
+                // original with a fresh trid on the next wp_update_post.
+                global $wpml_post_translations;
+                if ( isset( $wpml_post_translations ) && is_object( $wpml_post_translations ) && method_exists( $wpml_post_translations, 'reload' ) ) {
+                    $wpml_post_translations->reload();
+                }
+            }
 
             // Force WPML to re-read the icl_translations row we just wrote. Without
             // these cache flushes the next apply_filters('wpml_post_language_details')
@@ -1559,9 +1595,11 @@ class LuwiPress_Translation {
                 $new_post_id, $element_type
             ) );
 
-            if ( $verify && ( $verify->language_code !== $language || $verify->source_language_code !== $default_lang ) ) {
+            if ( $verify && ( $verify->language_code !== $language || $verify->source_language_code !== $default_lang || (int) $verify->trid !== (int) $trid ) ) {
                 // WPML hook overwrote our row -- force-correct it instead of deleting the
-                // post (the post itself is fine, only the icl_translations metadata is wrong).
+                // post (the post itself is fine, only the icl_translations metadata is
+                // wrong). trid drift included: without it a wrong-trid row skipped repair
+                // and fell into the catastrophic delete below.
                 $wpdb->update(
                     $wpdb->prefix . 'icl_translations',
                     array(
@@ -1573,6 +1611,12 @@ class LuwiPress_Translation {
                     array( '%s', '%s', '%d' ),
                     array( '%d', '%s' )
                 );
+                // Raw SQL again -- WPML's in-memory element cache is now stale; only
+                // reload() invalidates it (the wp_cache group below does not exist).
+                global $wpml_post_translations;
+                if ( isset( $wpml_post_translations ) && is_object( $wpml_post_translations ) && method_exists( $wpml_post_translations, 'reload' ) ) {
+                    $wpml_post_translations->reload();
+                }
                 wp_cache_delete( $new_post_id, 'wpml-element-language-details' );
                 LuwiPress_Logger::log(
                     sprintf( 'WPML row force-corrected for #%d → %s (was %s)', $new_post_id, $language, $verify->language_code ),
@@ -1609,6 +1653,17 @@ class LuwiPress_Translation {
             update_post_meta( $new_post_id, '_thumbnail_id', $thumb_id );
         }
 
+        // Update guid -- AFTER registration so WPML's permalink filters resolve
+        // (and cache) the CORRECT language details for the new post.
+        $wpdb->update(
+            $wpdb->posts,
+            array( 'guid' => get_permalink( $new_post_id ) ?: ( home_url( '/?p=' . $new_post_id ) ) ),
+            array( 'ID' => $new_post_id ),
+            array( '%s' ),
+            array( '%d' )
+        );
+        clean_post_cache( $new_post_id );
+
         // Stamp the source/language relationship so auto-cleanup can RE-STAMP the WPML
         // row instead of just deleting it when WPML hooks corrupt language_code. Without
         // this we'd loop forever: WPML mis-stamps -> we delete -> missing-list shows
@@ -1625,6 +1680,177 @@ class LuwiPress_Translation {
         );
 
         return $new_post_id;
+    }
+
+    /**
+     * Re-assert the WPML registration of a translation post we created.
+     *
+     * WPML's save_post handler can re-stamp a freshly created translation post
+     * as a default-language original with a FRESH trid when its per-request
+     * element-language cache predates our icl_translations insert (the
+     * 2026-06-10 orphan-page bug). Call this after any wp_update_post() on a
+     * translation post to verify the row still matches the expected
+     * (language, trid, source) and force-correct it when it drifted.
+     *
+     * Safe by design: it never steals a (trid, language) slot that a DIFFERENT
+     * living post occupies -- in that case it logs and bails.
+     *
+     * @param int    $post_id   Translation post ID (the post we created/updated).
+     * @param int    $source_id Source (default-language) post ID.
+     * @param string $language  Target language code the post must be stamped as.
+     * @return bool  True when the registration is verified healthy (or fixed).
+     */
+    public function ensure_translation_registration( $post_id, $source_id, $language ) {
+        global $wpdb;
+
+        if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
+            return false;
+        }
+
+        $post_id   = absint( $post_id );
+        $source_id = absint( $source_id );
+        $post      = get_post( $post_id );
+        if ( ! $post || ! $post_id || ! $source_id ) {
+            return false;
+        }
+
+        $element_type = 'post_' . $post->post_type;
+        $default_lang = self::get_default_language();
+        $trid         = apply_filters( 'wpml_element_trid', null, $source_id, $element_type );
+        if ( ! $trid ) {
+            return false;
+        }
+
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT translation_id, language_code, source_language_code, trid
+             FROM {$wpdb->prefix}icl_translations
+             WHERE element_id = %d AND element_type = %s",
+            $post_id, $element_type
+        ) );
+
+        if ( $row && $row->language_code === $language
+            && (int) $row->trid === (int) $trid
+            && $row->source_language_code === $default_lang ) {
+            return true; // Healthy -- nothing to do.
+        }
+
+        // Never steal a slot a DIFFERENT living post legitimately occupies.
+        $occupant = $wpdb->get_var( $wpdb->prepare(
+            "SELECT element_id FROM {$wpdb->prefix}icl_translations
+             WHERE trid = %d AND language_code = %s AND element_type = %s",
+            $trid, $language, $element_type
+        ) );
+        if ( $occupant && (int) $occupant !== $post_id ) {
+            // Trash/auto-draft occupants are NOT living -- treating them as alive
+            // would leave the fresh translation mis-stamped as an EN original.
+            $occupant_status = get_post_status( (int) $occupant );
+            if ( in_array( $occupant_status, array( 'publish', 'draft', 'private', 'pending', 'future' ), true ) ) {
+                LuwiPress_Logger::log( sprintf(
+                    'ensure_translation_registration: trid %d/%s already held by living post #%d -- not re-stamping #%d',
+                    $trid, $language, (int) $occupant, $post_id
+                ), 'warning' );
+                return false;
+            }
+            // Dead occupant (deleted/trashed post) -- clear the stale row first.
+            $wpdb->delete(
+                $wpdb->prefix . 'icl_translations',
+                array( 'trid' => $trid, 'language_code' => $language, 'element_type' => $element_type ),
+                array( '%d', '%s', '%s' )
+            );
+        }
+
+        // Official action keeps WPML's per-request caches coherent.
+        try {
+            do_action( 'wpml_set_element_language_details', array(
+                'element_id'           => $post_id,
+                'element_type'         => $element_type,
+                'trid'                 => $trid,
+                'language_code'        => $language,
+                'source_language_code' => $default_lang,
+            ) );
+        } catch ( \Throwable $e ) {
+            // WPML_Set_Language::set() can throw on duplicate checks; the SQL
+            // fallback below converges the row either way.
+            LuwiPress_Logger::log( 'wpml_set_element_language_details threw: ' . $e->getMessage(), 'warning' );
+        }
+
+        // Verify; force-correct via SQL when the action did not land.
+        $verify = $wpdb->get_row( $wpdb->prepare(
+            "SELECT language_code, source_language_code, trid
+             FROM {$wpdb->prefix}icl_translations
+             WHERE element_id = %d AND element_type = %s",
+            $post_id, $element_type
+        ) );
+        if ( ! $verify ) {
+            $wpdb->insert(
+                $wpdb->prefix . 'icl_translations',
+                array(
+                    'element_type'         => $element_type,
+                    'element_id'           => $post_id,
+                    'trid'                 => $trid,
+                    'language_code'        => $language,
+                    'source_language_code' => $default_lang,
+                ),
+                array( '%s', '%d', '%d', '%s', '%s' )
+            );
+        } elseif ( $verify->language_code !== $language
+            || (int) $verify->trid !== (int) $trid
+            || $verify->source_language_code !== $default_lang ) {
+            $wpdb->update(
+                $wpdb->prefix . 'icl_translations',
+                array(
+                    'language_code'        => $language,
+                    'source_language_code' => $default_lang,
+                    'trid'                 => $trid,
+                ),
+                array( 'element_id' => $post_id, 'element_type' => $element_type ),
+                array( '%s', '%s', '%d' ),
+                array( '%d', '%s' )
+            );
+        }
+
+        // If the official action did not land we wrote via raw SQL above, and
+        // WPML's in-memory per-request element cache still holds the stale
+        // state. reload() is the only effective invalidation -- the wp_cache
+        // groups below don't exist in WPML; only the 'wpml_cache_clear' action
+        // is plausibly consumed by third-party cache layers.
+        global $wpml_post_translations;
+        if ( isset( $wpml_post_translations ) && is_object( $wpml_post_translations ) && method_exists( $wpml_post_translations, 'reload' ) ) {
+            $wpml_post_translations->reload();
+        }
+        wp_cache_delete( $post_id, 'wpml-element-language-details' );
+        wp_cache_delete( $post_id, 'wpml-element-language-code' );
+        wp_cache_delete( 'all', 'wpml-language-details' );
+        do_action( 'wpml_cache_clear' );
+
+        // Final verification -- the SQL fallback can fail silently (e.g. unique
+        // key collision on (trid, language_code) with a WPML placeholder row).
+        // Honour the docblock contract: only report success when the row really
+        // matches.
+        $final = $wpdb->get_row( $wpdb->prepare(
+            "SELECT language_code, source_language_code, trid
+             FROM {$wpdb->prefix}icl_translations
+             WHERE element_id = %d AND element_type = %s",
+            $post_id, $element_type
+        ) );
+        if ( ! $final || $final->language_code !== $language
+            || (int) $final->trid !== (int) $trid
+            || $final->source_language_code !== $default_lang ) {
+            LuwiPress_Logger::log( sprintf(
+                'ensure_translation_registration FAILED for #%d -> %s (trid %d): row is %s',
+                $post_id, $language, $trid,
+                $final ? sprintf( '%s/trid %s', $final->language_code, $final->trid ) : 'missing'
+            ), 'error' );
+            return false;
+        }
+
+        LuwiPress_Logger::log( sprintf(
+            'WPML registration re-asserted for #%d -> %s (trid %d) after post update%s',
+            $post_id, $language, $trid,
+            $row ? sprintf( ' (row had drifted to %s/trid %s)', $row->language_code, $row->trid ) : ' (row was missing)'
+        ), 'warning' );
+
+        return true;
     }
 
     /**
@@ -3488,6 +3714,16 @@ class LuwiPress_Translation {
             $result = $elem->translate_page( $post_id, $lang );
 
             if ( is_wp_error( $result ) ) {
+                // Another run already holds the entry lock -- do NOT requeue (a
+                // queued duplicate would re-run a full AI pass after the active
+                // run finishes). Report in_progress and let the operator poll.
+                if ( 'translation_in_progress' === $result->get_error_code() ) {
+                    wp_send_json_success( array(
+                        'post_id' => $post_id,
+                        'title'   => $post->post_title,
+                        'status'  => 'in_progress',
+                    ) );
+                }
                 LuwiPress_Logger::log( 'AJAX Elementor inline translate failed, falling back to background: ' . $result->get_error_message(), 'warning', array(
                     'post_id' => $post_id, 'lang' => $lang, 'code' => $result->get_error_code(),
                 ) );

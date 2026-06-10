@@ -320,9 +320,31 @@ if ( $is_wpml ) {
 		);
 	}
 
+	// (C) Ghost rows: icl_translations entries whose post no longer exists.
+	// Left behind when a mis-stamped translation post is deleted in WP Admin
+	// AFTER its row drifted to a lonely trid (the 2026-06-10 orphan-page
+	// incident left 14 of these on a production site), or by direct-DB post
+	// deletions. Harmless to WPML resolution (nothing joins them) but they
+	// pollute coverage counts and confuse trid-level diagnostics. Rows with
+	// element_id NULL are kept -- WPML uses those as in-progress placeholders.
+	$ghost_rows = $wpdb->query(
+		"DELETE t FROM {$wpdb->prefix}icl_translations t
+		 LEFT JOIN {$wpdb->posts} p ON p.ID = t.element_id
+		 WHERE t.element_type LIKE 'post\\_%'
+		   AND t.element_id IS NOT NULL
+		   AND p.ID IS NULL"
+	);
+	if ( $ghost_rows ) {
+		$auto_cleanup_count += (int) $ghost_rows;
+		LuwiPress_Logger::log(
+			sprintf( 'Auto-cleanup (ghost rows): removed %d icl_translations rows pointing at deleted posts', (int) $ghost_rows ),
+			'warning'
+		);
+	}
+
 	if ( $auto_cleanup_count > 0 ) {
 		LuwiPress_Logger::log(
-			sprintf( 'Translation Manager auto-cleanup: removed %d cascade-duplicate WPML rows on page render', $auto_cleanup_count ),
+			sprintf( 'Translation Manager auto-cleanup: removed/repaired %d stale or duplicate WPML rows on page render', $auto_cleanup_count ),
 			'info'
 		);
 		// Recompute coverage now that cascade rows are gone -- otherwise the coverage
@@ -1541,7 +1563,11 @@ if ( $is_wpml ) {
 							sent++;
 							if (r.success) {
 								var st = r.data.status || 'completed';
-								if (st === 'queued') {
+								if (st === 'queued' || st === 'in_progress') {
+									// in_progress = another run holds the entry lock for this
+									// (post, lang) -- its real outcome arrives via the same
+									// _luwipress_translation_status meta the cron poll reads,
+									// so track it instead of counting it done now.
 									bgIds.push(item.id);
 								} else {
 									done++;

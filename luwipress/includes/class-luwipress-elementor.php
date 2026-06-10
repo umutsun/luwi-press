@@ -146,6 +146,15 @@ class LuwiPress_Elementor {
             $result = new \WP_Error( 'exception', $e->getMessage() );
         }
 
+        if ( is_wp_error( $result ) && 'translation_in_progress' === $result->get_error_code() ) {
+            // Another run already holds the entry lock -- this duplicate cron job
+            // is exactly what the lock exists to absorb. Not a failure: do not
+            // write a terminal status (the active run owns completion; the
+            // 'translating' stamp above remains accurate while it runs).
+            LuwiPress_Logger::log( 'Cron: translation of #' . $source_id . ' → ' . $target_language . ' already in progress -- duplicate job skipped', 'info' );
+            return;
+        }
+
         if ( is_wp_error( $result ) ) {
             update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
                 'status'   => 'failed',
@@ -170,6 +179,12 @@ class LuwiPress_Elementor {
                     }
                     wp_update_post( $fix );
                     LuwiPress_Logger::log( 'Cron: fixed missing title/slug on #' . $tid, 'warning' );
+                    // BELT: wp_update_post fires WPML's save_post handler, which can
+                    // re-stamp the translation from a stale per-request cache
+                    // (orphan-page bug, 2026-06-10). Re-assert the registration.
+                    if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) ) {
+                        LuwiPress_Translation::get_instance()->ensure_translation_registration( $tid, $source_id, $target_language );
+                    }
                 }
             }
 
@@ -1102,11 +1117,61 @@ class LuwiPress_Elementor {
      * Extracts all translatable text, sends to AI Engine, creates
      * (or updates) WPML translation post with translated Elementor data.
      *
+     * Entry lock: a full run takes 60s+ (synchronous AI calls), which is longer
+     * than most HTTP client timeouts -- clients then blindly retry while the
+     * first run is still working. Without this lock every retry burned a full
+     * AI pass AND created another translation post (the 2026-06-10 orphan-page
+     * incident: 14 orphans from one IT + one FR request). Concurrent calls for
+     * the same (post, language) now get an immediate 'translation_in_progress'
+     * error instead.
+     *
      * @param int    $post_id         Source post ID.
      * @param string $target_language Target language code.
      * @return array|WP_Error Translation result.
      */
     public function translate_page( $post_id, $target_language ) {
+        $lock_key = 'luwipress_eltr_lock_' . absint( $post_id ) . '_' . sanitize_key( $target_language );
+        if ( get_transient( $lock_key ) ) {
+            return new WP_Error(
+                'translation_in_progress',
+                sprintf(
+                    'Translation of #%d to %s is already running (started <15 min ago). Do NOT re-call -- each run costs a full AI pass. Poll translation_post_siblings or system_logs for completion.',
+                    $post_id, $target_language
+                ),
+                array( 'status' => 409 )
+            );
+        }
+        set_transient( $lock_key, time(), 15 * MINUTE_IN_SECONDS );
+
+        // A run takes 60s+; the REST/MCP entry points otherwise execute at the
+        // host's default max_execution_time and die mid-write when the client
+        // disconnects. (AJAX and cron paths already set their own limits.)
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 300 );
+        }
+        if ( function_exists( 'ignore_user_abort' ) ) {
+            @ignore_user_abort( true );
+        }
+
+        try {
+            return $this->translate_page_unlocked( $post_id, $target_language );
+        } finally {
+            // Releases on every return and uncaught Throwable. Engine fatals
+            // (hard timeout, OOM) skip finally -- the 15-min TTL is the
+            // backstop; retries during that window get a 409 that self-heals.
+            delete_transient( $lock_key );
+        }
+    }
+
+    /**
+     * Lock-free inner implementation of translate_page(). Never call directly
+     * outside the locked wrapper above.
+     *
+     * @param int    $post_id         Source post ID.
+     * @param string $target_language Target language code.
+     * @return array|WP_Error Translation result.
+     */
+    private function translate_page_unlocked( $post_id, $target_language ) {
         // CRITICAL inline guard: every translation flow eventually calls this method,
         // so this is the single chokepoint where we MUST verify $post_id is a legit
         // EN source -- not a translation, not a cascade duplicate. Without this,
@@ -1230,6 +1295,12 @@ class LuwiPress_Elementor {
                         'post_status'  => 'publish',
                     ) );
                     update_post_meta( $tid, '_luwipress_synced_source_modified', get_post_field( 'post_modified_gmt', $post_id ) );
+                }
+                // BELT: wp_update_post fires WPML's save_post handler which can
+                // re-stamp the fresh translation from a stale cache (orphan-page
+                // bug, 2026-06-10). Re-assert registration before returning.
+                if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) ) {
+                    LuwiPress_Translation::get_instance()->ensure_translation_registration( $tid, $post_id, $target_language );
                 }
             }
             // Mark the source post so future cron sweeps skip it (avoids the
@@ -1469,6 +1540,16 @@ class LuwiPress_Elementor {
             }
 
             wp_update_post( $update );
+
+            // BELT: the wp_update_post above fires WPML's save_post handler, which
+            // can re-stamp a freshly created translation as a default-language
+            // original with a FRESH trid when WPML's per-request cache predates
+            // our icl_translations insert (the 2026-06-10 orphan-page bug -- the
+            // row was verified correct at create time, then silently flipped to
+            // en + new trid here). Re-assert the registration before returning.
+            if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) ) {
+                LuwiPress_Translation::get_instance()->ensure_translation_registration( $tid, $post_id, $target_language );
+            }
         }
 
         $count = count( $texts_for_ai ) + count( $long_texts );

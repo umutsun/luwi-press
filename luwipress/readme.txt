@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.13.4
+Stable tag: 3.13.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,12 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.13.5 — Elementor translation: orphan-page fix + retry protection =
+* **Fixed: AI page translation could create orphan pages instead of linked WPML translations.** Creating a brand-new translation registered the WPML language record correctly, but WPML's per-request cache could re-stamp the new page as a default-language original on its own translation group during the final title update — the page looked translated but was invisible as a translation (and the next attempt created another copy). The language record is now registered through WPML's official API before any other lookup touches the new page, and re-verified after every save. Updating an existing translation was never affected.
+* **New: translation run lock.** A page translation takes a minute or more; impatient clients that time out and blindly retry used to trigger a full extra AI pass (and, with the bug above, another orphan page) per retry. Concurrent or repeated requests for the same page + language now get an immediate "translation already in progress" answer instead.
+* **New: Translation Manager cleans up ghost language records** left behind when translated pages are deleted outside WPML's normal flow.
+* **More robust:** REST/MCP translation runs now extend the PHP time limit and survive client disconnects; a stuck run releases its lock automatically after 15 minutes.
 
 = 3.13.4 — "LuwiPress Core" naming + a friendlier update experience =
 * **The core plugin is now named "LuwiPress Core"** in the Plugins list, matching its place in the LuwiPress ecosystem (WebMCP, Agentic, Marketplace companions + the LuwiPress themes). Nothing else changes — same install folder, same settings, same data.
