@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.13.3
+Stable tag: 3.13.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,12 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.13.4 — "LuwiPress Core" naming + a friendlier update experience =
+* **The core plugin is now named "LuwiPress Core"** in the Plugins list, matching its place in the LuwiPress ecosystem (WebMCP, Agentic, Marketplace companions + the LuwiPress themes). Nothing else changes — same install folder, same settings, same data.
+* **New: minimal update indicator on the dashboard.** When an update is available, a small amber dot appears on the version pill (plugin updates) or the theme pill (active theme update) in the dashboard header. Click it to review what's pending and install with one click — updates are always user-triggered, never silent.
+* **Fixed: "Update failed: Forbidden" on one-click updates.** The secure download link for an update package is short-lived, but it could be cached for hours — clicking "update now" after the link expired failed with Forbidden. Installing now always requests a fresh download link first.
+* **"Check again" on the Updates screen now performs a true re-check** against the update server instead of re-reading a cached answer.
 
 = 3.13.3 — Vendor products + "Made by" line now multilingual (WPML) =
 * **Fixed: a vendor/maker profile page showed its products only in the default language.** On a multilingual (WPML) store the translated vendor pages (and their Schema.org `makesOffer` rich-result data) came up empty because the product↔vendor link is stored against the source-language vendor, while the translated page queried with the translated vendor ID. Vendor product lookups now resolve to the source vendor and run language-neutrally, then localize each product to the current language — so French/Italian/Spanish vendor pages list the same products (with localized titles + links) and emit complete `makesOffer` structured data. Powers the theme "their work" grid and the master-grid widget count too.
