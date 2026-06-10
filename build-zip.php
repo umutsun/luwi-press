@@ -5,8 +5,19 @@
  */
 
 $version = $argv[1] ?? '2.0.0';
-$slug    = $argv[2] ?? 'luwipress'; // plugin folder slug; also used as ZIP prefix
-$src = __DIR__ . '/' . $slug;
+$slug    = $argv[2] ?? 'luwipress-core'; // RELEASE slug — ZIP filename prefix + license-server key
+
+// Release slug → source folder. The folder is ALSO the ZIP's internal root,
+// i.e. the WP install directory — it must NOT change for existing installs
+// (plugin basename `luwipress/luwipress.php` is the plugin's identity in WP).
+// Since 2026-06-10 the core plugin RELEASES as `luwipress-core` while keeping
+// the `luwipress/` install folder; companions release under their folder name.
+$dir_map = array(
+    'luwipress-core' => 'luwipress',
+    'luwipress'      => 'luwipress', // legacy invocation — old ZIP name, same content
+);
+$dir = $dir_map[ $slug ] ?? $slug;
+$src = __DIR__ . '/' . $dir;
 $dst = __DIR__ . '/releases/' . $slug . '-v' . $version . '.zip';
 
 if ( ! is_dir( $src ) ) {
@@ -60,7 +71,7 @@ echo "  All PHP files OK.\n\n";
 // (luwipress-webmcp, etc.) piggyback on core classes which aren't autoloadable
 // from a standalone companion path, so we skip PHPStan for those builds.
 $phpstan = __DIR__ . '/vendor/bin/phpstan';
-if ( file_exists( $phpstan ) && $slug === 'luwipress' ) {
+if ( file_exists( $phpstan ) && $dir === 'luwipress' ) {
     echo "Running PHPStan...\n";
     $stan_out = []; $stan_code = 0;
     exec( 'php -d memory_limit=4G ' . escapeshellarg( $phpstan ) . ' analyse --no-progress --memory-limit=4G 2>&1', $stan_out, $stan_code );
@@ -103,8 +114,9 @@ foreach ( $files as $file ) {
         continue;
     }
 
-    // Use addFromString to avoid ZipArchive truncation on large files (Windows)
-    $zip->addFromString( $slug . '/' . $rel, file_get_contents( $real ) );
+    // Use addFromString to avoid ZipArchive truncation on large files (Windows).
+    // Internal root = $dir (the WP install folder), NOT the release slug.
+    $zip->addFromString( $dir . '/' . $rel, file_get_contents( $real ) );
     $count++;
 }
 

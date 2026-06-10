@@ -7,8 +7,14 @@ name: Release
 # license server's GitHub webhook then verifies the sha256, Ed25519-signs the
 # package, and registers it — so licensed sites can one-click auto-update.
 #
-# Tag scheme (asset basename == release slug == install dir / plugin folder):
-#   v3.13.3                      → slug=luwipress           (core)
+# Tag scheme (asset basename == release slug; for companions that also equals
+# the install dir / plugin folder):
+#   v3.13.3                      → slug=luwipress-core      (core; source folder
+#                                  stays `luwipress/` — see build-zip.php dir map.
+#                                  Renaming the install folder would break every
+#                                  existing site, so only the RELEASE identity is
+#                                  `luwipress-core` as of 2026-06-10.)
+#   luwipress-core-v3.13.3       → same as v3.13.3 (both forms accepted)
 #   luwipress-webmcp-v1.0.45     → slug=luwipress-webmcp    (companion)
 #   luwipress-agentic-v1.3.5     → slug=luwipress-agentic
 #   luwipress-marketplace-v1.0.2 → slug=luwipress-marketplace
@@ -42,14 +48,18 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           if [[ "$TAG" =~ ^v(.+)$ ]]; then
-            SLUG="luwipress"; VERSION="${BASH_REMATCH[1]}"
+            SLUG="luwipress-core"; VERSION="${BASH_REMATCH[1]}"
           elif [[ "$TAG" =~ ^(luwipress-[a-z0-9-]+)-v(.+)$ ]]; then
             SLUG="${BASH_REMATCH[1]}"; VERSION="${BASH_REMATCH[2]}"
           else
             echo "::error::Unrecognized tag '$TAG' (expected v<ver> or <slug>-v<ver>)"; exit 1
           fi
-          if [ ! -d "$SLUG" ]; then
-            echo "::error::Plugin source folder '$SLUG' not found in repo"; exit 1
+          # Release slug → source folder (core releases as luwipress-core but
+          # lives in — and installs into — luwipress/). Must mirror build-zip.php.
+          SRC="$SLUG"
+          if [ "$SLUG" = "luwipress-core" ]; then SRC="luwipress"; fi
+          if [ ! -d "$SRC" ]; then
+            echo "::error::Plugin source folder '$SRC' not found in repo"; exit 1
           fi
           PRERELEASE=false
           case "$VERSION" in *-beta*|*-rc*) PRERELEASE=true;; esac

@@ -1190,7 +1190,13 @@ class LuwiPress_License {
 	// Phase 3 — licensed auto-update (manifest + signed download)
 	// ------------------------------------------------------------------
 
-	const UPDATE_SLUG         = 'luwipress';
+	// Core RELEASE slug on the license server. Renamed `luwipress` →
+	// `luwipress-core` on 2026-06-10 to disambiguate the core plugin within the
+	// ecosystem. The INSTALL folder stays `luwipress/` (plugin basename is the
+	// plugin's identity in WP — renaming it would deactivate every existing
+	// install on update), so the slug is purely the server-side release key.
+	// Server keeps answering the legacy `luwipress` slug for ≤3.13.2 sites.
+	const UPDATE_SLUG         = 'luwipress-core';
 	const UPDATE_CACHE        = 'luwipress_update_manifest';   // legacy single-slug cache (flushed for back-compat).
 	const UPDATE_CACHE_PREFIX = 'luwipress_upd_';              // + md5(slug) — per-package manifest cache.
 
@@ -1533,7 +1539,9 @@ class LuwiPress_License {
 	 * entitlement — may have changed).
 	 */
 	private function flush_update_cache() {
-		$slugs = array( self::UPDATE_SLUG, 'luwipress-webmcp', 'luwipress-agentic', 'luwipress-marketplace' );
+		// 'luwipress' = the pre-rename core slug; sites upgrading from ≤3.13.2
+		// still carry its cached manifest — drop it alongside the live keys.
+		$slugs = array( self::UPDATE_SLUG, 'luwipress', 'luwipress-webmcp', 'luwipress-agentic', 'luwipress-marketplace' );
 		if ( function_exists( 'wp_get_themes' ) ) {
 			foreach ( array_keys( wp_get_themes() ) as $stylesheet ) {
 				if ( 0 === strpos( (string) $stylesheet, 'luwipress-' ) ) {
