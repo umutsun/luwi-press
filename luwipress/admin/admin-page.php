@@ -50,20 +50,67 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			</h1>
 		</div>
 		<div class="lp-header-actions">
+			<?php
+			// Pending luwi-ecosystem updates. The license layer already fills
+			// WP's update transients, so this read costs zero extra HTTP. The
+			// indicator is deliberately MINIMAL: a tiny amber dot on the pills
+			// that already exist — the version pill for plugin updates, the
+			// theme pill for the active theme's update. No pending updates =
+			// the header looks exactly as it does today. Install is always the
+			// user's click through WP's native update.php flow (nonce +
+			// capability + the Ed25519 package-signature check in
+			// verify_package_download) — nothing installs silently.
+			$lp_pending        = array();
+			$lp_plugin_updates = array();
+			$lp_theme_updates  = array();
+			if ( class_exists( 'LuwiPress_License' ) && current_user_can( 'update_plugins' ) ) {
+				$lp_pending = LuwiPress_License::get_instance()->ecosystem_pending_updates();
+				foreach ( $lp_pending as $lp_u ) {
+					if ( 'theme' === $lp_u['type'] ) {
+						$lp_theme_updates[] = $lp_u;
+					} else {
+						$lp_plugin_updates[] = $lp_u;
+					}
+				}
+			}
+			$lp_active_theme_update = null;
+			foreach ( $lp_theme_updates as $lp_u ) {
+				if ( get_stylesheet() === $lp_u['file'] ) {
+					$lp_active_theme_update = $lp_u;
+					break;
+				}
+			}
+			// Theme-only updates for a NON-active theme still need a visible
+			// home — fall back to badging the version pill so nothing pending
+			// is ever invisible.
+			$lp_badge_version = ! empty( $lp_plugin_updates ) || ( ! empty( $lp_theme_updates ) && ! $lp_active_theme_update );
+			?>
 			<a href="<?php echo esc_url( admin_url( 'admin.php?page=luwipress-knowledge-graph' ) ); ?>"
 			   class="lp-pill lp-pill--action pill-neutral lp-pill--icon"
 			   title="<?php esc_attr_e( 'Knowledge Graph — interactive store intelligence (D3.js).', 'luwipress' ); ?>">
 				<span class="dashicons dashicons-networking"></span>
 				<span class="screen-reader-text"><?php esc_html_e( 'Knowledge Graph', 'luwipress' ); ?></span>
 			</a>
-			<span class="lp-pill pill-neutral" title="<?php esc_attr_e( 'Plugin version', 'luwipress' ); ?>">
-				v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
-			</span>
+			<?php if ( $lp_badge_version ) : ?>
+				<button type="button" class="lp-pill pill-neutral lp-update-trigger"
+					aria-expanded="false" aria-controls="lp-update-offer-pop"
+					title="<?php esc_attr_e( 'Update available — click to review and install.', 'luwipress' ); ?>">
+					v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
+					<span class="lp-update-dot" aria-hidden="true"></span>
+					<span class="screen-reader-text"><?php esc_html_e( 'Updates available', 'luwipress' ); ?></span>
+				</button>
+			<?php else : ?>
+				<span class="lp-pill pill-neutral" title="<?php esc_attr_e( 'Plugin version', 'luwipress' ); ?>">
+					v<?php echo esc_html( LUWIPRESS_VERSION ); ?>
+				</span>
+			<?php endif; ?>
 			<?php
 			// Theme-pairing pill — when the active theme registers itself as
 			// an official LuwiPress companion (default: `luwipress-gold`), show
 			// a green ✓ pill; otherwise a muted pill names the active theme
-			// so the operator knows which template they're running on.
+			// so the operator knows which template they're running on. When the
+			// active theme has a pending update, the pill carries the amber dot
+			// and opens the update popover.
 			if ( class_exists( 'LuwiPress_Plugin_Detector' ) ) {
 				$lp_theme = LuwiPress_Plugin_Detector::get_instance()->detect_theme();
 				if ( ! empty( $lp_theme['detected'] ) ) {
@@ -75,7 +122,20 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 						? esc_attr__( 'Official LuwiPress companion theme — full ecosystem features active.', 'luwipress' )
 						: esc_attr__( 'Active theme is not an official LuwiPress companion — some ecosystem features may not be amplified.', 'luwipress' );
 					$pill_text    = ( $is_companion ? '✓ ' : '' ) . $theme_label . ( $theme_ver ? ' v' . $theme_ver : '' );
-					echo '<span class="lp-pill ' . esc_attr( $pill_class ) . '" title="' . $pill_title . '">' . esc_html( $pill_text ) . '</span>';
+					if ( $lp_active_theme_update ) {
+						$pill_title = esc_attr( sprintf(
+							/* translators: %s: new theme version number. */
+							__( 'Theme update v%s available — click to review and install.', 'luwipress' ),
+							$lp_active_theme_update['new']
+						) );
+						echo '<button type="button" class="lp-pill ' . esc_attr( $pill_class ) . ' lp-update-trigger" aria-expanded="false" aria-controls="lp-update-offer-pop" title="' . $pill_title . '">'
+							. esc_html( $pill_text )
+							. '<span class="lp-update-dot" aria-hidden="true"></span>'
+							. '<span class="screen-reader-text">' . esc_html__( 'Theme update available', 'luwipress' ) . '</span>'
+							. '</button>';
+					} else {
+						echo '<span class="lp-pill ' . esc_attr( $pill_class ) . '" title="' . $pill_title . '">' . esc_html( $pill_text ) . '</span>';
+					}
 				}
 			}
 			?>
@@ -85,85 +145,57 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 				<span class="dashicons dashicons-admin-generic"></span>
 				<span class="screen-reader-text"><?php esc_html_e( 'Settings', 'luwipress' ); ?></span>
 			</a>
-			<?php
-			// Ecosystem update offer — minimal, USER-TRIGGERED only. Reads the
-			// updates the license layer already surfaced into WP's update
-			// transients (zero extra HTTP on render). Clicking "Update" goes
-			// through WP's native update.php flow (nonce + capability + the
-			// Ed25519 package-signature check in verify_package_download) —
-			// nothing installs without an explicit click.
-			if ( class_exists( 'LuwiPress_License' ) && current_user_can( 'update_plugins' ) ) {
-				$lp_pending = LuwiPress_License::get_instance()->ecosystem_pending_updates();
-				if ( ! empty( $lp_pending ) ) :
-					?>
-					<div class="lp-update-offer">
-						<button type="button" class="lp-pill pill-warning lp-update-offer__toggle"
-							aria-expanded="false" aria-controls="lp-update-offer-pop"
-							title="<?php esc_attr_e( 'LuwiPress updates are available — click to review and install.', 'luwipress' ); ?>">
-							<span class="dashicons dashicons-update"></span>
-							<?php
-							echo esc_html(
-								sprintf(
-									/* translators: %d: number of available updates. */
-									_n( '%d update', '%d updates', count( $lp_pending ), 'luwipress' ),
-									count( $lp_pending )
-								)
-							);
-							?>
-						</button>
-						<div class="lp-update-offer__pop" id="lp-update-offer-pop" hidden>
-							<div class="lp-update-offer__head"><?php esc_html_e( 'Updates found — install?', 'luwipress' ); ?></div>
-							<?php foreach ( $lp_pending as $lp_u ) :
-								if ( 'theme' === $lp_u['type'] ) {
-									if ( ! current_user_can( 'update_themes' ) ) {
-										continue;
-									}
-									$lp_action_url = wp_nonce_url(
-										self_admin_url( 'update.php?action=upgrade-theme&theme=' . rawurlencode( $lp_u['file'] ) ),
-										'upgrade-theme_' . $lp_u['file']
-									);
-								} else {
-									$lp_action_url = wp_nonce_url(
-										self_admin_url( 'update.php?action=upgrade-plugin&plugin=' . rawurlencode( $lp_u['file'] ) ),
-										'upgrade-plugin_' . $lp_u['file']
-									);
-								}
-								?>
-								<div class="lp-update-offer__row">
-									<span class="lp-update-offer__name"><?php echo esc_html( $lp_u['name'] ); ?></span>
-									<span class="lp-update-offer__ver"><?php echo esc_html( $lp_u['current'] . ' → ' . $lp_u['new'] ); ?></span>
-									<a class="button button-primary button-small" href="<?php echo esc_url( $lp_action_url ); ?>"><?php esc_html_e( 'Update', 'luwipress' ); ?></a>
-								</div>
-							<?php endforeach; ?>
-							<div class="lp-update-offer__foot">
-								<a href="<?php echo esc_url( self_admin_url( 'update-core.php?force-check=1' ) ); ?>"><?php esc_html_e( 'Check again', 'luwipress' ); ?></a>
-								<a href="<?php echo esc_url( self_admin_url( 'update-core.php' ) ); ?>"><?php esc_html_e( 'All updates', 'luwipress' ); ?></a>
-							</div>
-						</div>
-					</div>
-					<script>
-					( function () {
-						var wrap = document.querySelector( '.lp-update-offer' );
-						if ( ! wrap ) { return; }
-						var btn = wrap.querySelector( '.lp-update-offer__toggle' );
-						var pop = wrap.querySelector( '.lp-update-offer__pop' );
-						btn.addEventListener( 'click', function () {
-							var open = pop.hasAttribute( 'hidden' );
-							if ( open ) { pop.removeAttribute( 'hidden' ); } else { pop.setAttribute( 'hidden', '' ); }
-							btn.setAttribute( 'aria-expanded', open ? 'true' : 'false' );
-						} );
-						document.addEventListener( 'click', function ( e ) {
-							if ( ! wrap.contains( e.target ) && ! pop.hasAttribute( 'hidden' ) ) {
-								pop.setAttribute( 'hidden', '' );
-								btn.setAttribute( 'aria-expanded', 'false' );
+			<?php if ( ! empty( $lp_pending ) ) : ?>
+				<div class="lp-update-offer__pop" id="lp-update-offer-pop" hidden>
+					<div class="lp-update-offer__head"><?php esc_html_e( 'Updates found — install?', 'luwipress' ); ?></div>
+					<?php foreach ( $lp_pending as $lp_u ) :
+						if ( 'theme' === $lp_u['type'] ) {
+							if ( ! current_user_can( 'update_themes' ) ) {
+								continue;
 							}
-						} );
-					} )();
-					</script>
-					<?php
-				endif;
-			}
-			?>
+							$lp_action_url = wp_nonce_url(
+								self_admin_url( 'update.php?action=upgrade-theme&theme=' . rawurlencode( $lp_u['file'] ) ),
+								'upgrade-theme_' . $lp_u['file']
+							);
+						} else {
+							$lp_action_url = wp_nonce_url(
+								self_admin_url( 'update.php?action=upgrade-plugin&plugin=' . rawurlencode( $lp_u['file'] ) ),
+								'upgrade-plugin_' . $lp_u['file']
+							);
+						}
+						?>
+						<div class="lp-update-offer__row">
+							<span class="lp-update-offer__name"><?php echo esc_html( $lp_u['name'] ); ?></span>
+							<span class="lp-update-offer__ver"><?php echo esc_html( $lp_u['current'] . ' → ' . $lp_u['new'] ); ?></span>
+							<a class="button button-primary button-small" href="<?php echo esc_url( $lp_action_url ); ?>"><?php esc_html_e( 'Update', 'luwipress' ); ?></a>
+						</div>
+					<?php endforeach; ?>
+					<div class="lp-update-offer__foot">
+						<a href="<?php echo esc_url( self_admin_url( 'update-core.php?force-check=1' ) ); ?>"><?php esc_html_e( 'Check again', 'luwipress' ); ?></a>
+						<a href="<?php echo esc_url( self_admin_url( 'update-core.php' ) ); ?>"><?php esc_html_e( 'All updates', 'luwipress' ); ?></a>
+					</div>
+				</div>
+				<script>
+				( function () {
+					var pop = document.getElementById( 'lp-update-offer-pop' );
+					if ( ! pop ) { return; }
+					var triggers = Array.prototype.slice.call( document.querySelectorAll( '.lp-update-trigger' ) );
+					function setOpen( open ) {
+						if ( open ) { pop.removeAttribute( 'hidden' ); } else { pop.setAttribute( 'hidden', '' ); }
+						triggers.forEach( function ( t ) { t.setAttribute( 'aria-expanded', open ? 'true' : 'false' ); } );
+					}
+					triggers.forEach( function ( t ) {
+						t.addEventListener( 'click', function () { setOpen( pop.hasAttribute( 'hidden' ) ); } );
+					} );
+					document.addEventListener( 'click', function ( e ) {
+						if ( pop.hasAttribute( 'hidden' ) ) { return; }
+						if ( pop.contains( e.target ) ) { return; }
+						if ( triggers.some( function ( t ) { return t.contains( e.target ); } ) ) { return; }
+						setOpen( false );
+					} );
+				} )();
+				</script>
+			<?php endif; ?>
 		</div>
 	</div>
 
