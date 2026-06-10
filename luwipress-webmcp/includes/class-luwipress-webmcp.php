@@ -7882,6 +7882,20 @@ class LuwiPress_WebMCP {
 
     /* ───────────────────── Plugin & Theme Tools ────────────────────── */
 
+    /**
+     * Plugins whose deactivation/deletion would kill this MCP endpoint itself —
+     * the agent would lose all control with no way to re-enable over MCP. Hard-
+     * blocked in plugins_deactivate / plugins_delete; the operator can still do it
+     * from WP Admin → Plugins if they truly intend to.
+     */
+    private function is_mcp_lifeline_plugin( $plugin ) {
+        $lifeline = array(
+            'luwipress/luwipress.php',                // core: the auth + permission layer the MCP rides on
+            'luwipress-webmcp/luwipress-webmcp.php',  // the MCP server itself
+        );
+        return in_array( $plugin, $lifeline, true );
+    }
+
     private function register_plugin_theme_tools() {
 
         $this->register_tool( 'plugins_list', array(
@@ -7943,6 +7957,9 @@ class LuwiPress_WebMCP {
             'annotations' => array( 'title' => 'Deactivate Plugin', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
         ), function ( $args ) {
             $plugin = sanitize_text_field( $args['plugin'] );
+            if ( $this->is_mcp_lifeline_plugin( $plugin ) ) {
+                throw new Exception( 'Refusing to deactivate "' . $plugin . '" — it powers this MCP endpoint; deactivating it would lock you out with no way to re-enable over MCP. Do it from WP Admin → Plugins if you truly intend to.' );
+            }
             deactivate_plugins( $plugin );
             return array( 'plugin' => $plugin, 'deactivated' => true );
         } );
@@ -8076,6 +8093,10 @@ class LuwiPress_WebMCP {
             require_once ABSPATH . 'wp-admin/includes/file.php';
 
             $plugin = sanitize_text_field( $args['plugin'] );
+
+            if ( $this->is_mcp_lifeline_plugin( $plugin ) ) {
+                throw new Exception( 'Refusing to delete "' . $plugin . '" — it powers this MCP endpoint. Do it from WP Admin → Plugins if you truly intend to.' );
+            }
 
             if ( is_plugin_active( $plugin ) ) {
                 throw new Exception( 'Cannot delete an active plugin — deactivate it first' );

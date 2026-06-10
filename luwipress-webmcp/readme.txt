@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.44
+Stable tag: 1.0.45
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.45 — Plugin-management self-preservation guard =
+* **`plugins_deactivate` / `plugins_delete` now refuse to disable or remove the MCP's own lifeline** — LuwiPress core (`luwipress/luwipress.php`) and the WebMCP companion (`luwipress-webmcp/luwipress-webmcp.php`). Deactivating either over MCP would kill the endpoint with no way to re-enable it remotely; the guard blocks that footgun (the operator can still do it from WP Admin → Plugins). The full plugin toolset — `plugins_list`, `plugins_activate`, `plugins_deactivate`, `plugins_update`, `plugins_install`, `plugins_delete`, `plugins_search` — is otherwise unchanged.
 
 = 1.0.44 — Retranslate-from-source tool (paired with core 3.12.2) =
 * **`elementor_retranslate_from_source`** — retranslate an Elementor page into one or more languages (or all active languages) directly from the source/default language. Re-syncs the page structure from the source so drifted translations are rebuilt, AI-translates every text field in safe chunks, clears any stale "no translatable text" guard, and queues one background job per language. Pairs with core 3.12.2's chunked, self-healing translation pipeline.
