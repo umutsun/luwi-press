@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: LuwiPress
+ * Plugin Name: LuwiPress Core
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
  * Version: 3.13.3

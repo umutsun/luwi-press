@@ -1,4 +1,4 @@
-=== LuwiPress — AI-Powered WooCommerce Automation ===
+=== LuwiPress Core — AI-Powered WooCommerce Automation ===
 Contributors: luwidev
 Tags: woocommerce, ai, seo, translation, automation, product enrichment, multilingual
 Requires at least: 5.6
