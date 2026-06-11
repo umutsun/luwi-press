@@ -1594,7 +1594,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 						<td>
 							<input type="text" id="luwipress_telegram_username" name="luwipress_telegram_username"
 								value="<?php echo esc_attr( $tg_username ); ?>" class="regular-text"
-								placeholder="username">
+								placeholder="your_username">
 							<p class="description"><?php esc_html_e( 'Without @ sign. Used for t.me/username deep link.', 'luwipress' ); ?></p>
 						</td>
 					</tr>

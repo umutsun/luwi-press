@@ -4177,7 +4177,11 @@ class LuwiPress_Translation {
         if ( is_wp_error( $result ) ) {
             wp_send_json_error( $result->get_error_message() );
         }
-        wp_send_json_success( array( 'message' => $result['message'], 'synced' => $result['synced'] ) );
+        wp_send_json_success( array(
+            'message' => $result['message'],
+            'synced'  => $result['synced'],
+            'created' => $result['created'] ?? 0,
+        ) );
     }
 
     /**
@@ -4191,13 +4195,13 @@ class LuwiPress_Translation {
             return new WP_Error( 'wpml_inactive', 'WPML not active' );
         }
 
-        global $wpdb;
         $default_lang = self::get_default_language();
         $target_langs = apply_filters( 'wpml_active_languages', array() );
 
         // Get all menus in the default language
         $menus = wp_get_nav_menus();
-        $synced = 0;
+        $synced  = 0; // menus whose items were (re)synced from source
+        $created = 0; // translated menu terms created from scratch
 
         foreach ( $menus as $menu ) {
             // Check if this menu belongs to default language
@@ -4205,7 +4209,7 @@ class LuwiPress_Translation {
                 'element_id'   => $menu->term_id,
                 'element_type' => 'tax_nav_menu',
             ) );
-            if ( $menu_lang !== $default_lang ) {
+            if ( $menu_lang && $menu_lang !== $default_lang ) {
                 continue;
             }
 
@@ -4213,50 +4217,110 @@ class LuwiPress_Translation {
             if ( empty( $menu_items ) ) {
                 continue;
             }
+            $source_count = count( $menu_items );
 
+            // Ensure the source menu is registered with WPML as a SOURCE element
+            // so it owns a translation group (trid). On sites where menus were
+            // never opened in WPML's Menu Sync screen, the source menu has no
+            // trid yet and every translated lookup below returns the source id —
+            // which is exactly why the old sync was a no-op. Register it first.
             $menu_trid = apply_filters( 'wpml_element_trid', null, $menu->term_id, 'tax_nav_menu' );
             if ( ! $menu_trid ) {
-                continue;
+                do_action( 'wpml_set_element_language_details', array(
+                    'element_id'           => (int) $menu->term_id,
+                    'element_type'         => 'tax_nav_menu',
+                    'trid'                 => false,
+                    'language_code'        => $default_lang,
+                    'source_language_code' => null,
+                ) );
+                $menu_trid = apply_filters( 'wpml_element_trid', null, $menu->term_id, 'tax_nav_menu' );
+                if ( ! $menu_trid ) {
+                    LuwiPress_Logger::log( sprintf(
+                        'Menu sync: could not establish a WPML translation group for "%s" (#%d) — is "Navigation Menus" translatable in WPML settings?',
+                        $menu->name, $menu->term_id
+                    ), 'warning' );
+                    continue;
+                }
             }
 
-            // For each target language, check if menu translation exists
+            // For each target language: create the translated menu if missing,
+            // then sync its items from the source.
             foreach ( $target_langs as $lang_code => $lang_info ) {
                 if ( $lang_code === $default_lang ) {
                     continue;
                 }
 
                 $translated_menu_id = apply_filters( 'wpml_object_id', $menu->term_id, 'nav_menu', false, $lang_code );
-                if ( ! $translated_menu_id || $translated_menu_id === $menu->term_id ) {
-                    continue;
+                $has_translation    = ( $translated_menu_id && (int) $translated_menu_id !== (int) $menu->term_id );
+
+                if ( ! $has_translation ) {
+                    // CREATE the translated menu term and pair it to the source
+                    // trid. This is the step WPML's "WP Menus Sync" screen does
+                    // and the old code skipped — without it there is no menu for
+                    // the theme (or label translator) to fill, so the site falls
+                    // back to the default language on every translated page.
+                    $new_name = $menu->name . ' (' . strtoupper( $lang_code ) . ')';
+                    $new_menu_id = wp_create_nav_menu( $new_name );
+                    if ( is_wp_error( $new_menu_id ) ) {
+                        // Name clash from a prior partial run — try to reuse it.
+                        $existing = get_term_by( 'name', $new_name, 'nav_menu' );
+                        if ( $existing ) {
+                            $new_menu_id = (int) $existing->term_id;
+                        } else {
+                            LuwiPress_Logger::log( sprintf(
+                                'Menu sync: failed to create %s menu for "%s": %s',
+                                $lang_code, $menu->name, $new_menu_id->get_error_message()
+                            ), 'warning' );
+                            continue;
+                        }
+                    }
+
+                    // Pair the new menu term to the source's translation group.
+                    do_action( 'wpml_set_element_language_details', array(
+                        'element_id'           => (int) $new_menu_id,
+                        'element_type'         => 'tax_nav_menu',
+                        'trid'                 => (int) $menu_trid,
+                        'language_code'        => $lang_code,
+                        'source_language_code' => $default_lang,
+                    ) );
+                    $translated_menu_id = (int) $new_menu_id;
+                    $created++;
+                    LuwiPress_Logger::log( sprintf(
+                        'Menu sync: created %s translation of "%s" (#%d -> #%d) and paired to trid %d',
+                        $lang_code, $menu->name, $menu->term_id, $new_menu_id, $menu_trid
+                    ), 'info' );
                 }
 
-                // Get existing translated menu items
+                // Sync items from source -> translated menu when the translated
+                // one is missing items (freshly created, or drifted).
                 $translated_items = wp_get_nav_menu_items( $translated_menu_id );
-                $existing_count = is_array( $translated_items ) ? count( $translated_items ) : 0;
-                $source_count = count( $menu_items );
+                $existing_count   = is_array( $translated_items ) ? count( $translated_items ) : 0;
 
-                // If translated menu has fewer items, sync
                 if ( $existing_count < $source_count ) {
-                    // Use WPML's sync mechanism
                     do_action( 'wpml_sync_custom_element', $menu->term_id, 'nav_menu' );
                     $synced++;
                     LuwiPress_Logger::log( sprintf(
-                        'Menu sync: %s (%s â†’ %s) â€” source: %d items, translated: %d items',
+                        'Menu sync: %s (%s -> %s) — source: %d items, translated had: %d',
                         $menu->name, $default_lang, $lang_code, $source_count, $existing_count
                     ), 'info' );
                 }
             }
         }
 
-        if ( $synced > 0 ) {
+        if ( $created > 0 || $synced > 0 ) {
             return array(
                 'synced'  => $synced,
-                'message' => sprintf( '%d menu(s) synced. Visit WPML â†’ Menu Sync to complete item translations.', $synced ),
+                'created' => $created,
+                'message' => sprintf(
+                    '%d translated menu(s) created, %d menu(s) item-synced. Run "Translate Menus" next to fill the labels.',
+                    $created, $synced
+                ),
             );
         }
         return array(
             'synced'  => 0,
-            'message' => 'All menus are in sync. If menus are still broken, go to WPML â†’ Menu Sync manually.',
+            'created' => 0,
+            'message' => 'All menus are already in sync. If a translated menu still looks wrong, check that "Navigation Menus" is translatable in WPML → Settings.',
         );
     }
 

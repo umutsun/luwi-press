@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.14.0
+Stable tag: 3.14.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.14.1 — Menu sync now creates the translated menus =
+* **Fixed: "Sync Menus" did nothing on sites that had never created translated menus.** It only updated menus that were already translated, so on a multilingual store whose navigation had never been synced it reported "all in sync" and changed nothing — leaving every language showing the default-language menu. Sync Menus (and the `menu_sync_wpml` tool) now register the source menu's translation group, create the missing per-language menus, pair them to the source, and copy the items — so "Translate Menus" has real menus to fill. Requires "Navigation Menus" to be translatable in WPML → Settings.
 
 = 3.14.0 — DeepL translation engine + menu translation surface =
 * **New: DeepL translation engine.** Add a DeepL API key (Settings → AI) and switch the translation engine to DeepL (Settings → Translation). DeepL — known for the most accurate machine translation — handles product/page names and descriptions, while your AI provider still writes SEO titles, descriptions, focus keywords and FAQs. Free and Pro keys are both supported, with the correct endpoint selected automatically. Languages DeepL does not support fall back to the AI provider, and any DeepL error transparently falls back too — a translation never fails because of DeepL.
