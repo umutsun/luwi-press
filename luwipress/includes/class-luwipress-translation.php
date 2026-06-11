@@ -4293,15 +4293,24 @@ class LuwiPress_Translation {
 
                 // Sync items from source -> translated menu when the translated
                 // one is missing items (freshly created, or drifted).
+                // Copy items from source -> translated menu when it is missing
+                // items (freshly created, or drifted). We copy them OURSELVES:
+                // wpml_sync_custom_element is a no-op for menu items on current
+                // WPML versions (it pairs the term but never populates the items
+                // — confirmed on flybydeniz: translated menus stayed at 0 items).
                 $translated_items = wp_get_nav_menu_items( $translated_menu_id );
                 $existing_count   = is_array( $translated_items ) ? count( $translated_items ) : 0;
 
                 if ( $existing_count < $source_count ) {
-                    do_action( 'wpml_sync_custom_element', $menu->term_id, 'nav_menu' );
-                    $synced++;
+                    $copied = $this->copy_menu_items_to_translation(
+                        $menu->term_id, $menu_items, $translated_menu_id, $lang_code, $default_lang
+                    );
+                    if ( $copied > 0 ) {
+                        $synced++;
+                    }
                     LuwiPress_Logger::log( sprintf(
-                        'Menu sync: %s (%s -> %s) — source: %d items, translated had: %d',
-                        $menu->name, $default_lang, $lang_code, $source_count, $existing_count
+                        'Menu sync: %s (%s -> %s) — source: %d items, translated had: %d, copied: %d',
+                        $menu->name, $default_lang, $lang_code, $source_count, $existing_count, $copied
                     ), 'info' );
                 }
             }
@@ -4322,6 +4331,166 @@ class LuwiPress_Translation {
             'created' => 0,
             'message' => 'All menus are already in sync. If a translated menu still looks wrong, check that "Navigation Menus" is translatable in WPML → Settings.',
         );
+    }
+
+    /**
+     * Copy a source menu's items into a translated menu, preserving hierarchy
+     * and pairing each new nav_menu_item to its source via WPML so that
+     * apply_filters( 'wpml_object_id', $source_item_id, 'nav_menu_item', false, $lang )
+     * resolves later (translate_wpml_menus() depends on this).
+     *
+     * Idempotent: skips any source item that already has a translated
+     * counterpart in $lang, so a half-finished prior run resumes cleanly and a
+     * complete run is a no-op. Never deletes — re-pairing/labels survive.
+     *
+     * WPML orphan guard (feedback_menu_add_item_wpml_orphan.md, 2026-05-17):
+     * wp_update_nav_menu_item() calls wp_set_object_terms($item,$menu,'nav_menu')
+     * internally; WPML silently drops that relationship unless the CURRENT
+     * language context matches the target menu's language. So we switch language
+     * BEFORE creating each item, restore after, and verify attachment.
+     *
+     * @param int    $source_menu_id     Default-language menu term_id.
+     * @param array  $source_items       Result of wp_get_nav_menu_items() (parents-before-children).
+     * @param int    $translated_menu_id Target translated menu term_id (already paired to the source trid).
+     * @param string $lang               Target language code.
+     * @param string $default_lang       Default language code.
+     * @return int Number of items newly created in the translated menu.
+     */
+    private function copy_menu_items_to_translation( $source_menu_id, $source_items, $translated_menu_id, $lang, $default_lang ) {
+        if ( empty( $source_items ) || ! is_array( $source_items ) ) {
+            return 0;
+        }
+
+        // source nav_menu_item db_id => new translated nav_menu_item id.
+        $id_map  = array();
+        $created = 0;
+
+        // Remember/restore the global language context (orphan guard).
+        $restore_lang = defined( 'ICL_LANGUAGE_CODE' ) ? ICL_LANGUAGE_CODE : null;
+        do_action( 'wpml_switch_language', $lang );
+
+        $position = 0;
+        foreach ( $source_items as $src ) {
+            $position++;
+            $src_id = (int) ( $src->db_id ?? $src->ID ?? 0 );
+            if ( ! $src_id ) {
+                continue;
+            }
+
+            // Idempotency: already translated in this language? Record for child
+            // parent-mapping and skip creation.
+            $existing = apply_filters( 'wpml_object_id', $src_id, 'nav_menu_item', false, $lang );
+            if ( $existing && (int) $existing !== $src_id ) {
+                $id_map[ $src_id ] = (int) $existing;
+                continue;
+            }
+
+            // Parent remap: source parent db_id -> new translated item id.
+            $src_parent    = isset( $src->menu_item_parent ) ? (int) $src->menu_item_parent : 0;
+            $mapped_parent = ( $src_parent && isset( $id_map[ $src_parent ] ) ) ? (int) $id_map[ $src_parent ] : 0;
+
+            $type   = isset( $src->type )      ? (string) $src->type   : 'custom';
+            $object = isset( $src->object )    ? (string) $src->object : '';
+            $obj_id = isset( $src->object_id ) ? (int) $src->object_id : 0;
+            $title  = isset( $src->title )     ? (string) $src->title  : '';
+            $url    = isset( $src->url )       ? (string) $src->url    : '';
+
+            // Hyphenated menu-item-* keys are what wp_update_nav_menu_item()
+            // expects (wp-includes/nav-menu.php). status=publish is required.
+            $args = array(
+                'menu-item-status'    => 'publish',
+                'menu-item-parent-id' => $mapped_parent,
+                'menu-item-position'  => $position,
+                // Carry the source label so translate_wpml_menus() has a
+                // post_title to overwrite (object items get the exact translated
+                // title; custom links / overrides get AI-translated).
+                'menu-item-title'     => $title,
+            );
+
+            if ( 'taxonomy' === $type && $obj_id && $object ) {
+                $tr_obj = apply_filters( 'wpml_object_id', $obj_id, $object, false, $lang );
+                $args['menu-item-type']      = 'taxonomy';
+                $args['menu-item-object']    = $object;
+                $args['menu-item-object-id'] = $tr_obj ? (int) $tr_obj : $obj_id;
+            } elseif ( 'post_type' === $type && $obj_id && $object ) {
+                $tr_obj = apply_filters( 'wpml_object_id', $obj_id, $object, false, $lang );
+                $args['menu-item-type']      = 'post_type';
+                $args['menu-item-object']    = $object;
+                $args['menu-item-object-id'] = $tr_obj ? (int) $tr_obj : $obj_id;
+            } else {
+                // Custom link: copy title + url as-is (URL translation is a
+                // separate concern; label translation happens later).
+                $args['menu-item-type']   = 'custom';
+                $args['menu-item-object'] = 'custom';
+                $args['menu-item-url']    = $url;
+            }
+
+            $new_id = wp_update_nav_menu_item( (int) $translated_menu_id, 0, $args );
+            if ( is_wp_error( $new_id ) || ! $new_id ) {
+                LuwiPress_Logger::log( sprintf(
+                    'Menu item copy: failed to create %s item for source #%d ("%s"): %s',
+                    $lang, $src_id, $title,
+                    is_wp_error( $new_id ) ? $new_id->get_error_message() : 'no id returned'
+                ), 'warning' );
+                continue;
+            }
+            $new_id = (int) $new_id;
+            $id_map[ $src_id ] = $new_id;
+            $created++;
+
+            // WPML pairing: tie the new item to the source item's trid so
+            // wpml_object_id resolves later. element_type = post_nav_menu_item.
+            $src_trid = apply_filters( 'wpml_element_trid', null, $src_id, 'post_nav_menu_item' );
+            if ( ! $src_trid ) {
+                do_action( 'wpml_set_element_language_details', array(
+                    'element_id'           => $src_id,
+                    'element_type'         => 'post_nav_menu_item',
+                    'trid'                 => false,
+                    'language_code'        => $default_lang,
+                    'source_language_code' => null,
+                ) );
+                $src_trid = apply_filters( 'wpml_element_trid', null, $src_id, 'post_nav_menu_item' );
+            }
+            if ( $src_trid ) {
+                do_action( 'wpml_set_element_language_details', array(
+                    'element_id'           => $new_id,
+                    'element_type'         => 'post_nav_menu_item',
+                    'trid'                 => (int) $src_trid,
+                    'language_code'        => $lang,
+                    'source_language_code' => $default_lang,
+                ) );
+            } else {
+                LuwiPress_Logger::log( sprintf(
+                    'Menu item copy: could not establish trid for source item #%d — %s item #%d created but unpaired (label pass will skip it).',
+                    $src_id, $lang, $new_id
+                ), 'warning' );
+            }
+        }
+
+        // Restore language context.
+        if ( null !== $restore_lang ) {
+            do_action( 'wpml_switch_language', $restore_lang );
+        }
+
+        // Verify attachment (orphan guard): API success is necessary but not
+        // sufficient on WPML sites — count items actually attached.
+        if ( $created > 0 ) {
+            $attached       = wp_get_nav_menu_items( (int) $translated_menu_id );
+            $attached_count = is_array( $attached ) ? count( $attached ) : 0;
+            if ( $attached_count < count( $id_map ) ) {
+                LuwiPress_Logger::log( sprintf(
+                    'Menu item copy WARNING: %s menu #%d shows %d attached but %d expected — possible WPML orphan (language-context mismatch).',
+                    $lang, $translated_menu_id, $attached_count, count( $id_map )
+                ), 'warning' );
+            } else {
+                LuwiPress_Logger::log( sprintf(
+                    'Menu item copy: %s menu #%d — created %d, %d total attached.',
+                    $lang, $translated_menu_id, $created, $attached_count
+                ), 'info' );
+            }
+        }
+
+        return $created;
     }
 
     // â”€â”€â”€ AJAX: AI-translate WPML menu item LABELS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

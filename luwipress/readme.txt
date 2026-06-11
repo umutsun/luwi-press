@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.14.1
+Stable tag: 3.14.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.14.2 — Menu sync now copies the items into translated menus =
+* **Fixed: translated menus were created but stayed empty.** 3.14.1 created and paired the per-language menus, but relied on WPML's `wpml_sync_custom_element` to populate the items — which is a no-op for menu items on current WPML versions, so every translated menu had zero items. Sync Menus now copies the items itself: it walks the source menu, recreates each item in the translated menu (pointing category/page items at their translated term/page, copying custom links as-is), preserves the parent/child hierarchy, and pairs each item to its source so "Translate Menus" can fill the labels. Runs safely more than once (already-copied items are skipped, never duplicated) and guards against WPML's empty-menu "orphan" pitfall.
 
 = 3.14.1 — Menu sync now creates the translated menus =
 * **Fixed: "Sync Menus" did nothing on sites that had never created translated menus.** It only updated menus that were already translated, so on a multilingual store whose navigation had never been synced it reported "all in sync" and changed nothing — leaving every language showing the default-language menu. Sync Menus (and the `menu_sync_wpml` tool) now register the source menu's translation group, create the missing per-language menus, pair them to the source, and copy the items — so "Translate Menus" has real menus to fill. Requires "Navigation Menus" to be translatable in WPML → Settings.
