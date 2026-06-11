@@ -75,6 +75,11 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 	if ( isset( $_POST['luwipress_google_ai_api_key'] ) ) {
 		update_option( 'luwipress_google_ai_api_key', sanitize_text_field( wp_unslash( $_POST['luwipress_google_ai_api_key'] ) ) );
 	}
+	// DeepL translation key — translate-only engine, not an AI provider. Same
+	// isset() guard so an absent field leaves the stored key untouched.
+	if ( isset( $_POST['luwipress_deepl_api_key'] ) ) {
+		update_option( 'luwipress_deepl_api_key', sanitize_text_field( wp_unslash( $_POST['luwipress_deepl_api_key'] ) ) );
+	}
 	update_option( 'luwipress_ai_provider', sanitize_text_field( $_POST['luwipress_ai_provider'] ?? 'openai' ) );
 	update_option( 'luwipress_ai_model', sanitize_text_field( $_POST['luwipress_ai_model'] ?? 'gpt-4o-mini' ) );
 
@@ -133,6 +138,13 @@ if ( isset( $_POST['luwipress_save_settings'] ) && check_admin_referer( 'luwipre
 	$languages  = sanitize_text_field( $_POST['luwipress_translation_languages_text'] ?? '' );
 	$lang_array = array_filter( array_map( 'trim', explode( ',', $languages ) ) );
 	update_option( 'luwipress_translation_languages', $lang_array );
+	// Translation engine — 'ai' (LLM translates everything) or 'deepl' (DeepL
+	// body text + AI provider SEO meta). Unknown values fall back to 'ai'.
+	$translation_engine = sanitize_text_field( $_POST['luwipress_translation_engine'] ?? 'ai' );
+	if ( ! in_array( $translation_engine, array( 'ai', 'deepl' ), true ) ) {
+		$translation_engine = 'ai';
+	}
+	update_option( 'luwipress_translation_engine', $translation_engine );
 
 	// CRM Bridge thresholds
 	update_option( 'luwipress_crm_vip_threshold', floatval( $_POST['luwipress_crm_vip_threshold'] ?? 1000 ) );
@@ -222,6 +234,8 @@ $hreflang_mode      = get_option( 'luwipress_hreflang_mode', 'auto' );
 $openai_key         = get_option( 'luwipress_openai_api_key', '' );
 $anthropic_key      = get_option( 'luwipress_anthropic_api_key', '' );
 $google_ai_key      = get_option( 'luwipress_google_ai_api_key', '' );
+$deepl_key          = get_option( 'luwipress_deepl_api_key', '' );
+$translation_engine = get_option( 'luwipress_translation_engine', 'ai' );
 $ai_provider        = get_option( 'luwipress_ai_provider', 'openai' );
 $ai_model           = get_option( 'luwipress_ai_model', 'gpt-4o-mini' );
 $oai_compat_preset  = get_option( 'luwipress_oai_compat_preset', 'deepseek' );
@@ -825,6 +839,43 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 			</details>
 			<?php endif; ?>
 
+			<?php
+			// DeepL translation key — a translate-only engine (not an AI provider),
+			// so it lives in its own card rather than the provider pill grid. The
+			// engine toggle that decides whether DeepL is actually used lives in the
+			// Translation tab. Free keys end with :fx (api-free.deepl.com); Pro keys
+			// use api.deepl.com — the correct endpoint is auto-selected at call time.
+			?>
+			<div class="luwipress-card" style="margin-top:16px;">
+				<h2>
+					<span class="dashicons dashicons-translation"></span>
+					<?php esc_html_e( 'DeepL Translation', 'luwipress' ); ?>
+				</h2>
+				<p class="description" style="margin:-8px 0 16px;">
+					<?php esc_html_e( 'Optional. Add a DeepL key for higher-accuracy translation of names and descriptions. Enable it under the Translation tab — your AI provider still writes SEO titles, descriptions, keywords and FAQs.', 'luwipress' ); ?>
+				</p>
+				<div class="lp-field">
+					<label for="luwipress_deepl_api_key">
+						<?php esc_html_e( 'DeepL API Key', 'luwipress' ); ?>
+						<?php if ( ! empty( $deepl_key ) ) : ?>
+							<span class="lp-field-saved"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Saved', 'luwipress' ); ?></span>
+						<?php endif; ?>
+					</label>
+					<div class="lp-field-input-row">
+						<input type="password" id="luwipress_deepl_api_key" name="luwipress_deepl_api_key"
+						       value="<?php echo esc_attr( $deepl_key ); ?>" class="regular-text" autocomplete="off"
+						       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx" />
+						<button type="button" class="button button-small luwipress-toggle-password" data-target="luwipress_deepl_api_key" aria-label="<?php esc_attr_e( 'Show/hide key', 'luwipress' ); ?>">
+							<span class="dashicons dashicons-visibility"></span>
+						</button>
+					</div>
+					<p class="description">
+						<?php esc_html_e( 'Free keys (ending in :fx) and Pro keys are both supported — the correct endpoint is selected automatically.', 'luwipress' ); ?>
+						<a href="https://www.deepl.com/account/keys" target="_blank" rel="noopener"><?php esc_html_e( 'Get your DeepL key →', 'luwipress' ); ?></a>
+					</p>
+				</div>
+			</div>
+
 			<script>
 			(function () {
 				var hiddenModel = document.getElementById('luwipress_ai_model');
@@ -1305,6 +1356,24 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 								<p class="description"><?php printf( esc_html__( 'Auto-detected from %s. Add or remove languages in your translation plugin settings.', 'luwipress' ), esc_html( ucwords( $t_env['plugin'] ) ) ); ?></p>
 							<?php else : ?>
 								<span style="color:var(--lp-text-secondary);"><?php esc_html_e( 'No translation plugin detected. Install WPML or Polylang to enable multilingual support.', 'luwipress' ); ?></span>
+							<?php endif; ?>
+						</td>
+					</tr>
+				</table>
+
+				<h3><?php esc_html_e( 'Translation Engine', 'luwipress' ); ?></h3>
+				<table class="form-table">
+					<tr>
+						<th><label for="luwipress_translation_engine"><?php esc_html_e( 'Engine', 'luwipress' ); ?></label></th>
+						<td>
+							<select id="luwipress_translation_engine" name="luwipress_translation_engine">
+								<option value="ai" <?php selected( $translation_engine, 'ai' ); ?>><?php esc_html_e( 'AI provider (translates everything)', 'luwipress' ); ?></option>
+								<option value="deepl" <?php selected( $translation_engine, 'deepl' ); ?>><?php esc_html_e( 'DeepL for body text + AI for SEO meta', 'luwipress' ); ?></option>
+							</select>
+							<?php if ( 'deepl' === $translation_engine && '' === $deepl_key ) : ?>
+								<p class="description"><?php esc_html_e( 'Add a DeepL API key in the AI tab to use this engine. Until then, the AI provider is used.', 'luwipress' ); ?></p>
+							<?php else : ?>
+								<p class="description"><?php esc_html_e( 'DeepL translates names and descriptions; your AI provider still writes SEO titles, descriptions, keywords and FAQs. Languages DeepL does not support fall back to the AI provider.', 'luwipress' ); ?></p>
 							<?php endif; ?>
 						</td>
 					</tr>

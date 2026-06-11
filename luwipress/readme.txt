@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.13.6
+Stable tag: 3.14.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.14.0 — DeepL translation engine + menu translation surface =
+* **New: DeepL translation engine.** Add a DeepL API key (Settings → AI) and switch the translation engine to DeepL (Settings → Translation). DeepL — known for the most accurate machine translation — handles product/page names and descriptions, while your AI provider still writes SEO titles, descriptions, focus keywords and FAQs. Free and Pro keys are both supported, with the correct endpoint selected automatically. Languages DeepL does not support fall back to the AI provider, and any DeepL error transparently falls back too — a translation never fails because of DeepL.
+* **New: `translation_engine` exposed via REST.** `GET/POST /translation/settings` now reads and writes the engine choice (`ai` or `deepl`) and reports whether a DeepL key is configured (the key itself is never returned).
+* **New: navigation menu translation is now scriptable.** The "Sync Menus" and "Translate Menus" maintenance tools are now also available as reusable methods, powering new remote menu-translation tooling — useful for translating mega-menu labels across every language on multilingual (WPML) sites.
 
 = 3.13.6 — Translation pipeline hardening: no more empty or truncated translations =
 * **Fixed: an empty or truncated AI translation could overwrite existing content.** When the AI response was cut short, the pipeline could save an empty body over a real translation. Translations whose body comes back empty or implausibly short versus the source are now rejected and the existing content is preserved — the run is marked failed instead, ready to retry.

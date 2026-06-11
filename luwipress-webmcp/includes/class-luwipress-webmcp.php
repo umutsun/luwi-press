@@ -8794,6 +8794,50 @@ class LuwiPress_WebMCP {
             }
             return array( 'item_id' => $item_id, 'removed' => true );
         } );
+
+        // ── WPML menu structure sync (mega-menu translation, step 1) ──
+        // Copies the default-language menu STRUCTURE to every translated menu so
+        // each language has the same items to translate. Run BEFORE
+        // menu_translate_wpml. No-op (and reports so) on non-WPML sites.
+        $this->register_tool( 'menu_sync_wpml', array(
+            'description' => 'WPML only — sync navigation menu STRUCTURE from the default language to every translated menu. Run this BEFORE menu_translate_wpml so the translated menu items exist. Fixes mega menus that show default-language labels in other languages because the translated menu was never created. Returns the number of menus synced.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Sync WPML Menus', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Translation' ) ) {
+                throw new Exception( 'LuwiPress Translation module not available' );
+            }
+            $result = LuwiPress_Translation::get_instance()->sync_wpml_menus();
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( $result->get_error_message() );
+            }
+            return $result;
+        } );
+
+        // ── WPML menu label translation (mega-menu translation, step 2) ──
+        // Walks every translated menu and sets each item's label: the exact
+        // translated object title for plain post/term items, AI translation for
+        // custom links and label overrides. Run menu_sync_wpml first.
+        $this->register_tool( 'menu_translate_wpml', array(
+            'description' => 'WPML only — AI-translate navigation menu item LABELS into every language. Post/term items reuse their exact translated object title; custom links and label overrides are AI-translated. Run menu_sync_wpml FIRST so the translated items exist (the response reports needs_sync when items are still missing). Returns the count of labels updated.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Translate WPML Menus', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false ),
+        ), function () {
+            if ( ! class_exists( 'LuwiPress_Translation' ) ) {
+                throw new Exception( 'LuwiPress Translation module not available' );
+            }
+            $result = LuwiPress_Translation::get_instance()->translate_wpml_menus();
+            if ( is_wp_error( $result ) ) {
+                throw new Exception( $result->get_error_message() );
+            }
+            return $result;
+        } );
     }
 
     /* ───────────────────── Custom Field / Meta Tools ──────────────── */

@@ -319,6 +319,7 @@ class LuwiPress_Translation {
                 'target_language'       => ['required' => false, 'type' => 'string'],
                 'translation_languages' => ['required' => false, 'type' => 'array'],
                 'hreflang_mode'         => ['required' => false, 'type' => 'string'],
+                'translation_engine'    => ['required' => false, 'type' => 'string'],
             ],
         ]);
     }
@@ -331,6 +332,9 @@ class LuwiPress_Translation {
             'target_language'       => (string) get_option( 'luwipress_target_language', 'en' ),
             'translation_languages' => (array) get_option( 'luwipress_translation_languages', array() ),
             'hreflang_mode'         => (string) get_option( 'luwipress_hreflang_mode', 'auto' ),
+            'translation_engine'    => (string) get_option( 'luwipress_translation_engine', 'ai' ),
+            // The DeepL key itself is never exposed — only whether one is usable.
+            'deepl_configured'      => class_exists( 'LuwiPress_DeepL' ) && LuwiPress_DeepL::is_configured(),
         );
     }
 
@@ -365,6 +369,15 @@ class LuwiPress_Translation {
             }
             update_option( 'luwipress_hreflang_mode', $mode );
             $updated[] = 'hreflang_mode';
+        }
+
+        if ( array_key_exists( 'translation_engine', $data ) ) {
+            $engine = sanitize_text_field( (string) $data['translation_engine'] );
+            if ( ! in_array( $engine, array( 'ai', 'deepl' ), true ) ) {
+                return new WP_Error( 'invalid_engine', 'translation_engine must be ai or deepl.', array( 'status' => 400 ) );
+            }
+            update_option( 'luwipress_translation_engine', $engine );
+            $updated[] = 'translation_engine';
         }
 
         LuwiPress_Logger::log( 'Translation settings updated via REST: ' . implode( ', ', $updated ), 'info' );
@@ -801,6 +814,54 @@ class LuwiPress_Translation {
                 'max_tokens' => $max_tokens,
                 'timeout'    => 180,
             ) );
+
+            // ── Hybrid: DeepL handles body text, the LLM keeps the SEO meta ──
+            // When the operator selects the DeepL engine AND a key is configured
+            // AND DeepL supports the target language, overwrite the body fields
+            // (name/description/short_description) with DeepL's higher-accuracy
+            // translation while leaving meta_title/meta_description/focus_keyword/
+            // slug/faq from the LLM untouched. DeepL failures or unsupported
+            // languages fall through to the full-LLM result so a job never fails
+            // because of DeepL. The data-loss guard below still validates the
+            // merged description, so a truncated DeepL body is rejected too.
+            $use_deepl = ( 'deepl' === get_option( 'luwipress_translation_engine', 'ai' ) )
+                && class_exists( 'LuwiPress_DeepL' )
+                && LuwiPress_DeepL::is_configured()
+                && null !== LuwiPress_DeepL::map_lang_code( $lang, false );
+
+            if ( $use_deepl && ! is_wp_error( $ai_result ) && is_array( $ai_result ) ) {
+                $deepl_in = array_filter( array(
+                    'name'              => (string) ( $payload['content']['name'] ?? '' ),
+                    'description'       => (string) ( $payload['content']['description'] ?? '' ),
+                    'short_description' => (string) ( $payload['content']['short_description'] ?? '' ),
+                ), static function ( $v ) {
+                    return '' !== $v;
+                } );
+
+                $deepl_out = $deepl_in
+                    ? LuwiPress_DeepL::translate_batch( $deepl_in, $source_language, $lang, array( 'timeout' => 120 ) )
+                    : array();
+
+                if ( is_wp_error( $deepl_out ) ) {
+                    LuwiPress_Logger::log(
+                        'DeepL translation failed for ' . $lang . ' (post #' . $product_id . '): '
+                            . $deepl_out->get_error_message() . ' — falling back to LLM body.',
+                        'warning',
+                        array( 'product_id' => $product_id, 'language' => $lang )
+                    );
+                } else {
+                    if ( isset( $deepl_out['name'] ) ) {
+                        $ai_result['title'] = $deepl_out['name'];
+                        $ai_result['name']  = $deepl_out['name'];
+                    }
+                    if ( isset( $deepl_out['description'] ) ) {
+                        $ai_result['description'] = $deepl_out['description'];
+                    }
+                    if ( isset( $deepl_out['short_description'] ) ) {
+                        $ai_result['short_description'] = $deepl_out['short_description'];
+                    }
+                }
+            }
 
             // If JSON parse failed, extract from error data or retry
             if ( is_wp_error( $ai_result ) && strpos( $ai_result->get_error_message(), 'parse JSON' ) !== false ) {
@@ -2365,6 +2426,10 @@ class LuwiPress_Translation {
      * @return string|WP_Error Translated HTML or error.
      */
     private function translate_html_single( $html, $source_lang, $target_lang ) {
+        // NOTE: The Elementor HTML path stays on the LLM for now. DeepL supports
+        // tag_handling=html and could serve this too (follow-up) — the DeepL
+        // engine toggle currently only routes the product/page body fields in
+        // request_translation(), not Elementor widget chunks.
         $prompt   = LuwiPress_Prompts::elementor_html_translation( $html, $source_lang, $target_lang );
         $messages = LuwiPress_AI_Engine::build_messages( $prompt );
 
@@ -4108,8 +4173,22 @@ class LuwiPress_Translation {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized' );
         }
+        $result = $this->sync_wpml_menus();
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+        wp_send_json_success( array( 'message' => $result['message'], 'synced' => $result['synced'] ) );
+    }
+
+    /**
+     * Sync WPML menu STRUCTURE from the default language to every translated
+     * menu. Shared by the admin AJAX button and the menu_sync_wpml MCP tool.
+     *
+     * @return array|WP_Error { synced:int, message:string } or WP_Error when WPML inactive.
+     */
+    public function sync_wpml_menus() {
         if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
-            wp_send_json_error( 'WPML not active' );
+            return new WP_Error( 'wpml_inactive', 'WPML not active' );
         }
 
         global $wpdb;
@@ -4170,14 +4249,15 @@ class LuwiPress_Translation {
         }
 
         if ( $synced > 0 ) {
-            wp_send_json_success( array(
+            return array(
+                'synced'  => $synced,
                 'message' => sprintf( '%d menu(s) synced. Visit WPML â†’ Menu Sync to complete item translations.', $synced ),
-            ) );
-        } else {
-            wp_send_json_success( array(
-                'message' => 'All menus are in sync. If menus are still broken, go to WPML â†’ Menu Sync manually.',
-            ) );
+            );
         }
+        return array(
+            'synced'  => 0,
+            'message' => 'All menus are in sync. If menus are still broken, go to WPML â†’ Menu Sync manually.',
+        );
     }
 
     // â”€â”€â”€ AJAX: AI-translate WPML menu item LABELS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -4200,8 +4280,24 @@ class LuwiPress_Translation {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized' );
         }
+        $result = $this->translate_wpml_menus();
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+        wp_send_json_success( $result );
+    }
+
+    /**
+     * AI-translate WPML menu item labels for every translated menu. Shared by
+     * the admin AJAX button and the menu_translate_wpml MCP tool. See the long
+     * note above ajax_translate_wpml_menus' original location for the
+     * object-title-vs-AI label resolution rules.
+     *
+     * @return array|WP_Error { updated:int, needs_sync:int, message:string } or WP_Error when WPML inactive.
+     */
+    public function translate_wpml_menus() {
         if ( ! defined( 'ICL_SITEPRESS_VERSION' ) ) {
-            wp_send_json_error( 'WPML not active' );
+            return new WP_Error( 'wpml_inactive', 'WPML not active' );
         }
 
         $default_lang = self::get_default_language();
@@ -4328,7 +4424,7 @@ class LuwiPress_Translation {
                 $msg .= ' Some items have no translated counterpart yet — run "Sync Menus" first, then re-run.';
             }
         }
-        wp_send_json_success( array( 'message' => $msg, 'updated' => $updated, 'needs_sync' => $needs_sync ) );
+        return array( 'message' => $msg, 'updated' => $updated, 'needs_sync' => $needs_sync );
     }
 
     /**
@@ -5136,6 +5232,15 @@ class LuwiPress_Translation {
             foreach ( $resolved as $sid ) {
                 foreach ( $languages as $lang ) {
                     update_post_meta( $sid, '_luwipress_force_retranslate_' . $lang, current_time( 'mysql' ) );
+                    // Surface the job in the Translation Manager progress banner --
+                    // it only reads the _luwipress_translation_status JSON meta
+                    // (written by the Elementor path); without this the page shows
+                    // "no active translations" while a force-retranslate batch runs.
+                    update_post_meta( $sid, '_luwipress_translation_status', wp_json_encode( array(
+                        'status'   => 'queued',
+                        'language' => $lang,
+                        'queued'   => current_time( 'mysql' ),
+                    ) ) );
                     // 90s spacing, NOT 1s: wp-cron dequeues an event BEFORE running it,
                     // so when several heavy translation units pile into one cron spawn
                     // and PHP is killed mid-batch, every already-dequeued unit is LOST
@@ -5222,6 +5327,13 @@ class LuwiPress_Translation {
 
         self::clear_retranslate_guards( $source_id, array( $language ) );
 
+        // Progress visibility: the Translation Manager banner reads this JSON meta.
+        update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
+            'status'   => 'translating',
+            'language' => $language,
+            'started'  => current_time( 'mysql' ),
+        ) ) );
+
         $sub = new WP_REST_Request( 'POST', '/luwipress/v1/translation/request' );
         $sub->set_param( 'post_id', $source_id );
         $sub->set_param( 'target_languages', array( $language ) );
@@ -5234,12 +5346,23 @@ class LuwiPress_Translation {
                 array( 'source_id' => $source_id, 'language' => $language )
             );
             update_post_meta( $source_id, '_luwipress_force_retranslate_' . $language . '_error', $result->get_error_message() );
+            update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
+                'status'   => 'failed',
+                'language' => $language,
+                'error'    => $result->get_error_message(),
+                'finished' => current_time( 'mysql' ),
+            ) ) );
             return;
         }
 
         delete_post_meta( $source_id, '_luwipress_force_retranslate_' . $language );
         delete_post_meta( $source_id, '_luwipress_force_retranslate_' . $language . '_error' );
         update_post_meta( $source_id, '_luwipress_force_retranslate_' . $language . '_completed', current_time( 'mysql' ) );
+        update_post_meta( $source_id, '_luwipress_translation_status', wp_json_encode( array(
+            'status'   => 'completed',
+            'language' => $language,
+            'finished' => current_time( 'mysql' ),
+        ) ) );
 
         LuwiPress_Logger::log(
             'Force-retranslate cron OK: #' . $source_id . ' (' . strtoupper( $language ) . ')',

@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.45
+Stable tag: 1.0.46
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,10 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.46 — WPML menu translation tools (paired with core 3.14.0) =
+* **`menu_sync_wpml`** — sync navigation menu STRUCTURE from the default language to every translated menu, so each language has the same items to translate. Fixes mega menus that show default-language labels in other languages because the translated menu was never created. Run before `menu_translate_wpml`.
+* **`menu_translate_wpml`** — AI-translate navigation menu item LABELS into every language. Post/term items reuse their exact translated object title; custom links and label overrides are AI-translated. Reports `needs_sync` when translated items are still missing. Requires core 3.14.0 (which exposes the shared sync/translate methods).
 
 = 1.0.45 — Plugin-management self-preservation guard =
 * **`plugins_deactivate` / `plugins_delete` now refuse to disable or remove the MCP's own lifeline** — LuwiPress core (`luwipress/luwipress.php`) and the WebMCP companion (`luwipress-webmcp/luwipress-webmcp.php`). Deactivating either over MCP would kill the endpoint with no way to re-enable it remotely; the guard blocks that footgun (the operator can still do it from WP Admin → Plugins). The full plugin toolset — `plugins_list`, `plugins_activate`, `plugins_deactivate`, `plugins_update`, `plugins_install`, `plugins_delete`, `plugins_search` — is otherwise unchanged.
