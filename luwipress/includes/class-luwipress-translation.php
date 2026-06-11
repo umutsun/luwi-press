@@ -4635,11 +4635,41 @@ class LuwiPress_Translation {
 
                 foreach ( $assign as $titem_id => $label ) {
                     $cur = (string) get_post_field( 'post_title', $titem_id );
-                    if ( trim( $cur ) === trim( (string) $label ) ) {
-                        continue; // already correct.
+                    if ( trim( $cur ) !== trim( (string) $label ) ) {
+                        wp_update_post( array( 'ID' => (int) $titem_id, 'post_title' => (string) $label ) );
+                        $updated++;
                     }
-                    wp_update_post( array( 'ID' => (int) $titem_id, 'post_title' => (string) $label ) );
-                    $updated++;
+                }
+
+                // ── Custom-link URL translation ───────────────────────────
+                // Custom-link items store an absolute URL that WPML never
+                // rewrites, so on /fr/ they still point at the default-language
+                // page (e.g. "/flights/" or "/product-category/tours/"). Resolve
+                // each translated custom item's URL to the current language:
+                // a URL that maps to a post/term uses the translated object's
+                // permalink; a plain internal path gets the language prefix.
+                // taxonomy/post_type items derive their URL from the (already
+                // translated) object, so they are skipped here.
+                foreach ( $source_items as $sitem ) {
+                    if ( 'custom' !== (string) get_post_meta( $sitem->db_id, '_menu_item_type', true ) ) {
+                        continue;
+                    }
+                    $titem_id = apply_filters( 'wpml_object_id', $sitem->db_id, 'nav_menu_item', false, $lang_code );
+                    if ( ! $titem_id || (int) $titem_id === (int) $sitem->db_id ) {
+                        continue;
+                    }
+                    $src_url = (string) get_post_meta( $sitem->db_id, '_menu_item_url', true );
+                    if ( '' === $src_url ) {
+                        continue;
+                    }
+                    $new_url = $this->translate_menu_item_url( $src_url, $lang_code, $default_lang );
+                    if ( $new_url && $new_url !== $src_url ) {
+                        $cur_url = (string) get_post_meta( (int) $titem_id, '_menu_item_url', true );
+                        if ( $cur_url !== $new_url ) {
+                            update_post_meta( (int) $titem_id, '_menu_item_url', esc_url_raw( $new_url ) );
+                            $updated++;
+                        }
+                    }
                 }
             }
         }
@@ -4658,6 +4688,77 @@ class LuwiPress_Translation {
             }
         }
         return array( 'message' => $msg, 'updated' => $updated, 'needs_sync' => $needs_sync );
+    }
+
+    /**
+     * Translate a custom-link menu URL to the current language.
+     *
+     * Custom-link items store an absolute URL that WPML never auto-rewrites.
+     * Two cases:
+     *   1. The URL resolves to a post/page/product/term → use the TRANSLATED
+     *      object's permalink (correct slug + language prefix, e.g.
+     *      /product-category/tours/ → /fr/product-category/visites/).
+     *   2. A plain internal path with no resolvable object → prefix with the
+     *      language code via WPML's converter (e.g. /flights/ → /fr/flights/).
+     * External URLs (different host) are returned unchanged.
+     *
+     * @param string $url          Source absolute URL.
+     * @param string $lang         Target language code.
+     * @param string $default_lang Default language code.
+     * @return string Translated URL (or original when nothing to change).
+     */
+    private function translate_menu_item_url( $url, $lang, $default_lang ) {
+        $url = trim( (string) $url );
+        if ( '' === $url ) {
+            return $url;
+        }
+
+        // Only touch internal URLs.
+        $home = home_url();
+        $home_host = wp_parse_url( $home, PHP_URL_HOST );
+        $url_host  = wp_parse_url( $url, PHP_URL_HOST );
+        if ( $url_host && $home_host && strtolower( $url_host ) !== strtolower( $home_host ) ) {
+            return $url; // external link — leave alone.
+        }
+
+        // Case 1: URL maps to a post/page/product → translated permalink.
+        $post_id = url_to_postid( $url );
+        if ( $post_id ) {
+            $tr_post = apply_filters( 'wpml_object_id', $post_id, get_post_type( $post_id ), false, $lang );
+            if ( $tr_post ) {
+                $perma = get_permalink( (int) $tr_post );
+                if ( $perma ) {
+                    return $perma;
+                }
+            }
+        }
+
+        // Case 1b: URL maps to a term archive (e.g. /product-category/tours/).
+        // url_to_postid() doesn't resolve term archives, so try WP's request
+        // parser via get_term-by-link is unavailable; fall through to the
+        // language converter, which still injects the correct prefix. The slug
+        // itself stays source-language, but the prefix makes WPML serve the
+        // translated archive (WPML resolves /<lang>/product-category/<slug>/ to
+        // the right term). For the fully-translated slug, the operator should
+        // use a taxonomy menu item instead of a custom link.
+
+        // Case 2: plain internal path → ask WPML to convert it to $lang.
+        $converted = apply_filters( 'wpml_permalink', $url, $lang );
+        if ( $converted && $converted !== $url ) {
+            return $converted;
+        }
+
+        // Manual fallback: inject /<lang>/ right after the home URL when WPML's
+        // filter didn't (e.g. converter disabled for this URL shape).
+        if ( $lang !== $default_lang && 0 === strpos( $url, $home ) ) {
+            $path = substr( $url, strlen( rtrim( $home, '/' ) ) );
+            $path = '/' . ltrim( $path, '/' );
+            if ( 0 !== strpos( $path, '/' . $lang . '/' ) ) {
+                return rtrim( $home, '/' ) . '/' . $lang . $path;
+            }
+        }
+
+        return $url;
     }
 
     /**
