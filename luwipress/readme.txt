@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.14.3
+Stable tag: 3.14.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.14.4 — Menu URL translation no longer breaks links to untranslated pages =
+* **Fixed: custom menu links to pages that aren't translated yet returned 404.** 3.14.3 added the language prefix to every custom link, but for a page with no translation in that language WPML has nothing to serve, so the link 404'd. Menu URL translation now rewrites a link only when a real translation of the target exists (page, product, or category term) — otherwise it leaves the original link, which gracefully falls back to the default language instead of breaking. Category links also now use the fully translated term URL when available.
 
 = 3.14.3 — Translated menus now point at the right-language pages =
 * **Fixed: custom menu links stayed on the default language.** Category/page menu items already opened their translated page, but hand-made custom links (e.g. "Flights", "Tours") kept their original URL, so clicking them on a translated page jumped back to the default language. "Translate Menus" now rewrites each custom link to the current language — using the translated page's permalink when the link points at known content, or adding the language prefix for plain internal paths. External links are left untouched.

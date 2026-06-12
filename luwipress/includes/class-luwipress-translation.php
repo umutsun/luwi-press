@@ -4721,44 +4721,78 @@ class LuwiPress_Translation {
             return $url; // external link — leave alone.
         }
 
-        // Case 1: URL maps to a post/page/product → translated permalink.
+        // SAFETY RULE: only rewrite when a REAL translation of the target
+        // exists. Blindly prefixing /<lang>/ to an untranslated page produces
+        // a 404 (WPML has no page there). When there is no translated target
+        // we return the source URL unchanged — it 301s to the default language,
+        // which is a graceful fallback, not a broken link. (Regression fix:
+        // 3.14.3's eager prefixing 404'd /fr/online-application/ etc.)
+
+        // Case 1: URL maps to a post/page/product. Use the translated permalink
+        // ONLY when a distinct translation exists.
         $post_id = url_to_postid( $url );
         if ( $post_id ) {
             $tr_post = apply_filters( 'wpml_object_id', $post_id, get_post_type( $post_id ), false, $lang );
-            if ( $tr_post ) {
+            if ( $tr_post && (int) $tr_post !== (int) $post_id ) {
                 $perma = get_permalink( (int) $tr_post );
                 if ( $perma ) {
                     return $perma;
                 }
             }
+            return $url; // no real translation — leave as-is (301s to default).
         }
 
-        // Case 1b: URL maps to a term archive (e.g. /product-category/tours/).
-        // url_to_postid() doesn't resolve term archives, so try WP's request
-        // parser via get_term-by-link is unavailable; fall through to the
-        // language converter, which still injects the correct prefix. The slug
-        // itself stays source-language, but the prefix makes WPML serve the
-        // translated archive (WPML resolves /<lang>/product-category/<slug>/ to
-        // the right term). For the fully-translated slug, the operator should
-        // use a taxonomy menu item instead of a custom link.
-
-        // Case 2: plain internal path → ask WPML to convert it to $lang.
-        $converted = apply_filters( 'wpml_permalink', $url, $lang );
-        if ( $converted && $converted !== $url ) {
-            return $converted;
+        // Case 2: URL maps to a term archive (e.g. /product-category/tours/).
+        // Resolve the term from the path and, if it has a real translation,
+        // use the translated term link (correct prefix AND translated slug).
+        $term = $this->resolve_term_from_url( $url );
+        if ( $term ) {
+            $tr_term = apply_filters( 'wpml_object_id', $term->term_id, $term->taxonomy, false, $lang );
+            if ( $tr_term && (int) $tr_term !== (int) $term->term_id ) {
+                $tlink = get_term_link( (int) $tr_term, $term->taxonomy );
+                if ( ! is_wp_error( $tlink ) ) {
+                    return $tlink;
+                }
+            }
+            return $url; // no translated term — leave as-is.
         }
 
-        // Manual fallback: inject /<lang>/ right after the home URL when WPML's
-        // filter didn't (e.g. converter disabled for this URL shape).
-        if ( $lang !== $default_lang && 0 === strpos( $url, $home ) ) {
-            $path = substr( $url, strlen( rtrim( $home, '/' ) ) );
-            $path = '/' . ltrim( $path, '/' );
-            if ( 0 !== strpos( $path, '/' . $lang . '/' ) ) {
-                return rtrim( $home, '/' ) . '/' . $lang . $path;
+        // Unresolvable internal path with no known translated target: do NOT
+        // prefix (would 404). Leave the source URL — graceful 301 to default.
+        return $url;
+    }
+
+    /**
+     * Best-effort resolve a WordPress term (category, product_cat, tag…) from a
+     * front-end archive URL. Returns the WP_Term or null. Used by
+     * translate_menu_item_url() to avoid prefixing untranslated archives.
+     *
+     * @param string $url Archive URL.
+     * @return \WP_Term|null
+     */
+    private function resolve_term_from_url( $url ) {
+        $path = trim( (string) wp_parse_url( $url, PHP_URL_PATH ), '/' );
+        if ( '' === $path ) {
+            return null;
+        }
+        $segments = explode( '/', $path );
+        $slug     = end( $segments ); // last segment is the term slug.
+        if ( '' === $slug ) {
+            return null;
+        }
+        // Probe the taxonomies most likely to back a menu archive link.
+        $taxonomies = array( 'product_cat', 'category', 'product_tag', 'post_tag' );
+        foreach ( $taxonomies as $tax ) {
+            if ( ! taxonomy_exists( $tax ) ) {
+                continue;
+            }
+            // get_term_by() returns WP_Term|false|null (never WP_Error).
+            $term = get_term_by( 'slug', $slug, $tax );
+            if ( $term instanceof WP_Term ) {
+                return $term;
             }
         }
-
-        return $url;
+        return null;
     }
 
     /**
