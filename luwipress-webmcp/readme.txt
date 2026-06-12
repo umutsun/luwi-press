@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.46
+Stable tag: 1.0.47
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.47 — Fix: translation_request dropped the language (created empty-language copies) =
+* **Fixed: `translation_request` could create a bogus empty-language translation.** The tool only read a single `target_language` and ran it through a string sanitizer; when a caller passed the array form (`target_languages`), the single key was undefined and the pipeline received an empty language code — producing a junk translation attached to no language. The tool now accepts both `target_language` (a single code) and `target_languages` (an array), normalizes them to a clean list, and forwards an array — so multi-language requests work and an empty/odd input is rejected with a clear error instead of silently corrupting a translation group.
 
 = 1.0.46 — WPML menu translation tools (paired with core 3.14.0) =
 * **`menu_sync_wpml`** — sync navigation menu STRUCTURE from the default language to every translated menu, so each language has the same items to translate. Fixes mega menus that show default-language labels in other languages because the translated menu was never created. Run before `menu_translate_wpml`.

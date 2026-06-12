@@ -2375,14 +2375,15 @@ class LuwiPress_WebMCP {
         } );
 
         $this->register_tool( 'translation_request', array(
-            'description' => 'Request AI translation for a post/product to a target language (runs the LuwiPress AI pipeline)',
+            'description' => 'Request AI translation for a post/product to one or more target languages (runs the LuwiPress AI pipeline). Accepts a single language or a list.',
             'inputSchema' => array(
                 'type'       => 'object',
                 'properties' => array(
-                    'post_id'         => array( 'type' => 'integer', 'description' => 'Source post ID (required)' ),
-                    'target_language' => array( 'type' => 'string', 'description' => 'Target language code, e.g. fr, de, ar (required)' ),
+                    'post_id'          => array( 'type' => 'integer', 'description' => 'Source post ID (required)' ),
+                    'target_language'  => array( 'type' => 'string', 'description' => 'A single target language code, e.g. fr, de, ar. Use this OR target_languages.' ),
+                    'target_languages' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Multiple target language codes, e.g. ["fr","de","ar"]. Use this OR target_language.' ),
                 ),
-                'required'   => array( 'post_id', 'target_language' ),
+                'required'   => array( 'post_id' ),
             ),
             'annotations' => array(
                 'title'            => 'Request Translation (AI)',
@@ -2392,9 +2393,30 @@ class LuwiPress_WebMCP {
                 'openWorldHint'    => true,  // Triggers async AI pipeline + external API call
             ),
         ), function ( $args ) {
+            // Normalise to a clean array of language codes. The previous version
+            // read only $args['target_language'] and ran sanitize_text_field() on
+            // it — when a caller passed the ARRAY form (target_languages), the
+            // single key was undefined, sanitize_text_field(null) returned '',
+            // and the pipeline created a bogus empty-language ('') translation
+            // (flybydeniz 2026-06-12). Accept both shapes and forward an array.
+            $langs = array();
+            if ( ! empty( $args['target_languages'] ) && is_array( $args['target_languages'] ) ) {
+                $langs = $args['target_languages'];
+            } elseif ( ! empty( $args['target_language'] ) ) {
+                // single code or accidental comma-string.
+                $langs = is_array( $args['target_language'] )
+                    ? $args['target_language']
+                    : explode( ',', (string) $args['target_language'] );
+            }
+            $langs = array_values( array_filter( array_map( static function ( $l ) {
+                return sanitize_text_field( trim( (string) $l ) );
+            }, $langs ) ) );
+            if ( empty( $langs ) ) {
+                throw new Exception( 'Provide target_language (a code) or target_languages (an array of codes).' );
+            }
             return $this->proxy_rest_post( 'LuwiPress_Translation', 'request_translation', array(
                 'product_id'       => intval( $args['post_id'] ),
-                'target_languages' => sanitize_text_field( $args['target_language'] ),
+                'target_languages' => $langs,
             ) );
         } );
 
