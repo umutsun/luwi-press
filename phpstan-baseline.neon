@@ -55,6 +55,11 @@ parameters:
 			path: luwipress/includes/class-luwipress-aeo.php
 
 		-
+			message: "#^Function wc_get_product not found\\.$#"
+			count: 3
+			path: luwipress/includes/class-luwipress-booking.php
+
+		-
 			message: "#^Call to method get_name\\(\\) on an unknown class WC_Product_Attribute\\.$#"
 			count: 1
 			path: luwipress/includes/class-luwipress-ai-content.php

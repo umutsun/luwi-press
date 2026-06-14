@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress Core
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.14.4
+ * Version: 3.15.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.14.4');
+define('LUWIPRESS_VERSION', '3.15.0');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -324,6 +324,14 @@ class LuwiPress {
         // (_fbd_time_slots / _fbd_addons). WC-gated at the handler level.
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-booking.php';
         LuwiPress_Booking::get_instance();
+
+        // Theme String Translation (3.15.0+). AI-translates a theme's .pot/.po UI
+        // strings into the active languages and compiles .mo — a built-in stand-in
+        // for Loco Translate's paid auto-translate quota. Writes to the update-safe
+        // system languages dir by default. REST: /translation/theme-coverage +
+        // /translation/theme-strings. Reuses the configured AI engine.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-theme-i18n.php';
+        LuwiPress_Theme_I18n::get_instance();
 
     }
 

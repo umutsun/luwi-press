@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.14.4
+Stable tag: 3.15.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.15.0 — Theme string translation + activate "fuzzy" translations + remote tour booking config =
+* **New: AI theme-string translation.** Translate a theme's interface strings (its `.pot`/`.po` catalogue) into every active language and compile the `.mo` automatically — a built-in stand-in for Loco Translate's paid auto-translate quota. Translates only the untranslated strings, preserving placeholders (`%s`, `%1$s`), HTML and whitespace, and writes to the update-safe system languages folder by default. REST: `GET /translation/theme-coverage`, `POST /translation/theme-strings`.
+* **New: activate translations left marked "fuzzy".** Strings entered in Loco Translate but left "fuzzy" are excluded from the compiled `.mo`, so they never display even though the translation already exists. `POST /translation/theme-clear-fuzzy` finds the existing `.po` (system dir, the theme's `languages/` folder, or Loco's custom dir), strips the fuzzy flag from every translated entry, and recompiles the `.mo` so the translations go live — no re-translation, no AI cost. Use `dry_run` to preview the count first.
+* **New: remote tour booking configuration.** REST + MCP surface to read and update the WooCommerce tour-booking settings remotely.
 
 = 3.14.4 — Menu URL translation no longer breaks links to untranslated pages =
 * **Fixed: custom menu links to pages that aren't translated yet returned 404.** 3.14.3 added the language prefix to every custom link, but for a page with no translation in that language WPML has nothing to serve, so the link 404'd. Menu URL translation now rewrites a link only when a real translation of the target exists (page, product, or category term) — otherwise it leaves the original link, which gracefully falls back to the default language instead of breaking. Category links also now use the fully translated term URL when available.

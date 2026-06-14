@@ -38,19 +38,43 @@ $active_langs   = $translation['active_languages'] ?? array();
 $target_langs   = array_diff( $active_langs, array( $default_lang ) );
 $is_wpml        = 'wpml' === $translation['plugin'];
 
+// English language names — WP admin runs in English, so we show English
+// names (not native) for consistency. Keys lowercase; multi-region WPML
+// codes (zh-hans/zh-hant, zh-cn/zh-tw, pt-br) are mapped explicitly so they
+// don't fall back to the raw code (e.g. "ZH-HANS").
 $language_names = array(
-	'tr' => 'Türkçe', 'en' => 'English', 'de' => 'Deutsch', 'fr' => 'Français',
-	'ar' => 'العربية', 'es' => 'Español', 'it' => 'Italiano', 'nl' => 'Nederlands',
-	'ru' => 'Русский', 'ja' => '日本語', 'zh' => '中文', 'pt-pt' => 'Português',
-	'ko' => '한국어', 'sv' => 'Svenska', 'pl' => 'Polski', 'uk' => 'Українська',
+	'tr' => 'Turkish', 'en' => 'English', 'de' => 'German', 'fr' => 'French',
+	'ar' => 'Arabic', 'es' => 'Spanish', 'it' => 'Italian', 'nl' => 'Dutch',
+	'ru' => 'Russian', 'ja' => 'Japanese', 'zh' => 'Chinese',
+	'zh-hans' => 'Chinese (Simplified)', 'zh-hant' => 'Chinese (Traditional)',
+	'zh-cn' => 'Chinese (Simplified)', 'zh-tw' => 'Chinese (Traditional)', 'zh-hk' => 'Chinese (Hong Kong)',
+	'pt-pt' => 'Portuguese', 'pt-br' => 'Portuguese (Brazil)',
+	'ko' => 'Korean', 'sv' => 'Swedish', 'pl' => 'Polish', 'uk' => 'Ukrainian',
 );
 
 $language_flags = array(
 	'tr' => '🇹🇷', 'en' => '🇬🇧', 'de' => '🇩🇪', 'fr' => '🇫🇷',
 	'ar' => '🇸🇦', 'es' => '🇪🇸', 'it' => '🇮🇹', 'nl' => '🇳🇱',
-	'ru' => '🇷🇺', 'ja' => '🇯🇵', 'zh' => '🇨🇳', 'pt-pt' => '🇵🇹',
+	'ru' => '🇷🇺', 'ja' => '🇯🇵', 'zh' => '🇨🇳',
+	'zh-hans' => '🇨🇳', 'zh-hant' => '🇹🇼', 'zh-cn' => '🇨🇳', 'zh-tw' => '🇹🇼', 'zh-hk' => '🇭🇰',
+	'pt-pt' => '🇵🇹', 'pt-br' => '🇧🇷',
 	'ko' => '🇰🇷', 'sv' => '🇸🇪', 'pl' => '🇵🇱', 'uk' => '🇺🇦',
 );
+
+// Pull English language names straight from WPML — regardless of WPML's own
+// "display in native language" setting — so the list always reads "Arabic",
+// "Chinese (Simplified)", "French"… while the admin runs in English, and any
+// language WPML knows is covered without a hardcoded entry. The third arg
+// ('en') asks WPML for each language's name *in English*; the hardcoded map
+// above stays as the fallback (Polylang / WPML name unavailable).
+if ( $is_wpml ) {
+	foreach ( $active_langs as $code ) {
+		$en_name = apply_filters( 'wpml_translated_language_name', '', $code, 'en' );
+		if ( is_string( $en_name ) && '' !== $en_name ) {
+			$language_names[ strtolower( $code ) ] = $en_name;
+		}
+	}
+}
 
 // ── Handle content translation trigger ──
 if ( isset( $_POST['luwipress_trigger_translation'] ) && check_admin_referer( 'luwipress_translation_nonce' ) ) {
@@ -662,7 +686,7 @@ if ( $is_wpml ) {
 						$is_done = $p >= 100;
 					?>
 					<div class="tm-lang-pill <?php echo $is_done ? 'pill-done' : 'pill-pending'; ?>">
-						<span class="tm-flag"><?php echo $language_flags[ $lang ] ?? ''; ?></span>
+						<span class="tm-flag"><?php echo $language_flags[ strtolower( $lang ) ] ?? ''; ?></span>
 						<span class="tm-lang-code"><?php echo esc_html( strtoupper( $lang ) ); ?></span>
 						<span class="tm-lang-pct"><?php echo $p; ?>%</span>
 						<div class="tm-micro-bar"><div class="tm-micro-fill" style="width:<?php echo $p; ?>%;"></div></div>
@@ -748,9 +772,9 @@ if ( $is_wpml ) {
 				?>
 				<tr class="tm-lang-row" id="row-<?php echo esc_attr( $pt . '-' . $lang ); ?>" data-total="<?php echo $data['total']; ?>" data-done="<?php echo $done; ?>">
 					<td class="tm-lang-cell">
-						<span class="tm-flag-lg"><?php echo $language_flags[ $lang ] ?? strtoupper( $lang ); ?></span>
+						<span class="tm-flag-lg"><?php echo $language_flags[ strtolower( $lang ) ] ?? strtoupper( $lang ); ?></span>
 						<div>
-							<strong><?php echo esc_html( $language_names[ $lang ] ?? strtoupper( $lang ) ); ?></strong>
+							<strong><?php echo esc_html( $language_names[ strtolower( $lang ) ] ?? strtoupper( $lang ) ); ?></strong>
 						</div>
 					</td>
 					<td class="tm-col-num"><span class="tm-num-done" id="done-<?php echo esc_attr( $pt . '-' . $lang ); ?>"><?php echo $done; ?></span></td>
