@@ -2341,6 +2341,52 @@ class LuwiPress_WebMCP {
     /* ───────────────────── Translation Tools ───────────────────────── */
 
     private function register_translation_tools() {
+        // ── Theme String Translation (theme-i18n, core 3.15.0+) ──
+        $this->register_tool( 'theme_translation_coverage', array(
+            'description' => "Theme UI-string (.pot/.po) translation coverage. For the active theme (or a given text_domain) returns the total translatable string count and, per active language, how many are translated vs missing. Read-only — use before/after theme_translate_strings to see what Loco's free tier left unfinished.",
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'text_domain' => array( 'type' => 'string', 'description' => 'Theme text domain (default: active theme).' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Theme i18n Coverage', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Theme_I18n', 'rest_coverage', $args );
+        } );
+
+        $this->register_tool( 'theme_translate_strings', array(
+            'description' => "AI-translate a theme's MISSING UI strings (the part Loco's free tier leaves unfinished) and write .po + compiled .mo. Translates only untranslated msgids from the theme .pot, preserving placeholders (%s, %1\$s), HTML and whitespace. save_location 'system' (default) writes to wp-content/languages/themes/{domain}-{locale}.(po|mo) — update-safe; 'theme' writes the theme's own languages/ folder. Use dry_run to preview counts. Bounded to 400 strings per call — re-run until coverage is 100%.",
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'text_domain'      => array( 'type' => 'string', 'description' => 'Theme text domain (default: active theme).' ),
+                    'target_languages' => array( 'description' => 'Language code(s) to fill, or "all" (default) for every active language. Array or comma string.' ),
+                    'save_location'    => array( 'type' => 'string', 'description' => "'system' (default, update-safe) | 'theme'." ),
+                    'limit'            => array( 'type' => 'integer', 'description' => 'Max strings this call (default + cap 400).' ),
+                    'dry_run'          => array( 'type' => 'boolean', 'description' => 'Preview counts without writing.' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Translate Theme Strings (AI)', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => true ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Theme_I18n', 'rest_translate', $args );
+        } );
+
+        $this->register_tool( 'theme_clear_fuzzy', array(
+            'description' => "Activate theme translations that were entered (e.g. in Loco Translate) but left marked 'fuzzy'. Fuzzy entries are excluded from the compiled .mo, so they never display even though the .po already holds the text. For each active language this finds the existing .po (system dir, the theme's languages/ folder, or Loco's wp-content/languages/loco/themes/ dir), strips the fuzzy flag from every translated entry and recompiles the .mo — no re-translation, no AI cost. Use dry_run first to see how many fuzzy entries each locale has. After applying, purge page cache to see the strings live.",
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'text_domain'      => array( 'type' => 'string', 'description' => 'Theme text domain (default: active theme).' ),
+                    'target_languages' => array( 'description' => 'Language code(s) to process, or "all" (default) for every active language. Array or comma string.' ),
+                    'dry_run'          => array( 'type' => 'boolean', 'description' => 'Count fuzzy entries without writing.' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Activate Fuzzy Theme Translations', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            return $this->proxy_rest_post( 'LuwiPress_Theme_I18n', 'rest_clear_fuzzy', $args );
+        } );
+
         $this->register_tool( 'translation_missing', array(
             'description' => 'Get products/posts missing translations for a specific language',
             'inputSchema' => array(

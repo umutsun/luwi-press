@@ -4,7 +4,7 @@ Tags: mcp, ai, automation, claude, anthropic, woocommerce, rest-api
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.47
+Stable tag: 1.0.48
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,11 @@ No. Tools delegate to LuwiPress core classes (AI Engine, Translation, Elementor,
 Bearer token via `Authorization: Bearer <token>` header or a logged-in WordPress admin session. The token is the same one configured in LuwiPress → Settings → Connection.
 
 == Changelog ==
+
+= 1.0.48 — Theme string translation tools (paired with core 3.15.0) =
+* **New: `theme_translation_coverage`** — per-locale translated/missing counts for the active theme's UI strings.
+* **New: `theme_translate_strings`** — AI-translate a theme's missing `.pot`/`.po` strings and compile the `.mo` (built-in stand-in for Loco's paid auto-translate).
+* **New: `theme_clear_fuzzy`** — activate translations entered (e.g. in Loco) but left marked "fuzzy" by stripping the fuzzy flag and recompiling the `.mo`. No re-translation, no AI cost.
 
 = 1.0.47 — Fix: translation_request dropped the language (created empty-language copies) =
 * **Fixed: `translation_request` could create a bogus empty-language translation.** The tool only read a single `target_language` and ran it through a string sanitizer; when a caller passed the array form (`target_languages`), the single key was undefined and the pipeline received an empty language code — producing a junk translation attached to no language. The tool now accepts both `target_language` (a single code) and `target_languages` (an array), normalizes them to a clean list, and forwards an array — so multi-language requests work and an empty/odd input is rejected with a clear error instead of silently corrupting a translation group.
