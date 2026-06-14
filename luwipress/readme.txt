@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.15.3
+Stable tag: 3.15.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.15.4 — Tour Hero widget is translatable =
+* **Added the theme "Tour Hero" widget to the Elementor translation map.** Its text fields (eyebrow, headline, sub, both button labels, and the search-bar labels) are now picked up by page translation, so a hero built with the native widget translates into every language out of the box.
 
 = 3.15.3 — Elementor HTML widgets are now translated =
 * **Fixed: pages built with Elementor "HTML" widgets stayed in the source language.** The Elementor page translator only translated standard widgets (Heading, Text Editor, Button, etc.) and skipped raw-HTML widgets — so a homepage or section built with custom HTML still showed English on every translated language. HTML widgets are now translated like Text Editor content (markup preserved, only visible text translated). As a safety guard, an HTML widget that carries a `<script>` or `<style>` block is left untouched so JavaScript/CSS can't be corrupted. Re-run the page translation (Translation Manager or `POST /elementor/translate`) to fill the previously-missed text.

@@ -226,6 +226,7 @@ class LuwiPress_Elementor {
         // LuwiPress Gold theme widgets (3.4.3+)
         'lwp-section-head'   => array( 'eyebrow', 'heading', 'cta_label' ),
         'lwp-hero-split'     => array( 'eyebrow', 'kicker', 'heading', 'body', 'cta_label', 'quote', 'quote_name', 'quote_role' ),
+        'lwp-tour-hero'      => array( 'eyebrow', 'heading', 'sub', 'cta1_label', 'cta2_label', 'label_experience', 'label_date', 'label_guests' ),
         'lwp-story-split'    => array( 'card_eyebrow', 'card_title', 'card_sub', 'eyebrow', 'heading', 'lead', 'cta_label' ),
         'lwp-timeline'       => array( 'eyebrow', 'heading' ),
         'lwp-master-profile' => array( 'name', 'location', 'specialty', 'fallback_initial' ),
