@@ -4189,10 +4189,42 @@ function kgFloatScoreDelta(btn) {
 	}
 }
 
+// Fetch with a hard timeout so an action can never sit at "Working..." forever
+// when the server is slow (enrich / translate / FAQ run 10-20s+ synchronously)
+// or a proxy holds the connection open. The queued endpoints keep processing
+// server-side after an abort, so callers recover by refreshing rather than
+// reporting a hard failure. Uses .then(ok, err) instead of .finally for reach.
+function kgFetchWithTimeout(url, opts, ms) {
+	opts = opts || {};
+	if (typeof AbortController === 'undefined') {
+		return fetch(url, opts);
+	}
+	var ctrl = new AbortController();
+	var to = setTimeout(function () { ctrl.abort(); }, ms || 75000);
+	opts.signal = ctrl.signal;
+	return fetch(url, opts).then(
+		function (r) { clearTimeout(to); return r; },
+		function (e) { clearTimeout(to); throw e; }
+	);
+}
+
 function kgAction(action, productId, btn, langs) {
 	var originalText = btn.innerHTML;
 	btn.disabled = true;
 	btn.innerHTML = '<span class="kg-action-spinner"></span> Working...';
+	// Live elapsed counter so a slow (10-20s) server call never looks frozen.
+	// Started only on the actual network call; early-return branches below skip it.
+	var ticker = null;
+	var startTicker = function () {
+		var t = 0;
+		ticker = setInterval(function () {
+			t++;
+			if (btn.disabled) {
+				btn.innerHTML = '<span class="kg-action-spinner"></span> Working... ' + t + 's';
+			}
+		}, 1000);
+	};
+	var stopTicker = function () { if (ticker) { clearInterval(ticker); ticker = null; } };
 
 	var endpoint, body;
 	if (action === 'enrich') {
@@ -4254,15 +4286,17 @@ function kgAction(action, productId, btn, langs) {
 			return;
 		}
 		// Fire one request per taxonomy type, in parallel.
+		startTicker();
 		var promises = types.map(function(tax) {
-			return fetch(lpKgRestUrl + 'translation/taxonomy', {
+			return kgFetchWithTimeout(lpKgRestUrl + 'translation/taxonomy', {
 				method: 'POST',
 				headers: kgAuthHeaders(true),
 				body: JSON.stringify({ taxonomy: tax, target_languages: [targetLang], limit: 50 }),
 				credentials: 'same-origin'
-			}).then(function(r) { return r.json().then(function(d){ return { ok: r.ok, data: d, tax: tax }; }); });
+			}, 90000).then(function(r) { return r.json().then(function(d){ return { ok: r.ok, data: d, tax: tax }; }); });
 		});
 		Promise.all(promises).then(function(results) {
+			stopTicker();
 			var successful = results.filter(function(r) { return r.ok; });
 			var totalTerms = successful.reduce(function(sum, r) {
 				return sum + ((r.data && r.data.terms_sent) || 0);
@@ -4292,22 +4326,25 @@ function kgAction(action, productId, btn, langs) {
 				kgRefreshAndReopen(null, 'taxonomy', targetLang);
 			}, refreshMs);
 		}).catch(function(err) {
+			stopTicker();
 			btn.innerHTML = '<span style="color:var(--lp-error);">Failed — retry?</span>';
 			setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 3000);
 		});
 		return;
 	}
 
-	fetch(lpKgRestUrl + endpoint, {
+	startTicker();
+	kgFetchWithTimeout(lpKgRestUrl + endpoint, {
 		method: 'POST',
 		headers: kgAuthHeaders(true),
 		body: JSON.stringify(body),
 		credentials: 'same-origin'
-	})
+	}, 75000)
 	.then(function(r) {
 		return r.json().then(function(data) { return { ok: r.ok, status: r.status, data: data }; });
 	})
 	.then(function(res) {
+		stopTicker();
 		if (!res.ok) {
 			var msg = (res.data && (res.data.message || res.data.code)) || ('HTTP ' + res.status);
 			btn.innerHTML = '<span style="color:var(--lp-error);">' + msg + ' — retry?</span>';
@@ -4360,7 +4397,19 @@ function kgAction(action, productId, btn, langs) {
 		}, refreshDelay);
 	})
 	.catch(function(err) {
-		// Error path — reset so the user can retry.
+		stopTicker();
+		// Client-side timeout (AbortError): the queued endpoints keep processing
+		// server-side, so recover by refreshing the panel instead of reporting a
+		// hard failure. The work the operator started is NOT lost.
+		if (err && err.name === 'AbortError') {
+			btn.innerHTML = '<span style="color:var(--lp-warning);">Still processing — refreshing…</span>';
+			if (typeof fetchActivity === 'function') setTimeout(fetchActivity, 1500);
+			setTimeout(function() {
+				kgRefreshAndReopen(productId, action === 'translate_lang' ? 'language' : null, langs);
+			}, 6000);
+			return;
+		}
+		// Network/other error — reset so the user can retry.
 		btn.innerHTML = '<span style="color:var(--lp-error);">Network error — retry?</span>';
 		setTimeout(function(){ btn.disabled = false; btn.innerHTML = originalText; btn.classList.remove('kg-action-done'); }, 3000);
 		if (window.console) console.error('[lpKg] action error:', action, err);

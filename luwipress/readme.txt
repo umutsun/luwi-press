@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.15.0
+Stable tag: 3.15.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.15.1 — Knowledge Graph action buttons no longer get stuck on "Working…" =
+* **Fixed: recommendation action buttons (enrich, translate, FAQ, etc.) could sit on "Working…" for a long time and look frozen.** The underlying actions run synchronously and can take 10–20 seconds (longer on slow hosts), and the button had no timeout, no progress feedback, and no recovery. Now each action shows a live elapsed counter ("Working… 8s"), can never hang forever (hard client-side timeout), and if the request times out the panel recovers by refreshing — the queued work keeps running on the server, so nothing the operator started is lost. Applies to every Knowledge Graph action: product/category enrichment, translation, taxonomy translation, FAQ and HowTo.
 
 = 3.15.0 — Theme string translation + activate "fuzzy" translations + remote tour booking config =
 * **New: AI theme-string translation.** Translate a theme's interface strings (its `.pot`/`.po` catalogue) into every active language and compile the `.mo` automatically — a built-in stand-in for Loco Translate's paid auto-translate quota. Translates only the untranslated strings, preserving placeholders (`%s`, `%1$s`), HTML and whitespace, and writes to the update-safe system languages folder by default. REST: `GET /translation/theme-coverage`, `POST /translation/theme-strings`.
