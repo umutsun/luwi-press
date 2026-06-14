@@ -920,6 +920,7 @@ class LuwiPress_WebMCP {
             'attribution'      => 'register_attribution_tools',
             'ucp'              => 'register_ucp_tools',
             'vendors'          => 'register_vendors_tools',
+            'booking'          => 'register_booking_tools',
             'migration'        => 'register_migration_tools',
         );
 
@@ -949,6 +950,7 @@ class LuwiPress_WebMCP {
             'search'           => 'LuwiPress_Search_Index',
             'attribution'      => 'LuwiPress_ACP_Attribution',
             'vendors'          => 'LuwiPress_Vendors',
+            'booking'          => 'LuwiPress_Booking',
         );
         foreach ( $gates as $cat => $cls ) {
             if ( ! empty( $this->registration_audit[ $cat ] ) && ! empty( $this->registration_audit[ $cat ]['skipped'] ) ) {
@@ -9786,6 +9788,143 @@ class LuwiPress_WebMCP {
             'annotations' => array( 'title' => 'Vendor Rewrite Flush', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
         ), function () {
             $resp = LuwiPress_Vendors::get_instance()->rest_flush_rewrite();
+            return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
+        } );
+    }
+
+    /**
+     * Tour booking tools (3.15.0+). Flag and configure WooCommerce products as
+     * bookable tours remotely — pax range (guests, not quantity), duration,
+     * time slots, add-ons, pickup, cancellation. Proxies to LuwiPress_Booking
+     * so validation lives in one place. WC-gated (the core class itself returns
+     * 503 when WooCommerce is inactive).
+     */
+    private function register_booking_tools() {
+        if ( ! class_exists( 'LuwiPress_Booking' ) ) {
+            return;
+        }
+
+        $this->register_tool( 'booking_list_tours', array(
+            'description' => 'List bookable tours — WooCommerce products flagged as tours — with their normalized booking config (per-person price, duration, pax min/max/default, time slots, add-ons, pickup, cancellation). Pass all=true to include every product (discovery: find products that should be flagged). Use before configuring to see current state.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'all'   => array( 'type' => 'boolean', 'description' => 'Include non-tour products too (default false)' ),
+                    'limit' => array( 'type' => 'integer', 'description' => 'Max products (default 100, max 500)' ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Booking List Tours', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/booking/tours' );
+            $request->set_query_params( is_array( $args ) ? $args : array() );
+            $resp = LuwiPress_Booking::get_instance()->rest_list_tours( $request );
+            return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'booking_get_tour', array(
+            'description' => 'Read one product\'s tour booking config plus a TouristTrip JSON-LD preview. Returns is_tour flag, per-person price, duration + bucket, pax range, time slots, add-ons, pickup, deposit, cancellation.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'product_id' => array( 'type' => 'integer', 'description' => 'WooCommerce product ID' ),
+                ),
+                'required' => array( 'product_id' ),
+            ),
+            'annotations' => array( 'title' => 'Booking Get Tour', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $id = absint( $args['product_id'] );
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/booking/tour/' . $id );
+            $request->set_url_params( array( 'id' => $id ) );
+            $resp = LuwiPress_Booking::get_instance()->rest_get_tour( $request );
+            return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'booking_configure_tour', array(
+            'description' => 'Flag a WooCommerce product as a bookable tour and/or set its booking fields. Partial — only keys present are written. Pax is GUESTS (person count), not WooCommerce quantity: the per-person price (the product price) is multiplied by pax at checkout while WC quantity stays 1. time_slots is a list of strings ("Morning","Sunset"); addons is a list of {label, price} objects (price is per person). duration_bucket must be short|half|full|multi (or empty for auto).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'product_id'      => array( 'type' => 'integer', 'description' => 'WooCommerce product ID' ),
+                    'is_tour'         => array( 'type' => 'boolean', 'description' => 'Mark/unmark as a bookable tour' ),
+                    'duration'        => array( 'type' => 'string',  'description' => 'Human label, e.g. "6 hours" / "3 days"' ),
+                    'duration_bucket' => array( 'type' => 'string',  'description' => 'short (<=3h) | half (3-6h) | full (1 day) | multi (2+ days) | "" (auto)' ),
+                    'pax_min'         => array( 'type' => 'integer', 'description' => 'Minimum guests (>=1)' ),
+                    'pax_max'         => array( 'type' => 'integer', 'description' => 'Maximum guests' ),
+                    'pax_default'     => array( 'type' => 'integer', 'description' => 'Default guests (clamped into min..max)' ),
+                    'pickup_included' => array( 'type' => 'boolean', 'description' => 'Hotel pickup included' ),
+                    'deposit_pct'     => array( 'type' => 'integer', 'description' => 'Deposit percentage 0..100' ),
+                    'cancellation'    => array( 'type' => 'string',  'description' => 'Cancellation policy note' ),
+                    'time_slots'      => array(
+                        'type'        => 'array',
+                        'items'       => array( 'type' => 'string' ),
+                        'description' => 'Selectable time slots, e.g. ["Morning","Afternoon","Sunset"]',
+                    ),
+                    'addons'          => array(
+                        'type'        => 'array',
+                        'items'       => array(
+                            'type'       => 'object',
+                            'properties' => array(
+                                'label' => array( 'type' => 'string' ),
+                                'price' => array( 'type' => 'number', 'description' => 'Per-person price' ),
+                            ),
+                        ),
+                        'description' => 'Optional extras, e.g. [{"label":"Private guide","price":120}]',
+                    ),
+                ),
+                'required' => array( 'product_id' ),
+            ),
+            'annotations' => array( 'title' => 'Booking Configure Tour', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $id = absint( $args['product_id'] );
+            unset( $args['product_id'] );
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/booking/tour/' . $id );
+            $request->set_url_params( array( 'id' => $id ) );
+            $request->set_body_params( is_array( $args ) ? $args : array() );
+            $resp = LuwiPress_Booking::get_instance()->rest_set_tour( $request );
+            return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'booking_settings_get', array(
+            'description' => 'Read the Booking module defaults (default pax range, default pickup, default cancellation note, default time slots and add-ons) applied as a baseline when flagging a tour.',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => new stdClass(),
+            ),
+            'annotations' => array( 'title' => 'Booking Settings Read', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function () {
+            $request = new WP_REST_Request( 'GET', '/luwipress/v1/booking/settings' );
+            $resp = LuwiPress_Booking::get_instance()->rest_get_settings( $request );
+            return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
+        } );
+
+        $this->register_tool( 'booking_settings_set', array(
+            'description' => 'Update Booking module defaults (partial — only keys present are written).',
+            'inputSchema' => array(
+                'type'       => 'object',
+                'properties' => array(
+                    'default_pax_min'      => array( 'type' => 'integer' ),
+                    'default_pax_max'      => array( 'type' => 'integer' ),
+                    'default_pax_default'  => array( 'type' => 'integer' ),
+                    'default_pickup'       => array( 'type' => 'boolean' ),
+                    'default_cancellation' => array( 'type' => 'string' ),
+                    'default_time_slots'   => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+                    'default_addons'       => array(
+                        'type'  => 'array',
+                        'items' => array(
+                            'type'       => 'object',
+                            'properties' => array(
+                                'label' => array( 'type' => 'string' ),
+                                'price' => array( 'type' => 'number' ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            'annotations' => array( 'title' => 'Booking Settings Write', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false ),
+        ), function ( $args ) {
+            $request = new WP_REST_Request( 'POST', '/luwipress/v1/booking/settings' );
+            $request->set_body_params( is_array( $args ) ? $args : array() );
+            $resp = LuwiPress_Booking::get_instance()->rest_set_settings( $request );
             return $resp instanceof WP_REST_Response ? $resp->get_data() : $resp;
         } );
     }

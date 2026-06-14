@@ -44,6 +44,8 @@ SAFE_PROBES = {
     "search_products": {"query": "darbuka", "limit": 2},
     "token_usage_stats": {},
     "token_limit_check": {},
+    "booking_list_tours": {},
+    "booking_settings_get": {},
 }
 
 

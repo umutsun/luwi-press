@@ -315,6 +315,16 @@ class LuwiPress {
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-events.php';
         LuwiPress_Events::get_instance();
 
+        // Booking — remote tour configuration (3.15.0+). REST surface for
+        // reading/writing `_fbd_*` tour meta on WooCommerce products without the
+        // product editor (flag a tour, set pax range / time slots / add-ons /
+        // cancellation, etc.). The `_fbd_*` schema is owned by the Amber theme's
+        // booking module; core mirrors its validation and writes the raw keys,
+        // closing the gap where the theme can't REST-write the array meta
+        // (_fbd_time_slots / _fbd_addons). WC-gated at the handler level.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-booking.php';
+        LuwiPress_Booking::get_instance();
+
     }
 
     /**
