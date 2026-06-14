@@ -37,6 +37,7 @@ class LuwiPress_Plugin_Detector {
 			'seo'              => $this->detect_seo(),
 			'translation'      => $this->detect_translation(),
 			'email'            => $this->detect_email(),
+			'forms'            => $this->detect_forms(),
 			'crm'              => $this->detect_crm(),
 			'customer_support' => $this->detect_customer_support(),
 			'page_builder'     => $this->detect_page_builder(),
@@ -337,6 +338,75 @@ class LuwiPress_Plugin_Detector {
 		}
 
 		$this->cache['email'] = $result;
+		return $result;
+	}
+
+	// ------------------------------------------------------------------
+	// Forms Detection (WPForms / Fluent Forms / Gravity / Forminator / CF7)
+	// ------------------------------------------------------------------
+
+	/**
+	 * Detect the active form plugin — user's choice, like WPML vs Polylang.
+	 * Whichever is active surfaces as a green pill on the dashboard ribbon.
+	 *
+	 * `features` flags what the active plugin/edition can actually do, so the
+	 * UI can tell e.g. WPForms Lite (single-step, email-only) from Fluent Forms
+	 * (free multi-step wizard + DB entries + native Elementor widget).
+	 */
+	public function detect_forms() {
+		if ( isset( $this->cache['forms'] ) ) {
+			return $this->cache['forms'];
+		}
+
+		$result = array( 'plugin' => 'none', 'version' => null, 'features' => array() );
+
+		// Fluent Forms — free multi-step wizard + DB entries + native Elementor widget.
+		if ( defined( 'FLUENTFORM_VERSION' ) || function_exists( 'wpFluentForm' ) ) {
+			$result = array(
+				'plugin'   => 'fluent-forms',
+				'version'  => defined( 'FLUENTFORM_VERSION' ) ? constant( 'FLUENTFORM_VERSION' ) : 'unknown',
+				'features' => array( 'multi_step' => true, 'entries_db' => true, 'elementor_widget' => true ),
+			);
+		}
+		// WPForms — multi-step + DB entries are PRO-only; Lite is single-step, email-only.
+		elseif ( function_exists( 'wpforms' ) || defined( 'WPFORMS_VERSION' ) ) {
+			$is_pro = ( defined( 'WPFORMS_PRO' ) && constant( 'WPFORMS_PRO' ) ) || class_exists( 'WPForms\\Pro\\Pro' );
+			$result = array(
+				'plugin'   => $is_pro ? 'wpforms-pro' : 'wpforms-lite',
+				'version'  => defined( 'WPFORMS_VERSION' ) ? constant( 'WPFORMS_VERSION' ) : 'unknown',
+				'features' => array( 'multi_step' => $is_pro, 'entries_db' => $is_pro, 'elementor_widget' => $is_pro ),
+			);
+		}
+		// Gravity Forms
+		elseif ( class_exists( 'GFForms' ) || class_exists( 'GFCommon' ) ) {
+			$gf_ver = 'unknown';
+			if ( class_exists( 'GFForms' ) && isset( GFForms::$version ) ) {
+				$gf_ver = GFForms::$version;
+			}
+			$result = array(
+				'plugin'   => 'gravity-forms',
+				'version'  => $gf_ver,
+				'features' => array( 'multi_step' => true, 'entries_db' => true, 'elementor_widget' => false ),
+			);
+		}
+		// Forminator
+		elseif ( defined( 'FORMINATOR_VERSION' ) || class_exists( 'Forminator' ) ) {
+			$result = array(
+				'plugin'   => 'forminator',
+				'version'  => defined( 'FORMINATOR_VERSION' ) ? constant( 'FORMINATOR_VERSION' ) : 'unknown',
+				'features' => array( 'multi_step' => true, 'entries_db' => true, 'elementor_widget' => false ),
+			);
+		}
+		// Contact Form 7 (single-step; DB entries only with Flamingo).
+		elseif ( defined( 'WPCF7_VERSION' ) || function_exists( 'wpcf7' ) ) {
+			$result = array(
+				'plugin'   => 'contact-form-7',
+				'version'  => defined( 'WPCF7_VERSION' ) ? constant( 'WPCF7_VERSION' ) : 'unknown',
+				'features' => array( 'multi_step' => false, 'entries_db' => defined( 'FLAMINGO_VERSION' ), 'elementor_widget' => false ),
+			);
+		}
+
+		$this->cache['forms'] = $result;
 		return $result;
 	}
 

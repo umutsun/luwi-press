@@ -247,6 +247,13 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 				'wp-mail-smtp'    => admin_url( 'admin.php?page=wp-mail-smtp' ),
 				'fluent-smtp'     => admin_url( 'admin.php?page=fluent-mail' ),
 				'post-smtp'       => admin_url( 'admin.php?page=postman' ),
+				// Forms
+				'fluent-forms'    => admin_url( 'admin.php?page=fluent_forms' ),
+				'wpforms-lite'    => admin_url( 'admin.php?page=wpforms-overview' ),
+				'wpforms-pro'     => admin_url( 'admin.php?page=wpforms-overview' ),
+				'gravity-forms'   => admin_url( 'admin.php?page=gf_edit_forms' ),
+				'forminator'      => admin_url( 'admin.php?page=forminator' ),
+				'contact-form-7'  => admin_url( 'admin.php?page=wpcf7' ),
 				// Cache
 				'litespeed-cache' => admin_url( 'admin.php?page=litespeed' ),
 				'wp-rocket'       => admin_url( 'options-general.php?page=wprocket' ),
@@ -329,6 +336,21 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			$pills[] = array( 'err', 'dashicons-email-alt', __( 'No SMTP', 'luwipress' ),
 				__( 'Falling back to wp_mail() (host MTA). Click to install WP Mail SMTP for reliable delivery.', 'luwipress' ),
 				$install_url( 'wp-mail-smtp' ) );
+		}
+
+		// Forms — user's choice (Fluent Forms / WPForms / Gravity / Forminator / CF7),
+		// like WPML vs Polylang. Whichever is active shows a green pill.
+		$forms = $environment['forms'] ?? array( 'plugin' => 'none' );
+		if ( ! empty( $forms['plugin'] ) && 'none' !== $forms['plugin'] ) {
+			$feat = $forms['features'] ?? array();
+			$cap  = ! empty( $feat['multi_step'] ) ? __( 'multi-step wizard + DB entries', 'luwipress' ) : __( 'single-step', 'luwipress' );
+			$pills[] = array( 'ok', 'dashicons-feedback', $slug_label( $forms['plugin'] ),
+				sprintf( __( 'Forms plugin: %1$s (%2$s). Click to manage.', 'luwipress' ), $slug_label( $forms['plugin'] ), $cap ),
+				$manage_url( $forms['plugin'] ) );
+		} else {
+			$pills[] = array( 'err', 'dashicons-feedback', __( 'No forms plugin', 'luwipress' ),
+				__( 'No form plugin detected. Click to install Fluent Forms (free — multi-step wizard + DB entries + native Elementor widget). WPForms / Gravity Forms / Forminator / CF7 also supported.', 'luwipress' ),
+				$install_url( 'fluentform' ) );
 		}
 
 		// Cache — click → manage or install LiteSpeed.
