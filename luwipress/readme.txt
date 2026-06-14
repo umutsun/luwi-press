@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.15.1
+Stable tag: 3.15.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.15.2 — Forms plugin detection on the dashboard ribbon =
+* **New: LuwiPress now detects your forms plugin.** The dashboard status ribbon shows a green pill for the active forms plugin — Fluent Forms, WPForms (Lite or Pro), Gravity Forms, Forminator, or Contact Form 7 — with what it can do (multi-step wizard, stored entries, native Elementor widget). When no forms plugin is present it shows a one-click "install Fluent Forms" pill (free — multi-step wizard + entries + Elementor widget). Like the other integrations, it's detect-only — LuwiPress reads your forms plugin, it never replaces it.
 
 = 3.15.1 — Knowledge Graph action buttons no longer get stuck on "Working…" =
 * **Fixed: recommendation action buttons (enrich, translate, FAQ, etc.) could sit on "Working…" for a long time and look frozen.** The underlying actions run synchronously and can take 10–20 seconds (longer on slow hosts), and the button had no timeout, no progress feedback, and no recovery. Now each action shows a live elapsed counter ("Working… 8s"), can never hang forever (hard client-side timeout), and if the request times out the panel recovers by refreshing — the queued work keeps running on the server, so nothing the operator started is lost. Applies to every Knowledge Graph action: product/category enrichment, translation, taxonomy translation, FAQ and HowTo.
