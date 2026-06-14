@@ -206,6 +206,7 @@ class LuwiPress_Elementor {
     const TRANSLATABLE_WIDGETS = array(
         'heading'         => array( 'title' ),
         'text-editor'     => array( 'editor' ),
+        'html'            => array( 'html' ), // raw-HTML widget — translated like 'editor'; script/style blocks are skipped in extract_widget_texts
         'button'          => array( 'text' ),
         'image-box'       => array( 'title_text', 'description_text' ),
         'icon-box'        => array( 'title_text', 'description_text' ),
@@ -3276,6 +3277,14 @@ class LuwiPress_Elementor {
             if ( ! empty( $settings[ $field ] ) ) {
                 $texts[ $field ] = $settings[ $field ];
             }
+        }
+
+        // Raw-HTML widgets: translate plain-markup HTML, but never AI-translate a
+        // block carrying <script>/<style> — that could corrupt JS/CSS. Designed
+        // markup (the Amber hero, custom sections) carries its CSS in stylesheets
+        // and JS in enqueued files, so the visible text translates safely.
+        if ( 'html' === $widget_type && isset( $texts['html'] ) && preg_match( '/<(script|style)\b/i', (string) $texts['html'] ) ) {
+            unset( $texts['html'] );
         }
 
         // Repeater items

@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress Core
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.15.2
+ * Version: 3.15.3
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.15.2');
+define('LUWIPRESS_VERSION', '3.15.3');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -332,6 +332,22 @@ class LuwiPress {
         // /translation/theme-strings. Reuses the configured AI engine.
         require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-theme-i18n.php';
         LuwiPress_Theme_I18n::get_instance();
+
+        // Forms Bridge (3.15.0+). Remote create/edit/list/inspect of the detected
+        // form plugin's forms (v1: Fluent Forms) via REST — so the Plan-My-Trip
+        // wizard etc. can be built by MCP instead of the form builder UI.
+        // REST: /forms (list/create), /forms/{id} (get/update), /forms/{id}/entries.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-forms.php';
+        LuwiPress_Forms::get_instance();
+
+        // Backup Bridge (3.15.0+). Wraps the detected backup plugin (v1: UpdraftPlus)
+        // so a backup can be triggered, monitored, listed, and an archive streamed to a
+        // trusted peer for cross-server migration — all from REST/MCP. Symmetric: the
+        // same routes serve as source (run/status/list/download) and target
+        // (pull/rescan/restore). Degrades to 503 when UpdraftPlus is absent.
+        // REST: /backup/diag|run|status|list|download|pull|rescan|restore.
+        require_once LUWIPRESS_PLUGIN_DIR . 'includes/class-luwipress-backup-bridge.php';
+        LuwiPress_Backup_Bridge::get_instance();
 
     }
 
