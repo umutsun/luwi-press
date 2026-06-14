@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.15.4
+Stable tag: 3.15.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.15.5 — Reliable translation of HTML-widget pages =
+* **Fixed: pages with several Elementor HTML widgets (e.g. a homepage hero + sections) could still come back in the source language.** HTML widgets carry large markup blobs; batching several into one AI request overflowed the response, the AI returned malformed JSON, and the whole batch was dropped — so those widgets kept English. Each HTML widget is now translated on its own (small, reliable requests), like long text blocks already were. Re-run the page translation to fill any gaps.
 
 = 3.15.4 — Tour Hero widget is translatable =
 * **Added the theme "Tour Hero" widget to the Elementor translation map.** Its text fields (eyebrow, headline, sub, both button labels, and the search-bar labels) are now picked up by page translation, so a hero built with the native widget translates into every language out of the box.

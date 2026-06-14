@@ -1342,7 +1342,13 @@ class LuwiPress_Elementor {
                         $text = preg_replace( '/^\s*<h1[^>]*>.*?<\/h1>\s*/is', '', $text, 1 );
                     }
 
-                    if ( strlen( $text ) > 3000 ) {
+                    // Route long content AND raw-HTML widgets to the individual
+                    // (chunked) path. HTML widgets carry large markup blobs; batching
+                    // several into one JSON request overflows the response and the AI
+                    // returns malformed JSON — the whole chunk then fails and those
+                    // widgets keep the source language (homepage hero stayed English).
+                    // Translating each HTML widget on its own keeps every request small.
+                    if ( strlen( $text ) > 3000 || 'html' === $field ) {
                         $long_texts[] = array(
                             'widget_id' => $widget_id,
                             'field'     => $field,
