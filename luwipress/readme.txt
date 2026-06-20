@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.15.5
+Stable tag: 3.15.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.15.6 — Packaging fix (Forms Bridge + Backup Bridge) =
+* **Fixed a critical error that could occur on a clean install.** The 3.15.5 package was missing two module files (the Forms Bridge and Backup Bridge) that the plugin loads on startup, so a brand-new installation could fail to activate. Both modules are now bundled. Existing sites are unaffected — no action needed.
 
 = 3.15.5 — Reliable translation of HTML-widget pages =
 * **Fixed: pages with several Elementor HTML widgets (e.g. a homepage hero + sections) could still come back in the source language.** HTML widgets carry large markup blobs; batching several into one AI request overflowed the response, the AI returned malformed JSON, and the whole batch was dropped — so those widgets kept English. Each HTML widget is now translated on its own (small, reliable requests), like long text blocks already were. Re-run the page translation to fill any gaps.
