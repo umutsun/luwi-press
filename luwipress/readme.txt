@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.15.6
+Stable tag: 3.15.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.15.7 — AI image generation restored (gpt-image-1) =
+* **Fixed AI image generation.** OpenAI retired the older image model, so AI image features (DALL-E generation, e.g. blog/Journal hero images) had stopped working with a "model does not exist" error. LuwiPress now uses OpenAI's current image model and handles its response format, so AI-generated images work again. No settings change is needed.
 
 = 3.15.6 — Packaging fix (Forms Bridge + Backup Bridge) =
 * **Fixed a critical error that could occur on a clean install.** The 3.15.5 package was missing two module files (the Forms Bridge and Backup Bridge) that the plugin loads on startup, so a brand-new installation could fail to activate. Both modules are now bundled. Existing sites are unaffected — no action needed.

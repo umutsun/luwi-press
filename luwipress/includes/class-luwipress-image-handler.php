@@ -30,23 +30,34 @@ class LuwiPress_Image_Handler {
 			return new WP_Error( 'luwipress_wrong_provider', __( 'Image generation requires OpenAI provider.', 'luwipress' ) );
 		}
 
-		// Generate image.
+		// Generate image (defaults to gpt-image-1, which returns base64).
 		$image_result = $provider->generate_image( $prompt, array(
-			'size'    => $options['size'] ?? '1792x1024',
-			'quality' => $options['quality'] ?? 'standard',
+			'size'    => $options['size'] ?? '1536x1024',
+			'quality' => $options['quality'] ?? 'high',
 		) );
 
 		if ( is_wp_error( $image_result ) ) {
 			return $image_result;
 		}
 
-		// Download and attach.
-		$attachment_id = self::sideload_from_url(
-			$image_result['url'],
-			$post_id,
-			$options['filename'] ?? '',
-			$options['description'] ?? $prompt
-		);
+		// Attach — gpt-image-1 returns base64; dall-e legacy returns a url.
+		if ( ! empty( $image_result['url'] ) ) {
+			$attachment_id = self::sideload_from_url(
+				$image_result['url'],
+				$post_id,
+				$options['filename'] ?? '',
+				$options['description'] ?? $prompt
+			);
+		} elseif ( ! empty( $image_result['b64'] ) ) {
+			$attachment_id = self::sideload_from_b64(
+				$image_result['b64'],
+				$post_id,
+				$options['filename'] ?? '',
+				$options['description'] ?? $prompt
+			);
+		} else {
+			return new WP_Error( 'luwipress_empty_response', __( 'Image generation returned no image.', 'luwipress' ) );
+		}
 
 		if ( is_wp_error( $attachment_id ) ) {
 			return $attachment_id;
@@ -123,6 +134,57 @@ class LuwiPress_Image_Handler {
 		}
 
 		// Set alt text.
+		if ( ! empty( $description ) ) {
+			update_post_meta( $attachment_id, '_wp_attachment_image_alt', sanitize_text_field( $description ) );
+		}
+
+		return $attachment_id;
+	}
+
+	/**
+	 * Decode a base64 image (gpt-image-1) and add it to the Media Library.
+	 *
+	 * @param string $b64         Base64-encoded image data.
+	 * @param int    $post_id     Post to attach to.
+	 * @param string $filename    Desired filename (optional).
+	 * @param string $description Image description for alt text.
+	 * @return int|WP_Error       Attachment ID or WP_Error.
+	 */
+	public static function sideload_from_b64( $b64, $post_id = 0, $filename = '', $description = '' ) {
+		if ( ! function_exists( 'media_handle_sideload' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+			require_once ABSPATH . 'wp-admin/includes/media.php';
+			require_once ABSPATH . 'wp-admin/includes/image.php';
+		}
+
+		$bytes = base64_decode( $b64, true );
+		if ( false === $bytes || '' === $bytes ) {
+			return new WP_Error( 'luwipress_b64_decode', __( 'Generated image could not be decoded.', 'luwipress' ) );
+		}
+
+		if ( empty( $filename ) ) {
+			$filename = 'luwipress-' . wp_generate_uuid4() . '.png';
+		}
+		if ( ! preg_match( '/\.\w{3,4}$/', $filename ) ) {
+			$filename .= '.png';
+		}
+
+		$tmp = wp_tempnam( $filename );
+		if ( ! $tmp ) {
+			return new WP_Error( 'luwipress_tmp_failed', __( 'Could not create a temp file for the image.', 'luwipress' ) );
+		}
+		file_put_contents( $tmp, $bytes ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+
+		$file_array    = array( 'name' => sanitize_file_name( $filename ), 'tmp_name' => $tmp );
+		$attachment_id = media_handle_sideload( $file_array, $post_id, $description );
+
+		if ( is_wp_error( $attachment_id ) ) {
+			if ( file_exists( $tmp ) ) {
+				wp_delete_file( $tmp );
+			}
+			return $attachment_id;
+		}
+
 		if ( ! empty( $description ) ) {
 			update_post_meta( $attachment_id, '_wp_attachment_image_alt', sanitize_text_field( $description ) );
 		}

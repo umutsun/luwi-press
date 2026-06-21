@@ -152,13 +152,28 @@ class LuwiPress_Provider_OpenAI implements LuwiPress_AI_Provider {
 			return new WP_Error( 'luwipress_no_api_key', __( 'OpenAI API key is not configured.', 'luwipress' ) );
 		}
 
-		$body = array(
-			'model'   => $options['model'] ?? 'dall-e-3',
-			'prompt'  => $prompt,
-			'n'       => 1,
-			'size'    => $options['size'] ?? '1792x1024',
-			'quality' => $options['quality'] ?? 'standard',
-		);
+		// OpenAI deprecated dall-e-3 (the API now 400s "model does not exist").
+		// gpt-image-1 is the current model: base64-only response, and a different
+		// size/quality vocabulary — so build the request per model family.
+		$model        = $options['model'] ?? 'gpt-image-1';
+		$is_gpt_image = ( false !== strpos( $model, 'gpt-image' ) );
+		if ( $is_gpt_image ) {
+			$size = $options['size'] ?? '1536x1024';
+			$size = array( '1792x1024' => '1536x1024', '1024x1792' => '1024x1536' )[ $size ] ?? $size;
+			if ( ! in_array( $size, array( '1024x1024', '1536x1024', '1024x1536', 'auto' ), true ) ) { $size = 'auto'; }
+			$quality = $options['quality'] ?? 'high';
+			$quality = array( 'standard' => 'high', 'hd' => 'high' )[ $quality ] ?? $quality;
+			if ( ! in_array( $quality, array( 'low', 'medium', 'high', 'auto' ), true ) ) { $quality = 'high'; }
+			$body = array( 'model' => $model, 'prompt' => $prompt, 'n' => 1, 'size' => $size, 'quality' => $quality );
+		} else {
+			$body = array(
+				'model'   => $model,
+				'prompt'  => $prompt,
+				'n'       => 1,
+				'size'    => $options['size'] ?? '1792x1024',
+				'quality' => $options['quality'] ?? 'standard',
+			);
+		}
 
 		$response = wp_remote_post(
 			self::IMAGE_API_URL,
@@ -168,14 +183,14 @@ class LuwiPress_Provider_OpenAI implements LuwiPress_AI_Provider {
 					'Authorization' => 'Bearer ' . $this->api_key,
 				),
 				'body'    => wp_json_encode( $body ),
-				'timeout' => 120,
+				'timeout' => 180,
 			)
 		);
 
 		if ( is_wp_error( $response ) ) {
 			return new WP_Error(
 				'luwipress_api_error',
-				sprintf( __( 'DALL-E API request failed: %s', 'luwipress' ), $response->get_error_message() )
+				sprintf( __( 'Image API request failed: %s', 'luwipress' ), $response->get_error_message() )
 			);
 		}
 
@@ -191,14 +206,21 @@ class LuwiPress_Provider_OpenAI implements LuwiPress_AI_Provider {
 			);
 		}
 
-		if ( empty( $data['data'][0]['url'] ) ) {
-			return new WP_Error( 'luwipress_empty_response', __( 'DALL-E returned no image.', 'luwipress' ) );
+		$item = ( isset( $data['data'][0] ) && is_array( $data['data'][0] ) ) ? $data['data'][0] : array();
+		// gpt-image-1 returns base64; dall-e legacy returns a url.
+		if ( ! empty( $item['b64_json'] ) ) {
+			return array(
+				'b64'            => $item['b64_json'],
+				'revised_prompt' => $item['revised_prompt'] ?? $prompt,
+			);
 		}
-
-		return array(
-			'url'             => $data['data'][0]['url'],
-			'revised_prompt'  => $data['data'][0]['revised_prompt'] ?? $prompt,
-		);
+		if ( ! empty( $item['url'] ) ) {
+			return array(
+				'url'            => $item['url'],
+				'revised_prompt' => $item['revised_prompt'] ?? $prompt,
+			);
+		}
+		return new WP_Error( 'luwipress_empty_response', __( 'Image model returned no image.', 'luwipress' ) );
 	}
 
 	/**
