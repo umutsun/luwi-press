@@ -12,8 +12,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class LuwiPress_Provider_OpenAI implements LuwiPress_AI_Provider {
 
-	const CHAT_API_URL  = 'https://api.openai.com/v1/chat/completions';
-	const IMAGE_API_URL = 'https://api.openai.com/v1/images/generations';
+	const CHAT_API_URL       = 'https://api.openai.com/v1/chat/completions';
+	const IMAGE_API_URL      = 'https://api.openai.com/v1/images/generations';
+	const IMAGE_EDIT_API_URL = 'https://api.openai.com/v1/images/edits';
 
 	/**
 	 * @var string
@@ -221,6 +222,83 @@ class LuwiPress_Provider_OpenAI implements LuwiPress_AI_Provider {
 			);
 		}
 		return new WP_Error( 'luwipress_empty_response', __( 'Image model returned no image.', 'luwipress' ) );
+	}
+
+	/**
+	 * Edit / retouch an existing image with gpt-image-1 (the /images/edits
+	 * endpoint), using the supplied image as the reference. multipart/form-data.
+	 *
+	 * @param string $image_bytes Raw image file bytes.
+	 * @param string $mime        Source mime (image/png|jpeg|webp).
+	 * @param string $filename    Source filename.
+	 * @param string $prompt      Retouch instruction.
+	 * @param array  $options     size, quality.
+	 * @return array|WP_Error ['b64' => string] | error.
+	 */
+	public function edit_image( $image_bytes, $mime, $filename, $prompt, array $options = array() ) {
+		if ( ! $this->is_configured() ) {
+			return new WP_Error( 'luwipress_no_api_key', __( 'OpenAI API key is not configured.', 'luwipress' ) );
+		}
+		if ( '' === (string) $image_bytes ) {
+			return new WP_Error( 'luwipress_no_source', __( 'No source image to retouch.', 'luwipress' ) );
+		}
+
+		$size = $options['size'] ?? '1536x1024';
+		$size = array( '1792x1024' => '1536x1024', '1024x1792' => '1024x1536' )[ $size ] ?? $size;
+		if ( ! in_array( $size, array( '1024x1024', '1536x1024', '1024x1536', 'auto' ), true ) ) {
+			$size = 'auto';
+		}
+		$quality = $options['quality'] ?? 'high';
+		if ( ! in_array( $quality, array( 'low', 'medium', 'high', 'auto' ), true ) ) {
+			$quality = 'high';
+		}
+		if ( ! in_array( $mime, array( 'image/png', 'image/jpeg', 'image/webp' ), true ) ) {
+			$mime = 'image/png';
+		}
+
+		// Build the multipart/form-data body by hand (WP_Http has no file upload helper).
+		$boundary = 'lwp' . str_replace( '-', '', wp_generate_uuid4() );
+		$eol      = "\r\n";
+		$fields   = array( 'model' => 'gpt-image-1', 'prompt' => $prompt, 'n' => '1', 'size' => $size, 'quality' => $quality );
+		$payload  = '';
+		foreach ( $fields as $k => $v ) {
+			$payload .= '--' . $boundary . $eol;
+			$payload .= 'Content-Disposition: form-data; name="' . $k . '"' . $eol . $eol;
+			$payload .= $v . $eol;
+		}
+		$payload .= '--' . $boundary . $eol;
+		$payload .= 'Content-Disposition: form-data; name="image"; filename="' . sanitize_file_name( $filename ) . '"' . $eol;
+		$payload .= 'Content-Type: ' . $mime . $eol . $eol;
+		$payload .= $image_bytes . $eol;
+		$payload .= '--' . $boundary . '--' . $eol;
+
+		$response = wp_remote_post( self::IMAGE_EDIT_API_URL, array(
+			'headers' => array(
+				'Content-Type'  => 'multipart/form-data; boundary=' . $boundary,
+				'Authorization' => 'Bearer ' . $this->api_key,
+			),
+			'body'    => $payload,
+			'timeout' => 180,
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error( 'luwipress_api_error', sprintf( __( 'Image edit request failed: %s', 'luwipress' ), $response->get_error_message() ) );
+		}
+		$status = wp_remote_retrieve_response_code( $response );
+		$raw    = wp_remote_retrieve_body( $response );
+		$data   = json_decode( $raw, true );
+		if ( $status >= 400 ) {
+			$msg = $data['error']['message'] ?? $raw;
+			return new WP_Error( 'luwipress_api_error', sprintf( __( 'Image edit error (%d): %s', 'luwipress' ), $status, $msg ) );
+		}
+		$item = ( isset( $data['data'][0] ) && is_array( $data['data'][0] ) ) ? $data['data'][0] : array();
+		if ( ! empty( $item['b64_json'] ) ) {
+			return array( 'b64' => $item['b64_json'] );
+		}
+		if ( ! empty( $item['url'] ) ) {
+			return array( 'url' => $item['url'] );
+		}
+		return new WP_Error( 'luwipress_empty_response', __( 'Image edit returned no image.', 'luwipress' ) );
 	}
 
 	/**
