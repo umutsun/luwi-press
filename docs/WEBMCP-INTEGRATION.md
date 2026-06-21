@@ -1,13 +1,13 @@
-# n8nPress WebMCP Integration
+# LuwiPress WebMCP Integration
 
 ## Overview
 
-n8nPress v1.10.0 implements a **Model Context Protocol (MCP)** server using the
-**Streamable HTTP transport** (spec version `2025-03-26`). This exposes all n8nPress
+LuwiPress v1.10.0 implements a **Model Context Protocol (MCP)** server using the
+**Streamable HTTP transport** (spec version `2025-03-26`). This exposes all LuwiPress
 capabilities as MCP tools that any MCP-compatible AI agent can discover and invoke
 over a single HTTP endpoint.
 
-**Endpoint:** `https://your-site.com/wp-json/n8npress/v1/mcp`
+**Endpoint:** `https://your-site.com/wp-json/luwipress/v1/mcp`
 
 ## What is WebMCP?
 
@@ -27,12 +27,12 @@ via POST, making it accessible from:
 ```
 AI Agent (Claude, GPT, custom)
     │
-    │  POST /wp-json/n8npress/v1/mcp
+    │  POST /wp-json/luwipress/v1/mcp
     │  JSON-RPC 2.0 over HTTP
     │
     ▼
 ┌─────────────────────────────────────┐
-│  N8nPress_WebMCP                    │
+│  LuwiPress_WebMCP                    │
 │  ┌───────────────────────────────┐  │
 │  │ Permission Check              │  │
 │  │ (Bearer token / Cookie / HMAC)│  │
@@ -50,7 +50,7 @@ AI Agent (Claude, GPT, custom)
 │  │ with MCP schema + annotations │  │
 │  └───────────┬───────────────────┘  │
 │              ▼                      │
-│  Existing n8nPress modules:         │
+│  Existing LuwiPress modules:         │
 │  API, AI Content, AEO, Translation, │
 │  CRM, Email, Chatwoot, Open Claw,   │
 │  Knowledge Graph, Internal Linker    │
@@ -66,8 +66,8 @@ Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "n8npress": {
-      "url": "https://your-site.com/wp-json/n8npress/v1/mcp",
+    "luwipress": {
+      "url": "https://your-site.com/wp-json/luwipress/v1/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_API_TOKEN"
       }
@@ -83,9 +83,9 @@ Add to `.claude/settings.json` or project-level settings:
 ```json
 {
   "mcpServers": {
-    "n8npress": {
+    "luwipress": {
       "type": "url",
-      "url": "https://your-site.com/wp-json/n8npress/v1/mcp",
+      "url": "https://your-site.com/wp-json/luwipress/v1/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_API_TOKEN"
       }
@@ -98,14 +98,14 @@ Add to `.claude/settings.json` or project-level settings:
 
 ```javascript
 // Include webmcp-client.js
-const client = new N8nPressWebMCP(
-  'https://your-site.com/wp-json/n8npress/v1/mcp',
+const client = new LuwiPressWebMCP(
+  'https://your-site.com/wp-json/luwipress/v1/mcp',
   'YOUR_API_TOKEN'
 );
 
 // Connect (initialize handshake)
 const serverInfo = await client.connect();
-console.log(serverInfo.serverInfo.name); // "n8npress-webmcp"
+console.log(serverInfo.serverInfo.name); // "luwipress-webmcp"
 
 // List tools
 const tools = await client.listTools();
@@ -116,7 +116,7 @@ const health = await client.callTool('system_health');
 console.log(health.data); // { status: "healthy", checks: {...} }
 
 // Read a resource
-const config = await client.readResource('n8npress://site-config');
+const config = await client.readResource('luwipress://site-config');
 console.log(config[0].data);
 
 // Disconnect
@@ -127,14 +127,14 @@ await client.disconnect();
 
 ```bash
 # Initialize
-curl -X POST https://your-site.com/wp-json/n8npress/v1/mcp \
+curl -X POST https://your-site.com/wp-json/luwipress/v1/mcp \
   -H "Authorization: Bearer TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","clientInfo":{"name":"curl","version":"1.0"}}}'
 
 # Call a tool
-curl -X POST https://your-site.com/wp-json/n8npress/v1/mcp \
+curl -X POST https://your-site.com/wp-json/luwipress/v1/mcp \
   -H "Authorization: Bearer TOKEN" \
   -H "Content-Type: application/json" \
   -H "Mcp-Session-Id: SESSION_ID" \
@@ -146,10 +146,10 @@ curl -X POST https://your-site.com/wp-json/n8npress/v1/mcp \
 Three methods supported (in priority order):
 
 1. **WordPress Cookie** — Admin users with `manage_options` capability
-2. **Bearer Token** — `Authorization: Bearer <n8npress_seo_api_token>`
-3. **Custom Header** — `X-n8nPress-Token: <token>`
+2. **Bearer Token** — `Authorization: Bearer <luwipress_seo_api_token>`
+3. **Custom Header** — `X-LuwiPress-Token: <token>`
 
-The API token is configured in **n8nPress → Settings**.
+The API token is configured in **LuwiPress → Settings**.
 
 ## MCP Capabilities
 
@@ -185,7 +185,7 @@ The API token is configured in **n8nPress → Settings**.
 ### SEO & AI Enrichment
 | Tool | Description | Annotations |
 |------|-------------|-------------|
-| `seo_enrich_product` | AI product enrichment via n8n | write, **openWorld** |
+| `seo_enrich_product` | AI product enrichment | write, **openWorld** |
 | `seo_enrich_batch` | Batch AI enrichment | write, **openWorld** |
 | `seo_batch_status` | Batch job status | readOnly |
 | `seo_rank_math_meta` | Read Rank Math/Yoast meta | readOnly |
@@ -253,16 +253,16 @@ The API token is configured in **n8nPress → Settings**.
 ### Static Resources
 | URI | Description |
 |-----|-------------|
-| `n8npress://site-config` | Full environment snapshot |
-| `n8npress://health` | Server health status |
-| `n8npress://aeo-coverage` | AEO schema coverage |
+| `luwipress://site-config` | Full environment snapshot |
+| `luwipress://health` | Server health status |
+| `luwipress://aeo-coverage` | AEO schema coverage |
 
 ### Resource Templates (Parameterized)
 | URI Template | Description |
 |-------------|-------------|
-| `n8npress://post/{post_id}` | Read any post/product by ID |
-| `n8npress://seo-meta/{post_id}` | SEO meta for a post |
-| `n8npress://translation-status/{post_id}` | Translation status per post |
+| `luwipress://post/{post_id}` | Read any post/product by ID |
+| `luwipress://seo-meta/{post_id}` | SEO meta for a post |
+| `luwipress://translation-status/{post_id}` | Translation status per post |
 
 ## Security
 
@@ -270,7 +270,7 @@ Per the MCP spec's security requirements:
 
 1. **Origin Validation** — Prevents DNS rebinding attacks; validates `Origin` header
 2. **Authentication Required** — All requests must have valid credentials
-3. **Rate Limiting** — Inherited from n8nPress core rate limiter
+3. **Rate Limiting** — Inherited from LuwiPress core rate limiter
 4. **Input Sanitization** — All tool inputs sanitized via WordPress functions
 5. **Session Management** — UUID-based sessions with 1-hour TTL
 
@@ -279,7 +279,7 @@ Per the MCP spec's security requirements:
 Third-party plugins can register custom MCP tools:
 
 ```php
-add_action( 'n8npress_webmcp_register_tools', function( $webmcp ) {
+add_action( 'luwipress_webmcp_register_tools', function( $webmcp ) {
     $webmcp->register_tool( 'my_custom_tool', array(
         'description' => 'Does something custom',
         'inputSchema' => array(
@@ -303,6 +303,6 @@ add_action( 'n8npress_webmcp_register_tools', function( $webmcp ) {
 
 | File | Purpose |
 |------|---------|
-| `includes/class-n8npress-webmcp.php` | MCP server — JSON-RPC dispatcher, tool registry, resource handler |
+| `includes/class-luwipress-webmcp.php` | MCP server — JSON-RPC dispatcher, tool registry, resource handler |
 | `admin/webmcp-page.php` | WordPress admin page — status, tool catalog, connection tester |
 | `assets/js/webmcp-client.js` | Browser-side MCP client class |

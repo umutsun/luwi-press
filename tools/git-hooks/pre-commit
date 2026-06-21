@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+#
+# LuwiPress pre-commit guard
+# -------------------------------------------------------------------
+# Blocks two activation-breaking / fatal classes of mistake before they
+# ever reach a commit (see CLAUDE.md "No BOM in PHP files" + release rules):
+#
+#   1. UTF-8 BOM (EF BB BF) at the top of any staged PHP file.
+#      A BOM emits 3 bytes of stdout on load -> "headers already sent"
+#      -> WP refuses to activate the plugin. `php -l` does NOT catch this.
+#
+#   2. PHP syntax errors (`php -l`) in any staged PHP file.
+#
+# Install:  bash tools/install-git-hooks.sh   (symlinks/copies this file
+#           into .git/hooks/pre-commit)
+# Bypass :  git commit --no-verify   (use only when you know what you do)
+# -------------------------------------------------------------------
+set -u
+
+fail=0
+
+# Collect staged PHP files (Added / Copied / Modified / Renamed), NUL-safe.
+staged_php=$(git diff --cached --name-only --diff-filter=ACMR -z \
+  | tr '\0' '\n' | grep -E '\.php$' || true)
+
+if [ -z "$staged_php" ]; then
+  exit 0
+fi
+
+# Resolve a PHP CLI (BOM check works without it). Try PATH, then common
+# XAMPP/Windows locations since git-bash often lacks php on PATH.
+PHP_BIN=""
+if command -v php >/dev/null 2>&1; then
+  PHP_BIN="php"
+else
+  for cand in /c/xampp/php/php.exe "/c/Program Files/php/php.exe" /usr/bin/php; do
+    if [ -x "$cand" ]; then PHP_BIN="$cand"; break; fi
+  done
+fi
+php_warned=0
+
+while IFS= read -r file; do
+  [ -z "$file" ] && continue
+  [ -f "$file" ] || continue   # deleted in worktree but staged -> skip
+
+  # --- 1) BOM check (read the staged blob, not the worktree copy) ---
+  first3=$(git show ":$file" 2>/dev/null | head -c 3 | od -An -tx1 | tr -d ' \n')
+  if [ "$first3" = "efbbbf" ]; then
+    echo "BLOCKED (BOM): $file starts with a UTF-8 BOM (EF BB BF)."
+    echo "          Strip it:  sed -i '1s/^\xEF\xBB\xBF//' \"$file\""
+    fail=1
+  fi
+
+  # --- 2) Syntax check ---
+  # Write the staged blob to a temp FILE and lint that — piping `git show | php`
+  # over git-bash stdin to php.exe mangles large streams and yields false
+  # "unclosed {" errors on Windows.
+  if [ -n "$PHP_BIN" ]; then
+    tmp_php=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/lwp-precommit-$$.php")
+    git show ":$file" > "$tmp_php" 2>/dev/null
+    if ! out=$("$PHP_BIN" -l "$tmp_php" 2>&1); then
+      echo "BLOCKED (syntax): $file"
+      echo "$out" | sed "s|$tmp_php|$file|g; s/^/          /"
+      fail=1
+    fi
+    rm -f "$tmp_php"
+  elif [ "$php_warned" -eq 0 ]; then
+    echo "NOTE: 'php' not on PATH — skipped syntax (php -l) checks; BOM check still ran."
+    php_warned=1
+  fi
+done <<EOF
+$staged_php
+EOF
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "Pre-commit guard rejected the commit. Fix the files above (or --no-verify to override)."
+  exit 1
+fi
+
+exit 0

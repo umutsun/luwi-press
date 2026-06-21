@@ -1,20 +1,20 @@
 #!/usr/bin/env php
 <?php
 /**
- * n8nPress Translation System Test Suite
+ * LuwiPress Translation System Test Suite
  *
- * Tests all REST endpoints and n8n workflow integration for:
+ * Tests all REST endpoints for:
  * - Taxonomy translation (product_cat, product_tag, category, post_tag)
  * - Product translation (multi-language missing detection)
  * - WPML integration (trid, term registration, translation linking)
  * - Callback handling (taxonomy + product)
  * - Knowledge Graph accuracy
  *
- * Usage: php tests/test-translation-system.php https://osenben.com n8npress-bridge-2026-secure
+ * Usage: php tests/test-translation-system.php https://osenben.com <api-token>
  */
 
 $site_url  = $argv[1] ?? 'https://osenben.com';
-$api_token = $argv[2] ?? 'n8npress-bridge-2026-secure';
+$api_token = $argv[2] ?? '';
 
 $passed = 0;
 $failed = 0;
@@ -73,7 +73,7 @@ function section( $title ) {
 	echo "\n=== $title ===\n";
 }
 
-$base = rtrim( $site_url, '/' ) . '/wp-json/n8npress/v1';
+$base = rtrim( $site_url, '/' ) . '/wp-json/luwipress/v1';
 
 // ─── 1. HEALTH & AUTH ──────────────────────────────────────────────
 

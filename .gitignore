@@ -39,6 +39,9 @@ temp/
 # Parked (out-of-focus) companion work
 parked/
 
+# Nested standalone project (fbd-connect / Duffel bridge — its own git repo)
+flybydeniz/
+
 # Themes live in their own repo (umutsun/luwi-themes)
 # Local copy under themes/ is workdir-only for build-theme-zip.php.
 themes/
