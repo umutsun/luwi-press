@@ -17,6 +17,15 @@ parameters:
         -
             message: '#on an unknown class RankMath#'
             path: luwipress/includes/class-luwipress-redirections.php
+        # UpdraftPlus is an optional third-party plugin (not in our autoload or
+        # stubs). The Backup Bridge guards every call with is_a()/class_exists()
+        # and the method_exists() probes are deliberate version-drift defenses;
+        # PHPStan can't see the (real) static methods on the unknown class, so it
+        # reports the literal-class method_exists() as "always false". Expected
+        # external-dependency boundary, same as the Rank Math case above.
+        -
+            message: '#Call to function method_exists\(\) with .*UpdraftPlus.* will always evaluate to false#'
+            path: luwipress/includes/class-luwipress-backup-bridge.php
     # All existing errors tracked in phpstan-baseline.neon
     # New code must pass Level 5 clean
 
