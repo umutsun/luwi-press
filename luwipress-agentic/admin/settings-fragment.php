@@ -69,16 +69,16 @@ foreach ( $adapters as $id => $adapter ) {
 			? sprintf( __( 'Default: %s', 'luwipress-agentic' ), $row['default_url'] )
 			: __( 'No default endpoint — enter the URL your adapter expects.', 'luwipress-agentic' );
 	?>
-	<div class="agentic-backend-card<?php echo $is_active ? ' is-active' : ''; ?>" data-adapter-id="<?php echo esc_attr( $id ); ?>">
+	<div class="agentic-backend-card<?php echo $is_active ? ' is-active' : ''; ?>" data-adapter-id="<?php echo esc_attr( $id ); ?>" data-has-token="<?php echo $row['has_token'] ? '1' : '0'; ?>">
 		<div class="agentic-backend-head">
 			<label class="agentic-backend-active">
 				<input type="radio" name="agentic_active" value="<?php echo esc_attr( $id ); ?>"<?php checked( $is_active ); ?> />
 				<strong><?php echo esc_html( $row['label'] ); ?></strong>
 			</label>
-			<?php if ( $row['is_configured'] ) : ?>
-				<span class="lp-pill pill-success"><?php esc_html_e( 'Configured', 'luwipress-agentic' ); ?></span>
+			<?php if ( $row['has_token'] ) : ?>
+				<span class="lp-pill pill-neutral agentic-status-pill"><?php esc_html_e( 'Not verified', 'luwipress-agentic' ); ?></span>
 			<?php else : ?>
-				<span class="lp-pill pill-warning"><?php esc_html_e( 'Token needed', 'luwipress-agentic' ); ?></span>
+				<span class="lp-pill pill-warning agentic-status-pill"><?php esc_html_e( 'Token needed', 'luwipress-agentic' ); ?></span>
 			<?php endif; ?>
 			<?php if ( $is_active ) : ?>
 				<span class="lp-pill pill-info"><?php esc_html_e( 'Active', 'luwipress-agentic' ); ?></span>
@@ -254,9 +254,9 @@ foreach ( $adapters as $id => $adapter ) {
 				$status.text((ok ? '✓ ' : '✗ ') + msg)
 				       .css('color', ok ? 'var(--lp-success,#1e8e3e)' : 'var(--lp-danger,#c00)');
 				// Flip the configured/token pill to reflect the live result.
-				var $pill = $card.find('.lp-pill').filter('.pill-success, .pill-warning').first();
+				var $pill = $card.find('.agentic-status-pill').first();
 				if ($pill.length && d) {
-					$pill.removeClass('pill-success pill-warning')
+					$pill.removeClass('pill-success pill-warning pill-neutral')
 					     .addClass(ok ? 'pill-success' : 'pill-warning')
 					     .text(ok ? 'Connected' : (d.configured ? 'Unreachable' : 'Token needed'));
 				}
@@ -265,6 +265,14 @@ foreach ( $adapters as $id => $adapter ) {
 			}).always(function(){
 				$btn.prop('disabled', false);
 			});
+		});
+
+		// Auto-verify saved backends on load so each pill shows the live truth
+		// (Connected / Unreachable) rather than a static "a token is saved" badge.
+		$('.agentic-backend-card').each(function(){
+			if ( String( $(this).data('has-token') ) === '1' ) {
+				$(this).find('.agentic-test-btn').trigger('click');
+			}
 		});
 
 		$('#agentic-backends').on('change', 'input[name="agentic_active"]', function(){

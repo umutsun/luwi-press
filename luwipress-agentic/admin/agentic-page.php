@@ -188,8 +188,8 @@ $lwp_area_url = function ( $area ) {
 					}
 					?>
 				</p>
-				<a href="<?php echo esc_url( $settings_url ); ?>" class="button button-small" style="margin-top:6px;">
-					<span class="dashicons dashicons-admin-generic" style="vertical-align:text-bottom;"></span>
+				<a href="<?php echo esc_url( $settings_url ); ?>" class="button button-small" style="margin-top:6px;display:inline-flex;align-items:center;gap:5px;">
+					<span class="dashicons dashicons-admin-generic" style="font-size:16px;width:16px;height:16px;line-height:1;"></span>
 					<?php esc_html_e( 'Configure backends', 'luwipress-agentic' ); ?>
 				</a>
 			</div>
