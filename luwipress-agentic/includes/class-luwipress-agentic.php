@@ -33,6 +33,7 @@ class LuwiPress_Agentic {
 		add_action( 'wp_ajax_luwipress_claw_clear_history', array( $this, 'ajax_clear_history' ) );
 		add_action( 'wp_ajax_luwipress_claw_execute', array( $this, 'ajax_execute_action' ) );
 		add_action( 'wp_ajax_luwipress_agentic_save_backend', array( $this, 'ajax_save_backend' ) );
+		add_action( 'wp_ajax_luwipress_agentic_test_backend', array( $this, 'ajax_test_backend' ) );
 	}
 
 	/* ═══════════════════════════════════════════════════════════════════
@@ -91,6 +92,32 @@ class LuwiPress_Agentic {
 			'has_token'      => ! empty( $existing['token'] ),
 			'endpoint_saved' => isset( $existing['endpoint'] ) ? $existing['endpoint'] : '',
 		) );
+	}
+
+	/**
+	 * AJAX: live connection test for one backend.
+	 *
+	 * Hits the configured endpoint with a cheap {"ping":true} probe so the
+	 * "Configured" pill can reflect REALITY (reachable + token accepted) rather
+	 * than just "a token string is saved". See LuwiPress_Agent_Adapter_HTTP::test_connection().
+	 */
+	public function ajax_test_backend() {
+		check_ajax_referer( 'luwipress_claw_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( 'Unauthorized' );
+		}
+
+		$adapter_id = sanitize_key( $_POST['adapter_id'] ?? '' );
+		$host       = class_exists( 'LuwiPress_Agent_Host' ) ? LuwiPress_Agent_Host::get_instance() : null;
+		$adapter    = $host ? $host->get_adapter( $adapter_id ) : null;
+		if ( ! $adapter ) {
+			wp_send_json_error( 'Unknown adapter' );
+		}
+		if ( ! method_exists( $adapter, 'test_connection' ) ) {
+			wp_send_json_error( 'This runtime does not support connection tests.' );
+		}
+
+		wp_send_json_success( $adapter->test_connection() );
 	}
 
 	/* ═══════════════════════════════════════════════════════════════════

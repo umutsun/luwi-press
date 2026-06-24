@@ -4,7 +4,7 @@ Tags: ai, agent, woocommerce, chat, automation, admin, assistant, middleware
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.3.5
+Stable tag: 1.3.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,6 +49,10 @@ Or just type — "how many at-risk customers do I have?", "generate a blog post 
 5. In the right-hand "Backend Runtime" panel, pick your active agent and enter the access token. Endpoints default to the hosted services; override them if you self-host.
 
 == Changelog ==
+
+= 1.3.6 — Live connection test + truthful status =
+* **New "Test connection" button** on each backend card. It runs a live probe against the configured endpoint using your token, so the status badge reflects reality — *reachable and token accepted* — rather than simply "a token is saved". A backend that is unreachable or rejecting the token now shows clearly instead of a misleading green "Configured" pill.
+* **Sensible default backend** — a fresh install now lands on the first live backend slot out of the box, so the chat works without hand-picking a runtime first.
 
 = 1.3.5 — Bring-your-own-agent positioning =
 * **Repositioned the plugin description and admin copy around "connect your own AI agent endpoint."** The earlier copy presented Open Claw / Hermes hostnames as shipped runtimes — those were internal Luwi test deployments, not customer-facing services. The two backend slots are now described as what they are: configurable connections you point at your own agent runtime (the uniform request shape is unchanged). The Agentic Commerce description now spells out the agent-driven shopping stack it implements: Google UCP (Universal Commerce Protocol) product feed, agent-native checkout, and AP2 payment mandates for universal-cart / AI-shopping-agent purchases. Text-only release — no behavior, option, or endpoint changes.

@@ -48,7 +48,12 @@ class LuwiPress_Agent_Host {
 	}
 
 	public function get_active_id() {
-		return (string) get_option( 'luwipress_agent_active', 'open-claw' );
+		// Default to `hermes`: the Open Claw hosted backend (oc.luwi.dev) is
+		// decommissioned, so a fresh install that never picked a backend should
+		// land on the live one rather than a dead default. Sites that already
+		// set the option keep their explicit choice. get_active_adapter() also
+		// falls back to the first registered adapter if this id is unknown.
+		return (string) get_option( 'luwipress_agent_active', 'hermes' );
 	}
 
 	public function set_active_id( $id ) {

@@ -72,6 +72,79 @@ class LuwiPress_Agent_Adapter_HTTP implements LuwiPress_Agent_Adapter_Interface 
 		return ! empty( $cfg['endpoint'] ) && ! empty( $cfg['token'] );
 	}
 
+	/**
+	 * Live connectivity + auth probe.
+	 *
+	 * is_configured() only checks that a token STRING is present — the endpoint
+	 * always defaults, so a saved-but-dead backend still reports "configured".
+	 * This actually hits the wire: POST {"ping":true} to the configured
+	 * endpoint with the token. A conforming gateway answers a ping WITHOUT
+	 * spending an LLM call, so the test is cheap and safe to run on demand.
+	 *
+	 * @since 1.3.6
+	 * @return array { ok:bool, http:int, configured:bool, detail:string }
+	 */
+	public function test_connection() {
+		$cfg = $this->get_config();
+		if ( empty( $cfg['endpoint'] ) || empty( $cfg['token'] ) ) {
+			return array(
+				'ok'         => false,
+				'http'       => 0,
+				'configured' => false,
+				'detail'     => __( 'No access token saved yet.', 'luwipress-agentic' ),
+			);
+		}
+
+		$response = wp_remote_post(
+			esc_url_raw( $cfg['endpoint'] ),
+			array(
+				'timeout' => 12,
+				'headers' => array(
+					'Content-Type'  => 'application/json',
+					'Authorization' => 'Bearer ' . $cfg['token'],
+					'Accept'        => 'application/json',
+				),
+				'body'    => wp_json_encode( array( 'ping' => true ) ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'ok'         => false,
+				'http'       => 0,
+				'configured' => true,
+				'detail'     => $response->get_error_message(),
+			);
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 === $code ) {
+			$detail = ( is_array( $body ) && ! empty( $body['pong'] ) )
+				? __( 'Reachable — token accepted.', 'luwipress-agentic' )
+				: __( 'Endpoint reachable (HTTP 200).', 'luwipress-agentic' );
+			return array( 'ok' => true, 'http' => 200, 'configured' => true, 'detail' => $detail );
+		}
+
+		if ( 401 === $code || 403 === $code ) {
+			return array(
+				'ok'         => false,
+				'http'       => $code,
+				'configured' => true,
+				'detail'     => __( 'Reached the endpoint but the token was rejected.', 'luwipress-agentic' ),
+			);
+		}
+
+		return array(
+			'ok'         => false,
+			'http'       => $code,
+			'configured' => true,
+			/* translators: %d: HTTP status code */
+			'detail'     => sprintf( __( 'Endpoint returned HTTP %d (upstream may be down).', 'luwipress-agentic' ), $code ),
+		);
+	}
+
 	public function dispatch( $messages, $context, $tools ) {
 		$cfg = $this->get_config();
 		if ( empty( $cfg['endpoint'] ) || empty( $cfg['token'] ) ) {

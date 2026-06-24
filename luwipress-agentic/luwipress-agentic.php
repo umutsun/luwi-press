@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress Agentic
  * Plugin URI: https://luwi.dev/luwipress-agentic
  * Description: Agentic middleware for LuwiPress — a unified admin chat surface with a pluggable agent backend: connect your own AI agent endpoint and operate the store conversationally. Includes the Agentic Commerce hub for agent-driven shopping — Google UCP (Universal Commerce Protocol) product feed, agent-native checkout and AP2 payment mandates — so AI shopping agents and universal carts can discover your products and complete purchases. Requires the core LuwiPress plugin.
- * Version: 1.3.5
+ * Version: 1.3.6
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'LUWIPRESS_AGENTIC_VERSION', '1.3.5' );
+define( 'LUWIPRESS_AGENTIC_VERSION', '1.3.6' );
 define( 'LUWIPRESS_AGENTIC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LUWIPRESS_AGENTIC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'LUWIPRESS_AGENTIC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );

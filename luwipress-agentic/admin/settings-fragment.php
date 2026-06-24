@@ -114,6 +114,9 @@ foreach ( $adapters as $id => $adapter ) {
 				<button type="button" class="button button-primary agentic-save-btn">
 					<?php esc_html_e( 'Save', 'luwipress-agentic' ); ?>
 				</button>
+				<button type="button" class="button agentic-test-btn">
+					<?php esc_html_e( 'Test connection', 'luwipress-agentic' ); ?>
+				</button>
 				<span class="agentic-save-status"></span>
 			</div>
 		</div>
@@ -224,6 +227,43 @@ foreach ( $adapters as $id => $adapter ) {
 			}).always(function(){
 				$btn.prop('disabled', false);
 				setTimeout(function(){ if ($status.text().indexOf('Saved') === 0) $status.text(''); }, 4000);
+			});
+		});
+
+		// Live connection test — hits the backend with a cheap {"ping":true}
+		// probe so the pill reflects reality (reachable + token accepted), not
+		// just "a token string is saved". Test the SAVED config, so Save first.
+		$('#agentic-backends').on('click', '.agentic-test-btn', function(){
+			var $card   = $(this).closest('.agentic-backend-card');
+			var adapter = $card.data('adapter-id');
+			var $status = $card.find('.agentic-save-status');
+			var $btn    = $(this);
+
+			$btn.prop('disabled', true);
+			$status.text('Testing…').css('color','');
+
+			$.post(ajaxUrl, {
+				action:     'luwipress_agentic_test_backend',
+				nonce:      nonce,
+				adapter_id: adapter
+			}).done(function(resp){
+				var d  = (resp && resp.success && resp.data) ? resp.data : null;
+				var ok = !!(d && d.ok);
+				var msg = d ? (d.detail || (ok ? 'Connected' : 'Unreachable'))
+				            : ('Test failed: ' + ((resp && resp.data) || 'unknown'));
+				$status.text((ok ? '✓ ' : '✗ ') + msg)
+				       .css('color', ok ? 'var(--lp-success,#1e8e3e)' : 'var(--lp-danger,#c00)');
+				// Flip the configured/token pill to reflect the live result.
+				var $pill = $card.find('.lp-pill').filter('.pill-success, .pill-warning').first();
+				if ($pill.length && d) {
+					$pill.removeClass('pill-success pill-warning')
+					     .addClass(ok ? 'pill-success' : 'pill-warning')
+					     .text(ok ? 'Connected' : (d.configured ? 'Unreachable' : 'Token needed'));
+				}
+			}).fail(function(){
+				$status.text('✗ Network error').css('color','var(--lp-danger,#c00)');
+			}).always(function(){
+				$btn.prop('disabled', false);
 			});
 		});
 
