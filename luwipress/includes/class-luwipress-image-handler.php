@@ -294,7 +294,7 @@ class LuwiPress_Image_Handler {
 			'vivid'     => 'a vivid, vibrant, high-contrast photograph with punchy colour',
 			'bw'        => 'an elegant black-and-white photograph with deep contrast',
 		);
-		$style = is_string( $style ) ? strtolower( $style ) : 'clean';
+		$style = strtolower( (string) $style );
 		$desc  = $styles[ $style ] ?? $styles['clean'];
 		$base  = 'Retouch and enhance this image into ' . $desc . '. '
 			. 'Improve lighting, sharpness, colour balance and overall composition while staying faithful '
