@@ -1002,21 +1002,26 @@ class LuwiPress_License {
 					</tr>
 					<?php endif; ?>
 					<tr>
-						<th scope="row"><?php esc_html_e( 'Enforce licensing', 'luwipress' ); ?></th>
+						<th scope="row"><?php esc_html_e( 'Licensing', 'luwipress' ); ?></th>
 						<td>
-							<label>
-								<input type="checkbox" id="lwp-license-enforce" <?php checked( $enforce ); ?> <?php disabled( $enforce_locked ); ?> />
-								<?php esc_html_e( 'Block plugin features (REST, AI, admin tools) when no valid license is active.', 'luwipress' ); ?>
-							</label>
-							<p class="description">
-								<?php
-								if ( $enforce_locked ) {
-									esc_html_e( 'Fixed by the LUWIPRESS_LICENSE_ENFORCE site constant — cannot be changed here.', 'luwipress' );
-								} else {
-									esc_html_e( 'Off by default. Turn on only when you are ready to require activation (e.g. for distribution builds).', 'luwipress' );
-								}
-								?>
-							</p>
+							<?php if ( $enforce_locked ) : ?>
+								<?php /* Distribution build: enforcement is a vendor decision baked into
+									   the build, NOT a buyer-facing toggle. Show status, not a checkbox. */ ?>
+								<span class="lp-pill <?php echo $active ? 'pill-success' : 'pill-warning'; ?>">
+									<?php echo esc_html( $active ? __( 'Enforced — license active', 'luwipress' ) : __( 'Enforced — license required', 'luwipress' ) ); ?>
+								</span>
+								<p class="description">
+									<?php esc_html_e( 'This is a licensed build: an active license is required to use plugin features. Enforcement is set by the build and cannot be turned off here.', 'luwipress' ); ?>
+								</p>
+							<?php else : ?>
+								<label>
+									<input type="checkbox" id="lwp-license-enforce" <?php checked( $enforce ); ?> />
+									<?php esc_html_e( 'Block plugin features (REST, AI, admin tools) when no valid license is active.', 'luwipress' ); ?>
+								</label>
+								<p class="description">
+									<?php esc_html_e( 'Off by default — development convenience. Distributed builds enable enforcement automatically.', 'luwipress' ); ?>
+								</p>
+							<?php endif; ?>
 						</td>
 					</tr>
 				</table>
@@ -1038,7 +1043,7 @@ class LuwiPress_License {
 			var spinner = $('lwp-license-spinner'), msg = $('lwp-license-msg');
 			function busy(on){ spinner.classList.toggle('is-active', !!on); }
 			function say(t, ok){ msg.textContent = t || ''; msg.style.color = ok ? '' : '#b32d2e'; }
-			function call(path, body){
+			function call(path, body, expectActive){
 				busy(true); say('');
 				return fetch(REST + path, {
 					method: 'POST',
@@ -1048,6 +1053,16 @@ class LuwiPress_License {
 				.then(function(res){
 					busy(false);
 					if (!res.ok) { say((res.j && (res.j.message||res.j.code)) || 'Request failed', false); return; }
+					// Activation honesty: HTTP 200 only means the server answered — it
+					// does NOT mean the license became active. Refuse to report "Done"
+					// when the activation did not take, so the operator isn't misled
+					// into thinking an unlicensed site is licensed.
+					if (expectActive && res.j && res.j.is_active === false) {
+						var why = (res.j.last_error && String(res.j.last_error))
+							|| 'Key was rejected. Check the key, its tier, and that it is not already bound to another site.';
+						say('Activation failed: ' + why, false);
+						return;
+					}
 					say('Done. Reloading…', true);
 					setTimeout(function(){ location.reload(); }, 600);
 				}).catch(function(e){ busy(false); say(String(e), false); });
@@ -1057,7 +1072,7 @@ class LuwiPress_License {
 				if (!k || k.indexOf('****') === 0) { say('Enter a license key.', false); return; }
 				var fmt = /^lwp_[a-f0-9]{48}$/i.test(k) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k);
 				if (!fmt) { say('Enter a valid license key (lwp_…) or purchase code.', false); return; }
-				call('/activate', { key: k });
+				call('/activate', { key: k }, true);
 			});
 			$('lwp-license-recheck').addEventListener('click', function(){ call('/refresh'); });
 			$('lwp-license-deactivate').addEventListener('click', function(){
@@ -1201,6 +1216,19 @@ class LuwiPress_License {
 	const UPDATE_CACHE_PREFIX = 'luwipress_upd_';              // + md5(slug) — per-package manifest cache.
 
 	/**
+	 * Plugin-list / update-screen icon set for every managed luwi package.
+	 * Points at the core plugin's bundled logo (core is always installed +
+	 * reachable for companions), so WP renders our brand mark on the Plugins
+	 * screen + update list instead of the generic gray "plug" placeholder.
+	 *
+	 * @return array<string,string>
+	 */
+	private static function brand_icons() {
+		$logo = defined( 'LUWIPRESS_PLUGIN_URL' ) ? LUWIPRESS_PLUGIN_URL . 'assets/images/luwi-logo.png' : '';
+		return array( '1x' => $logo, '2x' => $logo, 'default' => $logo );
+	}
+
+	/**
 	 * The luwi-family PLUGINS this site updates, keyed by server slug, limited to
 	 * those actually installed. The map (slug => plugin basename) is filterable
 	 * so a future companion opts in without a core edit. Memoised per request —
@@ -1305,6 +1333,7 @@ class LuwiPress_License {
 				'tested'       => isset( $m['tested'] ) ? (string) $m['tested'] : '',
 				'requires'     => isset( $m['requires'] ) ? (string) $m['requires'] : '',
 				'requires_php' => isset( $m['requires_php'] ) ? (string) $m['requires_php'] : '7.4',
+				'icons'        => self::brand_icons(),
 			);
 		}
 		return $transient;
@@ -1379,6 +1408,8 @@ class LuwiPress_License {
 		$info->last_updated  = isset( $m['last_updated'] ) ? (string) $m['last_updated'] : '';
 		$info->download_link = isset( $m['download_url'] ) ? (string) $m['download_url'] : '';
 		$info->sections      = ( isset( $m['sections'] ) && is_array( $m['sections'] ) ) ? $m['sections'] : array( 'changelog' => '' );
+		$info->icons         = self::brand_icons();
+		$info->banners       = array();
 		return $info;
 	}
 

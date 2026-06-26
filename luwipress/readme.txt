@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.16.0
+Stable tag: 3.17.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.17.0 — Licensed builds: activation required =
+* **Licensing is now enforced in distributed builds.** This build requires an active LuwiPress license to use plugin features (REST API, AI tools, admin tools). Activate your license key under LuwiPress → Settings → License — the License screen always stays reachable so you can activate at any time. Already-licensed sites are unaffected; a 14-day grace window covers any temporary licensing-server hiccup, so a paying site is never abruptly cut off.
+* **Honest activation feedback.** Activating a license now tells you the truth: if a key is rejected — wrong key, wrong tier, or already bound to another site — you get the real reason instead of a misleading "done" message.
+* **Brand logo on the Plugins & Updates screens.** LuwiPress and its companions now show the Luwi logo instead of the generic placeholder icon.
 
 = 3.16.0 — Image Studio: one-click AI image retouch =
 * **NEW — Image Studio.** A new panel in the post/page/product editor retouches your CURRENT featured image with AI: pick a style (Clean, Luxury, E-commerce, Vivid, B&W) and size, click Retouch, and a polished, standardised version is added to the Media Library (your original is never overwritten) and can be set as the featured image in one click. Non-destructive and cost-tracked.

@@ -3,7 +3,7 @@
  * Plugin Name: LuwiPress Core
  * Plugin URI: https://luwi.dev/luwipress
  * Description: AI-powered content enrichment, SEO optimization, and translation automation for WooCommerce stores.
- * Version: 3.16.0
+ * Version: 3.17.0
  * Author: Luwi Developments LLC
  * Author URI: https://luwi.dev
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('LUWIPRESS_VERSION', '3.16.0');
+define('LUWIPRESS_VERSION', '3.17.0');
 define('LUWIPRESS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LUWIPRESS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -33,6 +33,16 @@ define('LUWIPRESS_PLUGIN_BASENAME', plugin_basename(__FILE__));
 // before the plugin loads. Verified end-to-end against https://luwi.dev/license/v1.
 if ( ! defined( 'LUWIPRESS_LICENSE_PUBKEY' ) ) {
     define( 'LUWIPRESS_LICENSE_PUBKEY', 'pXWw2M8qKLWlsB65jw4+zT6GiM8x83XyJ6ca6s2w9Rc=' );
+}
+
+// Distribution build flag. `build-zip.php` writes a one-line config-dist.php into
+// the shipped ZIP that defines LUWIPRESS_LICENSE_ENFORCE = true — turning ON
+// license enforcement for distributed/sold copies WITHOUT exposing it as a
+// customer-toggleable option (the vendor decides, not the buyer). The file is
+// absent in source/dev builds, so local development is never gated. Loaded here,
+// before any class, so the constant is defined before LuwiPress_License reads it.
+if ( file_exists( __DIR__ . '/config-dist.php' ) ) {
+    require_once __DIR__ . '/config-dist.php';
 }
 
 /**
