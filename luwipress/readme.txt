@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.17.0
+Stable tag: 3.17.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.17.1 — Knowledge Graph actions run in the background (no more stuck buttons) =
+* **Enrich & "Next Wins" actions no longer hang.** Triggering product enrichment from the Knowledge Graph or the Next Wins panel now hands the AI work to a background queue and returns instantly, instead of holding the request open for 30-90 seconds (which timed out and left the button stuck on "Working…"). The live progress monitor tracks each product as it completes, so the gamification loop — act, watch your store-health score climb — works reliably even on hosts with strict execution limits.
 
 = 3.17.0 — Licensed builds: activation required =
 * **Licensing is now enforced in distributed builds.** This build requires an active LuwiPress license to use plugin features (REST API, AI tools, admin tools). Activate your license key under LuwiPress → Settings → License — the License screen always stays reachable so you can activate at any time. Already-licensed sites are unaffected; a 14-day grace window covers any temporary licensing-server hiccup, so a paying site is never abruptly cut off.

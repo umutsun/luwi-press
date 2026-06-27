@@ -46,6 +46,17 @@ class LuwiPress_AI_Content {
 
         // AJAX handler for batch enrichment
         add_action('wp_ajax_luwipress_batch_enrich', array($this, 'ajax_batch_enrich'));
+
+        // Async worker — register the per-product enrichment worker with the
+        // generic Job Queue so the KG / Next-Wins enrich buttons enqueue and
+        // drain in the background via wp-cron instead of running the AI
+        // dispatch inline in the REST request. The inline path blocked 8-90s
+        // per product, exceeded PHP max_execution_time / the 75s client
+        // timeout, and left buttons stuck on "Working…". See
+        // class-luwipress-job-queue.php for the worker contract.
+        if ( class_exists( 'LuwiPress_Job_Queue' ) ) {
+            LuwiPress_Job_Queue::register_type( 'product_enrichment', array( $this, 'jq_enrich_product' ) );
+        }
     }
 
     /**
@@ -650,13 +661,32 @@ class LuwiPress_AI_Content {
             );
         }
 
-        // Send for AI enrichment as a single payload
-        if (!empty($queued)) {
-            $this->send_batch_for_enrichment($queued, $options, $batch_id);
+        // Enqueue background enrichment — one product per chunk, drained by
+        // wp-cron via LuwiPress_Job_Queue, so this request returns immediately.
+        // The worker (jq_enrich_product) updates _luwipress_enrich_status per
+        // product, so the existing /product/enrich-batch/status monitor reports
+        // real progress. Falls back to the legacy inline path only if the queue
+        // class is somehow unavailable.
+        $job = null;
+        if ( ! empty( $queued ) ) {
+            if ( class_exists( 'LuwiPress_Job_Queue' ) ) {
+                $job = LuwiPress_Job_Queue::enqueue( 'product_enrichment', array(
+                    'chunks' => array_values( $queued ),
+                    'meta'   => array( 'options' => (array) $options, 'batch_id' => $batch_id ),
+                ) );
+                if ( is_wp_error( $job ) ) {
+                    LuwiPress_Logger::log( 'Batch enrich enqueue failed: ' . $job->get_error_message(), 'error', array( 'batch_id' => $batch_id ) );
+                    $job = null;
+                }
+            }
+            if ( null === $job ) {
+                $this->send_batch_for_enrichment( $queued, $options, $batch_id );
+            }
         }
 
-        LuwiPress_Logger::log('Batch enrichment started', 'info', array(
+        LuwiPress_Logger::log( 'Batch enrichment ' . ( $job ? 'queued' : 'started (inline fallback)' ), 'info', array(
             'batch_id' => $batch_id,
+            'job_id'   => is_array( $job ) ? ( $job['job_id'] ?? null ) : null,
             'queued'   => count($queued),
             'errors'   => count($errors),
         ));
@@ -664,9 +694,50 @@ class LuwiPress_AI_Content {
         return array(
             'success'  => true,
             'batch_id' => $batch_id,
+            'job_id'   => is_array( $job ) ? ( $job['job_id'] ?? null ) : null,
             'queued'   => count($queued),
             'errors'   => $errors,
         );
+    }
+
+    /**
+     * Job Queue worker: enrich ONE product. Chunk payload is a product ID (or
+     * a row carrying product_id). Returns the queue's { sent, saved, errors }
+     * contract. Marks the product 'processing' on pick-up; send_for_enrichment
+     * + handle_enrich_callback flip it to 'completed' (or 'failed' on AI error)
+     * so /product/enrich-batch/status reflects live state.
+     *
+     * @param mixed  $chunk_payload Product ID or array with 'product_id'.
+     * @param array  $meta          Shared job meta: 'options', 'batch_id'.
+     * @param string $job_id
+     * @return array
+     */
+    public function jq_enrich_product( $chunk_payload, $meta, $job_id ) {
+        $pid = absint( is_array( $chunk_payload ) ? ( $chunk_payload['product_id'] ?? 0 ) : $chunk_payload );
+        if ( ! $pid || ! function_exists( 'wc_get_product' ) ) {
+            return array( 'sent' => 0, 'saved' => 0, 'errors' => array( 'invalid product id or WC inactive' ) );
+        }
+        $product = wc_get_product( $pid );
+        if ( ! $product ) {
+            update_post_meta( $pid, '_luwipress_enrich_status', 'failed' );
+            return array( 'sent' => 0, 'saved' => 0, 'errors' => array( 'product ' . $pid . ' not found' ) );
+        }
+
+        update_post_meta( $pid, '_luwipress_enrich_status', 'processing' );
+        $options = isset( $meta['options'] ) && is_array( $meta['options'] ) ? $meta['options'] : array();
+        $result  = $this->send_for_enrichment( $product, $options );
+
+        if ( is_wp_error( $result ) ) {
+            // send_for_enrichment marks status=failed on AI error. The only path
+            // that returns early without a terminal status is a lock collision
+            // (another process owns this product) — leave that to the holder.
+            if ( 'already_processing' !== $result->get_error_code()
+                && 'processing' === get_post_meta( $pid, '_luwipress_enrich_status', true ) ) {
+                update_post_meta( $pid, '_luwipress_enrich_status', 'failed' );
+            }
+            return array( 'sent' => 1, 'saved' => 0, 'errors' => array( $result->get_error_message() ) );
+        }
+        return array( 'sent' => 1, 'saved' => 1, 'errors' => array() );
     }
 
     /**
