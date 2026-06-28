@@ -1,12 +1,14 @@
 # LuwiPress — Complete Feature Overview
 
-**Version:** 3.13.2 · **License:** GPLv2+ · **Target:** WooCommerce stores · **Tested with:** WordPress 7.0
+**Version:** 3.17.2 · **License:** GPLv2+ · **Target:** WooCommerce stores · **Tested with:** WordPress 7.0
 
 LuwiPress is a standalone, AI-powered automation plugin for WordPress/WooCommerce. It generates content, optimizes SEO, translates products, and automates store management — integrating seamlessly with existing plugins (Rank Math, WPML, Elementor, etc.) without replacing them.
 
 Shipped as a lean **~700 KB core** plus three optional companion plugins (WebMCP, Marketplace Sync, Agentic) — install only what your store needs.
 
 ## 🆕 What's new in 3.x
+
+- **Knowledge Graph "Next Wins" that always work (3.17.1–3.17.2)** — the Knowledge Graph is your store's control console, and its one-click improvement actions are now reliable end-to-end. **Enrichment no longer hangs.** Triggering AI enrichment from the graph or the "Next Wins" panel used to hold the page open for up to a minute and could leave the button stuck on "Working…"; the work now runs in the background and the request returns instantly, with a live progress monitor that tracks each product as it completes — so the act-and-watch-your-store-health-score-climb loop works even on hosts with strict execution limits. **No more impossible "missing schema" tasks.** The graph used to flag products as missing Product structured data even when WooCommerce (or your SEO plugin — Rank Math, Yoast, AIOSEO, SEOPress) was already outputting it, leaving a task you could never clear; it now recognises that coverage, so those products show as complete and the dead tasks disappear — your store-health score reflects reality. And where Product schema is genuinely missing, a new one-click **Generate Product Schema** action builds valid JSON-LD (price, stock, rating) straight from your product data — instantly, with no AI cost — and only emits it when nothing else does, so you never get duplicate schema.
 
 - **Backup status & one-click site migration (3.15.2)** — LuwiPress now detects your backup plugin (**UpdraftPlus, All-in-One WP Migration, Duplicator, WPvivid, BackWPup**) and shows it on the dashboard with a green pill. For **UpdraftPlus**, you can **trigger a backup, watch its progress, and list backup sets** remotely — from the dashboard, REST API, or an AI assistant. And **moving a store to a new server** becomes a guided, mostly hands-off flow: a fresh LuwiPress install on the new host **pulls the latest backup straight from the old site** (server-to-server, resumable in chunks, no laptop round-trip), makes it restorable in one rescan, and hands you the exact one-line command to fix the domain after restore. Everything degrades gracefully when no backup plugin is installed. New WebMCP tools: `backup_diag`, `backup_run`, `backup_status`, `backup_list`, `backup_pull`, `backup_rescan`, `backup_restore`.
 
