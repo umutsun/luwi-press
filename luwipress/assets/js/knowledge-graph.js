@@ -1275,6 +1275,10 @@ function showDetailPanel(d) {
 		if (p.enrichment.status !== 'completed') recs.push({a:'enrich', l:'AI Enrichment', d:'Generate rich product content', p:'high'});
 		if (!p.aeo.has_faq) recs.push({a:'faq', l:'Generate FAQ', d:'Rich snippets in search results', p:'medium'});
 		if (!p.aeo.has_howto) recs.push({a:'howto', l:'Generate HowTo', d:'How-to rich result cards', p:'low'});
+		// has_schema is true whenever WooCommerce core / an SEO plugin already
+		// emits Product JSON-LD, so this only surfaces when schema is genuinely
+		// absent — and the action (deterministic, instant) actually resolves it.
+		if (!p.aeo.has_schema) recs.push({a:'schema', l:'Generate Product Schema', d:'JSON-LD: price · stock · rating', p:'medium'});
 		var missingLangs = [];
 		langKeys.forEach(function(l) { if (p.translation[l] !== 'completed') missingLangs.push(l); });
 		if (missingLangs.length) recs.push({a:'translate', l:'Translate ' + missingLangs.map(function(x){return x.toUpperCase();}).join(', '), d:missingLangs.length + ' language' + (missingLangs.length>1?'s':''), p:'medium', langs:missingLangs.join(',')});
@@ -4227,7 +4231,13 @@ function kgAction(action, productId, btn, langs) {
 	var stopTicker = function () { if (ticker) { clearInterval(ticker); ticker = null; } };
 
 	var endpoint, body;
-	if (action === 'enrich') {
+	if (action === 'schema') {
+		// Deterministic Product JSON-LD from WooCommerce data — instant, no AI,
+		// no queue. Returns {status:'done'} so the standard non-queued path
+		// flashes "Done" and refreshes the panel (has_schema flips true).
+		endpoint = 'aeo/generate-product-schema';
+		body = { post_id: productId };
+	} else if (action === 'enrich') {
 		// Route single-product enrichment through the batch endpoint so the
 		// operator gets the same live progress monitor as a category batch.
 		// Without this, AI takes 30-90s to complete but the panel says "Queued"

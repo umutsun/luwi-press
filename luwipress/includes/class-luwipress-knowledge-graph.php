@@ -1020,7 +1020,12 @@ class LuwiPress_Knowledge_Graph {
 			// AEO flags
 			$has_faq       = ! empty( $meta['_luwipress_faq'] ) && 'a:0:{}' !== $meta['_luwipress_faq'];
 			$has_howto     = ! empty( $meta['_luwipress_howto'] );
-			$has_schema    = ! empty( $meta['_luwipress_schema'] );
+			// Product schema counts as present when LuwiPress stored one OR when
+			// WooCommerce core / an SEO plugin already emits it (detect_seo is
+			// request-cached, so this is O(1) per product). Keeps the graph from
+			// painting products "missing schema" red when Rank Math/WC cover it.
+			$has_schema    = ! empty( $meta['_luwipress_schema'] )
+				|| ( class_exists( 'LuwiPress_Plugin_Detector' ) && LuwiPress_Plugin_Detector::get_instance()->product_schema_covered() );
 			$has_speakable = ! empty( $meta['_luwipress_speakable'] );
 
 			// Upsells/cross-sells

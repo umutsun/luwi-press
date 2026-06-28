@@ -240,6 +240,18 @@ class LuwiPress_KG_Opportunities {
 	private function build_missing_schema_candidates() {
 		global $wpdb;
 
+		// Honest signal: a standard WooCommerce store ALREADY emits Product
+		// JSON-LD — from WC core (WC_Structured_Data) and/or an SEO plugin
+		// (Rank Math / Yoast / AIOSEO / SEOPress). Flagging those products as
+		// "missing schema" is a false positive that can never be resolved. Only
+		// surface this candidate when nothing else provides Product schema (the
+		// rare case where LuwiPress's own deterministic generator is the right
+		// fix — see generate-product-schema + the Schema Registry `product` type).
+		if ( class_exists( 'LuwiPress_Plugin_Detector' )
+			&& LuwiPress_Plugin_Detector::get_instance()->product_schema_covered() ) {
+			return array();
+		}
+
 		$join_wpml  = '';
 		$where_wpml = '';
 		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {

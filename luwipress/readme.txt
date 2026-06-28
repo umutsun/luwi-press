@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.17.1
+Stable tag: 3.17.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,10 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.17.2 — Knowledge Graph schema signal is now honest =
+* **No more unfixable "missing Product Schema" tasks.** The Knowledge Graph used to flag products as missing structured data even when WooCommerce (or your SEO plugin — Rank Math, Yoast, AIOSEO, SEOPress) was already outputting it, leaving a task you could never clear. The graph now recognises that coverage: those products show as complete and the dead tasks disappear, so your store-health score reflects reality.
+* **One-click Product schema where it's genuinely missing.** On stores with no other source of Product structured data, a new "Generate Product Schema" action builds valid JSON-LD (price, stock, rating) straight from your product data — instantly, with no AI cost — and only emits it when nothing else does, so you never get duplicate schema.
 
 = 3.17.1 — Knowledge Graph actions run in the background (no more stuck buttons) =
 * **Enrich & "Next Wins" actions no longer hang.** Triggering product enrichment from the Knowledge Graph or the Next Wins panel now hands the AI work to a background queue and returns instantly, instead of holding the request open for 30-90 seconds (which timed out and left the button stuck on "Working…"). The live progress monitor tracks each product as it completes, so the gamification loop — act, watch your store-health score climb — works reliably even on hosts with strict execution limits.

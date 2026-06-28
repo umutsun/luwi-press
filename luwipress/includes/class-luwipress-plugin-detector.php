@@ -148,6 +148,36 @@ class LuwiPress_Plugin_Detector {
 		return $result;
 	}
 
+	/**
+	 * Is Product (schema.org) JSON-LD already emitted for WooCommerce products
+	 * by something OTHER than LuwiPress? True when a third-party SEO plugin with
+	 * schema support is active (Rank Math / Yoast / AIOSEO / SEOPress) OR when
+	 * WooCommerce core's own structured data emitter (WC_Structured_Data) is
+	 * present — which it is by default on every WC store.
+	 *
+	 * Used to (a) suppress the "missing Product Schema" Next-Wins card so it
+	 * never fires when schema is already covered, and (b) dedup LuwiPress's own
+	 * Product schema renderer so we never emit a duplicate Product node.
+	 *
+	 * Sites that have explicitly stripped WooCommerce structured data (some
+	 * speed/headless setups) can force LuwiPress to take over by returning
+	 * false from the `luwipress_wc_emits_product_schema` filter.
+	 *
+	 * @return bool
+	 */
+	public function product_schema_covered() {
+		$seo = $this->detect_seo();
+		$third_party = in_array( $seo['plugin'], array( 'rank-math', 'yoast', 'aioseo', 'seopress' ), true )
+			&& ! empty( $seo['features']['schema'] );
+		if ( $third_party ) {
+			return true;
+		}
+		if ( class_exists( 'WC_Structured_Data' ) && apply_filters( 'luwipress_wc_emits_product_schema', true ) ) {
+			return true;
+		}
+		return false;
+	}
+
 	// ------------------------------------------------------------------
 	// Translation Plugin Detection
 	// ------------------------------------------------------------------

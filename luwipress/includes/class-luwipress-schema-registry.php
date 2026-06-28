@@ -436,6 +436,58 @@ class LuwiPress_Schema_Registry {
 			'callback'            => array( $this, 'rest_diagnostic_render' ),
 			'permission_callback' => array( $this, 'permission_token' ),
 		) );
+
+		// Generate + store deterministic Product schema for a WC product:
+		// POST /aeo/generate-product-schema { post_id }. No AI, instant — the
+		// working action behind the KG "missing Product Schema" card.
+		register_rest_route( $ns, '/aeo/generate-product-schema', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'rest_generate_product_schema' ),
+			'permission_callback' => array( $this, 'permission_token' ),
+			'args'                => array(
+				'post_id' => array( 'required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint' ),
+			),
+		) );
+	}
+
+	/**
+	 * Build the deterministic Product schema from WooCommerce data and store it
+	 * under _luwipress_schema via the registry save path. Synchronous + instant
+	 * (no AI). Resolves the KG "missing Product Schema" signal in one click.
+	 */
+	public function rest_generate_product_schema( $request ) {
+		$body    = $request->get_json_params() ?: array();
+		$post_id = absint( $request->get_param( 'post_id' ) ?: ( $body['post_id'] ?? 0 ) );
+		if ( ! $post_id ) {
+			return new WP_Error( 'missing_id', 'post_id is required.', array( 'status' => 400 ) );
+		}
+		if ( 'product' !== get_post_type( $post_id ) ) {
+			return new WP_Error( 'not_a_product', 'Product schema only applies to WooCommerce products.', array( 'status' => 400 ) );
+		}
+
+		$built = $this->build_product_schema_data( $post_id );
+		if ( empty( $built ) ) {
+			return new WP_Error( 'build_failed', 'Could not build Product schema (WooCommerce inactive or product missing).', array( 'status' => 422 ) );
+		}
+
+		$result = $this->save_schema( 'post', $post_id, 'product', $built );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$covered = class_exists( 'LuwiPress_Plugin_Detector' )
+			&& LuwiPress_Plugin_Detector::get_instance()->product_schema_covered();
+
+		return rest_ensure_response( array(
+			'status'         => 'done',
+			'post_id'        => $post_id,
+			'generated'      => true,
+			'rendered_live'  => ! $covered, // false → stored but suppressed (WC/SEO plugin already emits it)
+			'note'           => $covered
+				? 'Stored. Not emitted on the storefront because WooCommerce core / your SEO plugin already outputs Product schema (no duplicate).'
+				: 'Stored and emitted on the product page.',
+			'schema_type'    => 'Product',
+		) );
 	}
 
 	public function permission_token( $request ) {
@@ -666,6 +718,21 @@ class LuwiPress_Schema_Registry {
 	// ─── BUILT-IN TYPE REGISTRATIONS ───────────────────────────────────
 
 	private function register_builtin_types() {
+		// Product — JSON-LD Product/Offer/AggregateRating built deterministically
+		// from WooCommerce data (no AI). Stored under _luwipress_schema (the key
+		// the KG "missing schema" signal + AEO coverage already track). The
+		// renderer is DEDUP-GUARDED: it never emits when WooCommerce core or an
+		// SEO plugin already outputs Product schema, so LuwiPress is a fallback
+		// only and never produces a duplicate Product node.
+		$this->register_type( 'product', array(
+			'schema_type' => 'Product',
+			'meta_key'    => '_luwipress_schema',
+			'contexts'    => array( 'post:product' ),
+			'description' => 'Product — JSON-LD Product/Offer/AggregateRating from WooCommerce data. Emitted ONLY when nothing else (WC core / SEO plugin) already provides Product schema.',
+			'sanitizer'   => array( $this, 'sanitize_passthrough_schema' ),
+			'renderer'    => array( $this, 'render_product_schema' ),
+		) );
+
 		// FAQ — applies to products AND product_cat terms (FR-013).
 		$this->register_type( 'faq', array(
 			'schema_type' => 'FAQPage',
@@ -821,6 +888,117 @@ class LuwiPress_Schema_Registry {
 			'@type'      => 'FAQPage',
 			'mainEntity' => $entities,
 		);
+	}
+
+	// ─── PRODUCT (deterministic, WooCommerce) ──────────────────────────
+
+	/**
+	 * Render the stored Product schema — DEDUP-GUARDED. Never emits when
+	 * WooCommerce core (WC_Structured_Data) or a third-party SEO plugin already
+	 * outputs Product JSON-LD, so we never produce a duplicate Product node.
+	 * Stored value may be an array (normal) or a legacy JSON string (older
+	 * enrich-callback writes) — both are handled.
+	 */
+	public function render_product_schema( $data, $context ) {
+		if ( class_exists( 'LuwiPress_Plugin_Detector' )
+			&& LuwiPress_Plugin_Detector::get_instance()->product_schema_covered() ) {
+			return null; // WC core / SEO plugin already covers it.
+		}
+		if ( is_string( $data ) ) {
+			$decoded = json_decode( $data, true );
+			$data    = is_array( $decoded ) ? $decoded : null;
+		}
+		if ( empty( $data ) || ! is_array( $data ) ) {
+			return null;
+		}
+		if ( empty( $data['@context'] ) ) {
+			$data = array( '@context' => 'https://schema.org' ) + $data;
+		}
+		if ( empty( $data['@type'] ) ) {
+			$data['@type'] = 'Product';
+		}
+		return $data;
+	}
+
+	/**
+	 * Build a complete Product JSON-LD array from WooCommerce product data —
+	 * deterministic, no AI: name, url, image(s), description, sku, brand, an
+	 * Offer (price/currency/availability/url) and AggregateRating when reviews
+	 * exist. Returns null when WC is inactive or the product is missing.
+	 *
+	 * @param int $product_id
+	 * @return array|null
+	 */
+	public function build_product_schema_data( $product_id ) {
+		if ( ! function_exists( 'wc_get_product' ) ) {
+			return null;
+		}
+		$product = wc_get_product( $product_id );
+		if ( ! $product ) {
+			return null;
+		}
+
+		$schema = array(
+			'@context' => 'https://schema.org',
+			'@type'    => 'Product',
+			'name'     => $product->get_name(),
+			'url'      => get_permalink( $product_id ),
+		);
+
+		$images = array();
+		$main   = wp_get_attachment_url( $product->get_image_id() );
+		if ( $main ) {
+			$images[] = $main;
+		}
+		foreach ( $product->get_gallery_image_ids() as $gid ) {
+			$u = wp_get_attachment_url( $gid );
+			if ( $u ) {
+				$images[] = $u;
+			}
+		}
+		if ( $images ) {
+			$schema['image'] = $images;
+		}
+
+		$desc = wp_strip_all_tags( $product->get_short_description() ?: $product->get_description() );
+		$desc = trim( preg_replace( '/\s+/', ' ', (string) $desc ) );
+		if ( '' !== $desc ) {
+			$schema['description'] = mb_substr( $desc, 0, 5000 );
+		}
+
+		if ( $product->get_sku() ) {
+			$schema['sku'] = $product->get_sku();
+		}
+
+		// Brand from the product_brand taxonomy when present (common WC brand plugins).
+		$brands = wp_get_post_terms( $product_id, 'product_brand', array( 'fields' => 'names' ) );
+		if ( ! is_wp_error( $brands ) && ! empty( $brands ) ) {
+			$schema['brand'] = array( '@type' => 'Brand', 'name' => $brands[0] );
+		}
+
+		// Offer.
+		$price = $product->get_price();
+		if ( '' !== (string) $price ) {
+			$schema['offers'] = array(
+				'@type'         => 'Offer',
+				'url'           => get_permalink( $product_id ),
+				'priceCurrency' => function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'USD',
+				'price'         => number_format( (float) $price, 2, '.', '' ),
+				'availability'  => $product->is_in_stock() ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+			);
+		}
+
+		// AggregateRating from real review data.
+		$review_count = (int) $product->get_review_count();
+		if ( $review_count > 0 ) {
+			$schema['aggregateRating'] = array(
+				'@type'       => 'AggregateRating',
+				'ratingValue' => (string) $product->get_average_rating(),
+				'reviewCount' => (string) $review_count,
+			);
+		}
+
+		return $schema;
 	}
 
 	// ─── EVENT (FR-024) ────────────────────────────────────────────────
