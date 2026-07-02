@@ -1,0 +1,6307 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: LuwiPress Core\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-02 08:15+0000\n"
+"PO-Revision-Date: 2026-07-02 08:25+0000\n"
+"Last-Translator: \n"
+"Language-Team: French (France)\n"
+"Language: fr_FR\n"
+"Plural-Forms: nplurals=2; plural=n > 1;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Loco https://localise.biz/\n"
+"X-Loco-Version: 2.8.5; wp-7.0; php-8.4.19\n"
+"X-Domain: luwipress"
+
+#: includes/class-luwipress-kg-opportunities.php:287
+#, php-format
+msgid "\"%1$s\" — missing Product Schema"
+msgstr "\"%1$s\" — Produit manquant Schéma"
+
+#. 1: product title
+#: includes/class-luwipress-kg-opportunities.php:472
+#, php-format
+msgid "\"%1$s\" — re-enrich (content changed since last AI write)"
+msgstr "\"%1$s\" — ré-enrichir (contenu changé depuis la dernière IA écrire)"
+
+#: admin/content-audit-page.php:361
+msgid "% Band"
+msgstr "%d e la bande"
+
+#: luwipress.php:1624
+#, php-format
+msgid "%1$d / %2$d"
+msgstr "%1$d / %2$d"
+
+#. 1: flagged count, 2: scanned count, 3: post-type label, 4: total findings
+#: includes/class-luwipress-content-audit.php:868
+#, php-format
+msgid ""
+"%1$d of %2$d scanned %3$s contain promotional / urgency language (%4$d flags)"
+" that can trigger Google Merchant Center disapproval."
+msgstr ""
+"%1$d de %2$d numérisés %3$s promotionnelle / urgence langue (%4$d drapeaux) "
+"qui peut déclencher Google Merchant Center désapprobation."
+
+#. 1: flagged count, 2: scanned count, 3: post-type label, 4: total findings
+#: includes/class-luwipress-content-audit.php:838
+#, php-format
+msgid ""
+"%1$d of %2$d scanned %3$s show stock LLM phrasing (%4$d findings). Rewrite "
+"for a proprietary voice — Helpful Content risk."
+msgstr ""
+"%1$d de %2$d numérisés %3$s show actions de MAÎTRISE du phrasé (%4$d les "
+"résultats). Réécrire pour un propriétaire de voix — un Contenu Utile de "
+"risque."
+
+#. 1: count, 2: plural label
+#: admin/vendors-page.php:331
+#, php-format
+msgid "%1$d published %2$s."
+msgid_plural "%1$d published %2$s."
+msgstr[0] "%1$d publiés %2$s."
+msgstr[1] "%1$d publiés %2$s."
+
+#: includes/class-luwipress-taxonomy-editor.php:112
+#, php-format
+msgid "%1$d saved, %2$d failed."
+msgstr "%1$d enregistré, %2$d a échoué."
+
+#: includes/class-luwipress-crm-campaigns.php:752
+#, php-format
+msgid "%1$d%% off — expires in %2$d days"
+msgstr "%1$d%% off — expire dans %2$d jours"
+
+#. 1: vendor preset name, 2: HTTP status, 3: error message
+#: includes/providers/class-luwipress-provider-openai-compatible.php:226
+#, php-format
+msgid "%1$s API error (%2$d): %3$s"
+msgstr "%1$s erreur de l'API (%2$d): %3$s"
+
+#. 1: vendor preset name, 2: error message
+#: includes/providers/class-luwipress-provider-openai-compatible.php:208
+#, php-format
+msgid "%1$s API request failed: %2$s"
+msgstr "%1$s de l'API demande a échoué: %2$s"
+
+#. 1: dimension label
+#: includes/class-luwipress-kg-opportunities.php:376
+#, php-format
+msgid "%1$s slipped this week"
+msgstr "%1$s a glissé cette semaine"
+
+#. %d: count
+#: admin/bot-defense-page.php:137
+msgid "%d active blocks"
+msgstr "%d actifs blocs"
+
+#: includes/class-luwipress-theme-bridge.php:752
+msgid "%d additional finding(s) — review in LuwiPress → Theme"
+msgstr ""
+
+#. %d count of callbacks
+#: admin/slug-resolver-page.php:138
+msgid "%d callbacks at p1"
+msgstr "%d rappels à p1"
+
+#. %d characters
+#: admin/image-alt-bulk-page.php:284
+msgid "%d chars"
+msgstr "%d caractères"
+
+#. %d field count
+#: admin/cpt-manager-page.php:312
+msgid "%d field"
+msgid_plural "%d fields"
+msgstr[0] "%d champ"
+msgstr[1] "%d des champs"
+
+#. %d: count
+#: admin/bot-defense-page.php:131
+msgid "%d flagged accounts"
+msgstr "%d marqués comptes"
+
+#: includes/class-luwipress-content-scheduler.php:1346
+msgid "%d internal link resolved"
+msgid_plural "%d internal links resolved"
+msgstr[0] "%d lien interne résolu"
+msgstr[1] "%d liens internes résolu"
+
+#. %d = current row count
+#: admin/faq-editor-metabox.php:59
+msgid "%d question"
+msgid_plural "%d questions"
+msgstr[0] "%d question"
+msgstr[1] "%d questions"
+
+#. %d taxonomy count
+#: admin/cpt-manager-page.php:314
+msgid "%d taxonomy"
+msgid_plural "%d taxonomies"
+msgstr[0] "%d taxonomie"
+msgstr[1] "%d taxonomies"
+
+#: includes/class-luwipress-taxonomy-editor.php:127
+msgid "%d term groups"
+msgstr "%terme, les groupes d"
+
+#: includes/class-luwipress-taxonomy-editor.php:111
+msgid "%d updates saved."
+msgstr "%d les mises à jour enregistrées."
+
+#. %s: provider display name
+#: includes/class-luwipress-ai-engine.php:433
+#, php-format
+msgid ""
+"%s API key is not configured. Go to LuwiPress Settings > AI Providers to add "
+"your API key."
+msgstr ""
+
+#: includes/class-luwipress-vendors.php:1115
+#: includes/class-luwipress-events.php:182
+#, php-format
+msgid "%s archive"
+msgstr "%s archive"
+
+#. %s: vendor preset name
+#: includes/providers/class-luwipress-provider-openai-compatible.php:245
+#, php-format
+msgid "%s returned an empty response."
+msgstr "%s a renvoyé une réponse vide."
+
+#. %s plural label
+#: admin/vendors-page.php:326
+#, php-format
+msgid "%s roster"
+msgstr "%s roster"
+
+#: includes/class-luwipress-taxonomy-editor.php:123
+msgid "(no translation)"
+msgstr "(pas de traduction)"
+
+#: admin/image-alt-bulk-page.php:270
+msgid "(unattached)"
+msgstr "(seules)"
+
+#. %d count
+#: admin/vendors-page.php:116
+msgid "+ %d draft"
+msgstr "+ %d, projet"
+
+#: admin/image-alt-bulk-page.php:210
+msgid "0 unsaved"
+msgstr "0 non enregistrées"
+
+#: admin/scheduler-page.php:67
+msgid "1500–3000 words · research frame, citations, FAQ"
+msgstr "1500-3000 mots · recherche en image, des citations, des FAQ"
+
+#: admin/faq-editor-metabox.php:112
+msgid ""
+"2-4 sentences, 50-80 words. Lead with the direct answer; cite a fact or "
+"workshop observation if you can."
+msgstr ""
+"2-4 phrases, de 50 à 80 mots. Conduire avec la réponse directe; citer un "
+"fait ou d'observation en atelier si vous le pouvez."
+
+#: admin/scheduler-page.php:72
+msgid "2000–3500+ words · strong voice, anecdotes, essay arc"
+msgstr "2000-3500+ mots · voix forte, des anecdotes, un essai d'arc"
+
+#: admin/usage-page.php:189 admin/usage-page.php:190
+msgid "30-day cost trend"
+msgstr "30 jours de l'évolution des coûts"
+
+#: admin/knowledge-graph-page.php:156
+msgid "30-Day Revenue"
+msgstr "De 30 Jours Revenus"
+
+#: admin/scheduler-page.php:62
+msgid "800–1500 words · balanced SEO article"
+msgstr "800-1500 mots · équilibré SEO article"
+
+#: admin/events-page.php:92
+msgid "A dashicons-* class."
+msgstr "Un dashicons-* classe."
+
+#: includes/class-luwipress-license.php:652
+msgid "A license key is required."
+msgstr "Une clé de licence est requise."
+
+#: includes/class-luwipress-crm-campaigns.php:574
+#: includes/class-luwipress-crm-campaigns.php:591
+#, php-format
+msgid "A note from %s"
+msgstr "Une note de %s"
+
+#: includes/class-luwipress-crm-campaigns.php:753
+msgid "A small perk inside"
+msgstr "Un petit avantage à l'intérieur de"
+
+#: includes/class-luwipress-license.php:519
+msgid ""
+"A valid LuwiPress license is required to use this feature. Activate your "
+"license under LuwiPress → Settings → License."
+msgstr ""
+
+#: admin/bot-defense-page.php:509
+msgid "Above this count, link-density signal fires. Default 2."
+msgstr ""
+"Au-dessus de ce nombre, lien densité de signal d'incendie. Par défaut 2."
+
+#: admin/scheduler-page.php:53
+msgid "Academic"
+msgstr "Académique"
+
+#: includes/class-luwipress-cookie-consent.php:191
+msgid "Accept all"
+msgstr "Accepter tous les"
+
+#: admin/bot-defense-page.php:197
+msgid "Account scoring tiers"
+msgstr "Compte de notation niveaux"
+
+#: admin/bot-defense-page.php:271
+msgid "Accounts"
+msgstr "Comptes"
+
+#: admin/bot-defense-page.php:853
+msgid "accounts at score ≥"
+msgstr "comptes au score ≥"
+
+#: admin/bot-defense-page.php:128
+msgid "Accounts flagged at current threshold"
+msgstr "Les comptes marqués au seuil de courant"
+
+#: admin/bot-defense-page.php:756
+msgid "accounts? This cannot be undone."
+msgstr "comptes? Ce ne peut pas être annulée."
+
+#: admin/bot-defense-page.php:541
+msgid "Action"
+msgstr "Action"
+
+#: admin/bot-defense-page.php:384 admin/slug-resolver-page.php:207
+msgid "Actions"
+msgstr "Actions"
+
+#: includes/class-luwipress-license.php:1030
+msgid "Activate"
+msgstr "Activer"
+
+#: includes/class-luwipress-license.php:961
+msgid "Activate a valid license below to unlock LuwiPress features."
+msgstr ""
+"Activer une licence valide ci-dessous pour déverrouiller LuwiPress "
+"fonctionnalités."
+
+#: admin/admin-page.php:494
+msgid "Activate license"
+msgstr "Activer la licence"
+
+#: includes/class-luwipress-license.php:967
+msgid ""
+"Activate your CodeCanyon purchase code or LuwiPress license key to unlock "
+"updates and premium features."
+msgstr ""
+"Activer votre CodeCanyon achat code ou LuwiPress clé de licence pour "
+"déverrouiller les mises à jour et des fonctionnalités premium."
+
+#: admin/events-page.php:47 admin/cpt-manager-page.php:138
+msgid "Active"
+msgstr "Active"
+
+#: admin/scheduler-page.php:117
+msgid "Active AI provider"
+msgstr "Active AI fournisseur"
+
+#: admin/bot-defense-page.php:405 admin/bot-defense-page.php:556
+msgid "Active blocks"
+msgstr "Active les blocs"
+
+#: admin/bot-defense-page.php:176
+msgid "Active IP blocks"
+msgstr "Active les blocs de propriété intellectuelle"
+
+#: includes/class-luwipress-health-score.php:84
+msgid "Active Schema Registry types vs. emission on relevant content."
+msgstr "Active Schéma types de Registre vs émission sur le contenu pertinent."
+
+#: admin/theme-page.php:154
+msgid "Active theme"
+msgstr "Thème actif"
+
+#: admin/theme-page.php:118
+msgid ""
+"Active theme has not registered with LuwiPress — capabilities cannot be "
+"amplified."
+msgstr ""
+"Thème actif n'a pas enregistré avec LuwiPress — capacités ne peuvent être "
+"amplifiés."
+
+#: admin/admin-page.php:123
+msgid ""
+"Active theme is not an official LuwiPress companion — some ecosystem "
+"features may not be amplified."
+msgstr ""
+"Thème actif n'est pas un fonctionnaire LuwiPress compagnon — quelques "
+"caractéristiques de l'écosystème ne peut être amplifié."
+
+#: admin/usage-page.php:156
+msgid "active this month"
+msgstr "actif ce mois-ci"
+
+#: includes/class-luwipress-license.php:972
+#, php-format
+msgid "Active — %s"
+msgstr "Actifs — %s"
+
+#: admin/usage-page.php:205
+msgid "Activity Log"
+msgstr "Journal D'Activité"
+
+#: admin/knowledge-graph-page.php:286
+msgid "Actually enriches, writes SEO and translates within your daily budget."
+msgstr ""
+"Effectivement enrichit, écrit SEO et se traduit au sein de votre budget "
+"quotidien."
+
+#: includes/class-luwipress-vendors.php:1106
+#: includes/class-luwipress-events.php:173
+#, php-format
+msgid "Add %s"
+msgstr "Ajouter %s"
+
+#: luwipress.php:1304
+msgid "Add a server cron entry that hits this URL every 5 minutes:"
+msgstr ""
+"Ajouter un serveur d'entrée cron qui frappe cette URL toutes les 5 minutes:"
+
+#: luwipress.php:1576
+msgid "Add at least one topic to continue."
+msgstr "Ajouter au moins un sujet de continuer."
+
+#: admin/cpt-manager-page.php:145 admin/cpt-manager-page.php:152
+#: admin/cpt-manager-page.php:436
+msgid "Add content type"
+msgstr "Ajouter un type de contenu"
+
+#: admin/cpt-manager-page.php:214
+msgid "Add field"
+msgstr "Ajouter un champ"
+
+#: admin/slug-resolver-page.php:217
+msgid "Add manual override"
+msgstr "Ajouter manuelle"
+
+#. %s singular label
+#. %s: CPT singular label
+#: admin/vendors-page.php:346 includes/class-luwipress-vendors.php:1107
+#: includes/class-luwipress-cpt-engine.php:468
+#: includes/class-luwipress-events.php:174
+#, php-format
+msgid "Add new %s"
+msgstr "Ajouter un nouveau %s"
+
+#: includes/class-luwipress-events.php:219
+msgid "Add New Category"
+msgstr "Ajouter Une Nouvelle Catégorie"
+
+#: includes/class-luwipress-vendors.php:1158
+msgid "Add New Group"
+msgstr "Ajouter Un Nouveau Groupe"
+
+#: admin/vendors-page.php:146
+msgid "Add new vendor"
+msgstr "Ajouter un nouveau fournisseur"
+
+#: admin/scheduler-page.php:440
+msgid ""
+"Add one topic per line, up to 50 per batch. Optionally add comma-separated "
+"keywords after a pipe."
+msgstr ""
+"Ajouter un sujet par ligne, jusqu'à 50 par lot. Ajoutez éventuellement "
+"séparés par des virgules mots clés après une pipe."
+
+#: admin/schema-picker-page.php:183
+msgid "Add or replace schema"
+msgstr "Ajouter ou remplacer schéma"
+
+#: luwipress.php:1623
+msgid "Add picked to queue"
+msgstr "Ajouter cueillies à la file d'attente"
+
+#: admin/faq-editor-metabox.php:124 includes/class-luwipress-faq-editor.php:332
+msgid "Add question"
+msgstr "Ajout de la question"
+
+#: admin/vendors-page.php:295
+msgid "Add row"
+msgstr "Ajouter une ligne"
+
+#: admin/schema-picker-page.php:160
+msgid ""
+"Add Schema.org JSON-LD blocks (HowTo, LocalBusiness, Service, Review, Course,"
+" AggregateRating, Speakable) to any post or term. FAQ has its own dedicated "
+"metabox on the post edit screen. ItemList auto-generates on category "
+"archives."
+msgstr ""
+"Ajouter Schema.org JSON-LD blocs (HowTo, LocalBusiness, Service de Révision, "
+"Cours, AggregateRating, Speakable) à un autre poste ou à terme. FAQ a son "
+"propre metabox sur le poste de l'écran d'édition. ItemList auto-génère sur "
+"les archives de la catégorie."
+
+#: admin/cpt-manager-page.php:231
+msgid "Add taxonomy"
+msgstr "Ajouter la taxonomie"
+
+#: includes/class-luwipress-image-studio.php:79
+msgid "Add your AI API key in LuwiPress → Settings to use Image Studio."
+msgstr ""
+
+#: includes/class-luwipress-abilities.php:281
+msgid "Administrator access required."
+msgstr "Administrateur d'accès requis."
+
+#: admin/cpt-manager-page.php:235
+msgid "Advanced — Schema.org & WooCommerce"
+msgstr "Avancé — Schema.org & Thème"
+
+#: admin/scheduler-page.php:485
+msgid "Advanced: per-topic overrides"
+msgstr "Avancé: par thème, les remplacements"
+
+#: includes/class-luwipress-health-score.php:65
+msgid "AEO Coverage"
+msgstr "OEA Couverture"
+
+#: admin/scheduler-page.php:620
+msgid "After AI generates each article"
+msgstr "Après l'IA génère chaque article"
+
+#: admin/scheduler-page.php:794
+msgid "After generation"
+msgstr "Après génération"
+
+#: admin/schema-picker-page.php:237
+msgid "After saving, use"
+msgstr "Après la sauvegarde, l'utilisation"
+
+#: admin/image-alt-bulk-page.php:292
+msgid "AI"
+msgstr "L'IA"
+
+#: admin/scheduler-page.php:717
+msgid "AI auto-brainstorms and queues new topics on your cadence."
+msgstr ""
+"IA auto-remue-méninges et des files d'attente de nouveaux thèmes à votre "
+"cadence."
+
+#: admin/knowledge-graph-page.php:252
+msgid "AI Autopilot"
+msgstr "IA pilote automatique"
+
+#: admin/admin-page.php:598
+msgid "AI blog posts + images"
+msgstr "L'IA des messages de blog + images"
+
+#: admin/admin-page.php:522
+msgid "AI Calls (today)"
+msgstr "L'IA des Appels (aujourd'hui)"
+
+#: admin/cookies-page.php:285
+msgid "AI cookie policy generator"
+msgstr "IA politique de cookie générateur"
+
+#: admin/admin-page.php:541
+msgid "AI Cost Trend"
+msgstr "L'IA de l'évolution des Coûts"
+
+#: admin/admin-page.php:596
+msgid "AI descriptions, SEO, FAQ"
+msgstr "L'IA des descriptions, SEO, FAQ"
+
+#: admin/scheduler-page.php:565
+msgid ""
+"AI drafts a structural outline first and waits for your edits. Only applies "
+"to deep/editorial depth — standard skips this step."
+msgstr ""
+"AI brouillons structurel contour premier et attend de vos modifications. "
+"S'applique uniquement à la profondeur et à la rédaction de la profondeur "
+"standard saute cette étape."
+
+#: includes/class-luwipress-faq-editor.php:152
+msgid "AI generating…"
+msgstr "IA génération..."
+
+#: includes/class-luwipress-faq-editor.php:337
+msgid "AI generation completed."
+msgstr "IA génération terminée."
+
+#: includes/class-luwipress-faq-editor.php:153
+msgid "AI generation failed"
+msgstr "IA génération a échoué"
+
+#: includes/class-luwipress-faq-editor.php:338
+msgid "AI generation failed."
+msgstr "IA génération a échoué."
+
+#: includes/class-luwipress-faq-editor.php:339
+msgid ""
+"AI generation is only available for WooCommerce products in this release."
+msgstr ""
+"IA génération est disponible uniquement pour le Thème produits dans cette "
+"version."
+
+#: includes/class-luwipress-faq-editor.php:336
+msgid "AI generation queued — reload the page in ~30s to see results."
+msgstr ""
+"IA génération en file d'attente à recharger la page dans ~30s à voir des "
+"résultats."
+
+#: admin/cookies-page.php:274
+msgid "AI Policy"
+msgstr "IA Politique"
+
+#: admin/admin-page.php:281
+#, php-format
+msgid "AI provider configured: %1$s · model %2$s. Click to manage in Settings."
+msgstr ""
+"AI fournisseur configuré: %1$s · modèle de %2$s. Cliquez sur gérer dans les "
+"Paramètres."
+
+#: admin/admin-page.php:599
+msgid "AI spend, activity"
+msgstr "AI passer, activité"
+
+#: admin/scheduler-page.php:662
+msgid "AI stagger (minutes between runs)"
+msgstr "AI tituber (minutes entre les séries)"
+
+#: admin/scheduler-page.php:459
+msgid "AI topic brainstorm"
+msgstr "IA rubrique remue-méninges"
+
+#: admin/usage-page.php:154
+msgid "AI Workflows"
+msgstr "L'IA des flux de travail"
+
+#. Description of the plugin
+msgid ""
+"AI-powered content enrichment, SEO optimization, and translation automation "
+"for WooCommerce stores."
+msgstr ""
+"AI-alimenté enrichissement de contenu, l'optimisation SEO, de traduction et "
+"d'automatisation pour Thème les magasins."
+
+#: includes/class-luwipress-abilities.php:81
+msgid "AI-powered content, SEO, translation, and store automation tools."
+msgstr ""
+"AI-alimenté le contenu, le RÉFÉRENCEMENT, la traduction, et de stocker les "
+"outils d'automatisation."
+
+#: admin/scheduler-page.php:113
+msgid ""
+"AI-powered editorial pipeline — queue topics, review outlines, publish on "
+"schedule."
+msgstr ""
+"AI-alimenté éditorial de pipeline de la file d'attente des sujets, revue "
+"décrit, de publier dans les délais."
+
+#: includes/class-luwipress-content-audit.php:835
+msgid "AI-tell phrasing flagged"
+msgstr "IA-dire le phrasé marqué"
+
+#: admin/content-audit-page.php:302
+msgid "AI-Tell Scanner"
+msgstr "AI-Dites-Scanner"
+
+#: admin/content-audit-page.php:244
+msgid "AI-Tells"
+msgstr "AI-Dit"
+
+#: admin/usage-page.php:290 admin/scheduler-page.php:193
+#: admin/image-alt-bulk-page.php:197 admin/knowledge-graph-page.php:51
+msgid "All"
+msgstr "Tous"
+
+#. %s: CPT plural label
+#. %s: attribution type label (e.g. Vendors)
+#: includes/class-luwipress-vendors.php:1111
+#: includes/class-luwipress-cpt-engine.php:472
+#: includes/class-luwipress-cpt-engine.php:1453
+#: includes/class-luwipress-events.php:178
+#, php-format
+msgid "All %s"
+msgstr "Tous les %s"
+
+#: admin/content-audit-page.php:276 admin/content-audit-page.php:319
+msgid "All (meta + body)"
+msgstr "Tous les (méta + corps)"
+
+#: admin/usage-page.php:447
+msgid "All AI stopped."
+msgstr "Tous AI arrêté."
+
+#: admin/bot-defense-page.php:163
+msgid "All bot settings"
+msgstr "Tous les paramètres des bots"
+
+#: includes/class-luwipress-events.php:217
+msgid "All Categories"
+msgstr "Toutes Les Catégories"
+
+#: includes/class-luwipress-ai-engine.php:274
+msgid "All fallback providers failed."
+msgstr "Tous les fournisseurs de secours a échoué."
+
+#: includes/class-luwipress-vendors.php:1154
+msgid "All Groups"
+msgstr "Tous Les Groupes"
+
+#: admin/knowledge-graph-page.php:54
+msgid "All items"
+msgstr "Tous les articles"
+
+#: admin/admin-page.php:648
+msgid "All Logs"
+msgstr "Tous Les Journaux"
+
+#: admin/usage-page.php:23
+msgid "All logs cleared."
+msgstr "Tous les journaux effacé."
+
+#: admin/admin-page.php:175
+msgid "All updates"
+msgstr "Toutes les mises à jour"
+
+#: admin/bot-defense-page.php:189 admin/bot-defense-page.php:413
+msgid "Allowlist entries"
+msgstr "Allowlist entrées"
+
+#: admin/scheduler-page.php:572
+msgid "Also generate in additional languages"
+msgstr "Aussi générer dans d'autres langues"
+
+#: admin/image-alt-bulk-page.php:231
+msgid "Alt text"
+msgstr "Le texte d'Alt"
+
+#: includes/class-luwipress-cookie-consent.php:196
+msgid "Analytics"
+msgstr "Analytics"
+
+#: admin/cookies-page.php:116
+msgid "Analytics accept-rate"
+msgstr "Analytics accepter des taux de"
+
+#: admin/admin-page.php:384
+#, php-format
+msgid "Analytics: %s. Click to open dashboard."
+msgstr "Analytics: %s. Cliquez pour ouvrir le tableau de bord."
+
+#: admin/bot-defense-page.php:326
+msgid ""
+"Animated sweep across every account matching the current tier. Customers, "
+"email-verified, and realistic-name users are skipped automatically."
+msgstr ""
+"Animation de balayer tous les comptes correspondant au niveau actuel. Les "
+"clients, e-mail-vérifié, et réaliste-le nom des utilisateurs sont "
+"automatiquement passée."
+
+#: admin/slug-resolver-page.php:136
+msgid ""
+"Another plugin or theme is also hooked at template_redirect priority 1 — "
+"verify no conflict."
+msgstr ""
+"Un autre plugin ou un thème est également raccordé à template_redirect "
+"priorité 1 — vérifiez qu'aucun conflit."
+
+#: admin/faq-editor-metabox.php:106
+msgid "Answer"
+msgstr "Réponse"
+
+#: includes/providers/class-luwipress-provider-anthropic.php:126
+#, php-format
+msgid "Anthropic API error (%d): %s"
+msgstr "Anthropique erreur de l'API (%d): %s"
+
+#: includes/providers/class-luwipress-provider-anthropic.php:37
+msgid "Anthropic API key is not configured."
+msgstr "Anthropique clé API n'est pas configuré."
+
+#: includes/providers/class-luwipress-provider-anthropic.php:113
+#, php-format
+msgid "Anthropic API request failed: %s"
+msgstr "Anthropique de l'API demande a échoué: %s"
+
+#: includes/providers/class-luwipress-provider-anthropic.php:138
+msgid "Anthropic returned an empty response."
+msgstr "Anthropique a renvoyé une réponse vide."
+
+#: admin/usage-page.php:213
+msgid "API Calls"
+msgstr "Les Appels d'API"
+
+#: luwipress.php:1620 admin/scheduler-page.php:840
+msgid "Approve & generate article"
+msgstr "Approuver et de générer de l'article"
+
+#: admin/vendors-page.php:214
+msgid "Archive enabled"
+msgstr "Archive activé"
+
+#: includes/class-luwipress-backup-bridge.php:517
+msgid ""
+"Archive exceeds 2GB on a 32-bit PHP build; cannot stream a correct Content-"
+"Length."
+msgstr ""
+"L'Archive est supérieure à 2 go sur un 32 bits PHP construire; ne peut "
+"diffuser un Contenu correct de Longueur."
+
+#: includes/class-luwipress-backup-bridge.php:507
+msgid "Archive not found on disk (may live only in remote storage)."
+msgstr ""
+"Archive ne trouve pas sur le disque (peut vivre que dans le stockage à "
+"distance)."
+
+#: admin/events-page.php:84 includes/class-luwipress-vendors.php:1401
+#: includes/class-luwipress-vendors.php:1413
+msgid "Archive slug (URL base)"
+msgstr "Archive slug (URL de base)"
+
+#: admin/vendors-page.php:120
+msgid "Archive URL"
+msgstr "Archive URL"
+
+#: admin/vendors-page.php:162 admin/cpt-manager-page.php:178
+msgid "Archive URL slug"
+msgstr "Archive URL slug"
+
+#: admin/scheduler-page.php:856
+msgid "Are you sure?"
+msgstr "Êtes-vous sûr?"
+
+#: admin/admin-page.php:699
+msgid "Ask AI"
+msgstr "Demander à l'IA"
+
+#: includes/class-luwipress-vendors.php:1469
+msgid ""
+"Assign this vendor to a group (in the Groups box) to pick a URL base. Until "
+"then the global Vendors archive slug is used."
+msgstr ""
+"Attribuer ce vendeur à un groupe (dans la zone de Groupes) pour choisir une "
+"URL de base. Jusqu'alors, le mondial des Fournisseurs de l'archive slug est "
+"utilisé."
+
+#. %d: threshold
+#: admin/bot-defense-page.php:309
+msgid "At threshold (≥ %d)"
+msgstr "Au seuil (≥ %d)"
+
+#: admin/image-alt-bulk-page.php:230
+msgid "Attached to"
+msgstr "Attaché à"
+
+#: includes/class-luwipress-events.php:639
+msgid "Attendance"
+msgstr "La fréquentation"
+
+#: includes/class-luwipress-events.php:373
+msgid "Attendance mode"
+msgstr "La fréquentation de mode"
+
+#. %s: plural label
+#: includes/class-luwipress-vendors.php:460
+#, php-format
+msgid ""
+"Attribute this product to one or more %s. Shows on the PDP and the Schema."
+"org manufacturer field."
+msgstr ""
+"Attribut de ce produit à un ou plusieurs de %s. Montre sur le PDP et le "
+"Schema.org fabricant de terrain."
+
+#: admin/cpt-manager-page.php:254
+msgid "Attribution role / label"
+msgstr "L'Attribution de rôle / label"
+
+#: admin/bot-defense-page.php:522
+msgid "Author"
+msgstr "Auteur"
+
+#: admin/bot-defense-page.php:543
+msgid "Author / IP"
+msgstr "Auteur / propriété intellectuelle"
+
+#: includes/class-luwipress-bot-shield.php:535
+msgid "Author enumeration blocked."
+msgstr "Auteur énumération bloqué."
+
+#: admin/schema-picker-page.php:112
+msgid ""
+"Author-written review of a product or item. ratingValue / bestRating drive "
+"the star display in Google."
+msgstr ""
+"Auteur-examen écrit d'un produit ou d'un élément. ratingValue / bestRating "
+"disque de l'étoile d'affichage dans Google."
+
+#: admin/scheduler-page.php:262
+msgid "Auto"
+msgstr "Auto"
+
+#: admin/cookies-page.php:158
+msgid "Auto (follow OS)"
+msgstr "Auto (suivre les OS)"
+
+#: admin/slug-resolver-page.php:233
+msgid "Auto (true)"
+msgstr "Auto (vrai)"
+
+#: admin/slug-resolver-page.php:106
+msgid "auto-discovered slug → target"
+msgstr ""
+
+#: admin/scheduler-page.php:797
+msgid "Auto-publish"
+msgstr "Auto-publier"
+
+#: admin/scheduler-page.php:632
+msgid "Auto-publish on schedule"
+msgstr "Auto-publier sur le calendrier"
+
+#: admin/slug-resolver-page.php:85
+msgid ""
+"Auto-redirects legacy /<hub>/ page URLs to their matching /product-"
+"category/<hub>/ archive using six discovery passes (exact / cross-language / "
+"fuzzy / Levenshtein-1 / menu-parent / ancestor fallback). Critical before a "
+"DNS swap so visitors and Google land on the live archive, not a stale "
+"editorial page."
+msgstr ""
+
+#: admin/knowledge-graph-page.php:267
+msgid "Autopilot mode"
+msgstr "Le pilote automatique en mode"
+
+#: admin/knowledge-graph-page.php:260
+msgid ""
+"Autopilot quietly improves your lowest-health content on a schedule — "
+"enriching descriptions, writing SEO meta and translating — staying inside "
+"the limits you set. Start in Dry-run to preview what it would do, then "
+"switch to Live."
+msgstr ""
+"Autopilot améliore tranquillement votre plus bas en santé du contenu sur un "
+"programme d'enrichissement des descriptions, de l'écriture SEO meta et de la "
+"traduction — rester à l'intérieur des limites que vous définissez. Départ "
+"dans l'exécution de la Sec pour un aperçu de ce qu'il allait faire, puis "
+"passer en Live."
+
+#: admin/schema-picker-page.php:122
+msgid ""
+"Average rating across multiple reviews. Pair with Review schemas or attach "
+"standalone (e.g. on a Service page)."
+msgstr ""
+"Note moyenne de multiples critiques. Paire de Révision des schémas ou "
+"joindre autonome (par exemple sur une page de Service)."
+
+#: admin/scheduler-page.php:691
+msgid "Back"
+msgstr "De retour"
+
+#: admin/bot-defense-page.php:142 admin/theme-page.php:127
+msgid "Back to LuwiPress Dashboard"
+msgstr "Retour à LuwiPress tableau de bord"
+
+#: includes/class-luwipress-backup-bridge.php:308
+msgid ""
+"Backup started synchronously. Poll /backup/status. Completion of a non-"
+"trivial backup depends on WP-Cron processing updraft_backup_resume."
+msgstr ""
+"Sauvegarde a commencé de façon synchrone. Sondage //sauvegarde de l'état. "
+"L'achèvement d'un non-trivial de sauvegarde dépend WP-Cron traitement "
+"updraft_backup_resume."
+
+#: admin/theme-page.php:209
+msgid "Backups stored · last 20 retained"
+msgstr "Les sauvegardes stockées · 20 dernières conservé"
+
+#: luwipress.php:1601
+msgid "Batch enrichment started — %d products queued."
+msgstr "Lot d'enrichissement de main — %d produits mis en file d'attente."
+
+#: includes/class-luwipress-image-studio.php:97
+msgid "Black & white"
+msgstr "Noir & blanc"
+
+#: admin/content-audit-page.php:360
+msgid "Bloat"
+msgstr "La météorisation"
+
+#: admin/bot-defense-page.php:461
+msgid "Block"
+msgstr "Bloc"
+
+#: includes/class-luwipress-license.php:1019
+msgid ""
+"Block plugin features (REST, AI, admin tools) when no valid license is "
+"active."
+msgstr ""
+"Bloc plugin caractéristiques (REPOS, l'IA, les outils d'administration) "
+"lorsqu'aucune licence valide est active."
+
+#: admin/bot-defense-page.php:1000
+msgid "Blocked."
+msgstr "Bloqués."
+
+#: includes/class-luwipress-taxonomy-editor.php:147
+msgid "Blog Categories"
+msgstr "Catégories De Blog"
+
+#: admin/scheduler-page.php:546 admin/scheduler-page.php:787
+msgid "Blog Post"
+msgstr "Post De Blog"
+
+#: includes/class-luwipress-health-score.php:139
+msgid "Blog post (standard)"
+msgstr "Blog (standard)"
+
+#: includes/class-luwipress-taxonomy-editor.php:148
+msgid "Blog Tags"
+msgstr "Blog Tags"
+
+#: admin/bot-defense-page.php:526
+msgid "Body"
+msgstr "Corps"
+
+#: admin/content-audit-page.php:278 admin/content-audit-page.php:321
+msgid "Body only"
+msgstr "Corps seulement"
+
+#: admin/bot-defense-page.php:313
+msgid "Borderline+ (≥ 40)"
+msgstr "Borderline+ (≥ 40)"
+
+#: admin/bot-defense-page.php:111 admin/site-hub-page.php:78
+msgid "Bot Defense"
+msgstr "Bot Défense"
+
+#: admin/cookies-page.php:147
+msgid "Bottom (centered)"
+msgstr "Bas (centré)"
+
+#: admin/cookies-page.php:149
+msgid "Bottom left"
+msgstr "En bas à gauche"
+
+#: admin/cookies-page.php:150
+msgid "Bottom right"
+msgstr "En bas à droite"
+
+#: luwipress.php:1589
+msgid "Brainstorm failed."
+msgstr "Brainstorm a échoué."
+
+#: admin/scheduler-page.php:448
+msgid "Brainstorm with AI"
+msgstr "Remue-méninges avec les IA"
+
+#: admin/scheduler-page.php:590
+msgid "Brand voice card"
+msgstr "Marque de la carte voix"
+
+#: admin/content-audit-page.php:157
+#: includes/class-luwipress-health-score.php:92
+msgid "Brand Voice Compliance"
+msgstr "Marque De Conformité Avec La Voix"
+
+#: includes/class-luwipress-theme-bridge.php:696
+msgid "Broken internal link"
+msgstr "Cassé lien interne"
+
+#: includes/class-luwipress-theme-bridge.php:691
+msgid "Broken subcategory archive"
+msgstr "Cassé la sous-catégorie archive"
+
+#: admin/admin-page.php:530
+msgid "Budget Used"
+msgstr "Le Budget Utilisé"
+
+#: admin/knowledge-graph-page.php:212
+msgid "Building knowledge graph"
+msgstr "La construction graphique des connaissances"
+
+#. %s human-readable time difference
+#: admin/slug-resolver-page.php:159
+#, php-format
+msgid "Built %s ago"
+msgstr "Construite %s ago"
+
+#: luwipress.php:1593
+msgid "Bulk action failed."
+msgstr "En vrac échec de l'action."
+
+#: admin/admin-page.php:619
+msgid "Bulk Enrich"
+msgstr "En Vrac Enrichir"
+
+#: admin/admin-page.php:360
+#, php-format
+msgid ""
+"Cache plugin: %s. /cache/purge flushes it on content updates. Click to "
+"manage."
+msgstr ""
+"Plugin de mise en Cache: %s. /cache/purge supprime sur les mises à jour de "
+"contenu. Cliquez sur gérer."
+
+#: admin/scheduler-page.php:652 admin/scheduler-page.php:732
+msgid "Cadence"
+msgstr "Cadence"
+
+#: luwipress.php:1606 admin/scheduler-page.php:682
+msgid "Calculating…"
+msgstr "De calcul..."
+
+#: admin/admin-page.php:576 admin/admin-page.php:586
+msgid "Calls"
+msgstr "Appels"
+
+#: admin/usage-page.php:119 admin/usage-page.php:130 admin/usage-page.php:247
+msgid "calls"
+msgstr "appels"
+
+#: luwipress.php:1627 admin/scheduler-page.php:812 admin/scheduler-page.php:838
+#: admin/scheduler-page.php:866 admin/cpt-manager-page.php:272
+msgid "Cancel"
+msgstr "Annuler"
+
+#: includes/class-luwipress-content-scheduler.php:1655
+msgid "Cannot delete published content"
+msgstr "Impossible de supprimer des contenus publiés"
+
+#: includes/class-luwipress-theme-bridge.php:686
+msgid "Canonical mismatch"
+msgstr "Canonique incompatibilité"
+
+#: includes/class-luwipress-vendors.php:1486
+msgid ""
+"Canonical URL base for this vendor. Groups without an archive slug are "
+"disabled here."
+msgstr ""
+"URL canonique base pour ce fournisseur. Groupes sans une archive slug sont "
+"désactivés ici."
+
+#: admin/theme-page.php:231
+msgid "capabilities"
+msgstr "les capacités de"
+
+#: admin/theme-page.php:229
+msgid "Capability matrix"
+msgstr "La capacité de la matrice"
+
+#: admin/knowledge-graph-page.php:313
+msgid "caps AI spend per day · 0 turns that action off"
+msgstr "casquettes AI dépenser par jour · 0 virages que l'action off"
+
+#: admin/scheduler-page.php:52
+msgid "Casual & Friendly"
+msgstr "Décontractée Et Conviviale"
+
+#: admin/content-audit-page.php:117
+msgid ""
+"Catch promotional phrases that trigger GMC disapproval, stock LLM phrasings "
+"that 2024+ Helpful Content Update flags, and content that falls outside your "
+"per-type word count target. Each tab runs against your live content and "
+"surfaces 1-click fix paths."
+msgstr ""
+"Captures de promotion des phrases qui déclenchent GMC de désapprobation, de "
+"stock de LLM phrasé qui 2024+ Utile mise à Jour du Contenu des drapeaux, et "
+"le contenu qui tombe à l'extérieur de votre par type nombre de mots cibles. "
+"Chaque onglet va à l'encontre de votre contenu en direct et les surfaces 1-"
+"cliquez sur réparer les chemins."
+
+#: admin/cookies-page.php:187
+msgid ""
+"Catches inline pixel snippets (Meta pixel for WordPress, PixelYourSite, raw "
+"GTM, etc.) that other plugins emit straight into wp_head/wp_footer without "
+"consent gating. Rewrites them to type=\"text/plain\" data-luwipress-"
+"consent=\"marketing\" so the banner releases them on consent. Manual opt-out:"
+" add data-lwp-no-intercept to any <script> tag."
+msgstr ""
+
+#: includes/class-luwipress-events.php:216
+msgid "Categories"
+msgstr "Catégories"
+
+#: admin/admin-page.php:174
+msgid "Check again"
+msgstr "Vérifier de nouveau"
+
+#: admin/cookies-page.php:260
+msgid "Choices"
+msgstr "Choix"
+
+#: includes/class-luwipress-image-studio.php:93
+msgid "Clean & professional"
+msgstr "Propre et professionnel"
+
+#: admin/usage-page.php:373
+msgid "Clear All"
+msgstr "Effacer Tous Les"
+
+#: admin/usage-page.php:365
+msgid "Clear logs older than"
+msgstr "Effacer les traces âgés de plus de"
+
+#: admin/usage-page.php:370
+msgid "Clear Old"
+msgstr "Effacer Les Anciens"
+
+#: admin/knowledge-graph-page.php:44
+msgid "Clear search"
+msgstr "Effacer la recherche"
+
+#: admin/bot-defense-page.php:389
+msgid "Click \"Run scan now\" to populate this list."
+msgstr "Cliquez sur \"Exécuter analyser maintenant\" pour remplir cette liste."
+
+#: admin/taxonomy-editor-page.php:138
+msgid "Click any cell value to edit. Press Enter to confirm or Esc to revert."
+msgstr ""
+"Cliquez sur une cellule de la valeur à modifier. Appuyez sur Enter pour "
+"confirmer ou sur la touche Esc pour revenir."
+
+#: admin/cookies-page.php:286
+msgid ""
+"Click Generate and a Cookie Policy WP page is created (or updated) "
+"automatically with a plain-language paragraph customized to the third-party "
+"tags detected on this site. Edit the text below and click \"Save edits\" to "
+"push your tweaks to the page."
+msgstr ""
+"Cliquez sur Générer et d'une Politique en matière de Cookies WP page est "
+"créée (ou mis à jour automatiquement avec un langage simple, paragraphe "
+"personnalisé pour les tags tiers détecté sur ce site. Modifier le texte ci-"
+"dessous et cliquez sur \"Enregistrer les modifications\" pour pousser vos "
+"réglages à la page."
+
+#: admin/scheduler-page.php:719 admin/scheduler-page.php:828
+#: admin/scheduler-page.php:859
+msgid "Close"
+msgstr "Fermer"
+
+#: includes/class-luwipress-taxonomy-editor.php:122
+msgid "Collapse"
+msgstr "L'effondrement"
+
+#: admin/bot-defense-page.php:479
+msgid "Comment review (bot-shaped submissions)"
+msgstr "Commentaire de l'examen (bot en forme de présentations)"
+
+#: admin/theme-page.php:174
+msgid "Companion contract"
+msgstr "Compagnon de contrat"
+
+#: admin/slug-resolver-page.php:190
+msgid "Composed redirect map"
+msgstr "Composé de rediriger la carte"
+
+#: admin/content-audit-page.php:189
+msgid "Computing…"
+msgstr "Le calcul..."
+
+#: luwipress.php:1625 admin/scheduler-page.php:867
+msgid "Confirm"
+msgstr "Confirmer"
+
+#: admin/scheduler-page.php:424
+msgid "Confirm & queue"
+msgstr "Confirmer et de la file d'attente"
+
+#: admin/cookies-page.php:263
+msgid "Consent ID"
+msgstr "Consentement ID"
+
+#: admin/cookies-page.php:254
+msgid "Consent log"
+msgstr "Le consentement du journal"
+
+#: admin/content-hub-page.php:92 admin/site-hub-page.php:123
+msgid "Content"
+msgstr "Contenu"
+
+#: admin/content-audit-page.php:100
+msgid "Content Audit"
+msgstr "Audit De Contenu"
+
+#: admin/content-audit-page.php:231
+msgid "Content audit sub-sections"
+msgstr "Contenu de l'audit des sous-sections"
+
+#: admin/content-audit-page.php:162
+#: includes/class-luwipress-health-score.php:101
+msgid "Content Depth"
+msgstr "Contenu De La Profondeur"
+
+#: admin/scheduler-page.php:504
+msgid "Content depth"
+msgstr "Contenu de la profondeur"
+
+#: admin/admin-page.php:556
+msgid "Content Health"
+msgstr "Contenu De La Santé"
+
+#: admin/content-hub-page.php:115
+msgid ""
+"Content quality, schema, taxonomy, media, and scheduling tools. Drives the "
+"Brand Voice + Content Depth + Schema Coverage pillars of your Content Health "
+"Score."
+msgstr ""
+"La qualité du contenu, du schéma, de la taxonomie, des médias et des outils "
+"de planification. Les lecteurs de la Marque Vocale + Contenu de la "
+"Profondeur + Schéma de Couverture de piliers de votre Contenu Santé du Score."
+
+#: admin/scheduler-page.php:111
+#: includes/class-luwipress-content-scheduler.php:233
+#: includes/class-luwipress-content-scheduler.php:234
+msgid "Content Scheduler"
+msgstr "Contenu Du Planificateur"
+
+#: admin/scheduler-page.php:132
+msgid "Content Scheduler sections"
+msgstr "Contenu Planificateur de sections"
+
+#: admin/content-hub-page.php:118
+msgid "Content tools"
+msgstr "Outils de contenu"
+
+#: admin/content-audit-page.php:356
+msgid "Content type"
+msgstr "Type de contenu"
+
+#: admin/site-hub-page.php:66 admin/site-hub-page.php:143
+#: admin/cpt-manager-page.php:109
+msgid "Content Types"
+msgstr "Les Types De Contenu"
+
+#: admin/cpt-manager-page.php:119
+msgid ""
+"Content Types are the engine behind Vendors, Events and any custom directory "
+"your store needs (Team, Venues, Recipes, Artists…). Each type carries a "
+"field schema (its attributes), optional taxonomies, a Schema.org mapping and "
+"— when WooCommerce is active — a product attribution binding. Presets are "
+"configured on their own tabs; add your own types below. New types become "
+"translatable and Elementor-ready automatically."
+msgstr ""
+"Les Types de contenu sont le moteur de Vendeurs, d'Événements et de toute "
+"répertoire personnalisé de vos besoins de magasin (de l'Équipe, des Lieux, "
+"des Recettes, des Artistes...). Chaque type comporte un schéma de champ (ses "
+"attributs), en option taxonomies, un Schema.org cartographie et — lorsque le "
+"Thème est actif — un produit d'attribution de liaison. Les Presets sont "
+"configurées sur leurs propres onglets; ajouter vos propres types ci-dessous. "
+"De nouveaux types se traduire et Elementor-prêt automatiquement."
+
+#: admin/bot-defense-page.php:855
+msgid "Continue?"
+msgstr "Continuer?"
+
+#: admin/bot-defense-page.php:732
+msgid "Continuing… scanned"
+msgstr "Continue... numérisées"
+
+#: admin/site-hub-page.php:83 admin/cookies-page.php:56
+msgid "Cookie Consent"
+msgstr "Cookie De Consentement"
+
+#: includes/class-luwipress-cookie-consent.php:1030
+msgid "Cookie Policy"
+msgstr "Politique En Matière De Cookies"
+
+#: admin/cookies-page.php:219
+msgid "Cookie policy URL"
+msgstr "Politique en matière de cookies URL"
+
+#: admin/cpt-manager-page.php:443
+msgid "Copied."
+msgstr "Copié."
+
+#: admin/cpt-manager-page.php:365
+msgid "Copy XML"
+msgstr "Copie XML"
+
+#: admin/usage-page.php:390 admin/admin-page.php:576 admin/admin-page.php:586
+msgid "Cost"
+msgstr "Coût"
+
+#: admin/admin-page.php:582
+msgid "Cost by Model"
+msgstr "Coût par Modèle"
+
+#: admin/admin-page.php:572
+msgid "Cost by Workflow"
+msgstr "Coût par Flux de travail"
+
+#: admin/usage-page.php:222
+msgid "Cost by Workflow (30d)"
+msgstr "Coût par Flux de travail (30d)"
+
+#: includes/class-luwipress-image-handler.php:174
+msgid "Could not create a temp file for the image."
+msgstr "Impossible de créer un fichier temporaire pour l'image."
+
+#: luwipress.php:1596
+msgid "Could not load outline."
+msgstr "Impossible de charger le contour."
+
+#: admin/bot-defense-page.php:430 admin/scheduler-page.php:469
+msgid "Count"
+msgstr "Le comte"
+
+#: admin/cookies-page.php:261
+msgid "Country"
+msgstr "Pays"
+
+#: admin/image-alt-bulk-page.php:172
+msgid "Coverage"
+msgstr "La couverture"
+
+#: includes/class-luwipress-health-score.php:75
+msgid "Coverage across active translation languages on translatable content."
+msgstr ""
+"Une couverture à travers la traduction active langues sur les chaînes "
+"traduisibles."
+
+#: admin/cpt-manager-page.php:41
+msgid "CPT Engine not available."
+msgstr "CPT Moteur n'est pas disponible."
+
+#: admin/scheduler-page.php:338
+msgid "Create a plan"
+msgstr "Créer un plan de"
+
+#: admin/scheduler-page.php:145
+msgid "Create new"
+msgstr "Créer de nouveaux"
+
+#: admin/scheduler-page.php:335
+msgid "Create one to keep your editorial calendar filling itself on schedule."
+msgstr ""
+"En créer un pour garder votre calendrier éditorial de remplissage lui-même "
+"sur l'horaire."
+
+#: admin/scheduler-page.php:184
+msgid "Create your first batch"
+msgstr "Créer votre premier lot"
+
+#: admin/cookies-page.php:426
+msgid "Created"
+msgstr "Créé"
+
+#: admin/scheduler-page.php:54
+msgid "Creative & Engaging"
+msgstr "Créatif Et S'Engager"
+
+#: admin/schema-picker-page.php:58
+msgid ""
+"CSS selectors that voice assistants should read aloud. Pin them to your lead "
+"paragraph / answer block."
+msgstr ""
+"CSS sélecteurs de voix assistants devraient lire à haute voix. Les broches "
+"pour votre premier paragraphe / répondre bloc."
+
+#: admin/knowledge-graph-page.php:69
+msgid "CSV — Missing SEO"
+msgstr "CSV — Manque de SEO"
+
+#: admin/knowledge-graph-page.php:68
+msgid "CSV — Opportunity list"
+msgstr "CSV — Occasion liste"
+
+#: includes/class-luwipress-events.php:379
+#: includes/class-luwipress-events.php:663
+msgid "Currency"
+msgstr "Monnaie"
+
+#. %d: threshold value
+#: admin/bot-defense-page.php:222
+msgid ""
+"Current flag threshold: %d. Lower it in Settings to surface borderline "
+"accounts."
+msgstr ""
+"Actuel drapeau de seuil: %d. L'abaisser dans les Paramètres de surface à la "
+"limite de comptes."
+
+#: admin/cpt-manager-page.php:299
+msgid "Custom"
+msgstr "Personnalisé"
+
+#: admin/cpt-manager-page.php:133
+msgid "Custom (yours)"
+msgstr "Personnalisé (le vôtre)"
+
+#: admin/admin-page.php:697
+msgid "Customer Segments"
+msgstr "Les Segments De Clientèle"
+
+#: admin/admin-page.php:734
+msgid "Customer segments will be computed on the next weekly refresh."
+msgstr ""
+"Les segments de clientèle sera calculé sur la prochaine semaine de "
+"rafraîchissement."
+
+#: admin/knowledge-graph-page.php:96 admin/knowledge-graph-page.php:176
+msgid "Customers"
+msgstr "Les clients"
+
+#: admin/scheduler-page.php:734
+msgid "Daily"
+msgstr "Quotidien"
+
+#: admin/usage-page.php:139
+msgid "Daily Budget"
+msgstr "Le Budget Quotidien"
+
+#: admin/knowledge-graph-page.php:313
+msgid "Daily budget"
+msgstr "Le budget quotidien"
+
+#: includes/providers/class-luwipress-provider-openai.php:206
+#, php-format
+msgid "DALL-E API error (%d): %s"
+msgstr "DALL-E erreur de l'API (%d): %s"
+
+#: admin/cookies-page.php:160
+msgid "Dark"
+msgstr "Sombre"
+
+#: luwipress.php:555 luwipress.php:556 admin/bot-defense-page.php:144
+#: admin/schema-preview-page.php:124 admin/schema-preview-page.php:126
+#: admin/usage-page.php:93 admin/usage-page.php:95 admin/theme-page.php:129
+#: admin/image-alt-bulk-page.php:137 admin/image-alt-bulk-page.php:139
+#: admin/slug-resolver-page.php:74 admin/slug-resolver-page.php:76
+#: admin/vendors-page.php:95 admin/vendors-page.php:97
+#: admin/content-audit-page.php:106 admin/content-audit-page.php:108
+#: admin/schema-picker-page.php:149 admin/schema-picker-page.php:151
+msgid "Dashboard"
+msgstr "Tableau de bord"
+
+#: admin/scheduler-page.php:417
+msgid "Dates & cadence"
+msgstr "Dates et cadence"
+
+#: admin/knowledge-graph-page.php:317 admin/knowledge-graph-page.php:321
+#: admin/knowledge-graph-page.php:325
+msgid "day"
+msgstr "jour"
+
+#: admin/scheduler-page.php:656
+msgid "day(s) between posts"
+msgstr "jour(s) entre les poteaux"
+
+#: admin/usage-page.php:367
+msgid "days"
+msgstr "jours"
+
+#: includes/class-luwipress-license.php:1032
+msgid "Deactivate"
+msgstr "Désactiver"
+
+#: admin/scheduler-page.php:66 admin/scheduler-page.php:758
+msgid "Deep"
+msgstr "Profonde"
+
+#. 1: status code, 2: error message
+#: includes/class-luwipress-deepl.php:234
+#, php-format
+msgid "DeepL API error (%1$d): %2$s"
+msgstr "DeepL erreur de l'API (%1$d): %2$s"
+
+#: includes/class-luwipress-deepl.php:167
+msgid "DeepL API key is not configured."
+msgstr "DeepL clé API n'est pas configuré."
+
+#. %s: language code
+#: includes/class-luwipress-deepl.php:174
+#, php-format
+msgid "DeepL does not support target language: %s"
+msgstr "DeepL ne prend pas en charge la langue cible: %s"
+
+#. %s: error message
+#: includes/class-luwipress-deepl.php:221
+#, php-format
+msgid "DeepL request failed: %s"
+msgstr "DeepL demande a échoué: %s"
+
+#: includes/class-luwipress-deepl.php:244
+msgid "DeepL returned an unexpected response."
+msgstr "DeepL renvoyé une réponse inattendue."
+
+#: admin/vendors-page.php:224
+msgid ""
+"Default %postname% emits /<archive>/vendor-slug/. Future: %year%/%postname%, "
+"%category%/%postname%."
+msgstr ""
+
+#: admin/vendors-page.php:188
+msgid "Default occupation"
+msgstr "Par défaut occupation"
+
+#: luwipress.php:1626 admin/scheduler-page.php:229 admin/scheduler-page.php:302
+#: admin/cpt-manager-page.php:341
+msgid "Delete"
+msgstr "Supprimer"
+
+#: luwipress.php:1571
+msgid "Delete %d selected item(s)? This cannot be undone."
+msgstr ""
+"La suppression de %d élément sélectionné(s)? Ce ne peut pas être annulée."
+
+#: admin/usage-page.php:372
+msgid "Delete ALL logs?"
+msgstr "Supprimer TOUS les journaux?"
+
+#: admin/bot-defense-page.php:785
+msgid "delete failed"
+msgstr "suppression a échoué"
+
+#: admin/bot-defense-page.php:762
+msgid "Delete failed."
+msgstr "Suppression a échoué."
+
+#: luwipress.php:1629
+msgid "Delete item"
+msgstr "Supprimer l'élément"
+
+#: admin/scheduler-page.php:376
+msgid "Delete plan"
+msgstr "Supprimer plan"
+
+#: luwipress.php:1633
+msgid "Delete recurring plan"
+msgstr "Supprimer récurrents plan"
+
+#: admin/bot-defense-page.php:323
+msgid "Delete selected (CONFIRM)"
+msgstr "Supprimer la sélection (à CONFIRMER)"
+
+#: admin/bot-defense-page.php:319
+msgid "Delete selected (dry-run)"
+msgstr "Supprimer la sélection (à sec)"
+
+#: luwipress.php:1630
+msgid "Delete selected items"
+msgstr "Supprimer les éléments sélectionnés"
+
+#: admin/cpt-manager-page.php:441
+msgid ""
+"Delete this content type? Posts of this type are NOT deleted; the type just "
+"stops being registered."
+msgstr ""
+"Supprimer ce type de contenu? Des postes de ce type ne sont PAS supprimés; "
+"le type s'arrête juste d'être enregistrés."
+
+#: luwipress.php:1566
+msgid ""
+"Delete this recurring plan? Already-queued topics are kept — only the auto-"
+"brainstorm stops."
+msgstr ""
+"Supprimer ce récurrents plan? Déjà en file d'attente sujets sont conservés — "
+"seulement l'auto-remue-méninges s'arrête."
+
+#: luwipress.php:1565
+msgid "Delete this scheduled item?"
+msgstr "Supprimer prévue ce point?"
+
+#: admin/bot-defense-page.php:345 admin/bot-defense-page.php:908
+msgid "Deleted"
+msgstr "Supprimé"
+
+#: admin/bot-defense-page.php:185 admin/bot-defense-page.php:289
+msgid "Deleted total"
+msgstr "Supprimé total"
+
+#: admin/cpt-manager-page.php:440
+msgid "Deleted — reloading…"
+msgstr "Supprimé — rechargement..."
+
+#: admin/bot-defense-page.php:764
+msgid "Deleted:"
+msgstr "Supprimé:"
+
+#: admin/bot-defense-page.php:760
+msgid "Deleting…"
+msgstr "La suppression de..."
+
+#: admin/bot-defense-page.php:181 admin/bot-defense-page.php:409
+msgid "Denials today"
+msgstr "Les refus aujourd'hui"
+
+#: admin/scheduler-page.php:755
+msgid "Depth"
+msgstr "Profondeur"
+
+#: admin/scheduler-page.php:500
+msgid ""
+"Depth controls article length and the AI system prompt. Editorial costs the "
+"most per article — reserve for flagship content."
+msgstr ""
+"Des contrôles approfondis de l'article de la longueur et de l'IA invite du "
+"système. Frais de rédaction de la plupart par l'article de la réserve de "
+"phare de contenu."
+
+#: admin/scheduler-page.php:599
+msgid ""
+"Describe how this site's content should feel — audience, taboos, signature "
+"phrases, cultural context, things to never say. This text layers on top of "
+"the depth rules for every article in the batch."
+msgstr ""
+"Décrire la façon dont le contenu du site doit se sentir — public, les tabous,"
+" la signature des phrases, le contexte culturel, les choses à ne jamais dire."
+" Ce texte couches sur le dessus de la profondeur des règles pour chaque "
+"article du lot."
+
+#: admin/image-alt-bulk-page.php:275
+msgid "Describe what the image shows (one short sentence)…"
+msgstr "Décrire ce que l'image montre (une courte phrase)..."
+
+#: includes/class-luwipress-taxonomy-editor.php:117
+msgid "Description"
+msgstr "Description"
+
+#: admin/knowledge-graph-page.php:146
+msgid "Design Health"
+msgstr "La Conception De La Santé"
+
+#: admin/theme-page.php:297
+msgid "destructive"
+msgstr "destructeur"
+
+#: admin/usage-page.php:418
+msgid "Details"
+msgstr "Détails"
+
+#: admin/cookies-page.php:191
+msgid "Detected pixel / analytics plugins"
+msgstr "Détecté pixel / plugins analytics"
+
+#: admin/cookies-page.php:309
+msgid ""
+"Detected third-party tags appear in the JSON block below after generation. "
+"The page is saved at /cookie-policy/ by default — the Cookie Policy URL "
+"setting auto-updates to the new permalink."
+msgstr ""
+"Détecté tags tiers apparaissent dans le JSON bloc ci-dessous après "
+"génération. La page est enregistrée dans /cookie-politique/ par défaut, la "
+"Politique en matière de Cookies URL de configuration automatique des mises à "
+"jour pour la nouvelle permalien."
+
+#: admin/usage-page.php:441
+msgid "Disable all AI and set budget to $0.001?"
+msgstr "Désactiver tous les IA et définissez budget de 0,001$?"
+
+#: luwipress.php:1301
+msgid ""
+"DISABLE_WP_CRON is defined as true in wp-config.php. Background jobs "
+"(translation queue, content scheduler, product enrichment, CRM refresh) will "
+"not run automatically until an external cron trigger is configured."
+msgstr ""
+"DISABLE_WP_CRON est défini comme vrai dans wp-config.php. Les travaux de "
+"fond (traduction de la file d'attente, le contenu du planificateur, "
+"enrichissement, CRM d'actualisation) ne sera pas exécuté automatiquement "
+"jusqu'à ce qu'un externe cron déclencheur est configuré."
+
+#: admin/cookies-page.php:66 admin/slug-resolver-page.php:94
+#: admin/cpt-manager-page.php:306
+msgid "Disabled"
+msgstr "Désactivé"
+
+#: admin/scheduler-page.php:282
+msgid "Discard"
+msgstr "Jetez"
+
+#: luwipress.php:1568
+msgid "Discard this outline and regenerate from scratch?"
+msgstr "Jetez ce plan et de se régénérer à partir de zéro?"
+
+#: luwipress.php:1192 luwipress.php:1247 admin/knowledge-graph-page.php:365
+msgid "Dismiss"
+msgstr "Rejeter"
+
+#: luwipress.php:1308
+msgid "Dismiss — external cron is configured"
+msgstr "Rejeter — externe cron est configuré"
+
+#: admin/schema-picker-page.php:226
+msgid ""
+"Documentation links per schema type — pin alongside the editor when filling "
+"unfamiliar fields:"
+msgstr ""
+"Des liens vers la Documentation par type de schéma — pin aux côtés de "
+"l'éditeur lors du remplissage des champs inconnus:"
+
+#: admin/knowledge-graph-page.php:272
+msgid "Does nothing — you act manually from the graph."
+msgstr "Ne fait rien — vous agir manuellement à partir du graphique."
+
+#: admin/content-audit-page.php:196
+msgid "Done — reloading…"
+msgstr "Fait — rechargement..."
+
+#: admin/bot-defense-page.php:736
+msgid "Done. Scanned"
+msgstr "Fait. Numérisé"
+
+#: admin/events-page.php:49
+msgid "Dormant"
+msgstr "Dormant"
+
+#: admin/scheduler-page.php:672
+msgid ""
+"Double-check the summary below. Queuing does not spend AI budget immediately "
+"— generation runs on schedule and defers automatically if your daily cap "
+"fills up."
+msgstr ""
+"Double-vérifier le résumé ci-dessous. Queuing ne pas dépenser de l'IA budget "
+"immédiatement génération s'exécute sur l'horaire et reporte automatiquement "
+"si votre limite quotidienne se remplit."
+
+#. 1: percent change, 2: dimension label, 3: baseline date
+#: includes/class-luwipress-kg-opportunities.php:381
+#, php-format
+msgid ""
+"Down %1$s%% vs %3$s — review the queue and run a small batch to recover %2$s."
+msgstr ""
+"En bas de %1$s%% c %3$s — examen de la file d'attente et exécuter un petit "
+"lot de récupérer %2$s."
+
+#: admin/scheduler-page.php:262
+msgid "Draft"
+msgstr "Projet"
+
+#: admin/vendors-page.php:184
+msgid ""
+"Drives the JSON-LD @type emitted on vendor archive pages. \"Person\" "
+"requires accurate individual data; \"Organization\" is the safe default for "
+"ateliers."
+msgstr ""
+
+#: admin/knowledge-graph-page.php:278
+msgid "Dry-run"
+msgstr "L'exécution de la sec"
+
+#: admin/bot-defense-page.php:764
+msgid "Dry-run:"
+msgstr "L'exécution de la sec:"
+
+#: admin/bot-defense-page.php:760
+msgid "Dry-run…"
+msgstr "L'exécution de la sec..."
+
+#: includes/class-luwipress-image-studio.php:95
+msgid "E-commerce"
+msgstr "E-commerce"
+
+#: admin/scheduler-page.php:466
+msgid "e.g. product care basics, buyer guides, craft stories"
+msgstr ""
+"par exemple, produit l'essentiel des soins, guides d'achat, de l'artisanat, "
+"des histoires"
+
+#: admin/scheduler-page.php:747
+msgid "e.g. story-driven, technique-focused, buyer-journey"
+msgstr "par exemple: histoire, technique, centré sur l'acheteur-voyage"
+
+#: admin/scheduler-page.php:474
+msgid "e.g. story-driven, technique-focused, comparison"
+msgstr "par exemple: histoire, technique, centré sur la comparaison"
+
+#: admin/scheduler-page.php:729
+msgid "e.g. Weekly how-to calendar"
+msgstr "par exemple, Hebdomadaire how-to agenda"
+
+#: admin/cpt-manager-page.php:199
+msgid ""
+"Each field is registered as post meta + exposed to REST. \"Translatable\" "
+"fields are sent to translation; \"Elementor\" fields become dynamic tags. "
+"\"Schema prop\" maps the value onto the type's Schema.org JSON-LD (needs a "
+"Schema.org @type set in Advanced) — e.g. jobTitle. Use sameAs on several "
+"fields (Facebook, Instagram…) to collect them into one array; knowsAbout / "
+"keywords comma-split into an array; address.addressLocality nests into a "
+"PostalAddress."
+msgstr ""
+
+#: admin/faq-editor-metabox.php:66
+msgid ""
+"Each question + answer pair is emitted as a single FAQPage entry in this "
+"post's JSON-LD. Aim for 3-5 entries with answers in the 50-80 word range — "
+"that band tracks closely with the Tapadum SEO writing guide §2.5 and the AEO "
+"citability standard."
+msgstr ""
+"Chaque question + réponse de la paire est émise que par un seul FAQPage "
+"entrée dans ce post, JSON-LD. Objectif de 3 à 5 entrées avec des réponses "
+"dans les 50-80 ensemble de mots — que des pistes d'accompagnement en étroite "
+"collaboration avec le Tapadum SEO guide de rédaction §2.5 et l'OEA "
+"citability standard."
+
+#: admin/scheduler-page.php:575
+msgid ""
+"Each selected language gets its own article written natively (not a machine "
+"translation) and linked to the primary via the translation plugin. AI cost "
+"multiplies per language."
+msgstr ""
+"Chaque langue possède son propre article écrit en natif (pas une machine de "
+"traduction) et lié à la primaire via le plugin de traduction. IA coût "
+"multiplie par langue."
+
+#: admin/theme-page.php:265
+msgid ""
+"Each tool exposes scan / execute / restore. Execute mutates content and "
+"writes a backup; the last 20 backups per site are retained for restore."
+msgstr ""
+"Chaque outil expose scan / exécuter / restauration. Exécuter mutation de "
+"contenu et écrit une sauvegarde; les 20 dernières sauvegardes par le site "
+"sont retenus pour la restauration."
+
+#: admin/scheduler-page.php:293 admin/cookies-page.php:431
+#: admin/content-audit-page.php:423 admin/cpt-manager-page.php:338
+msgid "Edit"
+msgstr "Modifier"
+
+#. %s: CPT singular label
+#: includes/class-luwipress-vendors.php:1109
+#: includes/class-luwipress-cpt-engine.php:470
+#: includes/class-luwipress-events.php:176
+#, php-format
+msgid "Edit %s"
+msgstr "Modifiez le fichier %s"
+
+#: admin/schema-preview-page.php:145
+msgid "Edit a product →"
+msgstr ""
+
+#: includes/class-luwipress-events.php:218
+msgid "Edit Category"
+msgstr "Modifier La Catégorie"
+
+#: admin/cpt-manager-page.php:437
+msgid "Edit content type"
+msgstr "Modifier un type de contenu"
+
+#: includes/class-luwipress-vendors.php:1155
+msgid "Edit Group"
+msgstr "Modifier Le Groupe"
+
+#: includes/class-luwipress-taxonomy-editor.php:128
+msgid "Edit in WP →"
+msgstr ""
+
+#: admin/bot-defense-page.php:262
+msgid "Edit settings"
+msgstr "Modifier les paramètres"
+
+#: admin/taxonomy-editor-page.php:65
+msgid ""
+"Edit term name, description, and SEO meta across every active language in "
+"one place. Save All batches every changed cell into a single API call."
+msgstr ""
+"Modifier terme nom, la description et meta SEO dans chaque langue active "
+"dans un seul endroit. Enregistrer Tous les lots chaque cellule modifiée en "
+"un seul appel d'API."
+
+#: admin/schema-preview-page.php:143
+msgid ""
+"Edit the post — the LuwiPress FAQ metabox now ships on every product / post "
+"/ page."
+msgstr ""
+"Éditer le post — le LuwiPress FAQ metabox est désormais disponible sur tous "
+"les produits / article / page."
+
+#: admin/content-audit-page.php:451
+msgid "Edit word count targets"
+msgstr "Modifier le nombre de mots cibles"
+
+#: admin/events-page.php:103
+msgid "Editor fields"
+msgstr "L'éditeur de champs"
+
+#: admin/scheduler-page.php:71 admin/scheduler-page.php:759
+msgid "Editorial"
+msgstr "Éditorial"
+
+#: admin/schema-picker-page.php:103
+msgid "Educational offering — workshop, masterclass, online tutorial series."
+msgstr ""
+"Offre pédagogique — atelier, cours de maître, en ligne, tutoriel de la série."
+
+#: admin/cpt-manager-page.php:207
+msgid "Elementor"
+msgstr "Elementor"
+
+#: includes/class-luwipress-theme-bridge.php:693
+msgid "Elementor hijacking single-post layout"
+msgstr "Elementor détournement unique après la mise en forme"
+
+#: admin/bot-defense-page.php:381
+msgid "Email"
+msgstr "E-mail"
+
+#: admin/bot-defense-page.php:779
+msgid "email verified"
+msgstr "e-mail vérifiée"
+
+#: admin/usage-page.php:102
+msgid "Emergency Stop"
+msgstr "D'Arrêt D'Urgence"
+
+#: admin/image-alt-bulk-page.php:282
+msgid "Empty"
+msgstr "Vide"
+
+#: includes/class-luwipress-theme-bridge.php:698
+msgid "Empty category in menu"
+msgstr "Catégorie vide dans le menu"
+
+#: admin/cookies-page.php:421
+msgid "Empty result — try again."
+msgstr "Résultat vide — essayez à nouveau."
+
+#: admin/cookies-page.php:128
+msgid "Enable cookie banner"
+msgstr "Activer cookies bannière"
+
+#: admin/events-page.php:72
+msgid "Enable Events"
+msgstr "Activer Des Événements"
+
+#: admin/events-page.php:97
+msgid "Enable the /events/ archive"
+msgstr "Permettre à l' /événements/ archive"
+
+#: admin/events-page.php:98
+msgid "Enable the Event Categories taxonomy"
+msgstr "Activer l'Événement Catégories de la taxonomie"
+
+#: admin/bot-defense-page.php:485 admin/cookies-page.php:64
+#: admin/theme-page.php:399 admin/slug-resolver-page.php:94
+#: admin/cpt-manager-page.php:129 admin/cpt-manager-page.php:304
+msgid "Enabled"
+msgstr "Activé"
+
+#: admin/cpt-manager-page.php:191
+msgid "Enabled (register the CPT, taxonomies and fields)"
+msgstr "Activé (inscrire le CPT, des taxonomies et des champs)"
+
+#: includes/class-luwipress-events.php:371
+#: includes/class-luwipress-events.php:628
+msgid "End"
+msgstr "Fin"
+
+#: includes/class-luwipress-license.php:1011
+msgid "Enforced — license active"
+msgstr "Appliquées — licence active"
+
+#: includes/class-luwipress-license.php:1011
+msgid "Enforced — license required"
+msgstr "Appliquées — licence requise"
+
+#: includes/class-luwipress-license.php:604
+msgid ""
+"Enforcement is fixed by the LUWIPRESS_LICENSE_ENFORCE site constant and "
+"cannot be changed here."
+msgstr ""
+"L'exécution est fixé par le LUWIPRESS_LICENSE_ENFORCE site de la constante "
+"et ne peut être modifié ici."
+
+#: luwipress.php:1616 admin/scheduler-page.php:287
+msgid "Enrich"
+msgstr "Enrichir"
+
+#: admin/knowledge-graph-page.php:316
+msgid "Enrich descriptions"
+msgstr "Enrichir les descriptions"
+
+#: luwipress.php:1594
+msgid "Enrich failed."
+msgstr "Enrichir échoué."
+
+#: admin/admin-page.php:596
+msgid "Enrich Products"
+msgstr "Enrichir Les Produits"
+
+#: admin/knowledge-graph-page.php:136
+msgid "Enriched"
+msgstr "Enrichi"
+
+#: admin/knowledge-graph-page.php:364
+msgid "Enrichment Batch"
+msgstr "L'Enrichissement Lot"
+
+#: includes/class-luwipress-kg-opportunities.php:335
+msgid "Enrichment coverage"
+msgstr "L'enrichissement de la couverture"
+
+#: admin/slug-resolver-page.php:116
+msgid "Environment"
+msgstr "Environnement"
+
+#: luwipress.php:1598
+msgid "Error"
+msgstr "Erreur"
+
+#: luwipress.php:1538
+msgid "Error: "
+msgstr ""
+
+#: admin/usage-page.php:293
+msgid "Errors"
+msgstr "Les erreurs"
+
+#: admin/scheduler-page.php:684
+msgid ""
+"Estimate based on current provider pricing and per-article token heuristics. "
+"Actual cost may vary ±20%. Image cost approximate (DALL·E 3 std)."
+msgstr ""
+"Estimation basée sur le fournisseur actuel de tarification et par l'article "
+"jeton heuristiques. Coûts réels peuvent varier de ±20%. Image coût "
+"approximatif (DALL'·E 3 std)."
+
+#: admin/scheduler-page.php:678
+msgid "Estimated AI cost"
+msgstr "Estimé IA coût"
+
+#: includes/class-luwipress-events.php:214
+#: includes/class-luwipress-events.php:388
+msgid "Event Categories"
+msgstr "Les Catégories D'Événements"
+
+#: includes/class-luwipress-events.php:215
+msgid "Event Category"
+msgstr "Catégorie De L'Événement"
+
+#: includes/class-luwipress-events.php:585
+msgid "Event Details"
+msgstr "Les Détails De L'Événement"
+
+#: admin/events-page.php:23 admin/events-page.php:45 admin/site-hub-page.php:60
+#: admin/site-hub-page.php:153
+msgid "Events"
+msgstr "Les événements"
+
+#: admin/events-page.php:87
+msgid ""
+"Events appear at /<slug>/ and /<slug>/<event>/. Changing it flushes rewrite "
+"rules automatically."
+msgstr ""
+
+#: admin/events-page.php:62
+msgid ""
+"Events is a CPT Engine preset that turns concerts, workshops and classes "
+"into a first-class content type (lwp_event) with structured fields, "
+"organizer / performer links to your Vendors, Schema.org Event JSON-LD, and "
+"downloadable .ics calendar files."
+msgstr ""
+"Des événements est un CPT Moteur de présélection qui tourne à concerts, des "
+"ateliers et des classes de premier ordre de type de contenu (lwp_event) avec "
+"des champs, organisateur / interprète des liens vers vos Fournisseurs, "
+"Schema.org Événement JSON-LD, et téléchargeable .sci les fichiers de "
+"calendrier."
+
+#: admin/events-page.php:23
+msgid "Events module not available."
+msgstr "Le module d'événements non disponible."
+
+#: includes/class-luwipress-content-scheduler.php:84
+msgid "Every 15 Minutes"
+msgstr "Toutes Les 15 Minutes"
+
+#: admin/scheduler-page.php:736
+msgid "Every 2 weeks"
+msgstr "Toutes les 2 semaines"
+
+#: admin/bot-defense-page.php:314
+msgid "Everything scored"
+msgstr "Tout marqué"
+
+#: admin/scheduler-page.php:601
+msgid ""
+"Example:\n"
+"• Audience profile.\n"
+"• Desired register — curator, teacher, storyteller.\n"
+"• Forbidden openers / clichés.\n"
+"• Preferred opening style (anecdote, contrast, fact).\n"
+"• Cultural context to weave in.\n"
+"• Words, claims, or competitors to avoid."
+msgstr ""
+"Exemple: • le profil de l'Auditoire. • Désiré inscrivez — conservateur, "
+"enseignant, conteur. • Interdit de dispositifs d'ouverture / de clichés. • "
+"Privilégiées d'ouverture (anecdote, le contraste, la fait). • Contexte "
+"culturel à tisser en. • Les mots, les réclamations ou les concurrents à "
+"éviter."
+
+#: admin/theme-page.php:316
+msgid "Execute"
+msgstr "Exécuter"
+
+#: luwipress.php:1528
+msgid "Executing…"
+msgstr "L'exécution de..."
+
+#: admin/schema-picker-page.php:176
+msgid "Existing schemas on this target"
+msgstr "Schémas existants sur cette cible"
+
+#: includes/class-luwipress-taxonomy-editor.php:121
+msgid "Expand"
+msgstr "Développez"
+
+#: admin/bot-defense-page.php:564 includes/class-luwipress-license.php:1000
+msgid "Expires"
+msgstr "Expire"
+
+#: admin/scheduler-page.php:68
+msgid "Explainers that need depth (history, theory, tech)"
+msgstr "Explainers qui ont besoin de profondeur (histoire, théorie, tech)"
+
+#: admin/knowledge-graph-page.php:65
+msgid "Export"
+msgstr "L'exportation"
+
+#: admin/scheduler-page.php:47 admin/scheduler-page.php:199
+msgid "Failed"
+msgstr "Échoué"
+
+#: includes/class-luwipress-image-handler.php:108
+#, php-format
+msgid "Failed to download image: %s"
+msgstr "Échec du téléchargement de l'image: %s"
+
+#: luwipress.php:1587
+msgid "Failed to fetch thin products."
+msgstr "Impossible de récupérer produits minces."
+
+#: admin/bot-defense-page.php:687
+msgid "Failed to load list."
+msgstr "Échec du chargement de la liste."
+
+#: includes/class-luwipress-ai-engine.php:376
+msgid "Failed to parse JSON from AI response."
+msgstr "Échec de parser JSON de IA réponse."
+
+#: admin/bot-defense-page.php:1000 admin/cookies-page.php:416
+msgid "Failed."
+msgstr "A échoué."
+
+#: includes/class-luwipress-ai-engine.php:250
+msgid "Fallback disabled or no providers configured."
+msgstr "De secours, handicapés ou non les fournisseurs de configuré."
+
+#: admin/vendors-page.php:191
+msgid ""
+"Fallback occupation for vendors that have not filled their own — used in "
+"Schema.org hasOccupation / jobTitle."
+msgstr ""
+"De secours de l'occupation pour les fournisseurs qui n'ont pas rempli leurs "
+"propres utilisés dans Schema.org hasOccupation / jobTitle."
+
+#: admin/admin-page.php:337
+msgid ""
+"Falling back to wp_mail() (host MTA). Click to install WP Mail SMTP for "
+"reliable delivery."
+msgstr ""
+"Retomber wp_mail() (hôte MTA). Cliquez sur installer WP Mail SMTP pour la "
+"fiabilité de la livraison."
+
+#: includes/class-luwipress-ai-content.php:1141
+msgid "FAQ"
+msgstr "FAQ"
+
+#: includes/class-luwipress-faq-editor.php:151
+msgid "FAQ saved"
+msgstr "FAQ enregistré"
+
+#: includes/class-luwipress-faq-editor.php:161
+msgid "FAQ saved manually"
+msgstr "FAQ enregistrés manuellement"
+
+#: includes/class-luwipress-health-score.php:66
+msgid "FAQ schema, HowTo schema, Speakable coverage on products and key posts."
+msgstr ""
+"FAQ schéma, HowTo schéma, Speakable de couverture sur les produits et des "
+"postes-clé."
+
+#: admin/scheduler-page.php:63
+msgid "Fast daily posts, product-focused content"
+msgstr "Rapide de messages quotidiens, basée sur le produit contenu"
+
+#: admin/vendors-page.php:75
+msgid "Featured quote"
+msgstr "Citation"
+
+#: admin/schema-preview-page.php:135
+msgid ""
+"Fetch any live URL and inspect every JSON-LD schema block embedded in its "
+"head. Cache-bypassed so what you see is what Google would see right now. One-"
+"click handoff to Rich Results Test for validation."
+msgstr ""
+"L'extraction des URL et inspectez chaque JSON-LD schéma bloc intégré dans sa "
+"tête. Cache-inhibés, ce que vous voyez est ce que Google serait de voir "
+"maintenant. En un clic, transfert à l'enrichissement des Résultats de Test "
+"pour la validation."
+
+#: admin/cpt-manager-page.php:198
+msgid "Fields (attributes)"
+msgstr "Champs (attributs)"
+
+#: admin/image-alt-bulk-page.php:229
+msgid "File / Title"
+msgstr "Fichier / Titre"
+
+#: includes/class-luwipress-backup-bridge.php:498
+msgid "File name does not match a backup archive pattern."
+msgstr "Nom de fichier ne correspond pas à une archive de sauvegarde modèle."
+
+#: admin/image-alt-bulk-page.php:206
+msgid "Filter"
+msgstr "Filtre"
+
+#: admin/bot-defense-page.php:486
+msgid "Filter comment submissions"
+msgstr "Filtrer les commentaires"
+
+#: admin/slug-resolver-page.php:195
+msgid "Filter slugs…"
+msgstr "Filtre de limaces..."
+
+#: admin/bot-defense-page.php:562
+msgid "First seen"
+msgstr "Vu pour la première fois"
+
+#: admin/knowledge-graph-page.php:228
+msgid "Fit to screen"
+msgstr "Adapter à l'écran"
+
+#: admin/admin-page.php:637
+msgid "Fix"
+msgstr "Fix"
+
+#: admin/bot-defense-page.php:736
+msgid "flagged"
+msgstr "marqué"
+
+#: admin/bot-defense-page.php:171
+msgid "Flagged accounts"
+msgstr "Marqué comptes"
+
+#: admin/scheduler-page.php:73
+msgid "Flagship pieces that carry brand voice"
+msgstr "Phare des pièces qui portent la marque de la voix"
+
+#: admin/vendors-page.php:309
+msgid "Flush rewrite rules"
+msgstr "Rincer les règles de réécriture"
+
+#: includes/class-luwipress-taxonomy-editor.php:120
+msgid "Focus Keyword"
+msgstr "L'Accent De Mot-Clé"
+
+#: admin/theme-page.php:359
+msgid "Footer"
+msgstr "Le pied de page"
+
+#: admin/slug-resolver-page.php:148
+msgid "Force rebuild"
+msgstr "La Force de reconstruire"
+
+#: admin/knowledge-graph-page.php:77
+msgid "Force reload from database (bypasses cache)"
+msgstr "Forcer le chargement de la base de données (contourne cache)"
+
+#: admin/admin-page.php:348
+#, php-format
+msgid "Forms plugin: %1$s (%2$s). Click to manage."
+msgstr "Formes plugin: %1$s (%2$s). Cliquez sur gérer."
+
+#: admin/cookies-page.php:179
+msgid "Forward consent decisions to Microsoft Clarity (Consent v2 API)."
+msgstr ""
+"Avant consentement des décisions de Microsoft Clarté (Consentement v2 API)."
+
+#: includes/class-luwipress-crm-campaigns.php:750
+msgid "Free shipping for %d days"
+msgstr "Livraison gratuite pour %d jours"
+
+#: includes/class-luwipress-ai-content.php:1276
+msgid "Frequently Asked Questions"
+msgstr "Foire Aux Questions"
+
+#: admin/vendors-page.php:277
+msgid "From (old path)"
+msgstr "À partir de (vieux chemin de)"
+
+#: admin/cookies-page.php:59
+msgid ""
+"GDPR/ePrivacy compliant cookie banner + consent log + AI policy generator."
+msgstr ""
+"GDPR/ğvie privée et communications électroniquesğ conforme cookie bannière + "
+"consentement journal + IA générateur de politique."
+
+#: admin/theme-page.php:357
+msgid "General"
+msgstr "Général"
+
+#: admin/cookies-page.php:294
+msgid "Generate & save"
+msgstr "Générer et enregistrer"
+
+#: admin/scheduler-page.php:803
+msgid "Generate a featured image"
+msgstr "Générer une image en vedette"
+
+#: admin/scheduler-page.php:556
+msgid "Generate a featured image for each post"
+msgstr "Générer une image en vedette pour chaque poste"
+
+#: admin/image-alt-bulk-page.php:213
+msgid "Generate empty with AI"
+msgstr "Générer vide avec l'IA"
+
+#: luwipress.php:1628 admin/scheduler-page.php:478
+msgid "Generate ideas"
+msgstr "Générer des idées"
+
+#: admin/faq-editor-metabox.php:130
+msgid "Generate with AI"
+msgstr "Générer avec l'IA"
+
+#: includes/class-luwipress-image-handler.php:162
+msgid "Generated image could not be decoded."
+msgstr "Image de synthèse n'a pas pu être décodé."
+
+#: admin/cookies-page.php:424
+msgid "Generated, but auto-save failed — copy the text manually."
+msgstr ""
+"Généré, mais la fonction de sauvegarde automatique a échoué — copiez le "
+"texte manuellement."
+
+#: admin/scheduler-page.php:43 admin/scheduler-page.php:195
+msgid "Generating"
+msgstr "La génération"
+
+#: luwipress.php:1608
+msgid "Generating ideas…"
+msgstr "La génération d'idées..."
+
+#: admin/cookies-page.php:414
+msgid "Generating with AI…"
+msgstr "La génération par l'IA..."
+
+#: admin/theme-page.php:170
+msgid "Generic"
+msgstr "Générique"
+
+#: luwipress.php:1070
+msgid ""
+"Generic features (content scheduler, customer chat, AI provider settings, "
+"token tracking, generic SEO/AEO writers) are active. WooCommerce-dependent "
+"features are disabled: product enrichment, AEO product schema, marketplace "
+"publishing, CRM customer segmentation, product knowledge graph nodes, and "
+"review analytics."
+msgstr ""
+"Fonctions génériques (contenu planificateur de, clientèle de de conversation,"
+" IA paramètres du fournisseur, jeton de suivi, générique SEO/OEA écrivains) "
+"sont actifs. Thème dépendant de fonctionnalités sont désactivées: produit de "
+"l'enrichissement, l'AEO produit de schéma, sur le marché de l'édition, de "
+"CRM, de segmentation de la clientèle, la connaissance des produits de noeuds "
+"d'un graphe, et de l'examen analytique."
+
+#: includes/class-luwipress-content-scheduler.php:988
+msgid "Give me a theme to brainstorm around."
+msgstr "Me donner un thème à un remue-méninges autour de."
+
+#: admin/scheduler-page.php:460
+msgid ""
+"Give the AI a theme. It proposes specific, publishable titles — filtering "
+"against your last 30 post titles so suggestions stay fresh."
+msgstr ""
+"Donner à l'IA d'un thème. Il propose, publiables titres de filtrage contre "
+"les 30 derniers post titres pour des suggestions de rester au frais."
+
+#: luwipress.php:1580
+msgid "Give the article a title first."
+msgstr "Donner à l'article un titre de premier."
+
+#: includes/class-luwipress-vendors.php:1416
+msgid ""
+"Gives this group its own URL base, e.g. \"team\" → /team/<vendor>/. Empty = "
+"global Vendors archive slug. Vendors point here via \"Primary group\" on the "
+"vendor edit screen."
+msgstr ""
+
+#: admin/scheduler-page.php:633
+msgid ""
+"Goes live at the publish date with no manual step. Best for high-volume "
+"batches where voice already works."
+msgstr ""
+"Va vivre à la date de publication sans l'étape manuelle. Le meilleur pour la "
+"haute-volume de lots où la voix fonctionne déjà."
+
+#: admin/admin-page.php:399
+#, php-format
+msgid "Google Ads / Merchant Center: %s. Click to manage."
+msgstr "Annonces Google / google Merchant Center: %s. Cliquez sur gérer."
+
+#: includes/providers/class-luwipress-provider-google.php:132
+#, php-format
+msgid "Google AI API error (%d): %s"
+msgstr "Google AI des erreurs de l'API (%d): %s"
+
+#: includes/providers/class-luwipress-provider-google.php:42
+msgid "Google AI API key is not configured."
+msgstr "Google IA clé de l'API n'est pas configuré."
+
+#: includes/providers/class-luwipress-provider-google.php:119
+#, php-format
+msgid "Google AI API request failed: %s"
+msgstr "Google IA demande d'API a échoué: %s"
+
+#: includes/providers/class-luwipress-provider-google.php:145
+msgid "Google AI returned an empty response."
+msgstr "Google AI renvoyé une réponse vide."
+
+#: admin/schema-picker-page.php:240
+msgid "Google Rich Results Test"
+msgstr "Google Rich Résultats De Test"
+
+#: includes/class-luwipress-vendors.php:1160
+msgid "Groups"
+msgstr "Les groupes"
+
+#: admin/image-alt-bulk-page.php:168 admin/image-alt-bulk-page.php:192
+msgid "Has alt"
+msgstr "A alt"
+
+#: admin/bot-defense-page.php:778
+msgid "has orders"
+msgstr "a des ordres"
+
+#: admin/content-hub-page.php:25 admin/site-hub-page.php:88
+msgid "Health Audit"
+msgstr "Audit De Santé"
+
+#: admin/content-audit-page.php:172
+msgid ""
+"Health Score cache is cold — hero values will populate after the next hourly "
+"cron tick. Click below to recompute now."
+msgstr ""
+"La santé de Partition de cache est froid — héros valeurs remplir après "
+"l'horaire suivante cron tique. Cliquez ci-dessous pour recalculer maintenant."
+
+#: admin/content-audit-page.php:445
+msgid ""
+"Health Score not loaded or no content measured yet. Reload after publishing "
+"some content."
+msgstr ""
+"Santé Score n'est pas chargé ou pas de contenu encore mesurer. Recharger "
+"après la publication de certains contenus."
+
+#: includes/class-luwipress-cookie-consent.php:200
+msgid ""
+"Help us measure traffic and improve the site. Disabling this hides our "
+"analytics tags."
+msgstr ""
+"Nous aider à mesurer le trafic et améliorer le site. La désactivation de ce "
+"masque notre tags google analytics."
+
+#: admin/cpt-manager-page.php:224
+msgid "Hierarchical"
+msgstr "Hiérarchique"
+
+#: admin/knowledge-graph-page.php:59
+msgid "High opportunity"
+msgstr "D'opportunité élevé"
+
+#: admin/bot-defense-page.php:202 admin/bot-defense-page.php:277
+msgid "High risk (80+)"
+msgstr "Risque élevé (80+)"
+
+#: admin/bot-defense-page.php:311
+msgid "High risk only (≥ 80)"
+msgstr "Haut risque (≥ 80)"
+
+#: admin/bot-defense-page.php:561
+msgid "Hits"
+msgstr "Hits"
+
+#: admin/schema-preview-page.php:68
+msgid "Homepage"
+msgstr "Page d'accueil"
+
+#: admin/scheduler-page.php:657
+msgid "hour(s) between posts"
+msgstr "heure(s) entre les poteaux"
+
+#: admin/knowledge-graph-page.php:305
+msgid "hours"
+msgstr "heures"
+
+#: admin/knowledge-graph-page.php:306
+msgid "How far back to look for recently changed content to refresh."
+msgstr ""
+"Comment loin en arrière pour chercher récemment changé de contenu pour se "
+"rafraîchir."
+
+#: admin/cookies-page.php:237
+msgid "How to block third-party scripts"
+msgstr "Comment bloquer des scripts tiers"
+
+#: includes/class-luwipress-theme-bridge.php:687
+msgid "Hreflang drift"
+msgstr "Hreflang de la dérive"
+
+#. Author URI of the plugin
+msgid "https://luwi.dev"
+msgstr ""
+
+#. URI of the plugin
+msgid "https://luwi.dev/luwipress"
+msgstr ""
+
+#: includes/class-luwipress-events.php:643
+msgid "Hybrid"
+msgstr "Hybride"
+
+#: admin/vendors-page.php:158
+msgid "Identity"
+msgstr "Identité"
+
+#: admin/image-alt-bulk-page.php:228
+msgid "Image"
+msgstr "Image"
+
+#: admin/content-hub-page.php:48 admin/site-hub-page.php:108
+msgid "Image Alt"
+msgstr "Image Alt"
+
+#: admin/image-alt-bulk-page.php:131
+msgid "Image Alt Bulk"
+msgstr "Image Alt Vrac"
+
+#: includes/providers/class-luwipress-provider-openai.php:194
+#, php-format
+msgid "Image API request failed: %s"
+msgstr "L'Image de l'API demande a échoué: %s"
+
+#: includes/providers/class-luwipress-provider-openai.php:292
+#, php-format
+msgid "Image edit error (%d): %s"
+msgstr "D'édition d'Image d'erreur (%d): %s"
+
+#: includes/providers/class-luwipress-provider-openai.php:285
+#, php-format
+msgid "Image edit request failed: %s"
+msgstr "Image modifier la demande a échoué: %s"
+
+#: includes/providers/class-luwipress-provider-openai.php:301
+msgid "Image edit returned no image."
+msgstr "D'édition d'Image renvoyé aucune image."
+
+#: includes/class-luwipress-image-handler.php:30
+msgid "Image generation requires OpenAI provider."
+msgstr "La génération d'images nécessite OpenAI fournisseur."
+
+#: includes/class-luwipress-image-handler.php:59
+msgid "Image generation returned no image."
+msgstr "La création de l'Image renvoyé aucune image."
+
+#: includes/providers/class-luwipress-provider-openai.php:224
+msgid "Image model returned no image."
+msgstr "Le modèle de l'Image renvoyé aucune image."
+
+#: includes/class-luwipress-image-handler.php:227
+msgid "Image retouch requires the OpenAI provider."
+msgstr "Image retouche nécessite la OpenAI fournisseur."
+
+#: includes/class-luwipress-events.php:641
+msgid "In person"
+msgstr "En personne"
+
+#: admin/usage-page.php:299
+msgid "Info"
+msgstr "Info"
+
+#: admin/cookies-page.php:139
+msgid "Info only (no consent collected)"
+msgstr "Info uniquement (pas de consentement de la collecte)"
+
+#: admin/scheduler-page.php:56
+msgid "Informative & Educational"
+msgstr "Informatif Et Éducatif"
+
+#: includes/class-luwipress-vendors.php:532
+#, php-format
+msgid "Inherit site default (%s)"
+msgstr "Hériter du site par défaut (%s)"
+
+#: admin/usage-page.php:388
+msgid "Input"
+msgstr "Entrée"
+
+#: admin/admin-page.php:576
+msgid "Input Tokens"
+msgstr "Entrée Jetons"
+
+#: admin/schema-preview-page.php:185
+msgid "Inspect schema"
+msgstr "Inspecter schéma"
+
+#: admin/bot-defense-page.php:177
+msgid "Inspect →"
+msgstr ""
+
+#: luwipress.php:1078
+msgid "Install WooCommerce"
+msgstr "Installer Le Thème"
+
+#: admin/scheduler-page.php:15 admin/admin-page.php:15
+msgid "Insufficient permissions."
+msgstr "Des autorisations insuffisantes."
+
+#: admin/knowledge-graph-page.php:221
+msgid "Interactive knowledge graph of store content"
+msgstr "Interactive graphique des connaissances de stocker du contenu"
+
+#: admin/cookies-page.php:186
+msgid ""
+"Intercept unguarded pixel / ad-tag scripts and gate them on consent (3.3.4+)."
+msgstr ""
+"Intercepter sans surveillance pixel / ad-tag scripts et porte sur le "
+"consentement (3.3.4+)."
+
+#: includes/class-luwipress-content-scheduler.php:886
+msgid "Invalid outline payload"
+msgstr "Non valide le contour de la charge utile"
+
+#: includes/class-luwipress-content-scheduler.php:810
+#: includes/class-luwipress-content-scheduler.php:1321
+#: includes/class-luwipress-content-scheduler.php:1644
+msgid "Invalid schedule ID"
+msgstr "Calendrier non valide ID"
+
+#: includes/class-luwipress-content-scheduler.php:446
+msgid "Invalid start date/time."
+msgstr "Invalide date/heure de début."
+
+#: admin/bot-defense-page.php:559
+msgid "IP"
+msgstr "IP"
+
+#: admin/cookies-page.php:255
+msgid ""
+"IP addresses are stored as one-way salted hashes. Each row proves a single "
+"visitor decision."
+msgstr ""
+"Les adresses IP sont stockées comme salé les tables de hachage. Chaque ligne "
+"s'avère un seul visiteur décision."
+
+#: admin/bot-defense-page.php:134
+msgid "IPs currently blocked"
+msgstr "IPs actuellement bloqué"
+
+#: admin/knowledge-graph-page.php:70
+msgid "JSON — Raw graph"
+msgstr "JSON — Raw graphique"
+
+#: luwipress.php:1582
+msgid "Keep at least one section."
+msgstr "Gardez au moins une section."
+
+#: admin/bot-defense-page.php:349
+msgid "Kept"
+msgstr "Gardé"
+
+#: admin/bot-defense-page.php:909
+msgid "kept"
+msgstr "gardé"
+
+#: admin/cpt-manager-page.php:156 admin/cpt-manager-page.php:203
+msgid "Key"
+msgstr "Clé"
+
+#: admin/cpt-manager-page.php:442
+msgid "Key is required (a–z, 0–9, _)."
+msgstr "La clé est requise (a–z, 0-9, _)."
+
+#: admin/scheduler-page.php:491
+msgid "Keys:"
+msgstr "Les touches:"
+
+#: includes/class-luwipress-theme-bridge.php:699
+msgid "Kit CSS approaching limit"
+msgstr "Kit CSS approche de la limite de"
+
+#: admin/theme-page.php:218
+msgid "Kit CSS headroom"
+msgstr "Kit CSS de la marge"
+
+#: luwipress.php:565 luwipress.php:566 admin/content-hub-page.php:98
+#: admin/content-hub-page.php:100 admin/site-hub-page.php:238
+#: admin/site-hub-page.php:240 admin/admin-page.php:92
+#: admin/knowledge-graph-page.php:27
+msgid "Knowledge Graph"
+msgstr "Knowledge Graph"
+
+#: admin/admin-page.php:90
+msgid "Knowledge Graph — interactive store intelligence (D3.js)."
+msgstr "Graphe de connaissances interactive magasin intelligence (D3.js)."
+
+#: admin/vendors-page.php:128 admin/cpt-manager-page.php:204
+#: admin/cpt-manager-page.php:223
+msgid "Label"
+msgstr "Étiquette"
+
+#: includes/class-luwipress-image-studio.php:105
+msgid "Landscape"
+msgstr "Paysage"
+
+#: admin/scheduler-page.php:533 admin/scheduler-page.php:777
+#: admin/cookies-page.php:262
+msgid "Language"
+msgstr "Langue"
+
+#: admin/cookies-page.php:112 admin/admin-page.php:573 admin/admin-page.php:583
+msgid "Last 30 days"
+msgstr "30 derniers jours"
+
+#: admin/admin-page.php:542
+msgid "Last 7 days"
+msgstr "Cours des 7 derniers jours"
+
+#. 1: days since last enrich, 2: days since content modified
+#: includes/class-luwipress-kg-opportunities.php:477
+#, php-format
+msgid ""
+"Last enriched %1$d days ago. Source content edited %2$d days ago. The AI-"
+"generated description / FAQ / schema is likely out of sync."
+msgstr ""
+"Dernière enrichi %1$d jours. Source de contenu édité %2$d jours. L'IA-généré "
+"description / FAQ / schéma est probablement en dehors de la synchronisation."
+
+#: admin/bot-defense-page.php:563
+msgid "Last seen"
+msgstr "Vu pour la dernière fois"
+
+#: admin/scheduler-page.php:362
+msgid "Last:"
+msgstr "Dernier:"
+
+#: admin/schema-preview-page.php:84
+msgid "Latest product"
+msgstr "Le dernier produit"
+
+#: admin/vendors-page.php:269
+msgid "Legacy URL redirects"
+msgstr "Héritage redirections d'URL"
+
+#: includes/class-luwipress-license.php:933
+#: includes/class-luwipress-license.php:965
+msgid "License"
+msgstr "Licence"
+
+#: includes/class-luwipress-license.php:1113
+msgid "License is active."
+msgstr "La licence est active."
+
+#: includes/class-luwipress-license.php:981
+msgid "License key"
+msgstr "Clé de licence"
+
+#: includes/class-luwipress-license.php:761
+msgid "License request rejected."
+msgstr "Demande de licence rejeté."
+
+#: admin/admin-page.php:490
+msgid "License required"
+msgstr "Licence requise"
+
+#: includes/class-luwipress-license.php:779
+msgid "License response failed signature verification."
+msgstr "Licence réponse échec de la vérification de la signature."
+
+#: includes/class-luwipress-license.php:773
+msgid "License server returned an unreadable response."
+msgstr "Licence serveur a renvoyé une illisible réponse."
+
+#: includes/class-luwipress-license.php:750
+#, php-format
+msgid "License server unreachable: %s"
+msgstr "Licence serveur inaccessible: %s"
+
+#: includes/class-luwipress-license.php:1107
+msgid "License: grace"
+msgstr "Licence: de grâce"
+
+#: includes/class-luwipress-license.php:1108
+msgid ""
+"Licensed, but the server has not confirmed recently — running on the cached "
+"verdict."
+msgstr ""
+"La licence, mais le serveur n'a pas confirmé récemment — en cours "
+"d'exécution sur la mise en cache verdict."
+
+#: includes/class-luwipress-license.php:1112
+#, php-format
+msgid "Licensed: %s"
+msgstr "Licence: %s"
+
+#: includes/class-luwipress-license.php:1005
+msgid "Licensing"
+msgstr "Licence"
+
+#: admin/cookies-page.php:159
+msgid "Light"
+msgstr "La lumière"
+
+#: admin/content-audit-page.php:282 admin/content-audit-page.php:325
+msgid "Limit"
+msgstr "Limite"
+
+#: includes/class-luwipress-content-scheduler.php:1331
+msgid "Linked post not found."
+msgstr "Message lié pas trouvé."
+
+#: admin/usage-page.php:312 admin/knowledge-graph-page.php:285
+msgid "Live"
+msgstr "Live"
+
+#: admin/slug-resolver-page.php:200
+msgid "Loading map…"
+msgstr "Chargement de la carte..."
+
+#: luwipress.php:1609 admin/scheduler-page.php:833
+msgid "Loading outline…"
+msgstr "Chargement de contour..."
+
+#: admin/bot-defense-page.php:681
+msgid "Loading scored accounts…"
+msgstr "Chargement marqué comptes..."
+
+#: includes/class-luwipress-taxonomy-editor.php:114
+msgid "Loading terms…"
+msgstr "Chargement de termes..."
+
+#: admin/bot-defense-page.php:549 admin/bot-defense-page.php:569
+#: admin/bot-defense-page.php:680 admin/cookies-page.php:266
+#: admin/slug-resolver-page.php:210 admin/knowledge-graph-page.php:338
+msgid "Loading…"
+msgstr "Chargement..."
+
+#: admin/vendors-page.php:57
+msgid "Local Business (physical-store vendor)"
+msgstr "Entreprise locale (physique-magasin vendeur)"
+
+#: includes/class-luwipress-vendors.php:535
+msgid "LocalBusiness"
+msgstr "LocalBusiness"
+
+#: admin/vendors-page.php:72
+msgid "Location"
+msgstr "Emplacement"
+
+#: admin/cookies-page.php:250
+msgid "Log"
+msgstr "Journal"
+
+#: admin/usage-page.php:361
+msgid "Log Maintenance"
+msgstr "Journal D'Entretien"
+
+#: admin/cookies-page.php:227
+msgid "Log retention (days)"
+msgstr "Journal de conservation (jours)"
+
+#: admin/bot-defense-page.php:480
+msgid ""
+"Logged-in users + allowlist always bypass. Score is the sum of weighted "
+"signals: link density, spam-token hits, author-shape heuristics, URL-only "
+"body, duplicates within 10min/IP, IP already on the blocklist. At or above "
+"the threshold, the configured action fires."
+msgstr ""
+"Les utilisateurs enregistrés + allowlist toujours contourner. Le Score est "
+"la somme pondérée des signaux: le lien de densité, le spam-jeton de frappe, "
+"auteur-forme de l'heuristique, URL-seulement le corps, les doublons dans les "
+"10min/IP, IP déjà sur la liste de blocs. Au niveau ou au-dessus du seuil, "
+"l'action configurée incendies."
+
+#: includes/class-luwipress-abilities.php:276
+msgid "Login required."
+msgstr "Connexion requise."
+
+#: admin/usage-page.php:19
+msgid "Logs older than %d days cleared."
+msgstr "Les journaux de plus que %d jours effacé."
+
+#: admin/knowledge-graph-page.php:304
+msgid "Look-back window"
+msgstr "Retour en arrière de la fenêtre"
+
+#: admin/bot-defense-page.php:285
+msgid "Low (40–59)"
+msgstr "Faible (40-59)"
+
+#: admin/bot-defense-page.php:210
+msgid "Low / borderline (40–59)"
+msgstr "Faible / borderline (40-59)"
+
+#. Author of the plugin
+msgid "Luwi Developments LLC"
+msgstr "Luwi Développements LLC"
+
+#: includes/class-luwipress-image-studio.php:61
+msgid "Luwi Image Studio"
+msgstr "Luwi Image Studio"
+
+#: includes/class-luwipress-abilities.php:80
+msgid "LuwiPress"
+msgstr "LuwiPress"
+
+#: includes/class-luwipress-vendors.php:331
+#, php-format
+msgid "LuwiPress %s"
+msgstr "LuwiPress %s"
+
+#. Name of the plugin
+msgid "LuwiPress Core"
+msgstr "LuwiPress De Base"
+
+#: includes/class-luwipress-faq-editor.php:77
+msgid "LuwiPress FAQ"
+msgstr "LuwiPress FAQ"
+
+#: admin/admin-page.php:491
+msgid ""
+"LuwiPress features are locked on this site. Activate your purchase code or "
+"license key to enable them."
+msgstr ""
+"LuwiPress fonctions sont verrouillées sur ce site. Activer votre achat code "
+"ou une clé de licence pour activer."
+
+#: admin/admin-page.php:303
+msgid "LuwiPress SEO"
+msgstr "LuwiPress SEO"
+
+#: includes/class-luwipress-vendors.php:2141
+msgid "LuwiPress Vendors — Custom Post Type permalinks"
+msgstr "LuwiPress Fournisseurs — Custom Post Type permaliens"
+
+#: luwipress.php:1300
+msgid "LuwiPress — WP-Cron is disabled."
+msgstr "LuwiPress — WP-Cron est désactivé."
+
+#: includes/class-luwipress-image-studio.php:94
+msgid "Luxury / editorial"
+msgstr "Luxe / editorial"
+
+#: includes/class-luwipress-license.php:984
+msgid "lwp_… license key or CodeCanyon purchase code"
+msgstr "lwp_... clé de licence ou de CodeCanyon achat code"
+
+#: includes/class-luwipress-vendors.php:249
+msgid "Made by"
+msgstr "Faite par"
+
+#. %s: singular vendor label, e.g. "luthier"
+#: includes/class-luwipress-vendors.php:746
+#, php-format
+msgid "Made by this %s:"
+msgstr "Faite par ce %s:"
+
+#. %s: theme name
+#: admin/theme-page.php:104
+#, php-format
+msgid "Maintenance + settings for %s"
+msgstr "Entretien + paramètres de %s"
+
+#: admin/theme-page.php:255 admin/theme-page.php:263
+msgid "Maintenance tools"
+msgstr "Les outils de Maintenance"
+
+#: admin/admin-page.php:673
+msgid "Manage"
+msgstr "Gérer"
+
+#. %s plural label
+#: admin/vendors-page.php:342
+#, php-format
+msgid "Manage all %s"
+msgstr "Gérer l'ensemble de %s"
+
+#: admin/events-page.php:56
+msgid "Manage Events →"
+msgstr ""
+
+#: admin/slug-resolver-page.php:112
+msgid "manual operator rules"
+msgstr "manuel de l'opérateur règles de"
+
+#: admin/bot-defense-page.php:456
+msgid "Manually block an IP"
+msgstr "Bloquer manuellement une adresse IP"
+
+#: admin/slug-resolver-page.php:104
+msgid "Map size"
+msgstr "Taille de la carte"
+
+#: includes/class-luwipress-cookie-consent.php:197
+msgid "Marketing"
+msgstr "Marketing"
+
+#: admin/cookies-page.php:120
+msgid "Marketing accept-rate"
+msgstr "Marketing accepter des taux de"
+
+#: admin/cookies-page.php:184
+msgid "Marketing scripts"
+msgstr "La commercialisation des scripts"
+
+#: includes/class-luwipress-image-studio.php:103
+msgid "Match original"
+msgstr "Match original"
+
+#: admin/bot-defense-page.php:690
+msgid "matching."
+msgstr "de correspondance."
+
+#: admin/bot-defense-page.php:506
+msgid "Max links / body"
+msgstr "Max de liens / corps"
+
+#: luwipress.php:1577
+msgid "Maximum 50 topics per batch. Please trim the list."
+msgstr "Un Maximum de 50 sujets par lot. Veuillez garniture de la liste."
+
+#: includes/class-luwipress-content-scheduler.php:398
+msgid "Maximum 50 topics per bulk request. Split your list and try again."
+msgstr ""
+"Un Maximum de 50 sujets par en vrac demande. Diviser votre liste et essayez "
+"de nouveau."
+
+#: admin/knowledge-graph-page.php:166
+msgid "Media Health"
+msgstr "Les Médias De La Santé"
+
+#: admin/bot-defense-page.php:206 admin/bot-defense-page.php:281
+msgid "Medium (60–79)"
+msgstr "Moyen (60-79)"
+
+#: admin/bot-defense-page.php:312
+msgid "Medium+ (≥ 60)"
+msgstr "Moyen+ (≥ 60)"
+
+#: admin/theme-page.php:360
+msgid "Mega menu"
+msgstr "Mega menu"
+
+#: admin/events-page.php:91 admin/cpt-manager-page.php:185
+msgid "Menu icon"
+msgstr "Icône de Menu"
+
+#: admin/vendors-page.php:195
+msgid "Menu icon (Dashicons class)"
+msgstr "Icône de Menu (Dashicons classe)"
+
+#: admin/content-audit-page.php:277 admin/content-audit-page.php:320
+msgid "Meta only"
+msgstr "Meta seulement"
+
+#: admin/admin-page.php:412
+#, php-format
+msgid "Meta Pixel / CAPI: %s. Click to manage."
+msgstr "Meta Pixel / CAPI: %s. Cliquez sur gérer."
+
+#: includes/class-luwipress-health-score.php:57
+msgid ""
+"Meta title, meta description, focus keyword presence across "
+"products/posts/pages."
+msgstr ""
+"Meta title, meta description, mot-clé focus présence à travers les "
+"produits/articles/pages."
+
+#: admin/cookies-page.php:177
+msgid "Microsoft Clarity"
+msgstr "Microsoft Clarté"
+
+#: admin/knowledge-graph-page.php:299
+msgid "Minimum confidence"
+msgstr "Minimum de confiance"
+
+#: admin/image-alt-bulk-page.php:187
+msgid "Missing"
+msgstr "Manquant"
+
+#: admin/image-alt-bulk-page.php:162
+msgid "Missing alt"
+msgstr "Manquant alt"
+
+#: admin/admin-page.php:628
+msgid "Missing Alt Text"
+msgstr "Manquant Alt Text"
+
+#: includes/class-luwipress-content-scheduler.php:1141
+#: includes/class-luwipress-content-scheduler.php:1158
+msgid "Missing plan id"
+msgstr "Manque de plan d'id"
+
+#: admin/admin-page.php:627
+msgid "Missing SEO Meta"
+msgstr "Manquant Meta SEO"
+
+#: includes/class-luwipress-content-scheduler.php:1762
+msgid "Missing title or content"
+msgstr "Titre manquant ou contenu"
+
+#: includes/class-luwipress-theme-bridge.php:692
+msgid "Missing translated term"
+msgstr "Manquant terme traduit"
+
+#: admin/admin-page.php:625
+msgid "Missing Translations"
+msgstr "Traductions Manquantes"
+
+#: admin/bot-defense-page.php:489 admin/cookies-page.php:134
+#: admin/knowledge-graph-page.php:266
+msgid "Mode"
+msgstr "Mode"
+
+#: admin/usage-page.php:387 admin/admin-page.php:586
+msgid "Model"
+msgstr "Modèle"
+
+#: admin/bot-defense-page.php:473
+msgid "Moderate — hold for review (recommended)"
+msgstr "Modérée à retenir pour l'examen (recommandé)"
+
+#: admin/scheduler-page.php:737
+msgid "Monthly"
+msgstr "Mensuel"
+
+#: admin/faq-editor-metabox.php:90 includes/class-luwipress-faq-editor.php:335
+msgid "Move down"
+msgstr "Déplacer vers le bas"
+
+#: admin/faq-editor-metabox.php:87 includes/class-luwipress-faq-editor.php:334
+msgid "Move up"
+msgstr "Déplacer vers le haut"
+
+#: admin/taxonomy-editor-page.php:62
+msgid "Multi-language Taxonomy Editor"
+msgstr "Multi-langage de Taxonomie de l'Éditeur"
+
+#: admin/admin-page.php:346
+msgid "multi-step wizard + DB entries"
+msgstr "multi-étapes de l'assistant à + DB entrées"
+
+#: includes/class-luwipress-taxonomy-editor.php:116
+msgid "Name"
+msgstr "Nom"
+
+#: luwipress.php:1584 includes/class-luwipress-content-scheduler.php:1080
+msgid "Name and theme are required."
+msgstr "Le nom et le thème sont nécessaires."
+
+#: admin/admin-page.php:304
+msgid ""
+"Native SEO writer active (no third-party SEO plugin). Click to install Rank "
+"Math for richer features."
+msgstr ""
+"Natif de RÉFÉRENCEMENT écrivain active (pas de tiers SEO plugin). Cliquez "
+"pour installer le Rang de Mathématiques pour les plus riches fonctionnalités."
+
+#: admin/schema-preview-page.php:142
+msgid "Need to add FAQ to a product or post?"
+msgstr "Besoin d'ajouter de FAQ pour un produit ou d'un post?"
+
+#: admin/knowledge-graph-page.php:137
+msgid "Needs enrich →"
+msgstr ""
+
+#: admin/knowledge-graph-page.php:55
+msgid "Needs SEO meta"
+msgstr "Besoins meta SEO"
+
+#: admin/knowledge-graph-page.php:132
+msgid "Needs SEO →"
+msgstr ""
+
+#: admin/scheduler-page.php:346
+msgid "never"
+msgstr "jamais"
+
+#: includes/class-luwipress-vendors.php:1108
+#: includes/class-luwipress-events.php:175
+#, php-format
+msgid "New %s"
+msgstr "Nouveau %s"
+
+#: includes/class-luwipress-vendors.php:1159
+msgid "New Group"
+msgstr "Nouveau Groupe"
+
+#: admin/scheduler-page.php:326
+msgid "New plan"
+msgstr "Nouveau plan"
+
+#: admin/scheduler-page.php:695 admin/image-alt-bulk-page.php:317
+msgid "Next"
+msgstr "Prochaine"
+
+#: admin/knowledge-graph-page.php:239
+msgid "Next wins"
+msgstr "Prochaines victoires"
+
+#: admin/scheduler-page.php:361
+msgid "Next:"
+msgstr "Prochaine:"
+
+#: admin/theme-page.php:244
+msgid "No"
+msgstr "Pas de"
+
+#: admin/admin-page.php:722
+#, php-format
+msgid "No %s customers"
+msgstr "Pas de %s clients"
+
+#: includes/class-luwipress-vendors.php:1114
+#: includes/class-luwipress-events.php:181
+#, php-format
+msgid "No %s found in trash."
+msgstr "Pas de %s trouvé dans la corbeille."
+
+#: includes/class-luwipress-vendors.php:1113
+#: includes/class-luwipress-events.php:180
+#, php-format
+msgid "No %s found."
+msgstr "Pas de %s trouvé."
+
+#. %s: plural label
+#: includes/class-luwipress-vendors.php:452
+#, php-format
+msgid "No %s yet. Add them in LuwiPress → Vendors."
+msgstr ""
+
+#: admin/bot-defense-page.php:642
+msgid "No accounts at this tier. Try a lower tier or run a fresh scan."
+msgstr ""
+"Pas de comptes à ce niveau. Essayez de niveau inférieur ou exécuter une "
+"nouvelle analyse."
+
+#: admin/bot-defense-page.php:965
+msgid "No active blocks."
+msgstr "Aucun des blocs."
+
+#: includes/class-luwipress-license.php:1119
+msgid "No active license. Click to activate your purchase code or license key."
+msgstr ""
+"Pas de licence active. Cliquez sur pour activer votre achat code ou la clé "
+"de licence."
+
+#: admin/usage-page.php:262
+msgid "No activity yet."
+msgstr "Aucune activité encore."
+
+#: admin/usage-page.php:226
+msgid "No AI calls yet."
+msgstr "N'AI appelle encore."
+
+#: admin/admin-page.php:284
+msgid "No AI key"
+msgstr "N'AI-clés"
+
+#: admin/scheduler-page.php:124
+msgid "No AI key configured"
+msgstr "Pas d'IA clé configurée"
+
+#: admin/admin-page.php:285
+msgid ""
+"No AI provider key set. Click to open Settings → API Keys (OpenAI, Anthropic,"
+" Google, or any OpenAI-compatible endpoint)."
+msgstr ""
+
+#: admin/admin-page.php:387
+msgid "No analytics"
+msgstr "Pas de google analytics"
+
+#: admin/admin-page.php:388
+msgid ""
+"No analytics plugin. Click to install Google Site Kit (recommended). GTM4WP "
+"/ MonsterInsights also supported."
+msgstr ""
+"Pas de plugin google analytics. Cliquez pour installer le Google Site Kit "
+"(recommandé). GTM4WP / MonsterInsights également pris en charge."
+
+#: admin/usage-page.php:394
+msgid "No API calls recorded yet."
+msgstr "Pas d'appels de l'API ont pas encore été enregistrées."
+
+#: luwipress.php:1535
+msgid "No backups for this tool."
+msgstr "Pas de sauvegardes pour cet outil."
+
+#: includes/class-luwipress-vendors.php:1476
+msgid "no base set"
+msgstr "pas de jeu de base"
+
+#: admin/bot-defense-page.php:425
+msgid ""
+"No blocks recorded yet — enable the shield in Settings to start collecting."
+msgstr ""
+"Pas de blocs ont pas encore été enregistrées activer le bouclier dans les "
+"Paramètres de début de la collecte."
+
+#: admin/bot-defense-page.php:233
+msgid "No blocks recorded yet."
+msgstr "Pas de blocs ont pas encore été enregistrées."
+
+#: admin/admin-page.php:363
+msgid "No cache plugin"
+msgstr "Pas de plugin de mise en cache"
+
+#: luwipress.php:1531
+msgid "No candidates found."
+msgstr "Aucun des candidats trouvés."
+
+#: admin/bot-defense-page.php:1057
+msgid "No caught comments in the last 100 events."
+msgstr "Pas pris de commentaires dans les 100 derniers événements."
+
+#: admin/taxonomy-editor-page.php:113
+msgid "No changes"
+msgstr "Pas de changements"
+
+#: includes/class-luwipress-taxonomy-editor.php:110
+msgid "No changes to save"
+msgstr "Pas de modifications pour enregistrer les"
+
+#: admin/cookies-page.php:363
+msgid "No consent records yet."
+msgstr "Le consentement n'enregistre encore."
+
+#: admin/content-hub-page.php:150
+msgid "No content tools available — required modules are not active."
+msgstr "Aucun contenu outils disponibles — requis modules ne sont pas actifs."
+
+#: includes/class-luwipress-content-scheduler.php:1326
+msgid "No draft attached yet — wait for generation to finish."
+msgstr "Aucun projet de joint encore attendre pour la génération à la fin."
+
+#: includes/class-luwipress-faq-editor.php:160
+msgid "No FAQ yet"
+msgstr "Pas de FAQ encore"
+
+#: admin/admin-page.php:352
+msgid ""
+"No form plugin detected. Click to install Fluent Forms (free — multi-step "
+"wizard + DB entries + native Elementor widget). WPForms / Gravity Forms / "
+"Forminator / CF7 also supported."
+msgstr ""
+"Aucune forme de plugin détecté. Cliquez sur installer Couramment Formes "
+"(gratuit — multi-étapes de l'assistant à + DB entrées + native Elementor "
+"widget). WPForms / les Formes de Gravité / Forminator / CF7 également pris "
+"en charge."
+
+#: admin/admin-page.php:351
+msgid "No forms plugin"
+msgstr "Aucune forme de plugin"
+
+#: admin/admin-page.php:403
+msgid "No Google Ads"
+msgstr "Aucune Annonces Google"
+
+#: admin/admin-page.php:404
+msgid ""
+"No Google Ads / Merchant Center integration. Click to install Google "
+"Listings & Ads."
+msgstr ""
+"Aucune Annonces Google / google Merchant Center de l'intégration. Cliquez "
+"sur installer Google annonces et les Annonces."
+
+#: includes/class-luwipress-vendors.php:1162
+msgid "No groups found."
+msgstr "Aucun groupe trouvé."
+
+#: admin/image-alt-bulk-page.php:241
+msgid "No images match."
+msgstr "Pas d'images de match."
+
+#: includes/class-luwipress-content-scheduler.php:1461
+msgid "No items selected."
+msgstr "Pas d'éléments sélectionnés."
+
+#: admin/usage-page.php:143
+msgid "No limit set"
+msgstr "Aucune limite"
+
+#: admin/usage-page.php:319
+msgid "No logs found."
+msgstr "Pas de journaux trouvés."
+
+#: admin/admin-page.php:416
+msgid "No Meta Pixel"
+msgstr "Pas De Méta-Pixel"
+
+#: admin/admin-page.php:417
+msgid ""
+"No Meta Pixel / Instagram Shopping integration. Click to install Meta for "
+"WooCommerce."
+msgstr ""
+"Pas de Méta-Pixel / Instagram Shopping intégration. Cliquez sur installer "
+"Meta pour Thème."
+
+#: includes/providers/class-luwipress-provider-openai-compatible.php:138
+msgid "No model selected for the OpenAI-Compatible provider."
+msgstr "Pas de modèle sélectionné pour le OpenAI-Compatible fournisseur."
+
+#: admin/admin-page.php:375
+msgid "No page builder"
+msgstr "Pas de générateur de page"
+
+#: admin/admin-page.php:376
+msgid ""
+"No page builder. Click to install Elementor (required for "
+"read/write/translate page structures)."
+msgstr ""
+"Pas de générateur de page. Cliquez sur installer Elementor (nécessaire pour "
+"lire/écrire/traduire les structures de page)."
+
+#: admin/admin-page.php:364
+msgid ""
+"No page-cache plugin. Click to install LiteSpeed Cache (recommended). WP "
+"Rocket / W3 Total Cache also supported."
+msgstr ""
+"Pas de page-plugin de mise en cache. Cliquez sur installer LiteSpeed Cache "
+"(recommandé). WP Rocket / W3 Total Cache également pris en charge."
+
+#: admin/admin-page.php:428
+msgid "No product feed"
+msgstr "Pas de flux de produits"
+
+#: admin/admin-page.php:429
+msgid ""
+"No product-feed plugin. Click to install Product Feed PRO (Google Shopping / "
+"marketplace sync)."
+msgstr ""
+"Pas de produit d'alimentation plugin. Cliquez pour installer le Flux de "
+"Produits PRO (Google Shopping / marché de synchronisation)."
+
+#: admin/bot-defense-page.php:1052
+msgid "No recent caught comments — enable comment review or wait for activity."
+msgstr ""
+"Pas récemment pris commentaires — permettre un commentaire de révision ou "
+"d'attendre pour l'activité."
+
+#: admin/scheduler-page.php:334
+msgid "No recurring plans yet"
+msgstr "Pas les plans récurrents encore"
+
+#: admin/scheduler-page.php:180
+msgid "No scheduled content yet"
+msgstr "N'est pas fixée au contenu encore"
+
+#: admin/admin-page.php:446
+msgid "No security plugin"
+msgstr "Pas de plug-in de sécurité"
+
+#: admin/admin-page.php:311
+msgid "No SEO plugin"
+msgstr "Pas de plugin SEO"
+
+#: admin/admin-page.php:312
+msgid ""
+"No SEO plugin detected. Click to install Rank Math (recommended). Yoast / "
+"AIOSEO / SEOPress also supported."
+msgstr ""
+"Pas de SEO plugin détecté. Cliquez pour installer le Rang de Mathématiques "
+"(recommandé). Yoast / AIOSEO / SEOPress également pris en charge."
+
+#: admin/admin-page.php:336
+msgid "No SMTP"
+msgstr "Pas de SMTP"
+
+#: includes/class-luwipress-image-handler.php:207
+#: includes/providers/class-luwipress-provider-openai.php:243
+msgid "No source image to retouch."
+msgstr "Aucune source de l'image à retoucher."
+
+#: admin/taxonomy-editor-page.php:130
+msgid "No term groups returned for this taxonomy."
+msgstr "Aucun terme, les groupes retourné pour cette taxonomie."
+
+#: includes/class-luwipress-taxonomy-editor.php:115
+msgid "No terms found."
+msgstr "Aucun conditions trouvés."
+
+#: luwipress.php:1585
+msgid "No thin content found to enrich. Run a scan first."
+msgstr "Pas mince contenu pour enrichir. Exécuter un scan de la première."
+
+#: luwipress.php:1586
+msgid "No thin products found."
+msgstr "Pas de produits minces trouvé."
+
+#: admin/admin-page.php:447
+msgid ""
+"No third-party security plugin detected. LuwiPress Bot Shield handles the "
+"full layer stack itself. Click to install Wordfence Free to delegate the "
+"noisy edge layers."
+msgstr ""
+"Pas de tiers plug-in de sécurité détectés. LuwiPress Bot Bouclier gère la "
+"totalité de la couche de la pile elle-même. Cliquez sur installer Wordfence "
+"Libre de déléguer le bruit de bord de couches."
+
+#: admin/site-hub-page.php:278
+msgid "No tools available — required modules are not active."
+msgstr "Pas d'outils disponibles — requis modules ne sont pas actifs."
+
+#: includes/class-luwipress-content-scheduler.php:395
+msgid "No topics provided."
+msgstr "Aucun des sujets fournis."
+
+#: luwipress.php:1590
+msgid "No topics returned — try a more specific theme."
+msgstr "Pas de rubriques correspondantes — essayez un thème précis."
+
+#: admin/admin-page.php:324
+msgid "No translation"
+msgstr "Pas de traduction"
+
+#: admin/cpt-manager-page.php:646
+msgid ""
+"No translation plugin (WPML / Polylang) detected — this config applies only "
+"on multilingual sites."
+msgstr ""
+"Pas de plugin de traduction (WPML / Polylang) détecté — cette configuration "
+"s'applique uniquement sur les sites multilingues."
+
+#: admin/taxonomy-editor-page.php:70
+msgid "No translation plugin detected — single-language mode"
+msgstr ""
+"Pas de plugin de traduction de détecter en une seule langue, le mode de"
+
+#: admin/admin-page.php:325
+msgid ""
+"No translation plugin detected. Click to install Polylang (free). WPML and "
+"TranslatePress also supported."
+msgstr ""
+"Pas de plugin de traduction détecté. Cliquez sur installer Polylang (gratuit)"
+". WPML et TranslatePress également pris en charge."
+
+#: includes/class-luwipress-events.php:691
+msgid "No vendors yet. Add them in LuwiPress → Vendors, then attach them here."
+msgstr ""
+
+#: admin/admin-page.php:295
+msgid "No WooCommerce"
+msgstr "Pas De Thème"
+
+#: admin/bot-defense-page.php:214
+msgid "Noise (< 40)"
+msgstr ""
+
+#: admin/knowledge-graph-page.php:56
+msgid "Not enriched"
+msgstr "Pas enrichi"
+
+#: admin/bot-defense-page.php:783
+msgid "not found"
+msgstr "pas trouvé"
+
+#: admin/scheduler-page.php:594
+msgid "not set"
+msgstr "pas ensemble"
+
+#: admin/image-alt-bulk-page.php:239
+msgid "Nothing missing alt text — every image is covered."
+msgstr "Rien ne manque alt texte — chaque image est couvert."
+
+#: includes/class-luwipress-content-scheduler.php:1373
+msgid "Nothing to enrich — content already clean."
+msgstr "Rien à enrichir le contenu déjà propre."
+
+#: admin/cookies-page.php:445
+msgid "Nothing to save."
+msgstr "Rien à sauver."
+
+#: admin/bot-defense-page.php:849
+msgid "Nothing to sweep at this tier."
+msgstr "Rien à balayage à ce niveau."
+
+#: admin/cpt-manager-page.php:138 admin/knowledge-graph-page.php:271
+msgid "Off"
+msgstr "Off"
+
+#: admin/bot-defense-page.php:472
+msgid "Off (no comment scoring)"
+msgstr "Off (aucun commentaire de notation)"
+
+#: admin/vendors-page.php:217
+msgid ""
+"Off = individual vendor permalinks still work, but the /<archive>/ landing "
+"page returns 404."
+msgstr ""
+
+#: includes/class-luwipress-license.php:1022
+msgid ""
+"Off by default — development convenience. Distributed builds enable "
+"enforcement automatically."
+msgstr ""
+"Off par défaut de développement de la commodité. Distribué construit activer "
+"la mise en application automatiquement."
+
+#: admin/theme-page.php:166
+msgid "Official"
+msgstr "Officiel"
+
+#: admin/admin-page.php:122 admin/theme-page.php:110
+msgid "Official LuwiPress companion theme — full ecosystem features active."
+msgstr ""
+"Officiel LuwiPress compagnon thème de l'ensemble de l'écosystème les "
+"fonctions actives."
+
+#: admin/vendors-page.php:272
+msgid ""
+"Old slug renamed (e.g. /masters/ → /luthiers/) ? Add 301 redirect pairs so "
+"existing bookmarks + Google index entries route to the new URL. Prefix-match:"
+" both /masters/ and /masters/yildirim-palabiyik/ redirect."
+msgstr ""
+
+#: admin/content-audit-page.php:358
+msgid "On band"
+msgstr "Sur la bande"
+
+#: admin/scheduler-page.php:453
+msgid ""
+"One topic per line.\n"
+"Advanced — pipe overrides per row:\n"
+"Specific topic title | keywords here, more keywords\n"
+"Another topic | depth=editorial | words=3000\n"
+"Short topic | depth=standard | words=900 | image=0"
+msgstr ""
+
+#: includes/class-luwipress-events.php:642
+msgid "Online"
+msgstr "En ligne"
+
+#: admin/events-page.php:106 includes/class-luwipress-events.php:376
+#: includes/class-luwipress-events.php:654
+msgid "Online URL"
+msgstr "En ligne, URL"
+
+#: admin/knowledge-graph-page.php:301
+msgid "Only act on opportunities the graph scores at or above this."
+msgstr ""
+"Seulement agir sur les possibilités que le graphique des scores au-dessus de "
+"cela."
+
+#: includes/class-luwipress-content-scheduler.php:820
+msgid "Only failed items can be retried."
+msgstr "Seulement échoué éléments peuvent être relancées."
+
+#: includes/class-luwipress-image-handler.php:215
+msgid "Only PNG, JPEG or WebP images can be retouched."
+msgstr "Seulement PNG, JPEG ou WebP les images peuvent être retouchées."
+
+#: admin/vendors-page.php:124
+msgid "Open archive →"
+msgstr ""
+
+#: luwipress.php:1189
+msgid "Open Claw moved to companion plugin (3.1+)"
+msgstr "Ouvrir Griffe déplacé pour compagnon de plugin (3.1+)"
+
+#: admin/theme-page.php:193
+msgid "Open findings"
+msgstr "Ouvrir résultats"
+
+#: admin/image-alt-bulk-page.php:260
+msgid "Open in Media Library →"
+msgstr ""
+
+#: admin/cpt-manager-page.php:350
+msgid "Open posts"
+msgstr "Ouvrir des postes"
+
+#: admin/faq-editor-metabox.php:134
+msgid "Open Schema Preview to verify FAQPage emission on the live URL."
+msgstr "Ouvrir le Schéma Aperçu pour vérifier FAQPage émission sur les URL."
+
+#: admin/bot-defense-page.php:258
+msgid "Open shield"
+msgstr "Bouclier ouvert"
+
+#: includes/class-luwipress-translation-sync.php:806
+msgid "Open Translation Sync"
+msgstr "Ouvrir La Traduction De Synchronisation"
+
+#: luwipress.php:859
+msgid "Open Translation Sync Audit"
+msgstr "Ouvrir La Traduction De Vérification De Synchronisation"
+
+#: admin/vendors-page.php:142
+msgid "Open vendor list"
+msgstr "Ouvrir la liste des fournisseurs"
+
+#: includes/providers/class-luwipress-provider-openai.php:117
+#, php-format
+msgid "OpenAI API error (%d): %s"
+msgstr "OpenAI erreur de l'API (%d): %s"
+
+#: includes/providers/class-luwipress-provider-openai.php:38
+#: includes/providers/class-luwipress-provider-openai.php:153
+#: includes/providers/class-luwipress-provider-openai.php:240
+msgid "OpenAI API key is not configured."
+msgstr "OpenAI clé API n'est pas configuré."
+
+#: includes/providers/class-luwipress-provider-openai.php:104
+#, php-format
+msgid "OpenAI API request failed: %s"
+msgstr "OpenAI API demande a échoué: %s"
+
+#: includes/providers/class-luwipress-provider-openai.php:130
+msgid "OpenAI returned an empty response."
+msgstr "OpenAI retourné une réponse vide."
+
+#: includes/providers/class-luwipress-provider-openai-compatible.php:127
+msgid ""
+"OpenAI-Compatible provider is not configured (missing API key or base URL)."
+msgstr ""
+"OpenAI-Compatible fournisseur n'est pas configuré (manque clé de l'API ou de "
+"l'URL de base)."
+
+#: admin/admin-page.php:617 admin/knowledge-graph-page.php:141
+msgid "Opportunities"
+msgstr "Possibilités"
+
+#: includes/class-luwipress-kg-opportunities.php:342
+msgid "Opportunity total"
+msgstr "Occasion total"
+
+#: admin/cookies-page.php:137
+msgid "Opt-in (EU default — strict)"
+msgstr "Opt-in (UE défaut — strict)"
+
+#: admin/cookies-page.php:138
+msgid "Opt-out (US default — cookies fire by default)"
+msgstr "Opt-out (US par défaut les cookies — feu par défaut)"
+
+#: admin/cpt-manager-page.php:218
+msgid ""
+"Optional groupings (e.g. a \"department\" for Team, a \"genre\" for Artists)."
+" Translatable taxonomies surface in the Translation Manager."
+msgstr ""
+"Option de groupes (par exemple un \"ministère\" de l'Équipe, un \"genre\" "
+"pour les Artistes). Traduisible taxonomies de surface dans le Gestionnaire "
+"de Traduction."
+
+#: admin/cpt-manager-page.php:250
+msgid ""
+"Optional. Bind products to this type via a JSON-array meta key. The engine "
+"auto-creates a hidden product_<type> taxonomy and keeps meta ↔ terms in sync."
+msgstr ""
+
+#: includes/class-luwipress-vendors.php:1403
+msgid ""
+"Optional. Gives this group its own URL base, e.g. \"team\" → /team/<vendor>/."
+" Leave empty to use the global Vendors archive slug."
+msgstr ""
+
+#: admin/cpt-manager-page.php:242
+msgid ""
+"Optional. Maps this type to a Schema Registry type (e.g. Person, "
+"Organization, Event)."
+msgstr ""
+"Facultatif. Les cartes de ce type à un Schéma type de Registre (par ex. une "
+"Personne, une Organisation, un Événement)."
+
+#: includes/class-luwipress-image-studio.php:110
+msgid "Optional: extra instruction"
+msgstr "En option: supplément d'instruction"
+
+#: admin/events-page.php:95
+msgid "Options"
+msgstr "Options"
+
+#: admin/image-alt-bulk-page.php:150
+msgid ""
+"Or click ✨ AI on any row to let your configured AI provider describe the "
+"image — the suggestion drops into the box for you to review before saving."
+msgstr ""
+
+#: includes/class-luwipress-vendors.php:533
+msgid "Organization"
+msgstr "Organisation"
+
+#: admin/vendors-page.php:55
+msgid "Organization (atelier, workshop, brand)"
+msgstr "(Organisation de l'atelier, l'atelier, de la marque)"
+
+#: includes/class-luwipress-events.php:594
+msgid "Organizers"
+msgstr "Les organisateurs"
+
+#: admin/events-page.php:108
+msgid "Organizers (vendor link)"
+msgstr "Les organisateurs (fournisseur de lien)"
+
+#: includes/class-luwipress-events.php:380
+msgid "Organizers (vendors)"
+msgstr "Les organisateurs (les vendeurs)"
+
+#: includes/class-luwipress-theme-bridge.php:697
+msgid "Orphan SEO landing"
+msgstr "Orphelin de RÉFÉRENCEMENT d'atterrissage"
+
+#: includes/class-luwipress-content-scheduler.php:920
+msgid "Outline must have at least one section."
+msgstr "Les grandes lignes doivent avoir au moins une section."
+
+#: luwipress.php:1581
+msgid "Outline needs at least one section."
+msgstr "Contour besoin d'au moins une section."
+
+#: includes/class-luwipress-content-scheduler.php:619
+msgid "Outline returned no sections. Try again or rewrite the topic."
+msgstr ""
+"Le contour n'ont pas retourné de sections. Essayez à nouveau ou de réécrire "
+"le sujet."
+
+#: admin/scheduler-page.php:44 admin/scheduler-page.php:196
+msgid "Outline review"
+msgstr "Le contour de l'examen"
+
+#: admin/usage-page.php:389
+msgid "Output"
+msgstr "Sortie"
+
+#: admin/admin-page.php:576
+msgid "Output Tokens"
+msgstr "Sortie Jetons"
+
+#: admin/scheduler-page.php:487
+msgid ""
+"Override batch defaults for individual rows using pipe-separated key=value "
+"segments:"
+msgstr ""
+"Remplacer le lot par défaut pour les lignes individuelles à l'aide de tuyaux "
+"séparés clé=valeur de segments:"
+
+#: admin/slug-resolver-page.php:110
+msgid "Overrides"
+msgstr "Remplace"
+
+#: includes/class-luwipress-vendors.php:537
+msgid ""
+"Overrides the Schema.org @type for this profile and its product attribution."
+msgstr ""
+
+#: admin/bot-defense-page.php:161 admin/usage-page.php:200
+#: admin/theme-page.php:140
+msgid "Overview"
+msgstr "Vue d'ensemble"
+
+#: admin/scheduler-page.php:547 admin/scheduler-page.php:788
+msgid "Page"
+msgstr "Page"
+
+#. %d page count
+#: admin/image-alt-bulk-page.php:307
+#, php-format
+msgid "Page %1$d of %2$d"
+msgstr "Page %1$d de %2$d"
+
+#: admin/admin-page.php:372
+#, php-format
+msgid ""
+"Page builder: %s. The 30+ Elementor REST endpoints are available. Click to "
+"manage."
+msgstr ""
+"Le créateur de la Page: %s. L'30+ Elementor RESTE des points de terminaison "
+"sont disponibles. Cliquez sur gérer."
+
+#: admin/knowledge-graph-page.php:92
+msgid "Pages"
+msgstr "Pages"
+
+#: admin/bot-defense-page.php:520
+msgid ""
+"Paste a sample comment body and see what would happen — score + matched "
+"signals — without touching live data."
+msgstr ""
+"Coller un exemple de commentaire de corps et de voir ce qui allait se passer "
+"— score + appariés signaux — sans toucher données en direct."
+
+#: admin/slug-resolver-page.php:172
+msgid ""
+"Paste any slugs (one per line, or comma-separated) to verify each one "
+"resolves before swap day. Probe runs the same six-pass discovery the live "
+"redirect uses."
+msgstr ""
+"De la pâte sur les limaces (un par ligne, séparés par des virgules) pour "
+"vérifier chaque résout avant swap de la journée. La sonde fonctionne de la "
+"même six de la découverte du col du live de redirection utilise."
+
+#: admin/bot-defense-page.php:354 admin/bot-defense-page.php:925
+#: admin/scheduler-page.php:371
+msgid "Pause"
+msgstr "Pause"
+
+#: admin/usage-page.php:312 admin/scheduler-page.php:353
+msgid "Paused"
+msgstr "Pause"
+
+#: admin/scheduler-page.php:42 admin/scheduler-page.php:194
+msgid "Pending"
+msgstr "En attendant"
+
+#: includes/class-luwipress-theme-bridge.php:701
+msgid "Pending UI string translation"
+msgstr "Dans l'attente de l'INTERFACE utilisateur de la chaîne de traduction"
+
+#: admin/content-audit-page.php:347
+msgid ""
+"Per-CPT word count compliance — share of published content within the [min, "
+"max] target band configured in Settings → AI Content. Below min = thin "
+"(action priority), above max = bloat (informational)."
+msgstr ""
+
+#: admin/theme-page.php:358
+msgid "Performance"
+msgstr "Performance"
+
+#: includes/class-luwipress-theme-bridge.php:700
+msgid "Performance signal regression"
+msgstr "Les performances du signal de régression"
+
+#: includes/class-luwipress-events.php:604
+msgid "Performers"
+msgstr "Artistes interprètes ou exécutants"
+
+#: admin/events-page.php:109
+msgid "Performers (vendor link)"
+msgstr "Artistes interprètes ou exécutants (fournisseur de lien)"
+
+#: includes/class-luwipress-events.php:381
+msgid "Performers (vendors)"
+msgstr "Artistes interprètes ou exécutants (les vendeurs)"
+
+#: admin/vendors-page.php:204
+msgid "Permalink & archive"
+msgstr "Permalien & archive"
+
+#: admin/vendors-page.php:208
+msgid "Permalink prefix"
+msgstr "Préfixe permalien"
+
+#: admin/bot-defense-page.php:756
+msgid "Permanently delete"
+msgstr "Supprimer définitivement"
+
+#: includes/class-luwipress-vendors.php:534
+msgid "Person"
+msgstr "Personne"
+
+#: admin/vendors-page.php:56
+msgid "Person (individual maestro, author, artist)"
+msgstr "Personne (individu maestro, auteur, artiste)"
+
+#: admin/vendors-page.php:68
+msgid "Personal website"
+msgstr "Site web personnel"
+
+#: includes/class-luwipress-cookie-consent.php:198
+msgid "Personalization"
+msgstr "Personnalisation"
+
+#: admin/scheduler-page.php:55
+msgid "Persuasive & Sales"
+msgstr "Persuasif Et Vente"
+
+#: admin/schema-picker-page.php:65
+msgid ""
+"Physical-store / atelier with an address, opening hours, geo coordinates. "
+"Strong local-SEO signal."
+msgstr ""
+"Physique-magasin / atelier avec une adresse, horaires d'ouverture, "
+"coordonnées géo. Local fort-de RÉFÉRENCEMENT de signal."
+
+#: admin/schema-picker-page.php:184
+msgid ""
+"Pick a schema type to start from a starter template, edit JSON, then save."
+msgstr ""
+"Choisissez un type de schéma pour démarrer à partir d'un modèle de démarrage,"
+" modifier JSON, puis sur enregistrer."
+
+#: luwipress.php:1578
+msgid "Pick a start date."
+msgstr "Choisissez une date de début."
+
+#: admin/scheduler-page.php:616
+msgid ""
+"Pick a start date. With more than one topic, cadence spreads them out. AI "
+"stagger keeps generation runs from all firing at once."
+msgstr ""
+"Choisissez une date de début. Avec plus d'un sujet, la cadence se répand au "
+"dehors. AI échelonner garde de génération de pistes de tous les tirs à la "
+"fois."
+
+#: luwipress.php:1583
+msgid "Pick at least one topic."
+msgstr "Choisir au moins un sujet."
+
+#: admin/schema-picker-page.php:165
+msgid "Pick target"
+msgstr "Choisir la cible"
+
+#: includes/class-luwipress-events.php:672
+msgid "Pick the organizing vendor(s)."
+msgstr "Choisir l'organisation de fournisseur(s)."
+
+#: includes/class-luwipress-events.php:676
+msgid "Pick the performing vendor(s)."
+msgstr "Choisissez la scène vendeur(s)."
+
+#: admin/scheduler-page.php:499
+msgid "Pick the voice and depth"
+msgstr "Choisir la voix et de la profondeur"
+
+#: admin/scheduler-page.php:728
+msgid "Plan name"
+msgstr "Nom du Plan"
+
+#: includes/class-luwipress-content-scheduler.php:1169
+msgid "Plan not found"
+msgstr "Plan pas trouvé"
+
+#: admin/scheduler-page.php:140
+msgid "Plans"
+msgstr "Les Plans"
+
+#: luwipress.php:1579
+msgid "Please enter a theme."
+msgstr "Veuillez saisir un thème."
+
+#: admin/knowledge-graph-page.php:151
+msgid "Plugin Health"
+msgstr "Plugin De Santé"
+
+#: admin/schema-preview-page.php:128 admin/content-hub-page.php:102
+#: admin/site-hub-page.php:242 admin/usage-page.php:97 admin/admin-page.php:103
+#: admin/image-alt-bulk-page.php:141 admin/slug-resolver-page.php:78
+#: admin/vendors-page.php:99 admin/content-audit-page.php:110
+#: admin/schema-picker-page.php:153
+msgid "Plugin version"
+msgstr "Version du Plugin"
+
+#: admin/events-page.php:80 admin/vendors-page.php:173
+#: admin/cpt-manager-page.php:174
+msgid "Plural label"
+msgstr "Pluriel de l'étiquette"
+
+#: admin/knowledge-graph-page.php:71
+msgid "PNG — Snapshot"
+msgstr "PNG — Instantané"
+
+#: admin/usage-page.php:309
+msgid "Poll server for new entries every 15 seconds"
+msgstr "Sondage serveur pour les nouvelles entrées toutes les 15 secondes"
+
+#: includes/class-luwipress-image-studio.php:106
+msgid "Portrait"
+msgstr "Portrait"
+
+#: admin/cookies-page.php:144
+msgid "Position"
+msgstr "Position"
+
+#: admin/scheduler-page.php:544 admin/scheduler-page.php:785
+#: admin/content-audit-page.php:266 admin/content-audit-page.php:309
+msgid "Post type"
+msgstr "Type de poste"
+
+#: admin/cpt-manager-page.php:163
+msgid "Post type slug"
+msgstr "Type de poste de slug"
+
+#: admin/knowledge-graph-page.php:88 admin/knowledge-graph-page.php:126
+msgid "Posts"
+msgstr "Postes"
+
+#: admin/scheduler-page.php:357 includes/class-luwipress-content-audit.php:820
+msgid "posts"
+msgstr "postes"
+
+#: admin/content-audit-page.php:406
+msgid ""
+"Posts below the min word count for their type. Highest-priority cleanup "
+"target (Helpful Content Update penalises thin content site-wide)."
+msgstr ""
+"Postes en dessous de la min nombre de mots pour leur type. Plus haute "
+"priorité de nettoyage de la cible (Utile mise à Jour de Contenu pénalise "
+"mince de contenu à l'échelle du site)."
+
+#: includes/class-luwipress-health-score.php:93
+msgid "Posts free of promotional phrases (GMC-sensitive) and AI-tell patterns."
+msgstr ""
+"Postes libres de promotion des phrases (GMC-sensibles) et de l'IA-dire des "
+"modèles."
+
+#: admin/scheduler-page.php:751
+msgid "Posts per run"
+msgstr "Messages par d'exécuter"
+
+#: admin/content-audit-page.php:416
+msgid "posts under"
+msgstr "des postes en vertu de l'"
+
+#: includes/class-luwipress-events.php:667
+msgid ""
+"Powers the Event JSON-LD schema, the ICS calendar download, and (when set) "
+"the ticketing offer. Start date is required for schema + ICS."
+msgstr ""
+"Les pouvoirs de l'Événement JSON-LD schéma, l'ICS calendrier de "
+"téléchargement, et (si définie), l'offre de billetterie. Date de début est "
+"nécessaire pour le schéma + ICS."
+
+#: includes/class-luwipress-cookie-consent.php:193
+msgid "Preferences"
+msgstr "Préférences"
+
+#: admin/cookies-page.php:171
+msgid "Preferences modal"
+msgstr "Préférences modal"
+
+#: admin/cpt-manager-page.php:192
+msgid "Prepend permalink base"
+msgstr "Ajouter permalien base"
+
+#: admin/events-page.php:99
+msgid "Prepend the permalink front base"
+msgstr "Ajouter le permalien de l'avant de la base de"
+
+#: admin/vendors-page.php:210
+msgid "Prepend WP permalink base (usually off)"
+msgstr "Ajouter WP permalien base (habituellement fermé)"
+
+#: admin/cpt-manager-page.php:301 admin/knowledge-graph-page.php:50
+msgid "Preset"
+msgstr "Preset"
+
+#: admin/faq-editor-metabox.php:136
+msgid "Preview schema"
+msgstr "Aperçu du schéma"
+
+#: admin/bot-defense-page.php:442
+msgid ""
+"Preview whether a request would be denied without actually firing the shield."
+msgstr "Aperçu si une demande peut être refusée sans fait de tir le bouclier."
+
+#: admin/image-alt-bulk-page.php:312
+msgid "Previous"
+msgstr "Précédente"
+
+#: includes/class-luwipress-events.php:378
+#: includes/class-luwipress-events.php:661
+msgid "Price"
+msgstr "Prix"
+
+#: includes/class-luwipress-vendors.php:1456
+msgid "Primary group (URL base)"
+msgstr "Groupe primaire (URL de base)"
+
+#: admin/cookies-page.php:223
+msgid "Privacy policy URL"
+msgstr "Politique de confidentialité URL"
+
+#: admin/slug-resolver-page.php:180
+msgid "Probe"
+msgstr "Sonde"
+
+#: admin/slug-resolver-page.php:170
+msgid "Probe slugs"
+msgstr "Sonde de limaces"
+
+#: admin/bot-defense-page.php:341
+msgid "Processed"
+msgstr "Traitées"
+
+#: luwipress.php:1600
+msgid "Processed %d item(s)."
+msgstr "Traitée %d point(s)."
+
+#: admin/scheduler-page.php:549
+msgid "Product"
+msgstr "Produit"
+
+#: admin/cpt-manager-page.php:247
+msgid "Product attribution meta key"
+msgstr "Produit d'attribution touche meta"
+
+#: includes/class-luwipress-taxonomy-editor.php:144
+msgid "Product Categories"
+msgstr "Les Catégories De Produits"
+
+#: admin/schema-preview-page.php:98
+msgid "Product category"
+msgstr "Catégorie de produit"
+
+#: includes/class-luwipress-health-score.php:133
+msgid "Product description"
+msgstr "Description du produit"
+
+#: admin/admin-page.php:425
+#, php-format
+msgid "Product feed: %s."
+msgstr "Alimentation du produit: %s."
+
+#: includes/class-luwipress-taxonomy-editor.php:145
+msgid "Product Tags"
+msgstr "L'Étiquette Du Produit"
+
+#: admin/admin-page.php:506 admin/knowledge-graph-page.php:84
+#: admin/knowledge-graph-page.php:121
+msgid "Products"
+msgstr "Produits"
+
+#: includes/class-luwipress-content-audit.php:820
+msgid "products"
+msgstr "produits"
+
+#: admin/scheduler-page.php:51
+msgid "Professional"
+msgstr "Professionnel"
+
+#: admin/vendors-page.php:233
+msgid "Profile field visibility"
+msgstr "Profil de champ de visibilité"
+
+#: admin/content-audit-page.php:259
+msgid "Promotional Phrase Audit"
+msgstr "Message Promotionnel De Vérification"
+
+#: admin/content-audit-page.php:237
+msgid "Promotional Phrases"
+msgstr "Promotion Phrases"
+
+#: includes/class-luwipress-content-audit.php:865
+msgid "Promotional phrases (GMC risk)"
+msgstr "Promotion des phrases (GMC risque)"
+
+#: admin/bot-defense-page.php:646
+msgid "Protected"
+msgstr "Protégé"
+
+#: admin/bot-defense-page.php:854
+msgid ""
+"Protected automatically: WooCommerce customers, email-verified users, and "
+"users with a realistic first + last name."
+msgstr ""
+"Automatiquement protégés: Thème des clients, email vérifié les utilisateurs, "
+"et les utilisateurs avec un réaliste premier + dernier nom."
+
+#: admin/bot-defense-page.php:645
+msgid ""
+"Protected by a safety tier — never deleted, regardless of score. Re-scan to "
+"refresh stored flags."
+msgstr ""
+"Protégé par une sécurité de niveau jamais supprimé, quel que soit le score. "
+"Re-scan pour actualiser stockées drapeaux."
+
+#: admin/admin-page.php:586
+msgid "Provider"
+msgstr "Fournisseur"
+
+#: admin/vendors-page.php:216
+msgid "Public /<archive>/ index page"
+msgstr ""
+
+#: admin/cpt-manager-page.php:181
+msgid ""
+"Public archive path — /team/, /artists/, etc. Defaults to the post type slug."
+msgstr ""
+"Public le chemin de l'archive — /équipe/, /artistes/, etc. Par défaut, le "
+"type de poste de slug."
+
+#: luwipress.php:1569
+msgid "Publish %d selected draft(s)?"
+msgstr "Publier %d brouillon sélectionné(s)?"
+
+#: includes/class-luwipress-content-scheduler.php:273
+msgid "Publish date is required."
+msgstr "Date de publication est nécessaire."
+
+#: admin/scheduler-page.php:223
+msgid "Publish selected"
+msgstr "La publication de certaines"
+
+#: luwipress.php:1634
+msgid "Publish selected items"
+msgstr "Publier les éléments sélectionnés"
+
+#: admin/scheduler-page.php:645
+msgid "Publish time"
+msgstr "Le délai de publication"
+
+#: admin/scheduler-page.php:46 admin/scheduler-page.php:198
+msgid "Published"
+msgstr "Publié"
+
+#: admin/vendors-page.php:113
+msgid "Published vendors"
+msgstr "Publié vendeurs"
+
+#: admin/faq-editor-metabox.php:98
+msgid "Question"
+msgstr "Question"
+
+#: admin/scheduler-page.php:135
+msgid "Queue"
+msgstr "La file d'attente"
+
+#: luwipress.php:1618 admin/scheduler-page.php:699
+msgid "Queue all topics"
+msgstr "La file d'attente de tous les sujets"
+
+#: admin/scheduler-page.php:181
+msgid "Queue your first batch of AI-generated posts in just a few steps."
+msgstr ""
+"La file d'attente de votre premier lot de IA posts générés en seulement "
+"quelques étapes."
+
+#: luwipress.php:1603
+#, php-format
+msgid "Queued %1$d topic(s) · %2$d skipped."
+msgstr "En attente de %1$d sujet(s) · %2$d sauté."
+
+#: luwipress.php:1602
+msgid "Queued %d topic(s)."
+msgstr "En file d'attente, %d sujet(s)."
+
+#: luwipress.php:1612
+msgid "Queuing…"
+msgstr "De files d'attente..."
+
+#: admin/bot-defense-page.php:250
+msgid "Quick actions"
+msgstr "Des actions rapides"
+
+#: admin/schema-preview-page.php:191
+msgid "Quick targets:"
+msgstr "Rapide des cibles:"
+
+#: admin/bot-defense-page.php:441 admin/bot-defense-page.php:519
+msgid "Quick test (dry-run)"
+msgstr "Test rapide (à sec)"
+
+#: admin/knowledge-graph-page.php:241
+msgid "Ranked by impact ÷ effort"
+msgstr "Classé par l'impact ÷ effort"
+
+#: admin/bot-defense-page.php:417
+msgid "Rate limit (req/window)"
+msgstr "Limite de fréquence (req/fenêtre)"
+
+#: includes/class-luwipress-license.php:1031
+msgid "Re-check"
+msgstr "Re-vérifier"
+
+#: admin/knowledge-graph-page.php:216
+msgid "Reading your catalog…"
+msgstr "La lecture de votre catalogue..."
+
+#: admin/scheduler-page.php:45 admin/scheduler-page.php:197
+msgid "Ready"
+msgstr "Prêt"
+
+#: admin/scheduler-page.php:671
+msgid "Ready to queue?"
+msgstr "Prêt à la file d'attente?"
+
+#: admin/bot-defense-page.php:780
+msgid "realistic name"
+msgstr "réaliste nom"
+
+#: admin/bot-defense-page.php:429 admin/bot-defense-page.php:560
+msgid "Reason"
+msgstr "Raison"
+
+#: admin/bot-defense-page.php:459
+msgid "reason (default: manual)"
+msgstr "raison (par défaut: manuel)"
+
+#: admin/usage-page.php:256 admin/admin-page.php:647
+msgid "Recent Activity"
+msgstr "Activité Récente"
+
+#: admin/knowledge-graph-page.php:348
+msgid "Recent activity"
+msgstr "Activité récente"
+
+#: admin/usage-page.php:382
+msgid "Recent API Calls"
+msgstr "Les récents Appels d'API"
+
+#: admin/bot-defense-page.php:536
+msgid "Recent caught comments"
+msgstr "De récentes pris les commentaires"
+
+#: admin/knowledge-graph-page.php:337
+msgid "Recent dispatches"
+msgstr "Dernières dépêches"
+
+#: admin/cookies-page.php:208
+msgid "recent:"
+msgstr "de récentes:"
+
+#: admin/knowledge-graph-page.php:278
+msgid "recommended"
+msgstr "recommandé"
+
+#: admin/content-audit-page.php:177
+msgid "Recompute now"
+msgstr "Recalculer maintenant"
+
+#: admin/scheduler-page.php:716
+msgid "Recurring plan"
+msgstr "Récurrents plan"
+
+#: admin/scheduler-page.php:321
+msgid "Recurring plans"
+msgstr "Les plans récurrents"
+
+#: includes/class-luwipress-theme-bridge.php:688
+msgid "Redirect chain"
+msgstr "Chaîne de redirection"
+
+#: admin/schema-picker-page.php:222
+msgid "Reference"
+msgstr "Référence"
+
+#: admin/knowledge-graph-page.php:79
+msgid "Refresh"
+msgstr "Actualiser"
+
+#: admin/slug-resolver-page.php:152
+msgid "Refresh diag"
+msgstr "Actualiser diag"
+
+#: luwipress.php:1574
+msgid "Refresh stale content via AI enrichment?"
+msgstr "Actualisation de contenu périmé, via AI un enrichissement?"
+
+#: luwipress.php:1604
+msgid "Refreshing…"
+msgstr "Rafraîchissant..."
+
+#: luwipress.php:1595
+msgid "Regenerate failed."
+msgstr "Régénérer échoué."
+
+#: luwipress.php:1619 luwipress.php:1631 admin/scheduler-page.php:836
+msgid "Regenerate outline"
+msgstr "Régénérer contour"
+
+#: luwipress.php:1610
+msgid "Regenerating…"
+msgstr "La régénération..."
+
+#: admin/events-page.php:73
+msgid "Register the Events post type and surface its menu."
+msgstr "Enregistrer les Événements post type et la surface de son menu."
+
+#: admin/bot-defense-page.php:382
+msgid "Registered"
+msgstr "Enregistré"
+
+#: admin/cpt-manager-page.php:125
+msgid "Registered types"
+msgstr "Types enregistrés"
+
+#: admin/cookies-page.php:165
+msgid "Reject button"
+msgstr "Bouton rejeter"
+
+#: includes/class-luwipress-cookie-consent.php:192
+msgid "Reject non-essential"
+msgstr "Rejeter non essentiels"
+
+#: admin/bot-defense-page.php:475
+msgid "Reject — silent 403, no row written"
+msgstr "Rejeter — silencieux 403, pas de ligne écrite"
+
+#: includes/class-luwipress-cookie-consent.php:202
+msgid ""
+"Remember your preferences (language, chat widget state). Disable for a fully "
+"anonymous visit."
+msgstr ""
+"Mémoriser vos préférences (langue, de la fenêtre de discussion de l'état). "
+"Désactiver pour une visite anonyme."
+
+#: includes/class-luwipress-faq-editor.php:333
+msgid "Remove"
+msgstr "Supprimer"
+
+#: admin/faq-editor-metabox.php:93
+msgid "Remove question"
+msgstr "Supprimer question"
+
+#: includes/class-luwipress-faq-editor.php:340
+msgid "Remove this question? Unsaved row content will be lost."
+msgstr "Supprimer cette question? Non enregistrées ligne contenu sera perdu."
+
+#: includes/class-luwipress-bot-shield.php:370
+msgid "Request blocked by site security."
+msgstr "Demande bloqué par la sécurité du site."
+
+#: luwipress.php:1588
+msgid "Request failed. Please try again."
+msgstr "Échec de la demande. Merci d'essayer de nouveau."
+
+#: includes/class-luwipress-cookie-consent.php:199
+msgid ""
+"Required for the site to function — session, cart, security tokens. Cannot "
+"be disabled."
+msgstr ""
+"Nécessaires au fonctionnement du site de session, le panier, les jetons de "
+"sécurité. Ne peut pas être désactivé."
+
+#: admin/bot-defense-page.php:784
+msgid "reserved"
+msgstr "réservés"
+
+#: admin/theme-page.php:382
+msgid "Reset group"
+msgstr "Réinitialisation de groupe"
+
+#: admin/knowledge-graph-page.php:229
+msgid "Reset saved layout for this view"
+msgstr "Réinitialisation de mise en page enregistrée pour cette vue"
+
+#: admin/schema-picker-page.php:197
+msgid "Reset to template"
+msgstr "Rétablir le modèle"
+
+#: admin/scheduler-page.php:286
+msgid "Resolve internal links + suggest taxonomy from existing terms"
+msgstr ""
+"Résoudre des liens internes + suggèrent la taxonomie de termes existants"
+
+#: admin/theme-page.php:322
+msgid "Restore from backup"
+msgstr "Restaurer à partir d'une sauvegarde"
+
+#: luwipress.php:1536
+msgid "Restored."
+msgstr "Restauré."
+
+#: luwipress.php:1529
+msgid "Restoring…"
+msgstr "La restauration..."
+
+#: admin/bot-defense-page.php:925 admin/scheduler-page.php:371
+msgid "Resume"
+msgstr "Résumé"
+
+#: includes/class-luwipress-image-studio.php:116
+msgid "Retouch image"
+msgstr "Retouche d'image"
+
+#: includes/class-luwipress-image-handler.php:255
+msgid "Retouch returned no image."
+msgstr "La retouche n'ont pas retourné de l'image."
+
+#: luwipress.php:1615 admin/scheduler-page.php:226 admin/scheduler-page.php:298
+msgid "Retry"
+msgstr "Réessayer"
+
+#: luwipress.php:1570
+msgid "Retry %d selected item(s)?"
+msgstr "Réessayer %d élément sélectionné(s)?"
+
+#: luwipress.php:1592
+msgid "Retry failed."
+msgstr "Nouvelle tentative a échoué."
+
+#: luwipress.php:1635
+msgid "Retry selected items"
+msgstr "Réessayer éléments sélectionnés"
+
+#: admin/admin-page.php:514
+msgid "Revenue (30d)"
+msgstr "Chiffre d'affaires (30d)"
+
+#: admin/scheduler-page.php:423
+msgid "Review"
+msgstr "Examen"
+
+#: admin/scheduler-page.php:290
+msgid "Review & publish"
+msgstr "Consulter et publier"
+
+#: admin/scheduler-page.php:280 admin/scheduler-page.php:825
+msgid "Review outline"
+msgstr "Examen contour"
+
+#: admin/scheduler-page.php:564
+msgid "Review outline before writing"
+msgstr "Examen contour avant d'écrire"
+
+#: admin/bot-defense-page.php:172
+msgid "Review →"
+msgstr ""
+
+#: admin/bot-defense-page.php:782 admin/bot-defense-page.php:788
+msgid "role protected"
+msgstr "rôle protégé"
+
+#: admin/scheduler-page.php:169
+msgid "Run %d pending now"
+msgstr "Exécutez %d attente maintenant"
+
+#: admin/theme-page.php:270
+msgid "Run all read-only audits"
+msgstr "Courir tous en lecture seule audits"
+
+#: admin/knowledge-graph-page.php:332
+msgid "Run one cycle now"
+msgstr "Exécuter un cycle de maintenant"
+
+#: luwipress.php:1617 luwipress.php:1632
+msgid "Run pending now"
+msgstr "Exécuter en attente maintenant"
+
+#: admin/schema-preview-page.php:178
+msgid "Run preview"
+msgstr "Exécuter l'aperçu"
+
+#: admin/content-audit-page.php:288 admin/content-audit-page.php:331
+msgid "Run scan"
+msgstr "Exécution de l'analyse"
+
+#: admin/bot-defense-page.php:301
+msgid "Run scan now"
+msgstr "Exécuter une analyse maintenant"
+
+#: admin/bot-defense-page.php:449 admin/bot-defense-page.php:530
+msgid "Run test"
+msgstr "Lancer le test"
+
+#: luwipress.php:1567
+msgid "Run up to 10 pending items through AI generation right now?"
+msgstr ""
+"Jusqu'à 10 éléments en attente par le biais de IA génération de maintenant?"
+
+#: includes/class-luwipress-license.php:975
+msgid "Running on cached verdict (server not confirmed recently)"
+msgstr ""
+"En cours d'exécution sur le cache verdict (serveur pas confirmé récemment)"
+
+#: luwipress.php:1613
+msgid "Running…"
+msgstr "En cours d'exécution..."
+
+#: admin/knowledge-graph-page.php:279
+msgid ""
+"Runs on schedule but only logs what it would do — no AI spend, no changes."
+msgstr ""
+"Fonctionne sur le calendrier, mais seulement les journaux de ce qu'il "
+"faudrait ne pas faire de IA passer, pas de changements."
+
+#: admin/image-alt-bulk-page.php:218 admin/taxonomy-editor-page.php:116
+#: includes/class-luwipress-taxonomy-editor.php:108
+msgid "Save all changes"
+msgstr "Enregistrer toutes les modifications"
+
+#: admin/scheduler-page.php:625 admin/scheduler-page.php:796
+msgid "Save as draft for review"
+msgstr "Enregistrer comme brouillon pour l'examen"
+
+#: admin/bot-defense-page.php:514
+msgid "Save comment-review settings"
+msgstr "Enregistrer un commentaire-revoir les paramètres"
+
+#: admin/cpt-manager-page.php:270
+msgid "Save content type"
+msgstr "Enregistrer un type de contenu"
+
+#: admin/cookies-page.php:301
+msgid "Save edits"
+msgstr "Enregistrer les modifications"
+
+#: admin/events-page.php:115
+msgid "Save Events settings"
+msgstr "Enregistrer les réglages des Événements"
+
+#: luwipress.php:1591 admin/bot-defense-page.php:1017 admin/events-page.php:150
+#: admin/cookies-page.php:353 admin/cookies-page.php:448
+#: includes/class-luwipress-taxonomy-editor.php:113
+msgid "Save failed."
+msgstr "Enregistrement échec."
+
+#: admin/slug-resolver-page.php:245
+msgid "Save override"
+msgstr "Enregistrer remplacer"
+
+#: luwipress.php:1621 admin/scheduler-page.php:813
+msgid "Save plan"
+msgstr "Enregistrez plan"
+
+#: includes/class-luwipress-cookie-consent.php:194
+msgid "Save preferences"
+msgstr "Enregistrer les préférences"
+
+#: admin/schema-picker-page.php:207
+msgid "Save schema"
+msgstr "Enregistrer schéma"
+
+#: admin/cookies-page.php:232 admin/theme-page.php:431
+#: admin/vendors-page.php:305 admin/knowledge-graph-page.php:331
+msgid "Save settings"
+msgstr "Enregistrer les paramètres"
+
+#: admin/scheduler-page.php:605
+msgid "Save this as the site default after queuing"
+msgstr "Enregistrez ce que le site par défaut après files d'attente"
+
+#: admin/cookies-page.php:449
+msgid "Saved"
+msgstr "Enregistré"
+
+#: admin/events-page.php:146 admin/cpt-manager-page.php:439
+msgid "Saved — reloading…"
+msgstr "Sauvé — rechargement..."
+
+#: luwipress.php:1537 admin/bot-defense-page.php:1017
+#: admin/cookies-page.php:353
+msgid "Saved."
+msgstr "Sauvé."
+
+#: admin/cookies-page.php:422
+msgid "Saving to Cookie Policy page…"
+msgstr "L'épargne à la Politique en matière de Cookies de la page..."
+
+#: luwipress.php:1530 luwipress.php:1611 admin/bot-defense-page.php:1015
+#: admin/events-page.php:137 admin/cookies-page.php:351
+#: admin/cookies-page.php:446 admin/cpt-manager-page.php:438
+#: includes/class-luwipress-taxonomy-editor.php:109
+msgid "Saving…"
+msgstr "L'enregistrement..."
+
+#: admin/admin-page.php:558 admin/theme-page.php:311
+msgid "Scan"
+msgstr "Scan"
+
+#: admin/bot-defense-page.php:254
+msgid "Scan accounts"
+msgstr "Analyse des comptes"
+
+#: admin/image-alt-bulk-page.php:148
+msgid ""
+"Scan every image in your Media Library, fill in alt text inline, and save "
+"50+ rows in one click. Missing-alt images are highlighted on first load. Use "
+"the \"From parent title\" button to fast-fill alt with the post/product "
+"title."
+msgstr ""
+"Analyse de chaque image dans votre Bibliothèque de Médias, de remplissage "
+"dans le texte alt en ligne et économisez 50+ lignes en un seul clic. Manque-"
+"alt des images sont mises en évidence lors du premier chargement. Utiliser "
+"le \"De parent titre\" bouton rapide pour remplir alt avec la poste/titre du "
+"produit."
+
+#: admin/bot-defense-page.php:724
+msgid "Scan failed."
+msgstr "Numérisation a échoué."
+
+#: admin/bot-defense-page.php:334
+msgid "Scanning users"
+msgstr "La numérisation des utilisateurs"
+
+#: admin/bot-defense-page.php:333 admin/bot-defense-page.php:720
+msgid "Scanning users…"
+msgstr "La numérisation des utilisateurs..."
+
+#: luwipress.php:1527
+msgid "Scanning…"
+msgstr "Numérisation..."
+
+#: admin/content-audit-page.php:261
+msgid ""
+"Scans for GMC-prohibited urgency / sale-pressure phrases (\"free shipping\", "
+"\"best price\", \"limited time\", \"today only\", etc.) across product title,"
+" meta title, meta description, excerpt and body. High-severity findings in "
+"meta will trigger Google Merchant Center disapproval; medium in title; low "
+"in body (flagged for editorial sweep)."
+msgstr ""
+"Des Scans pour GMC-interdit d'urgence / vente-pression des phrases "
+"(\"livraison gratuite\", \"meilleur prix\", \"temps limité\", \"aujourd'hui "
+"seulement\", etc.) à travers le titre du produit, meta title, meta "
+"description, extrait et le corps. Haute gravité résultats de la méta va "
+"déclencher Google Merchant Center désapprobation; moyen dans le titre; le "
+"bas du corps (marqué pour la rédaction de balayage)."
+
+#: admin/scheduler-page.php:416
+msgid "Schedule"
+msgstr "L'annexe"
+
+#: admin/admin-page.php:598
+msgid "Schedule Content"
+msgstr "Calendrier De Contenu"
+
+#: includes/class-luwipress-content-scheduler.php:815
+#: includes/class-luwipress-content-scheduler.php:847
+#: includes/class-luwipress-content-scheduler.php:880
+#: includes/class-luwipress-content-scheduler.php:956
+#: includes/class-luwipress-content-scheduler.php:1649
+#: includes/class-luwipress-content-scheduler.php:1673
+msgid "Schedule not found"
+msgstr "Calendrier non trouvé"
+
+#: includes/class-luwipress-content-scheduler.php:95
+msgid "Scheduled Content"
+msgstr "Contenu Planifiés"
+
+#: admin/content-hub-page.php:53 admin/site-hub-page.php:113
+msgid "Scheduler"
+msgstr "Planificateur"
+
+#: admin/content-hub-page.php:33 admin/site-hub-page.php:93
+msgid "Schema"
+msgstr "Schéma"
+
+#: includes/class-luwipress-health-score.php:83
+msgid "Schema Coverage"
+msgstr "Schéma De Couverture De"
+
+#: admin/vendors-page.php:134
+msgid "Schema entity"
+msgstr "Schéma de l'entité"
+
+#: includes/class-luwipress-vendors.php:216
+#: includes/class-luwipress-vendors.php:519
+msgid "Schema entity type"
+msgstr "Schéma type d'entité"
+
+#: admin/schema-picker-page.php:143
+msgid "Schema Picker"
+msgstr "Schéma Sélecteur"
+
+#: admin/schema-preview-page.php:118 admin/schema-picker-page.php:238
+msgid "Schema Preview"
+msgstr "Schéma Extrait"
+
+#: admin/cpt-manager-page.php:208
+msgid "Schema prop"
+msgstr "Schéma prop"
+
+#: admin/schema-preview-page.php:155
+msgid "Schema Registry — registered types"
+msgstr "Schéma de Registre — types enregistrés"
+
+#: admin/cpt-manager-page.php:239
+msgid "Schema.org @type"
+msgstr ""
+
+#: admin/schema-picker-page.php:223
+msgid "schema.org docs"
+msgstr "schema.org docs"
+
+#: admin/vendors-page.php:177
+msgid "Schema.org entity type"
+msgstr "Schema.org type d'entité"
+
+#: admin/cpt-manager-page.php:316
+msgid "Schema:"
+msgstr "Schéma:"
+
+#: admin/content-audit-page.php:274 admin/content-audit-page.php:317
+msgid "Scope"
+msgstr "Portée"
+
+#: admin/bot-defense-page.php:379 admin/bot-defense-page.php:542
+msgid "Score"
+msgstr "Score"
+
+#: admin/bot-defense-page.php:502
+msgid "Score at or above this value triggers the action. Default 40."
+msgstr ""
+"Score supérieur ou égal à cette valeur déclenchant l'action. Par défaut 40."
+
+#: admin/bot-defense-page.php:366
+msgid "Scored accounts"
+msgstr "Marqué comptes"
+
+#: admin/cookies-page.php:205
+msgid "scripts intercepted"
+msgstr "les scripts intercepté"
+
+#. %s: CPT plural label
+#: includes/class-luwipress-vendors.php:1112
+#: includes/class-luwipress-cpt-engine.php:474
+#: includes/class-luwipress-events.php:179
+#, php-format
+msgid "Search %s"
+msgstr "Recherche de %s"
+
+#: admin/schema-picker-page.php:167
+msgid "Search by title — product, page, post or category…"
+msgstr "Recherche par titre — produit, la page, la poste ou la catégorie..."
+
+#: includes/class-luwipress-events.php:220
+msgid "Search Categories"
+msgstr "Les Catégories De Recherche"
+
+#: admin/image-alt-bulk-page.php:202
+msgid "Search filename / title…"
+msgstr "Recherche de nom de fichier / titre..."
+
+#: includes/class-luwipress-vendors.php:1161
+msgid "Search Groups"
+msgstr "Les Groupes De Recherche"
+
+#: admin/knowledge-graph-page.php:43
+msgid "Search knowledge graph"
+msgstr "Recherche graphique des connaissances"
+
+#: admin/usage-page.php:306
+msgid "Search logs..."
+msgstr "Les journaux de recherche..."
+
+#: admin/knowledge-graph-page.php:43
+msgid "Search products, posts, categories... (press /)"
+msgstr "Recherche produits, messages, catégories... (presse /)"
+
+#: admin/taxonomy-editor-page.php:109
+#: includes/class-luwipress-taxonomy-editor.php:124
+msgid "Search terms…"
+msgstr "Termes de recherche..."
+
+#: admin/site-hub-page.php:133
+msgid "Security"
+msgstr "Sécurité"
+
+#: admin/admin-page.php:443
+#, php-format
+msgid ""
+"Security plugin: %s. Bot Shield delegates UA blocklist + rate limit + "
+"honeypot to it. Click to manage."
+msgstr ""
+"Plug-in de sécurité: %s. Bot Bouclier délégués UA liste de blocs + la limite "
+"du taux de + pot de miel pour elle. Cliquez sur gérer."
+
+#: luwipress.php:1622
+msgid "Select all (%d)"
+msgstr "Sélectionner tout (%d)"
+
+#: luwipress.php:1532
+msgid "Select rows to enable Execute."
+msgstr "Sélectionner des lignes pour permettre à Exécuter."
+
+#: luwipress.php:1573
+msgid ""
+"Send up to 50 thin content products for AI enrichment? This will trigger AI "
+"enrichment."
+msgstr ""
+"Envoyer jusqu'à 50 fine du contenu des produits pour les IA d'enrichissement?"
+" Cela va déclencher AI enrichissement."
+
+#: admin/theme-page.php:362
+msgid "SEO & Redirects"
+msgstr "SEO & Redirections"
+
+#: admin/site-hub-page.php:128
+msgid "SEO & Taxonomy"
+msgstr "SEO & Taxonomie"
+
+#: admin/knowledge-graph-page.php:131
+#: includes/class-luwipress-health-score.php:56
+msgid "SEO Coverage"
+msgstr "SEO Couverture"
+
+#: includes/class-luwipress-kg-opportunities.php:328
+msgid "SEO coverage"
+msgstr "SEO couverture"
+
+#: includes/class-luwipress-taxonomy-editor.php:119
+msgid "SEO Description"
+msgstr "SEO Description"
+
+#: admin/admin-page.php:308
+#, php-format
+msgid "SEO plugin detected: %s. Click to manage it."
+msgstr "SEO plugin détecté: %s. Cliquez sur gérer."
+
+#: includes/class-luwipress-taxonomy-editor.php:118
+msgid "SEO Title"
+msgstr "SEO Titre"
+
+#: admin/admin-page.php:597
+msgid "SEO-aware multilingual"
+msgstr "SEO-conscient multilingue"
+
+#. %s: SEO plugin name (Rank Math, Yoast, etc.)
+#: admin/taxonomy-editor-page.php:86
+#, php-format
+msgid "SEO: %s"
+msgstr "SEO: %s"
+
+#: includes/class-luwipress-image-studio.php:86
+msgid "Set a featured image first — Image Studio retouches it."
+msgstr "Définir une image en vedette première Image Studio retouche il."
+
+#: admin/scheduler-page.php:322
+msgid ""
+"Set a theme and a cadence. LuwiPress brainstorms fresh topics for you on "
+"schedule, filtering against your recent posts so you don't get duplicates. "
+"Each run respects your daily AI budget."
+msgstr ""
+"Définir un thème et une cadence. LuwiPress remue-méninges frais de sujets "
+"pour vous sur le calendrier, le filtrage à l'encontre de vos messages "
+"récents, afin de ne pas faire de doublons. Chaque exécution respecte votre "
+"quotidien IA budget."
+
+#: includes/class-luwipress-image-studio.php:113
+msgid "Set result as featured image"
+msgstr "Résultat de Set comme image en vedette"
+
+#: luwipress.php:598 luwipress.php:599 admin/content-hub-page.php:107
+#: admin/content-hub-page.php:109 admin/site-hub-page.php:247
+#: admin/site-hub-page.php:249 admin/cookies-page.php:102
+#: admin/admin-page.php:146 admin/theme-page.php:340
+msgid "Settings"
+msgstr "Paramètres"
+
+#: admin/theme-page.php:184
+msgid "settings"
+msgstr "paramètres"
+
+#: admin/admin-page.php:144
+msgid "Settings — API keys, providers, budget, integrations."
+msgstr "Paramètres — clés API, les fournisseurs, le budget, les intégrations."
+
+#: admin/cpt-manager-page.php:345
+msgid "Settings →"
+msgstr ""
+
+#: admin/content-audit-page.php:163
+msgid "Share of content within the per-CPT word count target band."
+msgstr "Partage de contenu dans le par-CPT nombre de mots cible de la bande."
+
+#: includes/class-luwipress-health-score.php:102
+msgid ""
+"Share of published content within the per-CPT word count target band "
+"(Settings → AI Content)."
+msgstr ""
+
+#: admin/content-audit-page.php:158
+msgid "Share of recent content free of promotional + AI-tell patterns."
+msgstr ""
+"Proportion de nouveaux contenus libres de promotion + IA-dire des modèles."
+
+#: admin/bot-defense-page.php:399
+msgid "Shield"
+msgstr "Bouclier"
+
+#: admin/bot-defense-page.php:119
+msgid "Shield active"
+msgstr "Bouclier actif"
+
+#: admin/bot-defense-page.php:124
+msgid "Shield disabled"
+msgstr "Bouclier désactivé"
+
+#: admin/bot-defense-page.php:125
+msgid "Shield off"
+msgstr "Bouclier off"
+
+#: admin/bot-defense-page.php:121
+msgid "Shield on"
+msgstr "Bouclier sur"
+
+#: admin/scheduler-page.php:626
+msgid ""
+"Ships into WP drafts with the target publish date baked in. Review, enrich, "
+"then publish yourself."
+msgstr ""
+"Les navires dans WP traites avec la cible de la date de publication de "
+"cuites dans. Revue, de l'enrichir, puis publier vous-même."
+
+#: admin/theme-page.php:363
+msgid "Shop archive UX"
+msgstr "Boutique archive UX"
+
+#: admin/cookies-page.php:173
+msgid "Show \"Preferences\" link for per-category control."
+msgstr "Montrer lien \"Préférences\" pour chaque catégorie de contrôle."
+
+#: admin/cookies-page.php:167
+msgid ""
+"Show \"Reject non-essential\" button next to Accept (required for GDPR "
+"equality)."
+msgstr ""
+"Spectacle \"Rejeter non-essentiel\" bouton suivant pour Accepter (nécessaire "
+"pour GDPR l'égalité)."
+
+#: admin/knowledge-graph-page.php:122
+msgid "Show all →"
+msgstr ""
+
+#: admin/vendors-page.php:235
+msgid ""
+"Show or hide standard profile fields on the front-end single-vendor template."
+msgstr ""
+"Afficher ou masquer le profil type des champs sur le front-end d'un seul "
+"fournisseur, modèle."
+
+#: admin/knowledge-graph-page.php:127
+msgid "Show posts →"
+msgstr ""
+
+#: admin/cookies-page.php:130
+msgid "Show the consent banner to frontend visitors."
+msgstr "Montrer le consentement à la bannière de frontend visiteurs."
+
+#: admin/bot-defense-page.php:305
+msgid "Show tier:"
+msgstr "Afficher les niveaux:"
+
+#: admin/bot-defense-page.php:383 admin/bot-defense-page.php:544
+msgid "Signals"
+msgstr "Les signaux"
+
+#: admin/vendors-page.php:221
+msgid "Single URL pattern"
+msgstr "URL unique de motif"
+
+#: admin/admin-page.php:346
+msgid "single-step"
+msgstr "en une seule étape"
+
+#: admin/events-page.php:76 admin/vendors-page.php:169
+#: admin/cpt-manager-page.php:170
+msgid "Singular label"
+msgstr "Singulier étiquette"
+
+#: luwipress.php:585 luwipress.php:586 admin/site-hub-page.php:232
+msgid "Site"
+msgstr "Site"
+
+#: admin/scheduler-page.php:592
+msgid "site default active"
+msgstr "site actif par défaut"
+
+#: admin/site-hub-page.php:254
+msgid "Site sections"
+msgstr "Sections du Site"
+
+#: includes/class-luwipress-theme-bridge.php:689
+msgid "Sitemap entry leaks"
+msgstr "L'entrée de Sitemap fuites"
+
+#: includes/class-luwipress-image-studio.php:101
+msgid "Size"
+msgstr "Taille"
+
+#: admin/bot-defense-page.php:765
+msgid "skipped:"
+msgstr "sauté:"
+
+#: admin/slug-resolver-page.php:204 admin/slug-resolver-page.php:224
+#: admin/cpt-manager-page.php:222
+msgid "Slug"
+msgstr "Slug"
+
+#: admin/site-hub-page.php:42 admin/slug-resolver-page.php:68
+msgid "Slug Resolver"
+msgstr "Slug De Résolution"
+
+#: admin/slug-resolver-page.php:198
+msgid ""
+"Slug → resolved target. Overrides win over auto-discovery. true means \"auto-"
+"redirect to /product-category/<slug>/\". false means \"do not redirect\"."
+msgstr ""
+
+#: admin/admin-page.php:333
+#, php-format
+msgid "SMTP plugin: %s. Email proxy routes through it. Click to manage."
+msgstr ""
+"SMTP plugin: %s. E-mail proxy itinéraires à travers elle. Cliquez sur gérer."
+
+#: admin/bot-defense-page.php:545
+msgid "Snippet"
+msgstr "Extrait de"
+
+#: admin/vendors-page.php:251
+msgid "Social link fields"
+msgstr "Lien Social les champs"
+
+#: admin/bot-defense-page.php:565 admin/cookies-page.php:259
+#: admin/slug-resolver-page.php:205
+msgid "Source"
+msgstr "Source"
+
+#: admin/bot-defense-page.php:474
+msgid "Spam — route to spam queue"
+msgstr "Spam — route de file d'attente de spam"
+
+#: admin/vendors-page.php:73
+msgid "Specialty"
+msgstr "Spécialité"
+
+#: includes/class-luwipress-image-studio.php:104
+msgid "Square"
+msgstr "Carré"
+
+#: admin/cpt-manager-page.php:159
+msgid ""
+"Stable internal identifier (a–z, 0–9, _). Cannot be changed after creation."
+msgstr ""
+"Stable identifiant interne (a–z, 0-9, _). Ne peut pas être modifié après la "
+"création."
+
+#: admin/admin-page.php:629
+msgid "Stale Content"
+msgstr "Contenu Obsolète"
+
+#: admin/schema-picker-page.php:92
+msgid ""
+"Standalone service offering — consulting, installation, custom builds. Links "
+"to provider + area-served."
+msgstr ""
+"Autonome offre de service — conseil, installation, personnalisé. Liens de "
+"fournisseur de + zone desservie."
+
+#: admin/scheduler-page.php:61 admin/scheduler-page.php:757
+msgid "Standard"
+msgstr "Standard"
+
+#: includes/class-luwipress-events.php:370
+#: includes/class-luwipress-events.php:626
+msgid "Start"
+msgstr "Démarrer"
+
+#: luwipress.php:1572
+msgid "Start bulk AI enrichment for thin content products?"
+msgstr "Démarrer en vrac AI enrichissement pour les produits à contenu?"
+
+#: admin/scheduler-page.php:641
+msgid "Start date"
+msgstr "Date de début de"
+
+#: includes/class-luwipress-health-score.php:145
+msgid "Static page"
+msgstr "Page statique"
+
+#: admin/slug-resolver-page.php:92 admin/cpt-manager-page.php:189
+#: includes/class-luwipress-events.php:372
+#: includes/class-luwipress-events.php:631
+msgid "Status"
+msgstr "Statut"
+
+#: admin/schema-picker-page.php:42
+msgid ""
+"Step-by-step instructions. Each step gets a name and text; optional images. "
+"Used for tutorials, recipes, assembly guides."
+msgstr ""
+"Étape par étape les instructions. Chaque étape est un nom et un texte; "
+"optionnel images. Utilisé pour des tutoriels, des recettes, des guides de "
+"montage."
+
+#: admin/bot-defense-page.php:355
+msgid "Stop"
+msgstr "Arrêter"
+
+#: admin/knowledge-graph-page.php:32
+msgid "Store Health — click for breakdown"
+msgstr "Magasin Santé — cliquez pour le détail"
+
+#: admin/theme-page.php:235
+msgid ""
+"Storefront features the active theme exposes to LuwiPress and its companion "
+"plugins."
+msgstr ""
+"Vitrine caractéristiques du thème actif expose à LuwiPress et son compagnon "
+"de plugins."
+
+#: includes/class-luwipress-cookie-consent.php:195
+msgid "Strictly necessary"
+msgstr "Strictement nécessaire"
+
+#: admin/scheduler-page.php:409 includes/class-luwipress-image-studio.php:91
+msgid "Style"
+msgstr "Style"
+
+#: admin/scheduler-page.php:473 admin/scheduler-page.php:746
+msgid "Style hint (optional)"
+msgstr "Le Style de l'indice (en option)"
+
+#: admin/slug-resolver-page.php:234
+msgid "Suppress (false)"
+msgstr "Supprimer les (faux)"
+
+#: admin/content-audit-page.php:304
+msgid ""
+"Surfaces stock LLM phrasings — \"In the world of...\", \"stands as one of "
+"the most...\", \"In conclusion,\", \"Unleash your creativity\" — that 2024+ "
+"Helpful Content Update flags as machine-generated boilerplate. All findings "
+"are editorial soft-flags; rewrite by hand for proprietary voice, or rerun "
+"your enrichment workflow with a tighter prompt."
+msgstr ""
+"Les Surfaces de stock d'une MAÎTRISE en rédaction — \"Dans le monde de...\", "
+"\"se présente comme l'une des plus...\", \"En conclusion,\", \"Libérez votre "
+"créativité\" — qui 2024+ Utile mise à Jour du Contenu des drapeaux, générée "
+"par l'ordinateur standard. Tous les résultats sont éditorial soft-drapeaux; "
+"réécrire à la main pour un propriétaire de voix, ou relancer votre "
+"enrichissement de flux de travail avec un resserrement de l'invite de "
+"commandes."
+
+#: admin/bot-defense-page.php:907
+msgid "Sweep complete."
+msgstr "Balayage complet."
+
+#: admin/bot-defense-page.php:328
+msgid "Sweep matching"
+msgstr "Balayage correspondant"
+
+#: admin/bot-defense-page.php:358
+msgid "Sweep progress"
+msgstr "Balayage progrès"
+
+#: admin/bot-defense-page.php:843
+msgid ""
+"Sweep requires score ≥ 40. Switch the tier filter to a higher value first."
+msgstr ""
+"Balayage nécessite score ≥ 40. Commutateur de niveau filtre à une valeur "
+"plus élevée que la première."
+
+#: admin/bot-defense-page.php:866
+msgid "Sweep running…"
+msgstr "Balayage en cours d'exécution..."
+
+#: admin/bot-defense-page.php:907
+msgid "Sweep stopped."
+msgstr "Balayage arrêté."
+
+#: admin/bot-defense-page.php:852
+msgid "Sweep will scan and delete up to"
+msgstr "Balayage de numérisation et de supprimer jusqu'à"
+
+#: admin/bot-defense-page.php:338
+msgid "Sweeping…"
+msgstr "Ramonage..."
+
+#: admin/bot-defense-page.php:370
+msgid ""
+"Switch the tier filter to surface borderline accounts (≥ 40). Dry-run always "
+"shows what WOULD be deleted; the red CONFIRM button is irreversible. Three "
+"protection tiers are enforced automatically — WooCommerce customers with any "
+"order, email-verified users, and users with a realistic first + last name "
+"are never deleted, regardless of score."
+msgstr ""
+"Commutateur de niveau filtre à la surface à la limite de comptes (≥ 40). Dry-"
+"run montre toujours ce que SERAIT supprimé; le rouge bouton de confirmation "
+"est irréversible. Trois niveaux de protection sont appliquées "
+"automatiquement Thème des clients avec toute commande, e-mail-vérifié les "
+"utilisateurs, et les utilisateurs avec un réaliste premier + dernier nom ne "
+"sont jamais supprimés, quel que soit le score."
+
+#: admin/slug-resolver-page.php:206
+msgid "Target"
+msgstr "Cible"
+
+#: admin/content-audit-page.php:362
+msgid "Target band"
+msgstr "Cible de la bande"
+
+#: admin/slug-resolver-page.php:229
+msgid "Target type"
+msgstr "Type de cible"
+
+#: admin/scheduler-page.php:529
+msgid "Target words"
+msgstr "Mots cibles"
+
+#: admin/cpt-manager-page.php:217
+msgid "Taxonomies"
+msgstr "Les Taxonomies"
+
+#: admin/content-hub-page.php:42 admin/site-hub-page.php:102
+msgid "Taxonomy"
+msgstr "La taxonomie"
+
+#: admin/knowledge-graph-page.php:161
+msgid "Taxonomy Coverage"
+msgstr "La Taxonomie De La Couverture"
+
+#: admin/taxonomy-editor-page.php:99
+#: includes/class-luwipress-taxonomy-editor.php:125
+msgid "Taxonomy:"
+msgstr "Taxonomie:"
+
+#: admin/slug-resolver-page.php:120
+msgid "template_redirect hook"
+msgstr "template_redirect crochet"
+
+#: admin/slug-resolver-page.php:231
+msgid "Term ID"
+msgstr "Terme ID"
+
+#: admin/bot-defense-page.php:953
+msgid "Test failed."
+msgstr "Test a échoué."
+
+#: admin/bot-defense-page.php:1031
+msgid "Testing…"
+msgstr "Les tests..."
+
+#: includes/class-luwipress-crm-campaigns.php:576
+msgid "Thank you for shopping with us."
+msgstr "Merci pour le shopping avec nous."
+
+#: includes/class-luwipress-license.php:655
+msgid ""
+"That does not look like a LuwiPress license key (lwp_…) or a CodeCanyon "
+"purchase code."
+msgstr ""
+"Qui ne ressemble pas à un LuwiPress clé de licence (lwp_...) ou un "
+"CodeCanyon d'achat code."
+
+#: includes/class-luwipress-license.php:960
+msgid "That feature is locked."
+msgstr "Cette fonction est verrouillée."
+
+#. 1: plural label, 2: archive slug, 3: settings URL
+#: includes/class-luwipress-vendors.php:2154
+#, php-format
+msgid ""
+"The %1$s custom post type uses the archive base /%2$s/. To rename it, change "
+"labels, toggle social-link fields, or add legacy URL redirects, manage it in "
+"%3$s."
+msgstr ""
+"L' %1$s custom post type utilise l'archive de base /%2$s/. Pour le renommer, "
+"changer les étiquettes, bascule sociaux-lien de champs, ou ajouter héritage "
+"redirections d'URL, de les gérer en %3$s."
+
+#: admin/theme-page.php:259
+msgid "The active theme has not registered any maintenance tools."
+msgstr "Le thème actif n'a pas enregistré de tous les outils de maintenance."
+
+#: admin/theme-page.php:345
+msgid "The active theme has not registered any settings."
+msgstr "Le thème actif n'a pas enregistré tous les paramètres."
+
+#: luwipress.php:1184
+msgid ""
+"The admin AI assistant now lives in the separate \"LuwiPress Open Claw\" "
+"plugin. Install and activate it to keep the LuwiPress → Open Claw menu."
+msgstr ""
+
+#: admin/vendors-page.php:336
+msgid ""
+"The full roster — with language columns, SEO status, search and bulk actions "
+"— lives in the WordPress list table."
+msgstr ""
+"La liste complète — avec la langue colonnes, le RÉFÉRENCEMENT, le statut, de "
+"la recherche et des actions groupées — vit dans le WordPress table de la "
+"liste."
+
+#: admin/events-page.php:64
+msgid ""
+"The module is dormant: no Events menu, post type, archive or rewrite rules "
+"are registered yet. Enable it below to start scheduling events."
+msgstr ""
+"Le module est en sommeil: pas de menu Événements, type de poste, des "
+"archives ou des règles de réécriture sont encore inscrit. Activer ci-dessous "
+"pour commencer la planification d'événements."
+
+#: includes/class-luwipress-image-handler.php:219
+msgid "The source image could not be read."
+msgstr "La source de l'image n'a pas pu être lue."
+
+#: includes/class-luwipress-image-handler.php:211
+msgid "The source image file could not be found."
+msgstr "Le fichier image source n'a pas pu être trouvé."
+
+#: includes/class-luwipress-license.php:1662
+msgid "The update package failed signature verification and was not installed."
+msgstr ""
+"Le package de mise à jour a échoué la vérification de la signature et n'a "
+"pas été installé."
+
+#: admin/vendors-page.php:106
+msgid ""
+"The Vendor CPT is a generic profile system for makers, ateliers, luthiers, "
+"chefs, artists, or whichever entity makes the things your store sells. "
+"Configure the URL slug, UI labels, Schema.org entity type, and which profile "
+"fields show on the front-end. Vendors carry verified social URLs that feed "
+"into JSON-LD sameAs — a strong E-E-A-T signal for Google."
+msgstr ""
+"Le Vendeur CPT est un générique de système de profil pour les auteurs, des "
+"ateliers, des luthiers, des chefs, des artistes, ou toute entité qui rend "
+"les choses de votre magasin vend. Configurer l'URL de la limace, l'INTERFACE "
+"utilisateur étiquettes, Schema.org type d'entité, et dont les champs du "
+"profil de montrer sur le front-end. Les vendeurs de réaliser vérifié sociale "
+"Url d'alimentation en JSON-LD sameAs — une forte E-E-a signal pour Google."
+
+#: admin/site-hub-page.php:72 admin/site-hub-page.php:138
+#: admin/scheduler-page.php:465 admin/scheduler-page.php:742
+#: admin/cookies-page.php:155 admin/theme-page.php:99
+msgid "Theme"
+msgstr "Thème"
+
+#: admin/theme-page.php:122
+msgid "Theme stylesheet slug"
+msgstr "Thème de la feuille de style slug"
+
+#: admin/admin-page.php:134
+msgid "Theme update available"
+msgstr "Thème mise à jour disponible"
+
+#. %s: new theme version number.
+#: admin/admin-page.php:128
+#, php-format
+msgid "Theme update v%s available — click to review and install."
+msgstr ""
+"Mise à jour du thème v%s disponibles — cliquez pour vérifier et installer "
+"les."
+
+#: includes/class-luwipress-crm-campaigns.php:720
+msgid "there"
+msgstr "il y"
+
+#: admin/theme-page.php:350
+msgid ""
+"These mirror the theme’s Customizer options so you can manage them remotely "
+"(REST + WebMCP) without touching wp-admin."
+msgstr ""
+"Ces miroir du thème Customizer options de sorte que vous pouvez les gérer à "
+"distance (REPOS + WebMCP) sans toucher wp-admin."
+
+#: admin/content-audit-page.php:359
+msgid "Thin"
+msgstr "Mince"
+
+#: admin/admin-page.php:626
+msgid "Thin Content"
+msgstr "Mince Contenu"
+
+#: admin/knowledge-graph-page.php:57
+msgid "Thin content"
+msgstr "Mince contenu"
+
+#: admin/content-audit-page.php:405
+msgid "Thin content — action queue"
+msgstr "Mince contenu de l'action de la file d'attente"
+
+#: luwipress.php:1607
+msgid "Thinking…"
+msgstr "De la pensée..."
+
+#: admin/theme-page.php:168
+msgid "Third-party"
+msgstr "Tiers"
+
+#: admin/theme-page.php:114
+msgid "Third-party theme has registered with the LuwiPress companion contract."
+msgstr ""
+"Troisième thème de la fête est inscrite auprès de la LuwiPress compagnon de "
+"contrat."
+
+#: includes/class-luwipress-license.php:1014
+msgid ""
+"This is a licensed build: an active license is required to use plugin "
+"features. Enforcement is set by the build and cannot be turned off here."
+msgstr ""
+"C'est un permis de construire: une licence est nécessaire pour utiliser le "
+"plugin dispose d'. L'application est définie par la construction et ne peut "
+"pas être désactivée."
+
+#: admin/usage-page.php:128
+msgid "This Month"
+msgstr "Ce Mois-Ci"
+
+#: includes/class-luwipress-kg-opportunities.php:288
+msgid ""
+"This product is missing JSON-LD structured data. Generating it helps search "
+"engines display rich snippets (price, availability, rating) and improves "
+"click-through rates."
+msgstr ""
+"Ce produit est manquant JSON-LD données structurées. La génération, il "
+"permet aux moteurs de recherche d'afficher des extraits enrichis (prix, "
+"disponibilité, l'évaluation et améliore les taux de clics."
+
+#. %s: this site's URL
+#: includes/class-luwipress-license.php:990
+#, php-format
+msgid "This site (%s) will be bound to the license. Server: "
+msgstr ""
+
+#: luwipress.php:1533
+msgid "This will mutate %d post(s). Continue?"
+msgstr "Cela va muter %d post(s). Continuer?"
+
+#: admin/bot-defense-page.php:499
+msgid "Threshold"
+msgstr "Seuil"
+
+#: includes/class-luwipress-events.php:377
+#: includes/class-luwipress-events.php:659
+msgid "Ticket URL"
+msgstr "Billet URL"
+
+#: admin/events-page.php:107
+msgid "Ticketing (URL + price)"
+msgstr "La billetterie (URL + prix)"
+
+#: admin/usage-page.php:385
+msgid "Time"
+msgstr "Le temps"
+
+#: admin/taxonomy-editor-page.php:137
+msgid "Tip:"
+msgstr "Astuce:"
+
+#: admin/content-audit-page.php:421
+msgid "Title"
+msgstr "Titre"
+
+#: admin/vendors-page.php:278
+msgid "To (new URL or path)"
+msgstr "(Nouveaux URL ou le chemin)"
+
+#: admin/schema-picker-page.php:239
+msgid "to confirm the JSON-LD block renders on the live URL, then"
+msgstr "pour confirmer le JSON-LD bloc s'affiche sur l'URL, puis"
+
+#: admin/schema-picker-page.php:241
+msgid "to validate it."
+msgstr "pour la valider."
+
+#: admin/usage-page.php:117
+msgid "Today's Spend"
+msgstr "Aujourd'hui, Passer"
+
+#: admin/slug-resolver-page.php:99
+msgid "Toggle resolver"
+msgstr "La bascule de résolution"
+
+#: admin/vendors-page.php:253
+msgid ""
+"Toggle which social link inputs appear on each vendor edit screen. Populated "
+"URLs flow into JSON-LD sameAs."
+msgstr ""
+"Bascule qui lien social entrées apparaissent sur chaque fournisseur de "
+"l'écran d'édition. Peuplée Url de flux en JSON-LD sameAs."
+
+#: admin/admin-page.php:586
+msgid "Tokens"
+msgstr "Jetons"
+
+#: admin/usage-page.php:247
+msgid "tokens"
+msgstr "jetons"
+
+#: admin/scheduler-page.php:521 admin/scheduler-page.php:769
+msgid "Tone"
+msgstr "Ton"
+
+#: admin/theme-page.php:183
+msgid "Tools registered"
+msgstr "Outils enregistré"
+
+#: admin/cookies-page.php:148
+msgid "Top (centered)"
+msgstr "Top (centré)"
+
+#: admin/bot-defense-page.php:230 admin/bot-defense-page.php:423
+msgid "Top block reasons"
+msgstr "Top block raisons"
+
+#: admin/knowledge-graph-page.php:142
+msgid "Top wins →"
+msgstr ""
+
+#: includes/class-luwipress-content-scheduler.php:269
+msgid "Topic is required."
+msgstr "Sujet est nécessaire."
+
+#: admin/scheduler-page.php:402 admin/scheduler-page.php:445
+msgid "Topics"
+msgstr "Sujets"
+
+#: admin/content-audit-page.php:357
+msgid "Total"
+msgstr "Total"
+
+#: admin/admin-page.php:549
+msgid "Total 7-day spend"
+msgstr "Total de 7 jours passent"
+
+#: admin/cookies-page.php:108
+msgid "Total consents"
+msgstr "Total des consentements"
+
+#: admin/image-alt-bulk-page.php:158
+msgid "Total images"
+msgstr "Total des images"
+
+#: admin/cpt-manager-page.php:206 admin/cpt-manager-page.php:225
+msgid "Transl."
+msgstr "Trad."
+
+#: admin/admin-page.php:597 admin/knowledge-graph-page.php:324
+msgid "Translate"
+msgstr "Traduire"
+
+#: admin/knowledge-graph-page.php:58
+msgid "Translation backlog"
+msgstr "Traduction de l'arriéré"
+
+#: admin/admin-page.php:672
+msgid "Translation Coverage"
+msgstr "Traduction Couverture"
+
+#: includes/class-luwipress-health-score.php:74
+msgid "Translation Health"
+msgstr "Traduction De La Santé"
+
+#: includes/class-luwipress-theme-bridge.php:695
+msgid "Translation out of sync"
+msgstr "Traduction de la synchronisation"
+
+#: admin/admin-page.php:321
+#, php-format
+msgid "Translation plugin: %1$s with %2$d languages. Click to manage."
+msgstr "Le plugin de traduction: %1$s %2$d langues. Cliquez sur gérer."
+
+#. %s: translation plugin name (WPML, Polylang, TranslatePress)
+#: admin/taxonomy-editor-page.php:76
+#, php-format
+msgid "Translation: %s"
+msgstr "Traduction: %s"
+
+#: admin/bot-defense-page.php:460
+msgid "ttl minutes"
+msgstr "ttl minutes"
+
+#: admin/cpt-manager-page.php:205
+msgid "Type"
+msgstr "Type"
+
+#: admin/schema-preview-page.php:159
+msgid ""
+"Types LuwiPress will emit on relevant content when their meta key carries "
+"data. Use the preview below to see which ones are actually rendering on a "
+"sample URL."
+msgstr ""
+"Types LuwiPress émet sur le contenu pertinent lors de leur méta-clés porte "
+"de données. Utilisez l'aperçu ci-dessous pour voir ceux qui sont réellement "
+"rendu sur un exemple d'URL."
+
+#: luwipress.php:1597
+msgid "Unable to estimate."
+msgstr "Impossible à estimer."
+
+#: admin/usage-page.php:12 includes/class-luwipress-content-scheduler.php:255
+#: includes/class-luwipress-content-scheduler.php:386
+#: includes/class-luwipress-content-scheduler.php:713
+#: includes/class-luwipress-content-scheduler.php:805
+#: includes/class-luwipress-content-scheduler.php:841
+#: includes/class-luwipress-content-scheduler.php:874
+#: includes/class-luwipress-content-scheduler.php:950
+#: includes/class-luwipress-content-scheduler.php:977
+#: includes/class-luwipress-content-scheduler.php:1062
+#: includes/class-luwipress-content-scheduler.php:1138
+#: includes/class-luwipress-content-scheduler.php:1155
+#: includes/class-luwipress-content-scheduler.php:1316
+#: includes/class-luwipress-content-scheduler.php:1453
+#: includes/class-luwipress-content-scheduler.php:1522
+#: includes/class-luwipress-content-scheduler.php:1639
+msgid "Unauthorized"
+msgstr "Non autorisé"
+
+#: admin/bot-defense-page.php:977
+msgid "Unblock"
+msgstr "Débloquer"
+
+#: admin/bot-defense-page.php:114
+msgid ""
+"Unified surface for fake-account cleanup and front-edge scraper/brute-force "
+"filtering."
+msgstr ""
+"Unifiée de surface pour les faux-nettoyage de compte et devant-bord "
+"racleur/force brute de filtrage."
+
+#: includes/class-luwipress-content-scheduler.php:1464
+msgid "Unknown action."
+msgstr "Inconnu action."
+
+#: includes/class-luwipress-ai-engine.php:424
+#, php-format
+msgid "Unknown AI provider: %s"
+msgstr "Inconnue AI fournisseur de: %s"
+
+#: includes/class-luwipress-license.php:1118
+msgid "Unlicensed"
+msgstr "Sans licence"
+
+#: includes/class-luwipress-taxonomy-editor.php:126
+msgid "unsaved"
+msgstr "non sauvegardées"
+
+#: includes/class-luwipress-theme-bridge.php:694
+msgid "Untranslated product"
+msgstr "Non traduite produit"
+
+#: admin/theme-page.php:201
+msgid "Untranslated products (sample)"
+msgstr "Non traduite de produits (exemple)"
+
+#: admin/admin-page.php:170
+msgid "Update"
+msgstr "Mise à jour"
+
+#: admin/admin-page.php:97
+msgid "Update available — click to review and install."
+msgstr "Mise à jour disponible — cliquez pour vérifier et installer les."
+
+#: includes/class-luwipress-vendors.php:1157
+msgid "Update Group"
+msgstr "Groupe De Mise À Jour"
+
+#: admin/cookies-page.php:427
+msgid "Updated"
+msgstr "Mise à jour"
+
+#: admin/admin-page.php:100
+msgid "Updates available"
+msgstr "Les mises à jour disponibles"
+
+#: admin/admin-page.php:150
+msgid "Updates found — install?"
+msgstr "Les mises à jour trouvées — installer?"
+
+#: includes/class-luwipress-backup-bridge.php:72
+msgid "UpdraftPlus is not active on this site."
+msgstr "UpdraftPlus n'est pas actif sur ce site."
+
+#: admin/knowledge-graph-page.php:73
+msgid "Upload CSV → apply SEO meta…"
+msgstr ""
+
+#: admin/bot-defense-page.php:524
+msgid "URL"
+msgstr "URL"
+
+#: admin/slug-resolver-page.php:232
+msgid "URL or path"
+msgstr "L'URL ou le chemin d'accès"
+
+#: admin/vendors-page.php:165
+msgid ""
+"URL path for the vendor archive — luthiers / chefs / artists / etc. Changing "
+"flushes rewrite rules automatically."
+msgstr ""
+"Chemin d'accès d'URL pour le fournisseur d'archives — les luthiers / chefs / "
+"artistes / etc. Évolution des bouffées de règles de réécriture "
+"automatiquement."
+
+#: luwipress.php:608 luwipress.php:609 admin/usage-page.php:87
+#: admin/admin-page.php:599
+msgid "Usage & Logs"
+msgstr "L'Utilisation Et Journaux"
+
+#: admin/usage-page.php:196
+msgid "Usage sections"
+msgstr "Sections de l'utilisation de"
+
+#: admin/image-alt-bulk-page.php:267
+msgid "Use parent title"
+msgstr "Utilisez parent titre"
+
+#: admin/slug-resolver-page.php:220
+msgid ""
+"Use this when the auto-discovery picks the wrong target, or for legacy slugs "
+"not in the live site map (e.g. retired URLs you still want to 301)."
+msgstr ""
+"Utilisez cette option lorsque la détection automatique choisit de se tromper "
+"de cible ou de l'héritage pour les limaces pas dans la carte du site (par "
+"exemple à la retraite Url que vous voulez toujours 301)."
+
+#: includes/class-luwipress-cookie-consent.php:201
+msgid ""
+"Used by advertising tools to show you relevant ads on other sites. Disable "
+"to opt out of retargeting."
+msgstr ""
+"Utilisé par la publicité des outils pour vous montrer la pertinence des "
+"annonces sur d'autres sites. Désactivez-la pour choisir de reciblage."
+
+#: admin/bot-defense-page.php:380
+msgid "User"
+msgstr "L'utilisateur"
+
+#: admin/schema-picker-page.php:211
+msgid "Validate JSON"
+msgstr "Valider JSON"
+
+#: admin/slug-resolver-page.php:238
+msgid "Value"
+msgstr "Valeur"
+
+#: includes/class-luwipress-vendors.php:1153
+msgid "Vendor Group"
+msgstr "Fournisseur De Groupe"
+
+#: includes/class-luwipress-vendors.php:238
+#: includes/class-luwipress-vendors.php:1152
+msgid "Vendor Groups"
+msgstr "Les Groupes De Vendeurs"
+
+#: admin/site-hub-page.php:48 admin/site-hub-page.php:148
+#: admin/vendors-page.php:30 admin/vendors-page.php:89
+#: admin/knowledge-graph-page.php:100 admin/knowledge-graph-page.php:171
+msgid "Vendors"
+msgstr "Les vendeurs"
+
+#: admin/cpt-manager-page.php:362
+msgid ""
+"Vendors + Events presets ship a static wpml-config.xml read by both WPML and "
+"Polylang. Polylang also auto-registers every enabled custom type. For custom "
+"types on WPML, paste the XML below into WPML → Settings → Custom XML "
+"Configuration."
+msgstr ""
+
+#: admin/vendors-page.php:30
+msgid "Vendors module not available."
+msgstr "Les vendeurs de module n'est pas disponible."
+
+#: admin/events-page.php:105
+msgid "Venue (name + address)"
+msgstr "Lieu (nom + adresse)"
+
+#: includes/class-luwipress-events.php:375
+#: includes/class-luwipress-events.php:649
+msgid "Venue address"
+msgstr "Adresse du site"
+
+#: includes/class-luwipress-events.php:374
+#: includes/class-luwipress-events.php:647
+msgid "Venue name"
+msgstr "Nom du site"
+
+#: admin/scheduler-page.php:294
+msgid "View"
+msgstr "Vue"
+
+#. 1: count, 2: segment label
+#: admin/admin-page.php:721
+#, php-format
+msgid "View %1$s %2$s customers"
+msgstr "Vue de %1$s %2$s clients"
+
+#: includes/class-luwipress-vendors.php:1110
+#: includes/class-luwipress-events.php:177
+#, php-format
+msgid "View %s"
+msgstr "Vue de %s"
+
+#: admin/knowledge-graph-page.php:157
+msgid "View analytics →"
+msgstr ""
+
+#: admin/knowledge-graph-page.php:177
+msgid "View detail →"
+msgstr ""
+
+#: admin/knowledge-graph-page.php:147 admin/knowledge-graph-page.php:152
+msgid "View details →"
+msgstr ""
+
+#: includes/class-luwipress-vendors.php:1156
+msgid "View Group"
+msgstr "Vue De Groupe"
+
+#: admin/knowledge-graph-page.php:162
+msgid "View heatmap →"
+msgstr ""
+
+#: admin/knowledge-graph-page.php:167
+msgid "View library →"
+msgstr ""
+
+#: admin/cookies-page.php:429 admin/cookies-page.php:449
+msgid "View page"
+msgstr "Afficher la page"
+
+#: admin/knowledge-graph-page.php:172
+msgid "View x-ray →"
+msgstr ""
+
+#: includes/class-luwipress-crm-campaigns.php:577
+#: includes/class-luwipress-crm-campaigns.php:594
+#: includes/class-luwipress-crm-campaigns.php:602
+msgid "Visit store"
+msgstr "Visiter le magasin"
+
+#: includes/class-luwipress-image-studio.php:96
+msgid "Vivid"
+msgstr "Vive"
+
+#: admin/scheduler-page.php:410
+msgid "Voice, depth, language"
+msgstr "De la voix, de la profondeur, de la langue"
+
+#: admin/usage-page.php:296
+msgid "Warnings"
+msgstr "Avertissements"
+
+#: includes/class-luwipress-cookie-consent.php:190
+msgid ""
+"We use cookies to enhance browsing, analyze traffic, and personalize content."
+" You can accept all, reject non-essential, or customize your preferences."
+msgstr ""
+"Nous utilisons des cookies pour faciliter la navigation, d'analyser le "
+"trafic, et de personnaliser le contenu. Vous pouvez tout accepter, de "
+"rejeter les non-essentiels, ou de personnaliser vos préférences."
+
+#: includes/class-luwipress-cookie-consent.php:189
+msgid "We value your privacy"
+msgstr "Nous respectons votre vie privée"
+
+#: luwipress.php:1244
+msgid "WebMCP moved to companion plugin (3.0+)"
+msgstr "WebMCP déplacé pour compagnon de plugin (3.0+)"
+
+#: admin/scheduler-page.php:735
+msgid "Weekly"
+msgstr "Hebdomadaire"
+
+#: admin/knowledge-graph-page.php:112
+msgid ""
+"Weighted average across content, translation, design, and media metrics."
+msgstr ""
+"Moyenne pondérée dans le contenu, la traduction, la conception, et les "
+"médias métriques."
+
+#: admin/scheduler-page.php:439
+msgid "What do you want to publish?"
+msgstr "Que voulez-vous publier?"
+
+#: admin/knowledge-graph-page.php:296
+msgid "What it acts on"
+msgstr "De quoi il s'agit sur"
+
+#: admin/faq-editor-metabox.php:104
+msgid "What materials are used to build this oud?"
+msgstr "Quels sont les matériaux utilisés pour construire cette oud?"
+
+#: admin/scheduler-page.php:743
+msgid "What should these posts be about? Be specific."
+msgstr "Quelles devraient être ces postes sera le sujet? Être spécifique."
+
+#: admin/scheduler-page.php:403
+msgid "What to write about"
+msgstr "De quoi écrire"
+
+#: admin/bot-defense-page.php:540 admin/cookies-page.php:258
+msgid "When"
+msgstr "Lorsque"
+
+#: admin/scheduler-page.php:615
+msgid "When and how should these publish?"
+msgstr "Quand et comment les publier?"
+
+#: admin/cookies-page.php:180
+msgid ""
+"When enabled, every consent change fires window.clarity(\"consentv2\", {…}) "
+"with analytics + marketing toggles mapped to the four GCM-aligned signals. "
+"Requires Microsoft Clarity to be loaded on the site (no SDK changes needed)."
+msgstr ""
+
+#: admin/bot-defense-page.php:664
+msgid "Whitelist"
+msgstr "Liste blanche"
+
+#: admin/bot-defense-page.php:293
+msgid "Whitelisted"
+msgstr "Dans la liste blanche"
+
+#: admin/bot-defense-page.php:781
+msgid "whitelisted"
+msgstr "dans la liste blanche"
+
+#: admin/scheduler-page.php:397
+msgid "Wizard steps"
+msgstr "Étapes de l'assistant"
+
+#: admin/cpt-manager-page.php:137 admin/cpt-manager-page.php:259
+msgid "WooCommerce"
+msgstr "Thème"
+
+#: luwipress.php:1075
+msgid "WooCommerce inactive — generic features only"
+msgstr "Thème inactif — fonctions génériques seulement"
+
+#: admin/admin-page.php:292
+msgid "WooCommerce is active. Click to open the WC dashboard."
+msgstr "Thème est active. Cliquez sur pour ouvrir le WC tableau de bord."
+
+#: admin/cpt-manager-page.php:260
+msgid "WooCommerce is not active — product attribution binding is unavailable."
+msgstr ""
+"Thème n'est pas active — produit d'attribution de liaison n'est pas "
+"disponible."
+
+#: admin/admin-page.php:296
+msgid ""
+"WooCommerce is not active. Click to install it. Plugin runs in WC-less mode "
+"meanwhile."
+msgstr ""
+"Thème n'est pas active. Cliquez sur installer. Plugin fonctionne dans les WC-"
+"mode moins pendant ce temps."
+
+#: admin/content-audit-page.php:251
+msgid "Word Count"
+msgstr "Nombre De Mots"
+
+#: admin/content-audit-page.php:345
+msgid "Word Count Audit"
+msgstr "Nombre De Mots D'Audit"
+
+#: admin/cpt-manager-page.php:166
+msgid ""
+"WordPress post_type name (max 20 chars). Defaults to the key. Reserved names "
+"(post, page, product…) are rejected."
+msgstr ""
+"WordPress post_type nom (max 20 caractères). Par défaut la clé. Les noms "
+"réservés (post, page, produit...) sont rejetés."
+
+#: admin/scheduler-page.php:763 admin/content-audit-page.php:422
+msgid "Words"
+msgstr "Mots"
+
+#: admin/content-audit-page.php:416
+msgid "words"
+msgstr "mots"
+
+#: admin/usage-page.php:386 admin/admin-page.php:576
+msgid "Workflow"
+msgstr "Flux de travail"
+
+#: includes/class-luwipress-backup-bridge.php:207
+msgid ""
+"WP-Cron is disabled; a real backup may stall after the first chunk unless "
+"system cron processes updraft_backup_resume. Verify completion via "
+"/backup/status."
+msgstr ""
+"WP-Cron est désactivé; un vrai de sauvegarde peut se bloquer après le "
+"premier morceau, à moins que le système de cron processus "
+"updraft_backup_resume. Vérification de l'achèvement de la via "
+"/sauvegarde/d'état."
+
+#: admin/theme-page.php:361
+msgid "WPML & Templates"
+msgstr "WPML et Modèles"
+
+#: admin/cpt-manager-page.php:360
+msgid "WPML / Polylang configuration"
+msgstr "WPML / Polylang de configuration"
+
+#: admin/taxonomy-editor-page.php:139
+msgid ""
+"WPML sibling terms are resolved via wpml_object_id; missing translations "
+"show \"(no translation)\" — create them in WP Admin first."
+msgstr ""
+"WPML frère termes sont résolus via wpml_object_id; traductions manquantes "
+"show \"(pas de traduction)\" — créer dans la note WP Admin de la première."
+
+#: admin/theme-page.php:300
+msgid "WPML-aware"
+msgstr "WPML-conscient"
+
+#: luwipress.php:1534
+msgid "WPML/Polylang siblings will be mutated together. Continue?"
+msgstr "WPML/Polylang les frères et sœurs vont être muté ensemble. Continuer?"
+
+#: admin/cookies-page.php:238
+msgid ""
+"Wrap any analytics/marketing tag in a placeholder script. After the visitor "
+"consents to that category, the script is automatically rewritten and "
+"executed."
+msgstr ""
+"Emballez tout analytics/marketing balise dans un espace réservé de script. "
+"Après avoir le visiteur consent à cette catégorie, le script est réécrit "
+"automatiquement et exécuté."
+
+#: admin/cookies-page.php:196
+#, php-format
+msgid "wrapped via %s"
+msgstr "enveloppé par %s"
+
+#: admin/knowledge-graph-page.php:320
+msgid "Write SEO meta"
+msgstr "Écrire meta SEO"
+
+#: admin/vendors-page.php:74
+msgid "Years active"
+msgstr "Années actives"
+
+#: admin/theme-page.php:242
+msgid "Yes"
+msgstr "Oui"
+
+#: luwipress.php:667 admin/bot-defense-page.php:26 admin/events-page.php:20
+#: admin/schema-preview-page.php:30 admin/content-hub-page.php:18
+#: admin/site-hub-page.php:28 admin/cookies-page.php:19 admin/theme-page.php:28
+#: admin/image-alt-bulk-page.php:24 admin/taxonomy-editor-page.php:24
+#: admin/slug-resolver-page.php:25 admin/vendors-page.php:26
+#: admin/content-audit-page.php:35 admin/cpt-manager-page.php:37
+#: admin/schema-picker-page.php:30 admin/knowledge-graph-page.php:15
+msgid "You do not have sufficient permissions to access this page."
+msgstr ""
+"Vous n'avez pas les autorisations suffisantes pour accéder à cette page."
+
+#: includes/class-luwipress-crm-campaigns.php:756
+msgid "Your code"
+msgstr "Votre code"
+
+#: includes/class-luwipress-bot-shield.php:941
+msgid ""
+"Your comment was blocked by site security. If you believe this is an error, "
+"please contact the site administrator."
+msgstr ""
+"Votre commentaire a été bloquée par la sécurité du site. Si vous croyez que "
+"c'est une erreur, veuillez contacter l'administrateur du site."
+
+#: luwipress.php:1239
+msgid ""
+"Your MCP configuration is preserved, but the WebMCP endpoint and admin page "
+"now live in the separate \"LuwiPress WebMCP\" plugin. Install and activate "
+"it to restore AI-agent integration."
+msgstr ""
+"Votre MCP configuration est conservée, mais le WebMCP d'extrémité et admin "
+"de la page vivent maintenant dans le \"LuwiPress WebMCP\" plugin. "
+"L'installer et l'activer pour restaurer AI-agent d'intégration."
+
+#: admin/knowledge-graph-page.php:226
+msgid "Zoom in"
+msgstr "Zoom avant"
+
+#: admin/knowledge-graph-page.php:227
+msgid "Zoom out"
+msgstr "Zoom arrière"
+
+#: includes/class-luwipress-vendors.php:1473
+msgid "— Global default —"
+msgstr "— Par défaut —"
+
+#: includes/class-luwipress-events.php:633
+msgid "— Scheduled (default) —"
+msgstr "Régulier (par défaut) —"
