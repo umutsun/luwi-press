@@ -487,6 +487,72 @@ class LuwiPress_Knowledge_Graph {
 		$response['nodes'] = array();
 		if ( in_array( 'products', $sections, true ) ) {
 			$response['nodes']['products'] = $product_nodes;
+
+			// Per-post-type catalog summary so the graph can cluster a multi-type
+			// catalog (e.g. a CPT-driven site) into collapsible hubs instead of a
+			// flat hairball. Single-type catalogs (WooCommerce) render flat.
+			$ctx       = $this->get_catalog_context();
+			$cat_types = array();
+			foreach ( $ctx['post_types'] as $pt ) {
+				$obj   = get_post_type_object( $pt );
+				$cnt   = post_type_exists( $pt ) ? (int) ( wp_count_posts( $pt )->publish ?? 0 ) : 0;
+				$shown = 0;
+				foreach ( $product_nodes as $pn ) {
+					if ( ( isset( $pn['post_type'] ) ? $pn['post_type'] : 'product' ) === $pt ) {
+						$shown++;
+					}
+				}
+				$cat_types[] = array(
+					'post_type' => $pt,
+					'label'     => $obj ? $obj->labels->name : $pt,
+					'count'     => $cnt,
+					'shown'     => $shown,
+				);
+			}
+			// Category taxonomies (with human labels) so the graph can offer a
+			// generic "Group by" selector — works for any CPT layout, not just
+			// WooCommerce's product_cat. Tags are excluded (they live in a
+			// separate bucket and aren't rendered as category nodes).
+			$cat_taxes = array();
+			foreach ( $ctx['category_taxonomies'] as $tax_name ) {
+				$tax_obj = get_taxonomy( $tax_name );
+				if ( ! $tax_obj ) {
+					continue;
+				}
+				// Full term list with TRUE published counts (WP maintains
+				// $term->count) so the graph's group-by hubs show real totals
+				// (e.g. "Completed (2500)"), not just the sample. hide_empty
+				// drops terms with no published posts. Capped at 200 terms so a
+				// pathological taxonomy can't bloat the payload.
+				$term_objs = get_terms( array(
+					'taxonomy'   => $tax_name,
+					'hide_empty' => true,
+					'number'     => 200,
+					'orderby'    => 'count',
+					'order'      => 'DESC',
+				) );
+				$terms = array();
+				if ( ! is_wp_error( $term_objs ) ) {
+					foreach ( $term_objs as $term_obj ) {
+						$terms[] = array(
+							'id'    => (int) $term_obj->term_id,
+							'name'  => $term_obj->name,
+							'count' => (int) $term_obj->count,
+						);
+					}
+				}
+				$cat_taxes[] = array(
+					'taxonomy' => $tax_name,
+					'label'    => $tax_obj->labels->name,
+					'terms'    => $terms,
+				);
+			}
+			$response['catalog'] = array(
+				'mode'         => $ctx['mode'],
+				'label_plural' => $ctx['label_plural'],
+				'types'        => $cat_types,
+				'taxonomies'   => $cat_taxes,
+			);
 		}
 		if ( in_array( 'categories', $sections, true ) ) {
 			$response['nodes']['categories'] = $category_nodes;
@@ -648,81 +714,220 @@ class LuwiPress_Knowledge_Graph {
 		return rest_ensure_response( $response );
 	}
 
+	// ─── CATALOG SOURCE RESOLUTION (generic: WooCommerce or CPT Engine) ──
+	//
+	// The KG "product / category" views visualise a catalog. On a commerce
+	// store that catalog is WooCommerce products; on a CPT-driven site (e.g.
+	// real-estate listings registered through the LuwiPress CPT Engine) there
+	// are no products and the catalog is the engine's post types instead. These
+	// helpers resolve which, so the downstream loaders/builders stay source-
+	// agnostic. WooCommerce stores are byte-for-byte unchanged: when WC is
+	// active with published products the resolver returns exactly ['product'] /
+	// ['product_cat','product_tag'] and the legacy query paths run identically.
+
+	/** @var array|null memoised catalog context for this request */
+	private $catalog_ctx = null;
+
+	/**
+	 * Resolve the catalog (post types + taxonomies + labels) once per request.
+	 *
+	 * @return array{mode:string,post_types:string[],taxonomies:string[],category_taxonomies:string[],label_singular:string,label_plural:string,wc_active:bool}
+	 */
+	public function get_catalog_context() {
+		if ( null !== $this->catalog_ctx ) {
+			return $this->catalog_ctx;
+		}
+
+		$wc_active = ( class_exists( 'LuwiPress' ) && method_exists( 'LuwiPress', 'is_wc_active' ) )
+			? (bool) LuwiPress::is_wc_active()
+			: class_exists( 'WooCommerce' );
+
+		$wc_products = 0;
+		if ( $wc_active && post_type_exists( 'product' ) ) {
+			$counts      = wp_count_posts( 'product' );
+			$wc_products = isset( $counts->publish ) ? (int) $counts->publish : 0;
+		}
+
+		if ( $wc_active && $wc_products > 0 ) {
+			$ctx = array(
+				'mode'                => 'wc',
+				'post_types'          => array( 'product' ),
+				'taxonomies'          => array( 'product_cat', 'product_tag' ),
+				'category_taxonomies' => array( 'product_cat' ),
+				'label_singular'      => __( 'Product', 'luwipress' ),
+				'label_plural'        => __( 'Products', 'luwipress' ),
+				'wc_active'           => $wc_active,
+			);
+		} else {
+			// CPT-driven: every enabled LuwiPress CPT Engine type is a catalog.
+			$pts      = array();
+			$taxes    = array();
+			$singular = '';
+			$plural   = '';
+			if ( class_exists( 'LuwiPress_CPT_Engine' ) ) {
+				$engine = LuwiPress_CPT_Engine::get_instance();
+				$pts    = $engine->get_post_types();
+				foreach ( $engine->get_taxonomies() as $t ) {
+					if ( ! empty( $t['slug'] ) && in_array( $t['post_type'], $pts, true ) ) {
+						$taxes[] = $t['slug'];
+					}
+				}
+				// A single engine type names the view ("Residences"); multiple
+				// types fall back to a generic "Catalog" label.
+				$enabled = array();
+				foreach ( $engine->get_types() as $def ) {
+					if ( ! empty( $def['enabled'] ) ) {
+						$enabled[] = $def;
+					}
+				}
+				if ( count( $enabled ) === 1 ) {
+					$singular = $enabled[0]['labels']['singular'] ?? '';
+					$plural   = $enabled[0]['labels']['plural'] ?? '';
+				}
+			}
+			$ctx = array(
+				'mode'                => 'cpt',
+				'post_types'          => array_values( array_unique( array_filter( $pts ) ) ),
+				'taxonomies'          => array_values( array_unique( array_filter( $taxes ) ) ),
+				'category_taxonomies' => array_values( array_unique( array_filter( $taxes ) ) ),
+				'label_singular'      => '' !== $singular ? $singular : __( 'Item', 'luwipress' ),
+				'label_plural'        => '' !== $plural ? $plural : __( 'Catalog', 'luwipress' ),
+				'wc_active'           => $wc_active,
+			);
+		}
+
+		/**
+		 * Filter the resolved KG catalog context. Lets a non-commerce vertical
+		 * override which post types / taxonomies the graph visualises.
+		 *
+		 * @param array $ctx Resolved catalog context.
+		 */
+		$ctx               = apply_filters( 'luwipress_kg_catalog_context', $ctx );
+		$this->catalog_ctx = $ctx;
+		return $ctx;
+	}
+
+	/** @return string[] post types whose catalog drives the product/category views */
+	private function catalog_post_types() {
+		$ctx = $this->get_catalog_context();
+		return $ctx['post_types'];
+	}
+
+	/** @return string[] taxonomies grouping the catalog */
+	private function catalog_taxonomies() {
+		$ctx = $this->get_catalog_context();
+		return $ctx['taxonomies'];
+	}
+
+	/** @return bool true when the catalog is CPT-Engine driven (no WC products) */
+	private function is_cpt_mode() {
+		$ctx = $this->get_catalog_context();
+		return 'cpt' === $ctx['mode'];
+	}
+
 	// ─── BULK DATA LOADERS ──────────────────────────────────────────────
 
 	private function load_product_posts() {
-		global $wpdb;
-
-		$translation_plugin = 'none';
-		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
-			$translation_plugin = 'wpml';
-		} elseif ( defined( 'POLYLANG_VERSION' ) ) {
-			$translation_plugin = 'polylang';
+		$pts = $this->catalog_post_types();
+		if ( empty( $pts ) ) {
+			return array();
 		}
 
-		// For WPML: only original products (not translations).
-		if ( 'wpml' === $translation_plugin ) {
-			$rows = $wpdb->get_results(
-				"SELECT p.ID, p.post_title, p.post_name, p.post_status,
-				        p.post_date, p.post_modified,
-				        LENGTH(p.post_content) AS content_length
+		// WooCommerce stores: byte-identical legacy behaviour — full 2000-row
+		// load over the single `product` type, ordered by ID.
+		if ( ! $this->is_cpt_mode() ) {
+			return $this->query_catalog_posts( $pts, 2000, 'p.ID ASC' );
+		}
+
+		// CPT-driven sites: cap PER post type so a large import (e.g. thousands
+		// of listings) can't flood the force graph into an unreadable hairball,
+		// while every engine type is still represented. Newest-first so the
+		// sample is the freshest content. Operators who want a denser or sparser
+		// graph tune this via the filter.
+		$per_type = (int) apply_filters( 'luwipress_kg_catalog_per_type_limit', 120 );
+		if ( $per_type < 1 ) {
+			$per_type = 120;
+		}
+		$rows = array();
+		foreach ( $pts as $pt ) {
+			$rows = array_merge( $rows, $this->query_catalog_posts( array( $pt ), $per_type, 'p.post_date DESC' ) );
+		}
+		return $rows;
+	}
+
+	/**
+	 * Load published catalog posts for one or more post types.
+	 *
+	 * Under WPML only originals (not translations) are returned; a post type
+	 * that has no icl_translations rows (never registered with WPML) falls back
+	 * to a plain query so its catalog is not silently dropped — this keeps mixed
+	 * registration (some types translated, some not) working.
+	 *
+	 * @param string[] $pts   Post types.
+	 * @param int      $limit Row cap.
+	 * @param string   $order Trusted ORDER BY clause (constant — never user input).
+	 * @return array
+	 */
+	private function query_catalog_posts( $pts, $limit, $order ) {
+		global $wpdb;
+
+		$pts = array_values( array_filter( (array) $pts ) );
+		if ( empty( $pts ) ) {
+			return array();
+		}
+		$limit  = max( 1, (int) $limit );
+		$pt_ph  = implode( ',', array_fill( 0, count( $pts ), '%s' ) );
+		$select = 'p.ID, p.post_title, p.post_name, p.post_type, p.post_status, p.post_date, p.post_modified, LENGTH(p.post_content) AS content_length';
+
+		if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+			$el_types = array();
+			foreach ( $pts as $pt ) {
+				$el_types[] = 'post_' . $pt;
+			}
+			$el_ph = implode( ',', array_fill( 0, count( $el_types ), '%s' ) );
+
+			$rows = $wpdb->get_results( $wpdb->prepare(
+				"SELECT {$select}
 				 FROM {$wpdb->posts} p
 				 JOIN {$wpdb->prefix}icl_translations t
-				   ON p.ID = t.element_id AND t.element_type = 'post_product'
-				 WHERE p.post_type = 'product'
+				   ON p.ID = t.element_id AND t.element_type IN ($el_ph)
+				 WHERE p.post_type IN ($pt_ph)
 				   AND p.post_status = 'publish'
 				   AND t.source_language_code IS NULL
-				 ORDER BY p.ID ASC
-				 LIMIT 2000"
-			);
+				 ORDER BY {$order}
+				 LIMIT %d",
+				...array_merge( $el_types, $pts, array( $limit ) )
+			) );
 
-			// 3.3.3 defensive fallback: if the WPML JOIN returns zero rows on
-			// a site that demonstrably has products (`SELECT COUNT(*)` against
-			// wp_posts alone is non-zero), the icl_translations table is
-			// missing entries for some / all products (WPML "Product
-			// translation" was never activated for the `product` post type,
-			// the table was partially purged during a WPML reinstall, or the
-			// site was imported before WPML setup). Falling back to the
-			// plain query here keeps the KG dashboard usable while logging
-			// the diagnostic so the operator can repair WPML separately.
+			// No icl_translations rows but published posts exist → the post type
+			// was never registered with WPML (or the table was purged). Include
+			// them via the plain query so the catalog stays complete.
 			if ( empty( $rows ) ) {
-				$raw_count = (int) $wpdb->get_var(
-					"SELECT COUNT(*) FROM {$wpdb->posts}
-					 WHERE post_type = 'product' AND post_status = 'publish'"
-				);
+				$raw_count = (int) $wpdb->get_var( $wpdb->prepare(
+					"SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type IN ($pt_ph) AND post_status = 'publish'",
+					...$pts
+				) );
 				if ( $raw_count > 0 ) {
 					if ( class_exists( 'LuwiPress_Logger' ) ) {
 						LuwiPress_Logger::log(
-							'KG product loader: WPML JOIN returned 0 but wp_posts has ' . $raw_count . ' published products — falling back to non-WPML query. Check WPML > Settings > Multilingual Content Setup > Custom Posts and re-register `product`.',
+							'KG catalog loader: WPML JOIN returned 0 but wp_posts has ' . $raw_count . ' published posts (' . implode( ',', $pts ) . ') — using non-WPML query. Register these post types in WPML > Multilingual Content Setup if translations are expected.',
 							'warning'
 						);
 					}
-					$rows = $wpdb->get_results(
-						"SELECT p.ID, p.post_title, p.post_name, p.post_status,
-						        p.post_date, p.post_modified,
-						        LENGTH(p.post_content) AS content_length
-						 FROM {$wpdb->posts} p
-						 WHERE p.post_type = 'product'
-						   AND p.post_status = 'publish'
-						 ORDER BY p.ID ASC
-						 LIMIT 2000"
-					);
+					$rows = $wpdb->get_results( $wpdb->prepare(
+						"SELECT {$select} FROM {$wpdb->posts} p WHERE p.post_type IN ($pt_ph) AND p.post_status = 'publish' ORDER BY {$order} LIMIT %d",
+						...array_merge( $pts, array( $limit ) )
+					) );
 				}
 			}
 
-			return $rows;
+			return $rows ? $rows : array();
 		}
 
-		return $wpdb->get_results(
-			"SELECT p.ID, p.post_title, p.post_name, p.post_status,
-			        p.post_date, p.post_modified,
-			        LENGTH(p.post_content) AS content_length
-			 FROM {$wpdb->posts} p
-			 WHERE p.post_type = 'product'
-			   AND p.post_status = 'publish'
-			 ORDER BY p.ID ASC
-			 LIMIT 2000"
-		);
+		return $wpdb->get_results( $wpdb->prepare(
+			"SELECT {$select} FROM {$wpdb->posts} p WHERE p.post_type IN ($pt_ph) AND p.post_status = 'publish' ORDER BY {$order} LIMIT %d",
+			...array_merge( $pts, array( $limit ) )
+		) );
 	}
 
 	private function load_product_meta( $product_ids, $seo_meta_keys, $target_languages ) {
@@ -771,7 +976,13 @@ class LuwiPress_Knowledge_Graph {
 	private function load_product_terms( $product_ids ) {
 		global $wpdb;
 
+		$taxes = $this->catalog_taxonomies();
+		if ( empty( $taxes ) || empty( $product_ids ) ) {
+			return array();
+		}
+
 		$id_placeholders = implode( ',', array_fill( 0, count( $product_ids ), '%d' ) );
+		$tax_placeholders = implode( ',', array_fill( 0, count( $taxes ), '%s' ) );
 
 		$rows = $wpdb->get_results( $wpdb->prepare(
 			"SELECT tr.object_id, t.term_id, t.name, t.slug, tt.taxonomy, tt.parent
@@ -779,13 +990,15 @@ class LuwiPress_Knowledge_Graph {
 			 INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
 			 INNER JOIN {$wpdb->terms} t ON tt.term_id = t.term_id
 			 WHERE tr.object_id IN ($id_placeholders)
-			   AND tt.taxonomy IN ('product_cat', 'product_tag')",
-			...$product_ids
+			   AND tt.taxonomy IN ($tax_placeholders)",
+			...array_merge( $product_ids, $taxes )
 		) );
 
 		$map = array();
 		foreach ( $rows as $row ) {
-			$key = 'product_cat' === $row->taxonomy ? 'categories' : 'tags';
+			// product_tag → tags bucket; product_cat and every CPT taxonomy
+			// group as "category" nodes in the graph.
+			$key = 'product_tag' === $row->taxonomy ? 'tags' : 'categories';
 			$map[ $row->object_id ][ $key ][] = array(
 				'id'   => absint( $row->term_id ),
 				'name' => $row->name,
@@ -1101,6 +1314,7 @@ class LuwiPress_Knowledge_Graph {
 			$nodes[] = array(
 				'id'              => $id,
 				'type'            => 'product',
+				'post_type'       => isset( $p->post_type ) ? $p->post_type : 'product',
 				'name'            => $p->post_title,
 				'slug'            => $p->post_name,
 				'sku'             => $meta['_sku'] ?? '',
@@ -1151,7 +1365,7 @@ class LuwiPress_Knowledge_Graph {
 		$term_map = array();
 		if ( ! empty( $all_cat_ids ) ) {
 			$terms = get_terms( array(
-				'taxonomy'   => 'product_cat',
+				'taxonomy'   => $this->get_catalog_context()['category_taxonomies'],
 				'include'    => array_keys( $all_cat_ids ),
 				'hide_empty' => false,
 			) );
@@ -1173,6 +1387,10 @@ class LuwiPress_Knowledge_Graph {
 						'type'          => 'category',
 						'name'          => $term ? $term->name : '',
 						'slug'          => $term ? $term->slug : '',
+						// Which taxonomy this term belongs to — lets the graph
+						// group a single-type catalog by any of the CPT's
+						// taxonomies (generic; no hardcoded developer/area/etc).
+						'taxonomy'      => $term ? $term->taxonomy : '',
 						'parent_id'     => $term ? $term->parent : 0,
 						'product_count' => 0,
 						'total_score'   => 0,
@@ -1217,6 +1435,7 @@ class LuwiPress_Knowledge_Graph {
 				'type'            => 'category',
 				'name'            => $cat['name'],
 				'slug'            => $cat['slug'],
+				'taxonomy'        => $cat['taxonomy'],
 				'parent_id'       => $cat['parent_id'],
 				'product_count'   => $cat['product_count'],
 				'avg_opportunity_score' => round( $cat['total_score'] / $count, 1 ),
@@ -1408,29 +1627,46 @@ class LuwiPress_Knowledge_Graph {
 		$vendor_product_counts = array();
 		$attribution_edges     = array();
 
-		if ( ! empty( $product_nodes ) ) {
-			foreach ( $product_nodes as $p ) {
-				$vendor_ids = $this->extract_vendor_ids_from_product( $p['id'] );
-				foreach ( $vendor_ids as $vid ) {
-					$vendor_product_counts[ $vid ] = ( $vendor_product_counts[ $vid ] ?? 0 ) + 1;
-					$attribution_edges[] = array(
-						'source' => 'product:' . $p['id'],
-						'target' => 'vendor:' . $vid,
-						'type'   => 'made_by',
-					);
-				}
+		// 3.16.0+: always derive counts + edges from a single attribution-meta
+		// query across ALL attributable post types (see
+		// load_vendor_product_counts_with_edges). This replaces the former
+		// product_nodes-only fast path, which silently missed CPT attribution
+		// (e.g. a project → developer link) whenever the products section was
+		// loaded in the same request. Edge targets to product nodes resolve
+		// when the client loads the products section; CPT-post sources without
+		// a matching node render as halo dots — better signal than zero edges.
+		$bulk                  = $this->load_vendor_product_counts_with_edges();
+		$vendor_product_counts = $bulk['counts'];
+		$attribution_edges     = $bulk['edges'];
+
+		// 3.16.0+: add taxonomy-based attribution counts. A vendor mapped to
+		// taxonomy term IDs (via `_lwp_vendor_attr_terms`) gets credited with the
+		// published posts (of any attributable post type) in those terms — so a
+		// catalog/CPT site links vendors with a handful of vendor-side writes
+		// instead of a per-post `_lwp_vendor_ids` sweep. Counts only: a term can
+		// hold hundreds of posts, so we do NOT emit per-post edges here (it would
+		// drown the graph topology).
+		$term_counts = $this->load_vendor_term_counts();
+		foreach ( $term_counts as $vid => $cnt ) {
+			$vendor_product_counts[ $vid ] = ( $vendor_product_counts[ $vid ] ?? 0 ) + $cnt;
+		}
+
+		// Generic attribution noun for the panel/tooltip — derived from the
+		// first opted-in non-product post type's labels (e.g. "Project" /
+		// "Projects"), falling back to "product(s)" on a pure-WooCommerce site.
+		// Core ships ZERO hardcoded site/type names.
+		$attr_label_one = __( 'product', 'luwipress' );
+		$attr_label     = __( 'products', 'luwipress' );
+		foreach ( LuwiPress_Vendors::get_attributable_post_types() as $apt ) {
+			if ( 'product' === $apt || ! post_type_exists( $apt ) ) {
+				continue;
 			}
-		} else {
-			// Vendors-only call — single bulk query for product→vendor counts AND
-			// emit the matching `made_by` edges so callers requesting only the
-			// `vendors` section still get the supply-graph topology (target
-			// product nodes will resolve into real nodes when the client later
-			// loads the products section, otherwise they remain as dangling
-			// references the graph engine can render as halo dots — better
-			// signal than zero edges).
-			$bulk = $this->load_vendor_product_counts_with_edges();
-			$vendor_product_counts = $bulk['counts'];
-			$attribution_edges     = $bulk['edges'];
+			$apt_obj = get_post_type_object( $apt );
+			if ( $apt_obj && isset( $apt_obj->labels ) ) {
+				$attr_label_one = ! empty( $apt_obj->labels->singular_name ) ? $apt_obj->labels->singular_name : $attr_label_one;
+				$attr_label     = ! empty( $apt_obj->labels->name ) ? $apt_obj->labels->name : $attr_label;
+			}
+			break;
 		}
 
 		$nodes = array();
@@ -1495,6 +1731,9 @@ class LuwiPress_Knowledge_Graph {
 				'social_count'   => $social_count,
 				'socials'        => $socials,
 				'product_count'  => $product_count,
+				'attributed_count'     => $product_count,
+				'attributed_label'     => $attr_label,
+				'attributed_label_one' => $attr_label_one,
 				'eat_score'      => $eat,
 				'edit_url'       => admin_url( 'post.php?post=' . $post->ID . '&action=edit' ),
 			);
@@ -1539,22 +1778,29 @@ class LuwiPress_Knowledge_Graph {
 			return array( 'counts' => array(), 'edges' => array() );
 		}
 		$meta_key = LuwiPress_Vendors::PRODUCT_VENDORS_META;
-		// IMPORTANT: pull `post_id` alongside `meta_value` so we can emit edges.
-		$rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT pm.post_id, pm.meta_value
+
+		// 3.16.0+: attribution is no longer product-only. Count + edge every
+		// post type a site opts in via `luwipress_vendor_attributable_post_types`
+		// (always includes `product`). Build a prepared IN() placeholder list so
+		// the query stays parameterized.
+		$types   = LuwiPress_Vendors::get_attributable_post_types();
+		$type_ph = implode( ',', array_fill( 0, count( $types ), '%s' ) );
+
+		// IMPORTANT: pull `post_id` + `post_type` alongside `meta_value` so we
+		// can emit correctly-typed edges (product:X / <cpt>:X).
+		$sql = "SELECT pm.post_id, pm.meta_value, p.post_type
 			   FROM {$wpdb->postmeta} pm
 			   JOIN {$wpdb->posts} p ON p.ID = pm.post_id
 			  WHERE pm.meta_key = %s
-			    AND p.post_type = 'product'
-			    AND p.post_status = 'publish'",
-			$meta_key
-		) );
+			    AND p.post_type IN ($type_ph)
+			    AND p.post_status = 'publish'";
+		$rows = $wpdb->get_results( $wpdb->prepare( $sql, array_merge( array( $meta_key ), $types ) ) );
 
 		$counts = array();
 		$edges  = array();
 		foreach ( $rows as $row ) {
-			$product_id = (int) $row->post_id;
-			$decoded    = json_decode( (string) $row->meta_value, true );
+			$post_id = (int) $row->post_id;
+			$decoded = json_decode( (string) $row->meta_value, true );
 			if ( ! is_array( $decoded ) ) {
 				continue;
 			}
@@ -1565,13 +1811,79 @@ class LuwiPress_Knowledge_Graph {
 				}
 				$counts[ $vid ] = ( $counts[ $vid ] ?? 0 ) + 1;
 				$edges[] = array(
-					'source' => 'product:' . $product_id,
+					'source' => $row->post_type . ':' . $post_id,
 					'target' => 'vendor:' . $vid,
 					'type'   => 'made_by',
 				);
 			}
 		}
 		return array( 'counts' => $counts, 'edges' => $edges );
+	}
+
+	// Taxonomy-based vendor attribution counts (3.16.0+). For each vendor that
+	// declares a `_lwp_vendor_attr_terms` map, count DISTINCT published posts (of
+	// any attributable post type) sitting in ANY of its mapped terms. One query
+	// per mapped vendor (typically a handful); DISTINCT avoids cross-term double
+	// counting. Returns vendor_id => count. Edges are intentionally omitted (a
+	// term can hold hundreds of posts).
+	private function load_vendor_term_counts() {
+		global $wpdb;
+		if ( ! class_exists( 'LuwiPress_Vendors' ) ) {
+			return array();
+		}
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT pm.post_id, pm.meta_value
+			   FROM {$wpdb->postmeta} pm
+			   JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+			  WHERE pm.meta_key = %s
+			    AND p.post_type = %s
+			    AND p.post_status = 'publish'",
+			LuwiPress_Vendors::ATTR_TERMS_META,
+			LuwiPress_Vendors::POST_TYPE
+		) );
+		if ( empty( $rows ) ) {
+			return array();
+		}
+
+		$types   = LuwiPress_Vendors::get_attributable_post_types();
+		$type_ph = implode( ',', array_fill( 0, count( $types ), '%s' ) );
+
+		$counts = array();
+		foreach ( $rows as $row ) {
+			$vid     = (int) $row->post_id;
+			$decoded = json_decode( (string) $row->meta_value, true );
+			if ( ! is_array( $decoded ) ) {
+				continue;
+			}
+			$term_ids = array();
+			foreach ( $decoded as $tax_ids ) {
+				if ( is_array( $tax_ids ) ) {
+					foreach ( $tax_ids as $tid ) {
+						$tid = absint( $tid );
+						if ( $tid > 0 ) {
+							$term_ids[] = $tid;
+						}
+					}
+				}
+			}
+			$term_ids = array_values( array_unique( $term_ids ) );
+			if ( empty( $term_ids ) ) {
+				continue;
+			}
+			$term_ph = implode( ',', array_fill( 0, count( $term_ids ), '%d' ) );
+			$sql = "SELECT COUNT(DISTINCT p.ID)
+				  FROM {$wpdb->posts} p
+				  JOIN {$wpdb->term_relationships} tr ON tr.object_id = p.ID
+				  JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
+				 WHERE tt.term_id IN ($term_ph)
+				   AND p.post_type IN ($type_ph)
+				   AND p.post_status = 'publish'";
+			$cnt = (int) $wpdb->get_var( $wpdb->prepare( $sql, array_merge( $term_ids, $types ) ) );
+			if ( $cnt > 0 ) {
+				$counts[ $vid ] = ( $counts[ $vid ] ?? 0 ) + $cnt;
+			}
+		}
+		return $counts;
 	}
 
 	// ─── CUSTOMERS — individual nodes, privacy-gated (3.5.2+) ───────────
@@ -1805,6 +2117,21 @@ class LuwiPress_Knowledge_Graph {
 	private function build_summary( $product_nodes, $category_nodes, $language_nodes, $segment_nodes, $target_languages ) {
 		$total = count( $product_nodes );
 
+		// True published total across catalog post types. The graph renders a
+		// capped SAMPLE ($total) for readability/perf, but the headline stat must
+		// reflect reality (e.g. 3,777, not the 120 loaded). Coverage maths below
+		// stay over the sample ($total) — they're estimates from the loaded set.
+		$ctx_total   = $this->get_catalog_context();
+		$total_all   = 0;
+		foreach ( $ctx_total['post_types'] as $pt_all ) {
+			if ( post_type_exists( $pt_all ) ) {
+				$total_all += (int) ( wp_count_posts( $pt_all )->publish ?? 0 );
+			}
+		}
+		if ( $total_all < $total ) {
+			$total_all = $total; // safety: never report fewer than we loaded
+		}
+
 		// SEO coverage
 		$seo_complete = 0;
 		$enriched     = 0;
@@ -1844,6 +2171,11 @@ class LuwiPress_Knowledge_Graph {
 
 		$summary = array(
 			'total_products'        => $total,
+			// True catalog total + how many we actually loaded into the graph.
+			// Frontend shows total_products_all as the headline; products_shown
+			// drives the "N of M loaded" hint when the catalog is sampled.
+			'total_products_all'    => $total_all,
+			'products_shown'        => $total,
 			'total_categories'      => count( $category_nodes ),
 			'total_customer_segments' => count( $segment_nodes ),
 			'enrichment_coverage'   => $pct( $enriched ),

@@ -47,15 +47,15 @@ class LuwiPress_AI_Content {
         // AJAX handler for batch enrichment
         add_action('wp_ajax_luwipress_batch_enrich', array($this, 'ajax_batch_enrich'));
 
-        // Async worker — register the per-product enrichment worker with the
-        // generic Job Queue so the KG / Next-Wins enrich buttons enqueue and
-        // drain in the background via wp-cron instead of running the AI
-        // dispatch inline in the REST request. The inline path blocked 8-90s
-        // per product, exceeded PHP max_execution_time / the 75s client
-        // timeout, and left buttons stuck on "Working…". See
-        // class-luwipress-job-queue.php for the worker contract.
+        // Async workers — register with the generic Job Queue so the KG /
+        // Next-Wins action buttons enqueue and drain in the background via
+        // wp-cron instead of running the AI dispatch inline in the REST
+        // request. The inline path blocked 8-90s per item, exceeded PHP
+        // max_execution_time / the 75s client timeout, and left buttons stuck
+        // on "Working…". See class-luwipress-job-queue.php for the contract.
         if ( class_exists( 'LuwiPress_Job_Queue' ) ) {
             LuwiPress_Job_Queue::register_type( 'product_enrichment', array( $this, 'jq_enrich_product' ) );
+            LuwiPress_Job_Queue::register_type( 'content_generation', array( $this, 'jq_generate_content' ) );
         }
     }
 
@@ -157,6 +157,22 @@ class LuwiPress_AI_Content {
                 'days'      => array('default' => 90, 'sanitize_callback' => 'absint'),
                 'post_type' => array('default' => 'product', 'sanitize_callback' => 'sanitize_text_field'),
                 'per_page'  => array('default' => 50, 'sanitize_callback' => 'absint'),
+            ),
+        ));
+
+        // Generic AI content generation for ANY post type (SEO meta / enrich /
+        // FAQ / HowTo). The WC-less / CPT counterpart to /product/enrich* —
+        // operates on get_post() and writes SEO via the Plugin Detector + FAQ/
+        // HowTo via post meta. Async: enqueues via LuwiPress_Job_Queue and
+        // returns { status:'queued', job_id } — poll /job/status for progress.
+        register_rest_route('luwipress/v1', '/content/generate', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'handle_generate_content'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+            'args'                => array(
+                'post_id' => array('required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'),
+                'task'    => array('required' => true, 'type' => 'string', 'sanitize_callback' => 'sanitize_key'),
+                'options' => array('required' => false, 'type' => 'object', 'default' => array()),
             ),
         ));
     }
@@ -437,6 +453,255 @@ class LuwiPress_AI_Content {
             'product_id'     => $product_id,
             'updated_fields' => $updated_fields,
         );
+    }
+
+    // ─── GENERIC content generation (any post type, WC-less / CPT) ──────
+
+    /**
+     * Generate + write AI content for ANY post type. Counterpart to product
+     * enrichment that works on get_post() instead of wc_get_product(). Tasks:
+     *   seo    — SEO meta title + description (+ focus keyword) via Plugin Detector
+     *   enrich — long description (post_content) + SEO meta + FAQ + enrich flag
+     *   faq    — FAQ schema (post meta _luwipress_faq)
+     *   howto  — HowTo schema (post meta _luwipress_howto)
+     */
+    public function handle_generate_content( $request ) {
+        $post_id = absint( $request->get_param( 'post_id' ) );
+        $task    = sanitize_key( $request->get_param( 'task' ) ?: 'seo' );
+        $options = (array) ( $request->get_param( 'options' ) ?: array() );
+
+        $post = $post_id ? get_post( $post_id ) : null;
+        if ( ! $post || 'trash' === $post->post_status ) {
+            return new WP_Error( 'not_found', 'Post not found.', array( 'status' => 404 ) );
+        }
+        $allowed = array( 'seo', 'enrich', 'faq', 'howto' );
+        if ( ! in_array( $task, $allowed, true ) ) {
+            return new WP_Error( 'bad_task', 'Unknown task. Use one of: ' . implode( ', ', $allowed ), array( 'status' => 400 ) );
+        }
+
+        // WPML guard: never write source-language content into a translation copy.
+        if ( defined( 'ICL_SITEPRESS_VERSION' ) && class_exists( 'LuwiPress_Translation' ) && empty( $options['allow_translation_target'] ) ) {
+            $post_lang    = LuwiPress_Translation::get_post_wpml_language( $post_id );
+            $default_lang = LuwiPress_Translation::get_default_language();
+            if ( $post_lang && $post_lang !== $default_lang ) {
+                return new WP_Error(
+                    'language_mismatch',
+                    sprintf( 'Post #%d is a %s translation copy; generation targets the %s source. Switch to the source language.', $post_id, strtoupper( $post_lang ), strtoupper( $default_lang ) ),
+                    array( 'status' => 409 )
+                );
+            }
+        }
+
+        $lock = 'luwipress_gen_lock_' . $post_id . '_' . $task;
+        if ( get_transient( $lock ) ) {
+            return new WP_Error( 'already_processing', 'Already generating ' . $task . ' for this item — try again shortly.', array( 'status' => 429 ) );
+        }
+        set_transient( $lock, true, 300 );
+
+        // Background path: enqueue the AI work via the Job Queue and return a
+        // job_id immediately. The heavy 'enrich' task otherwise exceeds PHP
+        // max_execution_time and leaves the KG action button stuck on
+        // "Working…"; the frontend polls /job/status. The worker releases the
+        // dedup lock when done.
+        if ( class_exists( 'LuwiPress_Job_Queue' ) ) {
+            $job = LuwiPress_Job_Queue::enqueue( 'content_generation', array(
+                'chunks' => array( $post_id ),
+                'meta'   => array( 'task' => $task, 'options' => $options, 'lock' => $lock ),
+            ) );
+            if ( is_wp_error( $job ) ) {
+                delete_transient( $lock );
+                return $job;
+            }
+            return rest_ensure_response( array(
+                'status'  => 'queued',
+                'post_id' => $post_id,
+                'task'    => $task,
+                'job_id'  => $job['job_id'],
+            ) );
+        }
+
+        // Fallback (queue class unavailable): run inline.
+        $result = $this->generate_for_post( $post, $task, $options );
+
+        delete_transient( $lock );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+        return rest_ensure_response( array(
+            'status'         => 'done',
+            'post_id'        => $post_id,
+            'task'           => $task,
+            'updated_fields' => $result['updated_fields'],
+            'preview'        => $result['preview'],
+        ) );
+    }
+
+    /**
+     * Run a single generation task for a post and persist the result.
+     *
+     * @param WP_Post $post
+     * @param string  $task
+     * @param array   $options
+     * @return array|WP_Error { updated_fields:string[], preview:array }
+     */
+    private function generate_for_post( $post, $task, $options ) {
+        $data    = $this->build_generic_post_data( $post );
+        $updated = array();
+        $preview = array();
+
+        if ( 'faq' === $task ) {
+            $prompt   = LuwiPress_Prompts::aeo_faq( $data, $options );
+            $messages = LuwiPress_AI_Engine::build_messages( $prompt );
+            $ai       = LuwiPress_AI_Engine::dispatch_json( 'aeo-faq-generic', $messages, array( 'max_tokens' => 1400 ) );
+            if ( is_wp_error( $ai ) ) {
+                return $ai;
+            }
+            $faq = $ai['faqs'] ?? $ai['faq'] ?? ( ( is_array( $ai ) && isset( $ai[0] ) ) ? $ai : array() );
+            if ( empty( $faq ) ) {
+                return new WP_Error( 'empty_result', 'AI returned no FAQ items.', array( 'status' => 502 ) );
+            }
+            update_post_meta( $post->ID, '_luwipress_faq', $this->sanitize_faq( $faq ) );
+            update_post_meta( $post->ID, '_luwipress_aeo_faq_status', 'completed' );
+            $updated[]            = 'faq';
+            $preview['faq_count'] = count( $faq );
+            return array( 'updated_fields' => $updated, 'preview' => $preview );
+        }
+
+        if ( 'howto' === $task ) {
+            $prompt   = LuwiPress_Prompts::aeo_howto( $data, $options );
+            $messages = LuwiPress_AI_Engine::build_messages( $prompt );
+            $ai       = LuwiPress_AI_Engine::dispatch_json( 'aeo-howto-generic', $messages, array( 'max_tokens' => 1400 ) );
+            if ( is_wp_error( $ai ) ) {
+                return $ai;
+            }
+            $steps = $ai['steps'] ?? $ai['howto'] ?? array();
+            if ( empty( $steps ) ) {
+                return new WP_Error( 'empty_result', 'AI returned no HowTo steps.', array( 'status' => 502 ) );
+            }
+            update_post_meta( $post->ID, '_luwipress_howto', wp_json_encode( $ai ) );
+            $updated[]             = 'howto';
+            $preview['step_count'] = count( $steps );
+            return array( 'updated_fields' => $updated, 'preview' => $preview );
+        }
+
+        if ( 'enrich' === $task ) {
+            $prompt   = LuwiPress_Prompts::product_enrichment( $data, $options );
+            $messages = LuwiPress_AI_Engine::build_messages( $prompt );
+            $ai       = LuwiPress_AI_Engine::dispatch_json( 'content-enricher', $messages, array( 'max_tokens' => 2048 ) );
+            if ( is_wp_error( $ai ) ) {
+                update_post_meta( $post->ID, '_luwipress_enrich_status', 'failed' );
+                return $ai;
+            }
+            // No WC setter on a generic CPT — write the long copy into post_content.
+            if ( ! empty( $ai['description'] ) ) {
+                wp_update_post( array( 'ID' => $post->ID, 'post_content' => wp_kses_post( $ai['description'] ) ) );
+                $updated[] = 'description';
+            }
+            if ( ! empty( $ai['meta_title'] ) || ! empty( $ai['meta_description'] ) ) {
+                $this->write_generic_seo_meta( $post->ID, $ai );
+                $updated[] = 'seo_meta';
+            }
+            if ( ! empty( $ai['faq'] ) && is_array( $ai['faq'] ) ) {
+                update_post_meta( $post->ID, '_luwipress_faq', $this->sanitize_faq( $ai['faq'] ) );
+                $updated[] = 'faq';
+            }
+            update_post_meta( $post->ID, '_luwipress_enrich_status', 'completed' );
+            update_post_meta( $post->ID, '_luwipress_enrich_completed', current_time( 'mysql' ) );
+            $updated[]             = 'enriched';
+            $preview['meta_title'] = (string) ( $ai['meta_title'] ?? '' );
+            return array( 'updated_fields' => $updated, 'preview' => $preview );
+        }
+
+        // task === 'seo' — lean SEO-meta-only generation (no content rewrite).
+        $excerpt  = mb_substr( $data['description'], 0, 1500 );
+        $topics   = $data['categories'] ? 'Topics: ' . implode( ', ', array_slice( $data['categories'], 0, 8 ) ) . "\n" : '';
+        $messages = array(
+            array( 'role' => 'system', 'content' => 'You are an expert SEO copywriter. Respond with ONLY a JSON object, no prose, no code fences.' ),
+            array( 'role' => 'user', 'content' =>
+                "Write SEO metadata for this page. Title <= 60 characters, description <= 155 characters, compelling and accurate to the content.\n\n" .
+                'Page title: ' . $data['name'] . "\n" . $topics . "\nContent:\n" . $excerpt . "\n\n" .
+                'Return JSON exactly: {"meta_title":"...","meta_description":"...","focus_keyword":"..."}',
+            ),
+        );
+        $ai = LuwiPress_AI_Engine::dispatch_json( 'seo-meta', $messages, array( 'max_tokens' => 400 ) );
+        if ( is_wp_error( $ai ) ) {
+            return $ai;
+        }
+        if ( empty( $ai['meta_title'] ) && empty( $ai['meta_description'] ) ) {
+            return new WP_Error( 'empty_result', 'AI returned no SEO metadata.', array( 'status' => 502 ) );
+        }
+        $this->write_generic_seo_meta( $post->ID, $ai );
+        if ( ! empty( $ai['meta_title'] ) ) {
+            $updated[] = 'meta_title';
+        }
+        if ( ! empty( $ai['meta_description'] ) ) {
+            $updated[] = 'meta_description';
+        }
+        $preview['meta_title']       = (string) ( $ai['meta_title'] ?? '' );
+        $preview['meta_description'] = (string) ( $ai['meta_description'] ?? '' );
+        return array( 'updated_fields' => $updated, 'preview' => $preview );
+    }
+
+    /**
+     * Build a generic content context from any post: title, content, excerpt,
+     * and every taxonomy term it carries (used as "categories" for the prompt).
+     *
+     * @param WP_Post $post
+     * @return array
+     */
+    private function build_generic_post_data( $post ) {
+        $cats = array();
+        foreach ( get_object_taxonomies( $post->post_type ) as $tx ) {
+            $names = wp_get_post_terms( $post->ID, $tx, array( 'fields' => 'names' ) );
+            if ( ! is_wp_error( $names ) && $names ) {
+                $cats = array_merge( $cats, $names );
+            }
+        }
+        return array(
+            'name'              => get_the_title( $post ),
+            'description'       => wp_strip_all_tags( (string) $post->post_content ),
+            'short_description' => (string) $post->post_excerpt,
+            'price'             => '',
+            'sku'               => '',
+            'categories'        => array_values( array_unique( $cats ) ),
+            'tags'              => array(),
+            'attributes'        => array(),
+        );
+    }
+
+    /**
+     * Write AI-generated SEO meta (title/description/focus keyword) through the
+     * Plugin Detector, honouring the same length/CTA constraints as product
+     * enrichment. Keyed by post ID, so it works for any post type.
+     *
+     * @param int   $post_id
+     * @param array $ai
+     */
+    private function write_generic_seo_meta( $post_id, $ai ) {
+        $detector  = LuwiPress_Plugin_Detector::get_instance();
+        $title_max = absint( get_option( 'luwipress_enrich_meta_title_max', 60 ) );
+        $desc_max  = absint( get_option( 'luwipress_enrich_meta_desc_max', 160 ) );
+        $desc_cta  = trim( (string) get_option( 'luwipress_enrich_meta_desc_cta', '' ) );
+
+        $seo = array();
+        if ( ! empty( $ai['meta_title'] ) ) {
+            $seo['title'] = self::trim_meta( (string) $ai['meta_title'], $title_max );
+        }
+        if ( ! empty( $ai['meta_description'] ) ) {
+            $desc = (string) $ai['meta_description'];
+            if ( '' !== $desc_cta && false === mb_stripos( $desc, $desc_cta ) ) {
+                $body = self::trim_meta( $desc, max( 0, $desc_max - ( mb_strlen( $desc_cta ) + 1 ) ) );
+                $desc = rtrim( $body ) . ' ' . $desc_cta;
+            }
+            $seo['description'] = self::trim_meta( $desc, $desc_max );
+        }
+        if ( ! empty( $ai['focus_keyword'] ) ) {
+            $seo['focus_keyword'] = sanitize_text_field( (string) $ai['focus_keyword'] );
+        }
+        if ( $seo ) {
+            $detector->set_seo_meta( $post_id, $seo );
+        }
     }
 
     // ─── SCHEMA endpoint ────────────────────────────────────────────────
@@ -738,6 +1003,38 @@ class LuwiPress_AI_Content {
             return array( 'sent' => 1, 'saved' => 0, 'errors' => array( $result->get_error_message() ) );
         }
         return array( 'sent' => 1, 'saved' => 1, 'errors' => array() );
+    }
+
+    /**
+     * Job Queue worker: run ONE generic content-generation task (seo / enrich /
+     * faq / howto) for any post type. Releases the per-task dedup lock the REST
+     * handler set before enqueueing.
+     *
+     * @param mixed  $chunk_payload Post ID or array with 'post_id'.
+     * @param array  $meta          'task', 'options', 'lock'.
+     * @param string $job_id
+     * @return array
+     */
+    public function jq_generate_content( $chunk_payload, $meta, $job_id ) {
+        $post_id = absint( is_array( $chunk_payload ) ? ( $chunk_payload['post_id'] ?? 0 ) : $chunk_payload );
+        $task    = isset( $meta['task'] ) ? sanitize_key( $meta['task'] ) : 'seo';
+        $options = isset( $meta['options'] ) && is_array( $meta['options'] ) ? $meta['options'] : array();
+        $lock    = isset( $meta['lock'] ) ? (string) $meta['lock'] : '';
+
+        $post = $post_id ? get_post( $post_id ) : null;
+        if ( ! $post ) {
+            if ( $lock ) { delete_transient( $lock ); }
+            return array( 'sent' => 0, 'saved' => 0, 'errors' => array( 'post ' . $post_id . ' not found' ) );
+        }
+
+        $result = $this->generate_for_post( $post, $task, $options );
+        if ( $lock ) { delete_transient( $lock ); }
+
+        if ( is_wp_error( $result ) ) {
+            return array( 'sent' => 1, 'saved' => 0, 'errors' => array( $result->get_error_message() ) );
+        }
+        $saved = ! empty( $result['updated_fields'] ) ? 1 : 0;
+        return array( 'sent' => 1, 'saved' => $saved, 'errors' => array() );
     }
 
     /**

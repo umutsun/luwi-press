@@ -15,6 +15,22 @@ if ( ! current_user_can( 'manage_options' ) ) {
 	wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'luwipress' ) );
 }
 
+// Resolve the catalog source. On a CPT-driven site (no WooCommerce products)
+// the catalog tab/card take the CPT's own label and the WooCommerce-only views
+// (Revenue, Customers) hide — generic, driven by the CPT Engine registry.
+$kg_ctx = null;
+if ( class_exists( 'LuwiPress_Knowledge_Graph' ) ) {
+	$kg_inst = LuwiPress_Knowledge_Graph::get_instance();
+	if ( method_exists( $kg_inst, 'get_catalog_context' ) ) {
+		$kg_ctx = $kg_inst->get_catalog_context();
+	}
+}
+if ( ! is_array( $kg_ctx ) ) {
+	$kg_ctx = array( 'mode' => 'wc' );
+}
+$kg_is_cpt        = ( 'cpt' === ( $kg_ctx['mode'] ?? 'wc' ) );
+$kg_catalog_label = ! empty( $kg_ctx['label_plural'] ) ? $kg_ctx['label_plural'] : __( 'Products', 'luwipress' );
+
 // JS + config injection handled by admin_enqueue_scripts ('luwipress-knowledge-graph' handle).
 ?>
 
@@ -59,7 +75,15 @@ if ( ! current_user_can( 'manage_options' ) ) {
 						<button type="button" class="kg-dropdown-item" data-preset="high_opportunity"><?php esc_html_e( 'High opportunity', 'luwipress' ); ?></button>
 					</div>
 				</div>
-				<div class="kg-dropdown" id="kg-export-dd">
+				<div class="kg-dropdown" id="kg-groupby-dd" hidden>
+						<button type="button" class="kg-btn kg-btn-outline" id="kg-groupby-trigger" aria-haspopup="true">
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 6h-5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h5"/></svg>
+							<?php esc_html_e( 'Group by', 'luwipress' ); ?>
+							<span class="kg-preset-label" id="kg-groupby-label"><?php esc_html_e( 'None', 'luwipress' ); ?></span>
+						</button>
+						<div class="kg-dropdown-menu" id="kg-groupby-menu" hidden></div>
+					</div>
+					<div class="kg-dropdown" id="kg-export-dd">
 					<button type="button" class="kg-btn kg-btn-outline" id="kg-export-trigger" aria-haspopup="true">
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 						<?php esc_html_e( 'Export', 'luwipress' ); ?>
@@ -81,7 +105,7 @@ if ( ! current_user_can( 'manage_options' ) ) {
 				<div class="kg-view-switch">
 					<button type="button" class="kg-view-btn active" data-view="product">
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-						<?php esc_html_e( 'Products', 'luwipress' ); ?>
+						<?php echo esc_html( $kg_catalog_label ); ?>
 					</button>
 					<button type="button" class="kg-view-btn" data-view="post">
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -91,14 +115,18 @@ if ( ! current_user_can( 'manage_options' ) ) {
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
 						<?php esc_html_e( 'Pages', 'luwipress' ); ?>
 					</button>
+					<?php if ( ! $kg_is_cpt ) : // Customers view is WooCommerce-order driven; hide on CPT-driven sites. ?>
 					<button type="button" class="kg-view-btn" data-view="customer">
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 						<?php esc_html_e( 'Customers', 'luwipress' ); ?>
 					</button>
+					<?php endif; ?>
+					<?php if ( ! $kg_is_cpt && class_exists( 'LuwiPress_Vendors' ) && LuwiPress_Vendors::is_available() ) : // Vendors view is WC-attribution driven; hide on CPT-driven / WC-less sites (overrides any force-enable). ?>
 					<button type="button" class="kg-view-btn" data-view="vendor">
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 7h20l-1.5 11a2 2 0 0 1-2 1.7H5.5a2 2 0 0 1-2-1.7Z"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><circle cx="9" cy="13" r="1.5"/><circle cx="15" cy="13" r="1.5"/></svg>
 						<?php esc_html_e( 'Vendors', 'luwipress' ); ?>
 					</button>
+					<?php endif; ?>
 				</div>
 			</div>
 		</div>
@@ -111,6 +139,7 @@ if ( ! current_user_can( 'manage_options' ) ) {
 	<div class="kg-hero-detail-wrap" id="kg-hero-detail" hidden>
 		<p class="kg-hero-subtitle" id="kg-hero-subtitle"><?php esc_html_e( 'Weighted average across content, translation, design, and media metrics.', 'luwipress' ); ?></p>
 		<div class="kg-hero-meta" id="kg-hero-meta"></div>
+		<div class="kg-hero-next" id="kg-hero-next" hidden></div>
 		<div class="kg-achievements" id="kg-achievements"></div>
 	</div>
 
@@ -118,7 +147,7 @@ if ( ! current_user_can( 'manage_options' ) ) {
 	<div class="kg-stats" id="kg-stats">
 		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-products" data-view="product" data-preset="all">
 			<div class="kg-stat-value" data-counter="total_products">—</div>
-			<div class="kg-stat-label"><?php esc_html_e( 'Products', 'luwipress' ); ?></div>
+			<div class="kg-stat-label"><?php echo esc_html( $kg_catalog_label ); ?></div>
 			<div class="kg-stat-cue"><?php esc_html_e( 'Show all →', 'luwipress' ); ?></div>
 		</div>
 		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-posts" data-view="post" data-preset="all">
@@ -151,11 +180,13 @@ if ( ! current_user_can( 'manage_options' ) ) {
 			<div class="kg-stat-label"><?php esc_html_e( 'Plugin Health', 'luwipress' ); ?></div>
 			<div class="kg-stat-cue"><?php esc_html_e( 'View details →', 'luwipress' ); ?></div>
 		</div>
+		<?php if ( ! $kg_is_cpt ) : // WooCommerce revenue — hide on CPT-driven sites. ?>
 		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-revenue">
 			<div class="kg-stat-value" data-counter="revenue_30d">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( '30-Day Revenue', 'luwipress' ); ?></div>
 			<div class="kg-stat-cue"><?php esc_html_e( 'View analytics →', 'luwipress' ); ?></div>
 		</div>
+		<?php endif; ?>
 		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-taxonomy">
 			<div class="kg-stat-value" data-counter="taxonomy_coverage">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Taxonomy Coverage', 'luwipress' ); ?></div>
@@ -166,16 +197,20 @@ if ( ! current_user_can( 'manage_options' ) ) {
 			<div class="kg-stat-label"><?php esc_html_e( 'Media Health', 'luwipress' ); ?></div>
 			<div class="kg-stat-cue"><?php esc_html_e( 'View library →', 'luwipress' ); ?></div>
 		</div>
+		<?php if ( ! $kg_is_cpt ) : // WooCommerce vendor attribution — hide on CPT-driven / WC-less sites. ?>
 		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-vendors" data-view="vendor">
 			<div class="kg-stat-value" data-counter="total_vendors">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Vendors', 'luwipress' ); ?></div>
 			<div class="kg-stat-cue"><?php esc_html_e( 'View x-ray →', 'luwipress' ); ?></div>
 		</div>
+		<?php endif; ?>
+		<?php if ( ! $kg_is_cpt ) : // WooCommerce customers — hide on CPT-driven sites. ?>
 		<div class="kg-stat kg-stat-skeleton kg-stat-clickable" id="kg-stat-customers" data-view="customer">
 			<div class="kg-stat-value" data-counter="total_customers">—</div>
 			<div class="kg-stat-label"><?php esc_html_e( 'Customers', 'luwipress' ); ?></div>
 			<div class="kg-stat-cue"><?php esc_html_e( 'View detail →', 'luwipress' ); ?></div>
 		</div>
+		<?php endif; ?>
 	</div>
 
 	<!-- Graph Canvas -->

@@ -236,7 +236,10 @@ function markHeavyCardsSkeleton(on) {
 
 // ── Current view state ──
 var _kgCurrentView = 'product'; // 'product' | 'post' | 'page'
+var _kgExpanded = {}; // catalog_hub id → bool (operator expand/collapse overrides)
+var _kgCatalogMode = 'wc'; // 'wc' | 'cpt' — routes per-item AI actions to the right endpoints
 var _kgCurrentPreset = 'all';   // 'all' | 'needs_seo' | 'not_enriched' | 'thin_content' | 'translation_backlog' | 'high_opportunity'
+var _kgGroupBy = null;          // null = auto-resolve; else a taxonomy slug, 'posttype', or 'none'. Clusters the product/projects view into collapsible hubs.
 
 // ── Layout persistence (P3 #20) ─────────────────────────────────
 // User-dragged node positions are stored per view in localStorage so the
@@ -357,6 +360,115 @@ function buildGraph(data, viewFilter) {
 		segmentNodes = [];
 		vendorNodes = [];
 		customerNodes = [];
+
+		// ── Catalog clustering ──────────────────────────────────────────────
+		// A large catalog collapses into clickable hubs instead of rendering as
+		// a hairball. The grouping dimension is generic (see kgResolveGroupBy):
+		//   • by taxonomy  — one hub per term of the chosen taxonomy (any CPT)
+		//   • by post type — one hub per type (multi-type CPT catalogs)
+		//   • none         — flat (small catalogs / operator override)
+		// Operators pick the dimension via the header "Group by" selector.
+		var catTypes = (data.catalog && data.catalog.types) ? data.catalog.types : [];
+		var AUTO_EXPAND_MAX = 40;
+		var groupMode = kgResolveGroupBy(productNodes.length, catTypes);
+
+		if (groupMode !== 'none' && groupMode !== 'posttype') {
+			// ── Group by taxonomy ──
+			// One collapsible hub per term of the active taxonomy. Hub labels show
+			// the TRUE published count from data.catalog.taxonomies[].terms, so a
+			// SAMPLED catalog still reports real totals (e.g. "Completed (2,500)")
+			// rather than just how many landed in the loaded sample. The loaded
+			// sample products are attached to their hubs for rendering; a hub with
+			// no loaded sample still appears (true count) and expands to nothing
+			// until more is loaded. Large catalogs start every hub collapsed.
+			var taxEntry = null;
+			var taxList = (data.catalog && data.catalog.taxonomies) || [];
+			for (var _ti = 0; _ti < taxList.length; _ti++) {
+				if (taxList[_ti].taxonomy === groupMode) { taxEntry = taxList[_ti]; break; }
+			}
+			var trueTerms = (taxEntry && taxEntry.terms) || [];
+			var termIdSet = {};
+			trueTerms.forEach(function(t){ termIdSet[t.id] = true; });
+
+			// Bucket the loaded sample products by their term(s) in this taxonomy.
+			var sampleByTerm = {}; // term_id → [sample products]
+			var uncategorized = [];
+			productNodes.forEach(function(p) {
+				var pTerms = (p.categories || []).filter(function(cid){ return termIdSet[cid]; });
+				if (pTerms.length === 0) { uncategorized.push(p); return; }
+				pTerms.forEach(function(cid) {
+					if (!sampleByTerm[cid]) sampleByTerm[cid] = [];
+					sampleByTerm[cid].push(p);
+				});
+			});
+
+			// "Large" = true total across terms exceeds the auto-expand cap →
+			// start every hub collapsed so the default view is just the hubs.
+			var trueTotal = trueTerms.reduce(function(s, t){ return s + (t.count || 0); }, 0);
+			var keptProducts = [];
+			var keptIds = {};
+			var pushTaxHub = function(hubId, name, termId, trueCount, items) {
+				var defaultOpen = (trueTotal <= AUTO_EXPAND_MAX) ? (trueCount <= AUTO_EXPAND_MAX) : false;
+				var isOpen = (_kgExpanded[hubId] !== undefined) ? _kgExpanded[hubId] : defaultOpen;
+				var hub = {
+					id: hubId,
+					type: 'catalog_hub',
+					label: (isOpen ? '▾ ' : '▸ ') + name + ' (' + (trueCount || 0).toLocaleString() + ')',
+					radius: 20 + Math.min(Math.sqrt(trueCount || 1) * 1.4, 28),
+					score: trueCount,
+					data: { taxonomy: groupMode, term_id: termId, label: name, count: trueCount, shown: items.length, expanded: isOpen }
+				};
+				nodes.push(hub);
+				nodeMap[hubId] = hub;
+				if (isOpen) {
+					items.forEach(function(p) {
+						if (!keptIds[p.id]) { keptProducts.push(p); keptIds[p.id] = true; }
+						edges.push({ source: 'product:' + p.id, target: hubId, type: 'in_catalog' });
+					});
+				}
+			};
+			// One hub per true term (backend returns them sorted by count desc).
+			trueTerms.forEach(function(t) {
+				pushTaxHub('taxhub:' + groupMode + ':' + t.id, t.name || 'Untitled', t.id, t.count || 0, sampleByTerm[t.id] || []);
+			});
+			if (uncategorized.length > 0) {
+				// No DB-true count for "no term in this taxonomy" — label with the
+				// loaded sample count (rare; most items carry a term).
+				pushTaxHub('taxhub:' + groupMode + ':none', '(Uncategorized)', 0, uncategorized.length, uncategorized);
+			}
+			productNodes = keptProducts;
+			categoryNodes = []; // term-hubs replace standalone category nodes in this mode
+		} else if (groupMode === 'posttype' && catTypes.length > 1) {
+			// ── Group by post type (multi-type CPT catalog) ──
+			var keptProductsPT = [];
+			catTypes.forEach(function(t) {
+				var hubId = 'cathub:' + t.post_type;
+				var typeItems = productNodes.filter(function(p){ return (p.post_type || 'product') === t.post_type; });
+				var isOpen = (_kgExpanded[hubId] !== undefined) ? _kgExpanded[hubId] : (typeItems.length <= AUTO_EXPAND_MAX);
+				var hub = {
+					id: hubId,
+					type: 'catalog_hub',
+					label: (isOpen ? '▾ ' : '▸ ') + (t.label || t.post_type) + ' (' + (t.count || typeItems.length) + ')',
+					radius: 22 + Math.min(Math.sqrt(t.count || typeItems.length) * 1.3, 26),
+					score: t.count || typeItems.length,
+					data: { post_type: t.post_type, label: t.label, count: t.count, shown: typeItems.length, expanded: isOpen }
+				};
+				nodes.push(hub);
+				nodeMap[hubId] = hub;
+				if (isOpen) {
+					typeItems.forEach(function(p){
+						keptProductsPT.push(p);
+						edges.push({ source: 'product:' + p.id, target: hubId, type: 'in_catalog' });
+					});
+				}
+			});
+			productNodes = keptProductsPT;
+			// Keep only categories referenced by a currently-shown item.
+			var keepCat = {};
+			keptProductsPT.forEach(function(p){ (p.categories || []).forEach(function(cid){ keepCat[cid] = true; }); });
+			categoryNodes = categoryNodes.filter(function(c){ return keepCat[c.id]; });
+		}
+		// groupMode === 'none' → render flat (no clustering).
 	} else if (viewFilter === 'page') {
 		productNodes = [];
 		categoryNodes = [];
@@ -407,6 +519,12 @@ function buildGraph(data, viewFilter) {
 		languageNodes = [];
 		segmentNodes = [];
 		customerNodes = [];
+		// With zero vendors there are no made_by targets, so the whole catalog
+		// would render as a cloud of unanchored circles ("products under vendors").
+		// Drop it — an empty-state placeholder node is added below instead.
+		if (vendorNodes.length === 0) {
+			productNodes = [];
+		}
 	} else if (viewFilter === 'post') {
 		productNodes = [];
 		categoryNodes = [];
@@ -442,6 +560,7 @@ function buildGraph(data, viewFilter) {
 		var node = {
 			id: 'product:' + p.id,
 			type: 'product',
+			post_type: p.post_type || 'product',
 			label: p.name,
 			radius: 6 + Math.min(p.opportunity_score / 5, 14),
 			score: p.opportunity_score,
@@ -681,6 +800,22 @@ function buildGraph(data, viewFilter) {
 		};
 		nodes.push(vHub);
 		nodeMap[vendorHubId] = vHub;
+	} else if (viewFilter === 'vendor') {
+		// No vendors yet — show a centered empty-state placeholder instead of a
+		// cloud of unanchored products. (Vendors module is WC-gated; the view tab
+		// itself is hidden on WC-less sites in knowledge-graph-page.php.)
+		var vEmpty = {
+			id: 'vendor_empty',
+			type: 'vendor_empty',
+			label: 'No vendors yet — add a maker, then attribute products to it',
+			radius: 28,
+			score: 0,
+			_hub: true,
+			x: width / 2,  y: height / 2,
+			fx: width / 2, fy: height / 2
+		};
+		nodes.push(vEmpty);
+		nodeMap[vEmpty.id] = vEmpty;
 	}
 	(vendorNodes).forEach(function(v) {
 		var r = 8 + Math.min((v.product_count || 0), 10); // 8..18 depending on attribution count
@@ -730,10 +865,29 @@ function buildGraph(data, viewFilter) {
 		}
 	});
 
+	// Vendor view: keep only products attributed to a vendor (those with a
+	// made_by edge). Unattributed products otherwise float free and read as
+	// "products under vendors". Splice in place + drop orphaned edges so d3's
+	// forceLink never references a removed node (which would throw).
+	if (viewFilter === 'vendor' && vendorNodes.length > 0) {
+		var _attributedProducts = {};
+		edges.forEach(function(e) { if (e.type === 'made_by') { _attributedProducts[e.source] = true; } });
+		for (var _i = nodes.length - 1; _i >= 0; _i--) {
+			if (nodes[_i].type === 'product' && !_attributedProducts[nodes[_i].id]) {
+				delete nodeMap[nodes[_i].id];
+				nodes.splice(_i, 1);
+			}
+		}
+		for (var _j = edges.length - 1; _j >= 0; _j--) {
+			if (!nodeMap[edges[_j].source] || !nodeMap[edges[_j].target]) { edges.splice(_j, 1); }
+		}
+	}
+
 	// Color scale
 	function nodeColor(d) {
 		if (d.type === 'segment_hub') return '#6366f1'; // indigo — the central customer hub
 		if (d.type === 'page_hub')    return '#0ea5e9'; // sky — pages hub
+		if (d.type === 'catalog_hub') return (d.data && d.data.expanded) ? '#7c3aed' : '#a78bfa'; // violet — catalog post-type hub (lighter when collapsed)
 		if (d.type === 'category') return '#f59e0b';
 		if (d.type === 'language') return '#2563eb';
 		if (d.type === 'post') {
@@ -766,6 +920,7 @@ function buildGraph(data, viewFilter) {
 			if (d.score > 15) return '#f59e0b';
 			return '#6366f1';
 		}
+		if (d.type === 'vendor_empty') return '#94a3b8'; // slate — neutral empty state
 		if (d.type === 'vendor' || d.type === 'vendor_hub') {
 			// Tint by E-E-A-T score so weak vendor profiles stand out.
 			var ve = Number(d.score || 0);
@@ -952,7 +1107,7 @@ function buildGraph(data, viewFilter) {
 		// the node is hovered so the canvas isn't a wall of text.
 		var base = 'kg-label';
 		if (d.type === 'category' || d.type === 'language' || d.type === 'segment' ||
-			d.type === 'segment_hub' || d.type === 'page_hub') {
+			d.type === 'segment_hub' || d.type === 'page_hub' || d.type === 'catalog_hub') {
 			return base + ' kg-label-anchor';
 		}
 		if (d.type === 'post' || d.type === 'page') {
@@ -1049,7 +1204,13 @@ function buildGraph(data, viewFilter) {
 	})
 	.on('click', function(event, d) {
 		event.stopPropagation();
-		// Hubs are visual anchors only — clicking them opens nothing (the
+		// Catalog hubs toggle their cluster open/closed in place.
+		if (d.type === 'catalog_hub') {
+			_kgExpanded[d.id] = !(d.data && d.data.expanded);
+			if (_kgData) buildGraph(_kgData);
+			return;
+		}
+		// Other hubs are visual anchors only — clicking them opens nothing (the
 		// tooltip already explains what they are).
 		if (d.type === 'segment_hub' || d.type === 'page_hub') return;
 		showDetailPanel(d);
@@ -1198,7 +1359,8 @@ function buildTooltip(d) {
 	} else if (d.type === 'vendor') {
 		var vt = d.data || {};
 		h += '<div class="kg-tt-row">E-E-A-T: <b>' + Number(vt.eat_score != null ? vt.eat_score : (d.score || 0)) + '</b></div>';
-		h += '<div class="kg-tt-row">Products: ' + Number(vt.product_count || 0) + '</div>';
+		var vtNoun = vt.attributed_label ? (vt.attributed_label.charAt(0).toUpperCase() + vt.attributed_label.slice(1)) : 'Products';
+		h += '<div class="kg-tt-row">' + vtNoun + ': ' + Number(vt.attributed_count != null ? vt.attributed_count : (vt.product_count || 0)) + '</div>';
 		if (vt.specialty) h += '<div class="kg-tt-row">Specialty: ' + escHtml(vt.specialty) + '</div>';
 	} else if (d.type === 'vendor_hub') {
 		h += '<div class="kg-tt-row">Vendor directory — click a vendor for their profile.</div>';
@@ -1268,9 +1430,9 @@ function showDetailPanel(d) {
 			var miss = [];
 			if (!p.seo.has_title) miss.push('title');
 			if (!p.seo.has_description) miss.push('description');
-			recs.push({a:'enrich', l:'Optimize SEO', d:'Missing ' + miss.join(' & '), p:'high'});
+			recs.push({a:'seo', l:'Optimize SEO', d:'Missing ' + miss.join(' & '), p:'high'});
 		} else if (!p.seo.has_focus_kw) {
-			recs.push({a:'enrich', l:'Add Focus Keyword', d:'SEO meta OK, keyword missing', p:'medium'});
+			recs.push({a:'seo', l:'Add Focus Keyword', d:'SEO meta OK, keyword missing', p:'medium'});
 		}
 		if (p.enrichment.status !== 'completed') recs.push({a:'enrich', l:'AI Enrichment', d:'Generate rich product content', p:'high'});
 		if (!p.aeo.has_faq) recs.push({a:'faq', l:'Generate FAQ', d:'Rich snippets in search results', p:'medium'});
@@ -1350,7 +1512,7 @@ function showDetailPanel(d) {
 			var miss = [];
 			if (!p.seo || !p.seo.has_title) miss.push('title');
 			if (!p.seo || !p.seo.has_description) miss.push('description');
-			recs.push({ p: 'high', l: 'Add SEO Meta', d: 'Missing ' + miss.join(' & ') + ' — edit post to add', link: editUrl });
+			recs.push({ p: 'high', a: 'seo', l: 'Generate SEO Meta', d: 'AI writes the missing ' + miss.join(' & ') });
 		}
 		var missingPostLangs = [];
 		langKeys.forEach(function(l) { if (trans[l] !== 'completed') missingPostLangs.push(l); });
@@ -1709,13 +1871,16 @@ function showDetailPanel(d) {
 	} else if (d.type === 'vendor') {
 		var v = d.data || {};
 		var eat = Number(v.eat_score != null ? v.eat_score : (d.score || 0));
-		var pc = Number(v.product_count || 0);
+		var pc = Number(v.attributed_count != null ? v.attributed_count : (v.product_count || 0));
+		var attrNoun  = v.attributed_label || 'products';
+		var attrNoun1 = v.attributed_label_one || 'product';
+		var attrNounCap = attrNoun.charAt(0).toUpperCase() + attrNoun.slice(1);
 		var eatCls = eat >= 70 ? 'good' : eat >= 40 ? 'warn' : 'bad';
 		var entityLabel = (v.entity_type === 'person') ? 'Person' : (v.entity_type === 'localbusiness') ? 'Local Business' : 'Organization';
 
 		h += '<div class="kg-p-type-badge" style="background:#0d9488;color:#fff">Vendor &middot; ' + entityLabel + '</div>';
 		h += '<h3 class="kg-p-name">' + escHtml(d.label || v.name || 'Vendor') + '</h3>';
-		h += '<div class="kg-p-meta">' + pc + (pc === 1 ? ' product' : ' products') + ' attributed</div>';
+		h += '<div class="kg-p-meta">' + pc + ' ' + (pc === 1 ? attrNoun1 : attrNoun) + ' attributed</div>';
 
 		h += '<div class="kg-p-health kg-h-' + eatCls + '">';
 		h += '<div class="kg-p-health-bar" style="width:' + Math.min(100, eat) + '%"></div>';
@@ -1723,7 +1888,7 @@ function showDetailPanel(d) {
 
 		// Profile stats
 		h += '<div class="kg-p-section"><div class="kg-p-section-title">Profile</div>';
-		h += '<div class="kg-p-stat-row"><span>Products</span><strong>' + pc + '</strong></div>';
+		h += '<div class="kg-p-stat-row"><span>' + attrNounCap + '</span><strong>' + pc + '</strong></div>';
 		if (v.specialty)  h += '<div class="kg-p-stat-row"><span>Specialty</span><strong>' + escHtml(v.specialty) + '</strong></div>';
 		if (v.location)   h += '<div class="kg-p-stat-row"><span>Location</span><strong>' + escHtml(v.location) + '</strong></div>';
 		if (v.occupation) h += '<div class="kg-p-stat-row"><span>Role</span><strong>' + escHtml(v.occupation) + '</strong></div>';
@@ -1733,7 +1898,7 @@ function showDetailPanel(d) {
 		// Recommendations — E-E-A-T leverage points
 		var vRecs = [];
 		if (pc === 0) {
-			vRecs.push({ p: 'high', l: 'Attribute products', d: 'No products link to this vendor yet. Tick the Vendor box on a product to build the supply graph.' });
+			vRecs.push({ p: 'high', l: 'Attribute ' + attrNoun, d: 'No ' + attrNoun + ' link to this vendor yet — attribute items so it anchors the supply graph.' });
 		}
 		if (eat < 70) {
 			vRecs.push({ p: 'medium', l: 'Strengthen E-E-A-T profile', d: 'Add bio, portrait, location, specialty and verified social links to lift the authority score.' });
@@ -1991,7 +2156,10 @@ function updateStats(data, phase) {
 	}
 
 	var stats = {
-		total_products: summary.total_products || 0,
+		// Headline = TRUE catalog total (total_products_all). The graph renders a
+		// capped sample, but the stat card + the hero "fix N products" CTA should
+		// reflect the real backlog. Falls back to the sample on older backends.
+		total_products: summary.total_products_all || summary.total_products || 0,
 		total_posts: summary.total_posts || 0,
 		seo_coverage: summary.seo_coverage || 0,
 		enrichment_coverage: summary.enrichment_coverage || 0,
@@ -2054,6 +2222,27 @@ function updateStats(data, phase) {
 		}
 		animateCounter(el, Math.round(stats[key]), suffix);
 	});
+
+	// Sampled-catalog hint: when the graph loaded fewer products than the store
+	// actually has, the headline shows the true total and this cue says how many
+	// are visualised — so "120 of 3,777" reads as intentional, not a wrong count.
+	var prodCard = document.getElementById('kg-stat-products');
+	if (prodCard) {
+		var prodCue = prodCard.querySelector('.kg-stat-cue');
+		if (prodCue) {
+			var shownN = (summary.products_shown != null)
+				? summary.products_shown
+				: ((data.nodes && data.nodes.products) ? data.nodes.products.length : 0);
+			var allN = summary.total_products_all || summary.total_products || 0;
+			if (allN > shownN && shownN > 0) {
+				prodCue.textContent = shownN.toLocaleString() + ' of ' + allN.toLocaleString() + ' shown';
+				prodCard.title = 'The graph renders the ' + shownN.toLocaleString() + ' most recent of ' + allN.toLocaleString() + ' for readability. Counts reflect the full catalog.';
+			} else {
+				prodCue.textContent = 'Show all →';
+				prodCard.removeAttribute('title');
+			}
+		}
+	}
 }
 
 // ── Store Health Hero ──
@@ -2133,49 +2322,116 @@ function renderStoreHealthHero(stats, summary) {
 	// Qualitative subtitle matching the band, so the operator sees a
 	// direction ("you're on track" vs "needs attention"), not just a number.
 	if (subtitleEl) {
+		// One-line verdict for the band. The visual breakdown below shows the
+		// weakest dimension, so we don't repeat "fix SEO" in prose here.
 		var msg = 'Weighted across content, translation, design, and media.';
-		if (score >= 80) msg = 'Your store is in solid shape — keep closing the small gaps to hit 100%.';
-		else if (score >= 50) msg = 'Decent foundation with room to grow. Target the weakest dimension below first.';
-		else msg = 'Significant gaps across several dimensions. Start with the highest-weight weakness (SEO or enrichment).';
+		if (score >= 80) msg = 'Your store is in solid shape — keep closing the small gaps.';
+		else if (score >= 50) msg = 'Decent foundation with clear room to grow.';
+		else msg = 'Major gaps to close — weakest dimensions are listed first below.';
 
-		// Trend delta — appended only when we have ≥7-day history. Positive
-		// SEO/enrichment movement or dropping opportunity count is progress.
+		// Trend delta — appended only when we have ≥2 history points. Uses a
+		// SEPARATE array (trendParts), NOT `parts`: `parts` holds the dimension
+		// breakdown the bars below render from, and reusing the name here
+		// silently wiped the breakdown on any site with trend history.
 		var trend = summary.trend || {};
 		if (trend.points_count && trend.points_count >= 2 && trend.opportunities_delta !== null) {
-			var parts = [];
+			var trendParts = [];
 			if (trend.seo_delta !== null && Math.abs(trend.seo_delta) >= 0.1) {
-				parts.push((trend.seo_delta > 0 ? '+' : '') + trend.seo_delta + '% SEO');
+				trendParts.push((trend.seo_delta > 0 ? '+' : '') + trend.seo_delta + '% SEO');
 			}
 			if (trend.enrichment_delta !== null && Math.abs(trend.enrichment_delta) >= 0.1) {
-				parts.push((trend.enrichment_delta > 0 ? '+' : '') + trend.enrichment_delta + '% enriched');
+				trendParts.push((trend.enrichment_delta > 0 ? '+' : '') + trend.enrichment_delta + '% enriched');
 			}
 			if (trend.opportunities_delta !== 0) {
-				// Negative delta = fewer opportunities = progress.
-				var oppSign = trend.opportunities_delta > 0 ? '+' : '';
-				parts.push(oppSign + trend.opportunities_delta + ' opportunity pts');
+				// Positive delta = MORE open work surfaced this week (often a
+				// catalog import); negative = work clearing. Spell out the
+				// direction so a big "+12,368" doesn't read like a win.
+				var od = trend.opportunities_delta;
+				trendParts.push((od > 0 ? '+' : '−') + Math.abs(od).toLocaleString() +
+					' opportunity points' + (od > 0 ? ' (more to do)' : ' (clearing)'));
 			}
-			if (parts.length > 0) {
-				msg += ' · Last 7 days: ' + parts.join(', ') + '.';
+			if (trendParts.length > 0) {
+				msg += ' · This week: ' + trendParts.join(', ') + '.';
 			}
 		}
 		subtitleEl.textContent = msg;
 	}
 
-	// Breakdown chips — show the weakest dimensions first so the operator
-	// knows where one click gives them the biggest lift. Defensive: drop any
-	// chip whose label or value didn't survive the parts[] pipeline (caused
-	// "undefined NaN%" chips when a backend stat returned null/undefined and
-	// snuck past the value-only filter above).
+	// Breakdown bars — show the weakest dimensions first so the operator knows
+	// where one click gives them the biggest lift. Defensive: drop any row whose
+	// label or value didn't survive the parts[] pipeline (caused "undefined
+	// NaN%" rows when a backend stat returned null/undefined and snuck past the
+	// value-only filter above). `sorted` is reused below to drive the CTA.
+	var sorted = [];
 	if (metaEl) {
 		var renderable = parts.filter(function(p) {
 			return p && typeof p.label === 'string' && p.label.length > 0
 				&& typeof p.value === 'number' && !isNaN(p.value);
 		});
-		var sorted = renderable.slice().sort(function(a,b){ return a.value - b.value; });
+		sorted = renderable.slice().sort(function(a,b){ return a.value - b.value; });
 		metaEl.innerHTML = sorted.map(function(p) {
-			var cls = p.value >= 80 ? 'kg-h-good' : p.value >= 50 ? 'kg-h-warn' : 'kg-h-bad';
-			return '<span class="kg-hero-meta-chip"><strong>' + escHtml(p.label) + '</strong> <span class="' + cls + '">' + Math.round(p.value) + '%</span></span>';
+			var v = Math.round(p.value);
+			var band = v >= 80 ? 'kg-h-good' : v >= 50 ? 'kg-h-warn' : 'kg-h-bad';
+			return '<div class="kg-hero-dim ' + band + '">' +
+				'<span class="kg-hero-dim-label">' + escHtml(p.label) + '</span>' +
+				'<span class="kg-hero-dim-track"><span class="kg-hero-dim-fill" style="width:' + Math.max(2, v) + '%"></span></span>' +
+				'<span class="kg-hero-dim-pct">' + v + '%</span>' +
+			'</div>';
 		}).join('');
+	}
+
+	// Next action — deep-link the weakest *actionable* dimension to its preset
+	// filter so one click takes the operator to exactly the items to fix. Only
+	// dimensions with a per-item preset qualify (design/media/plugins have no
+	// product filter, so they stay visible in the breakdown but don't drive
+	// the CTA). Skip anything already ≥95% — that's effectively done.
+	var nextEl = document.getElementById('kg-hero-next');
+	if (nextEl) {
+		// Maps a dimension key → its preset filter + CTA verb. Covers BOTH key
+		// schemes: the legacy fallback (seo/enrichment/…) and the Health Score
+		// module pillars (seo_coverage/translation_health/…). Dimensions with no
+		// per-item preset (design/media/plugins/schema/brand voice) are absent on
+		// purpose — they stay in the breakdown but don't drive the CTA.
+		var presetMap = {
+			// legacy fallback keys
+			seo:                { preset: 'needs_seo',           verb: 'Fix SEO meta on' },
+			enrichment:         { preset: 'not_enriched',        verb: 'Enrich' },
+			translation:        { preset: 'translation_backlog', verb: 'Translate' },
+			taxonomy:           { preset: 'high_opportunity',    verb: 'Categorize' },
+			// Health Score module pillar keys (canonical path)
+			seo_coverage:       { preset: 'needs_seo',           verb: 'Fix SEO meta on' },
+			translation_health: { preset: 'translation_backlog', verb: 'Translate' },
+			content_depth:      { preset: 'thin_content',        verb: 'Expand' }
+		};
+		var actionable = sorted.filter(function(p) { return presetMap[p.key] && p.value < 95; });
+		if (actionable.length > 0) {
+			var w = actionable[0];
+			var m = presetMap[w.key];
+			var ctaText;
+			if (m.preset === 'translation_backlog') {
+				ctaText = 'Clear translation backlog';
+			} else {
+				var total = stats.total_products || 0;
+				var miss = Math.max(0, Math.round(total * (100 - w.value) / 100));
+				ctaText = m.verb + (miss > 0 ? ' ~' + miss.toLocaleString() + ' products' : ' products');
+			}
+			nextEl.innerHTML = '<button type="button" class="kg-hero-next-btn" data-preset="' + m.preset + '">→ ' + escHtml(ctaText) + '</button>';
+			nextEl.hidden = false;
+			var ctaBtn = nextEl.querySelector('.kg-hero-next-btn');
+			if (ctaBtn) {
+				ctaBtn.onclick = function() {
+					var item = document.querySelector('.kg-dropdown-item[data-preset="' + this.getAttribute('data-preset') + '"]');
+					if (item) item.click();
+					// Collapse the detail panel so the now-filtered graph is visible.
+					var tog = document.getElementById('kg-hero-toggle');
+					var det = document.getElementById('kg-hero-detail');
+					if (tog && det) { tog.setAttribute('aria-expanded', 'false'); det.hidden = true; }
+				};
+			}
+		} else {
+			nextEl.innerHTML = '';
+			nextEl.hidden = true;
+		}
 	}
 
 	pill.hidden = false;
@@ -2349,7 +2605,10 @@ function renderAchievements(stats, summary, data) {
 	// Cap at 6 badges so the row doesn't wrap into 3 lines.
 	deduped = deduped.slice(0, 6);
 
-	container.innerHTML = deduped.map(function(r) {
+	// Demoted to a small, muted "Earned" footer row under the breakdown — these
+	// are nice-to-have milestones, not the main health signal (it felt off to
+	// celebrate "100+ products" while overall health sits in the red).
+	container.innerHTML = '<span class="kg-ach-label">Earned</span>' + deduped.map(function(r) {
 		return '<span class="kg-ach" data-tier="' + r.tier + '" title="' + escHtml(r.tier.charAt(0).toUpperCase() + r.tier.slice(1)) + ' achievement"><span class="kg-ach-icon">' + r.icon + '</span>' + escHtml(r.text) + '</span>';
 	}).join('');
 }
@@ -2780,6 +3039,7 @@ function init(forceFresh) {
 					return;
 				}
 				_kgData = data;
+				if (data.catalog && data.catalog.mode) _kgCatalogMode = data.catalog.mode;
 				updateStats(data, 'a');
 				buildGraph(data);
 				bindDesignHealthClick(data);
@@ -3440,6 +3700,87 @@ function initPresets() {
 	});
 }
 
+// ── Group-by (generic catalog clustering) ──
+// Returns the category taxonomies the backend exposed for the active catalog —
+// [{taxonomy, label}, …]. Drives the "Group by" selector AND the buildGraph
+// clustering, so it stays generic across any CPT layout (no hardcoded terms).
+function kgGroupTaxonomies() {
+	return (_kgData && _kgData.catalog && _kgData.catalog.taxonomies) || [];
+}
+
+// Resolves the effective grouping mode for the product/projects view. Operator
+// choice (_kgGroupBy) always wins; otherwise auto: a multi-type catalog groups
+// by post type (existing behaviour), a large single-type catalog groups by its
+// first taxonomy (so it doesn't render as a hairball), small catalogs stay flat.
+function kgResolveGroupBy(productCount, catTypes) {
+	var taxes = kgGroupTaxonomies();
+	if (_kgGroupBy) {
+		// Validate a stale taxonomy choice against the current catalog.
+		if (_kgGroupBy === 'none' || _kgGroupBy === 'posttype') return _kgGroupBy;
+		if (taxes.some(function(t){ return t.taxonomy === _kgGroupBy; })) return _kgGroupBy;
+		// fall through to auto if the saved taxonomy no longer exists
+	}
+	if (catTypes && catTypes.length > 1) return 'posttype';
+	if (productCount > 40 && taxes.length > 0) return taxes[0].taxonomy;
+	return 'none';
+}
+
+// Rebuilds the Group-by menu from the live catalog + toggles its visibility.
+// Only shown in the product/projects view when ≥1 taxonomy exists. Called on
+// data load and on every view switch.
+function populateGroupBy() {
+	var dd = document.getElementById('kg-groupby-dd');
+	var menu = document.getElementById('kg-groupby-menu');
+	var labelEl = document.getElementById('kg-groupby-label');
+	if (!dd || !menu) return;
+
+	var taxes = kgGroupTaxonomies();
+	var catTypes = (_kgData && _kgData.catalog && _kgData.catalog.types) || [];
+	var show = (_kgCurrentView === 'product') && (taxes.length > 0 || catTypes.length > 1);
+	dd.hidden = !show;
+	if (!show) return;
+
+	var html = '<button type="button" class="kg-dropdown-item" data-groupby="none">' + 'None (flat)' + '</button>';
+	if (catTypes.length > 1) {
+		html += '<button type="button" class="kg-dropdown-item" data-groupby="posttype">' + 'By type' + '</button>';
+	}
+	taxes.forEach(function(t) {
+		html += '<button type="button" class="kg-dropdown-item" data-groupby="' + escHtml(t.taxonomy) + '">' + escHtml(t.label || t.taxonomy) + '</button>';
+	});
+	menu.innerHTML = html;
+
+	// Reflect the effective (resolved) mode in the trigger label + active item.
+	var products = (_kgData && _kgData.nodes && _kgData.nodes.products) || [];
+	var mode = kgResolveGroupBy(products.length, catTypes);
+	var modeLabel = 'None';
+	if (mode === 'posttype') modeLabel = 'By type';
+	else taxes.forEach(function(t){ if (t.taxonomy === mode) modeLabel = t.label || t.taxonomy; });
+	if (labelEl) labelEl.textContent = modeLabel;
+	menu.querySelectorAll('.kg-dropdown-item').forEach(function(it) {
+		it.classList.toggle('active', it.getAttribute('data-groupby') === mode);
+	});
+}
+
+function initGroupBy() {
+	// Reuse initDropdown for open/close + outside-click + Esc. Items are injected
+	// dynamically by populateGroupBy(), so selection is handled via delegation
+	// rather than initDropdown's static per-item binding.
+	initDropdown('kg-groupby-dd', 'kg-groupby-trigger', 'kg-groupby-menu', null);
+	var menu = document.getElementById('kg-groupby-menu');
+	var trigger = document.getElementById('kg-groupby-trigger');
+	if (!menu) return;
+	menu.addEventListener('click', function(e) {
+		var item = e.target.closest ? e.target.closest('.kg-dropdown-item') : null;
+		if (!item) return;
+		_kgGroupBy = item.getAttribute('data-groupby');
+		menu.hidden = true;
+		if (trigger) trigger.setAttribute('aria-expanded', 'false');
+		var labelEl = document.getElementById('kg-groupby-label');
+		if (labelEl) labelEl.textContent = item.textContent.replace(/\s*\(.+\)\s*$/, '').trim();
+		if (_kgData) buildGraph(_kgData, _kgCurrentView);
+	});
+}
+
 // Inject match counts into preset menu items so operators see how many nodes
 // each filter selects before committing. Called whenever _kgData refreshes.
 function updatePresetCounts(data) {
@@ -3467,6 +3808,10 @@ function updatePresetCounts(data) {
 		var base = btn.textContent.replace(/\s*\(\d+\)\s*$/, '');
 		btn.textContent = base + ' (' + counts[key] + ')';
 	});
+
+	// Refresh the Group-by selector from the same data payload (catalog
+	// taxonomies can change between loads, e.g. after switching sites).
+	populateGroupBy();
 }
 
 function initExport() {
@@ -3821,6 +4166,8 @@ function applyViewAndPreset(view, preset) {
 			b.classList.toggle('active', b.dataset.view === view);
 		});
 		_kgCurrentView = view;
+		// Group-by only applies to the product/projects view — show/hide + refresh.
+		populateGroupBy();
 	}
 	// Preset switch
 	if (preset !== null && preset !== undefined) {
@@ -3907,6 +4254,7 @@ initViewSwitch();
 initStatCardClicks();
 initSearch();
 initPresets();
+initGroupBy();
 initExport();
 initKeyboardShortcuts();
 initActivityFeed();
@@ -4061,6 +4409,18 @@ function kgPollBatchOnce(batchId) {
 
 			var elapsed = Math.round((Date.now() - _kgBatchStart) / 1000);
 			stats.textContent = completed + ' / ' + total + ' done (' + progress + '%) · ' + elapsed + 's elapsed';
+
+			// Hard ceiling: a stuck job (cron not draining, an item the worker
+			// can't process) must never spin forever. After 4 minutes, stop and
+			// refresh so the operator sees the real state instead of an endless
+			// elapsed counter.
+			if (elapsed >= 240) {
+				stats.textContent = 'Taking longer than expected — refreshing. Re-run if it didn\'t apply.';
+				if (typeof kgRefreshAndReopen === 'function') kgRefreshAndReopen(_kgBatchLastNodeId || null, null, null);
+				kgStopBatchMonitor(false);
+				if (typeof fetchActivity === 'function') fetchActivity();
+				return;
+			}
 
 			// Per-status chips
 			var chips = [];
@@ -4231,7 +4591,15 @@ function kgAction(action, productId, btn, langs) {
 	var stopTicker = function () { if (ticker) { clearInterval(ticker); ticker = null; } };
 
 	var endpoint, body;
-	if (action === 'schema') {
+	// SEO meta generation is generic (any post type) — always route to the
+	// any-post-type endpoint. On a CPT / WC-less site the enrich/faq/howto
+	// product endpoints are WC-gated (404), so route those generically too;
+	// the generic endpoint returns synchronously (no batch monitor to hang).
+	var _genericTask = { seo: 'seo', enrich: 'enrich', faq: 'faq', howto: 'howto' }[action];
+	if (action === 'seo' || (_kgCatalogMode === 'cpt' && _genericTask)) {
+		endpoint = 'content/generate';
+		body = { post_id: productId, task: _genericTask };
+	} else if (action === 'schema') {
 		// Deterministic Product JSON-LD from WooCommerce data — instant, no AI,
 		// no queue. Returns {status:'done'} so the standard non-queued path
 		// flashes "Done" and refreshes the panel (has_schema flips true).
