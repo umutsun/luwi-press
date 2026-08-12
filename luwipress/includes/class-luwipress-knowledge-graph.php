@@ -1662,7 +1662,7 @@ class LuwiPress_Knowledge_Graph {
 				continue;
 			}
 			$apt_obj = get_post_type_object( $apt );
-			if ( $apt_obj && isset( $apt_obj->labels ) ) {
+			if ( $apt_obj ) {
 				$attr_label_one = ! empty( $apt_obj->labels->singular_name ) ? $apt_obj->labels->singular_name : $attr_label_one;
 				$attr_label     = ! empty( $apt_obj->labels->name ) ? $apt_obj->labels->name : $attr_label;
 			}
@@ -1749,22 +1749,6 @@ class LuwiPress_Knowledge_Graph {
 		} );
 
 		return array( 'nodes' => $nodes, 'edges' => $attribution_edges );
-	}
-
-	// Read `_lwp_vendor_ids` JSON meta from a single product. Returns int[].
-	private function extract_vendor_ids_from_product( $product_id ) {
-		if ( ! class_exists( 'LuwiPress_Vendors' ) ) {
-			return array();
-		}
-		$raw = get_post_meta( $product_id, LuwiPress_Vendors::PRODUCT_VENDORS_META, true );
-		if ( ! is_string( $raw ) || $raw === '' ) {
-			return array();
-		}
-		$decoded = json_decode( $raw, true );
-		if ( ! is_array( $decoded ) ) {
-			return array();
-		}
-		return array_values( array_filter( array_map( 'absint', $decoded ) ) );
 	}
 
 	// Bulk count + edges of product→vendor attributions. Used when KG is
