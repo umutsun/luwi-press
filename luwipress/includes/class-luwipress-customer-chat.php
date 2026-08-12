@@ -811,13 +811,31 @@ class LuwiPress_Customer_Chat {
 				$kind = $parsed['chip_kind'];
 			}
 		} else {
-			// Model ignored the JSON envelope (older provider, mid-flight
-			// reroute) — treat the raw content as the reply, but only if it
-			// doesn't look like a JSON object we just failed to parse.
+			// The model returned content we couldn't strict-parse as the JSON
+			// envelope. Two cases:
+			//  (a) plain prose (older provider / mid-flight reroute) -> use as-is.
+			//  (b) a JSON envelope that failed parsing — almost always because the
+			//      reply was truncated at the token limit (no closing brace). Never
+			//      dump raw `{"reply": ...}` at the customer: recover the reply
+			//      string leniently, falling back to a generic line only if nothing
+			//      is recoverable.
 			$raw = trim( $result['content'] );
-			$reply = ( strlen( $raw ) > 0 && $raw[0] === '{' && substr( $raw, -1 ) === '}' )
-				? 'I\'m here to help — could you tell me a bit more about what you\'re looking for?'
-				: $raw;
+			if ( strlen( $raw ) > 0 && $raw[0] === '{' ) {
+				$reply = 'I\'m here to help — could you tell me a bit more about what you\'re looking for?';
+				// Capture the "reply" value body (handles a truncated tail: the
+				// alternation only consumes complete escape sequences, so json_decode
+				// of the wrapped capture always succeeds).
+				if ( preg_match( '/"reply"\s*:\s*"((?:\\\\.|[^"\\\\])*)/s', $raw, $m ) ) {
+					$decoded = json_decode( '"' . $m[1] . '"' );
+					if ( is_string( $decoded ) && trim( $decoded ) !== '' ) {
+						$reply = $decoded;
+					} elseif ( trim( $m[1] ) !== '' ) {
+						$reply = stripcslashes( $m[1] );
+					}
+				}
+			} else {
+				$reply = $raw;
+			}
 		}
 
 		if ( empty( $chips ) ) {

@@ -1011,45 +1011,103 @@
     color: var(--lp-text-muted);
     line-height: 1.45;
 }
+/* Per-dimension breakdown — weakest-first labelled bars so the operator sees
+ * at a glance where the score is bleeding and where it's already strong. */
 .kg-hero-meta {
     display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-bottom: 8px;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 10px;
 }
 .kg-hero-meta:empty { display: none; }
-.kg-hero-meta-chip {
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    background: var(--lp-surface);
-    border: 1px solid var(--lp-border);
-    color: var(--lp-text-muted);
-    white-space: nowrap;
+.kg-hero-dim {
+    display: grid;
+    grid-template-columns: 92px 1fr 40px;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
 }
-.kg-hero-meta-chip strong {
+.kg-hero-dim-label {
     color: var(--lp-text);
     font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
+.kg-hero-dim-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--lp-border);
+    overflow: hidden;
+}
+.kg-hero-dim-fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.4s ease;
+}
+.kg-hero-dim.kg-h-good .kg-hero-dim-fill { background: linear-gradient(90deg, #22c55e, #16a34a); }
+.kg-hero-dim.kg-h-warn .kg-hero-dim-fill { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.kg-hero-dim.kg-h-bad  .kg-hero-dim-fill { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.kg-hero-dim-pct {
+    text-align: right;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--lp-text-muted);
+}
+.kg-hero-dim.kg-h-good .kg-hero-dim-pct { color: var(--lp-success); }
+.kg-hero-dim.kg-h-warn .kg-hero-dim-pct { color: var(--lp-warning); }
+.kg-hero-dim.kg-h-bad  .kg-hero-dim-pct { color: var(--lp-error); }
+
+/* Next-action CTA — one click to the preset filter for the weakest dimension. */
+.kg-hero-next { margin-bottom: 4px; }
+.kg-hero-next:empty { display: none; }
+.kg-hero-next-btn {
+    appearance: none;
+    border: 1px solid var(--lp-primary);
+    background: var(--lp-primary);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: filter 0.15s ease, transform 0.05s ease;
+}
+.kg-hero-next-btn:hover { filter: brightness(1.08); }
+.kg-hero-next-btn:active { transform: translateY(1px); }
 
 /* Achievements — milestone badges earned by hitting coverage thresholds.
  * Colourful, with a subtle float-in on first render to feel like a reward. */
+/* Demoted milestone row — separated from the breakdown and prefixed with a
+ * muted "Earned" label so it reads as secondary, not the main health signal. */
 .kg-achievements {
-    margin-top: 10px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--lp-border);
     display: flex;
+    align-items: center;
     gap: 6px;
     flex-wrap: wrap;
 }
 .kg-achievements:empty {
     display: none;
 }
+.kg-ach-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--lp-text-muted);
+    margin-right: 2px;
+}
 .kg-ach {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-size: 11px;
+    gap: 4px;
+    font-size: 10px;
     font-weight: 600;
-    padding: 3px 9px 3px 7px;
+    padding: 2px 8px 2px 6px;
     border-radius: 999px;
     background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
     color: #92400e;
@@ -1062,7 +1120,7 @@
 .kg-ach[data-tier="gold"]     { background: linear-gradient(135deg, #fef9c3, #fde047); color: #713f12; border-color: #eab308; }
 .kg-ach[data-tier="platinum"] { background: linear-gradient(135deg, #ede9fe, #c4b5fd); color: #5b21b6; border-color: #a78bfa; }
 .kg-ach-icon {
-    font-size: 13px;
+    font-size: 11px;
     line-height: 1;
 }
 @keyframes kg-ach-pop {
@@ -1367,6 +1425,13 @@
 .kg-ap-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .kg-ap-mode { cursor: pointer; margin: 0; }
 .kg-ap-mode input { position: absolute; opacity: 0; pointer-events: none; }
+/* Source-of-truth checkboxes behind the mode cards. The `hidden` attribute alone
+   does NOT hide them: wp-admin forms.css declares
+   `input[type="checkbox"] { display: inline-block }`, and any author rule beats the
+   UA stylesheet's `[hidden] { display: none }`. Without this they render as two
+   stray checkboxes inside the "Off" card. `!important` is required because
+   `input[type="checkbox"]` (0,1,1) outranks `.kg-ap-srccbx` (0,1,0). */
+.kg-ap-srccbx { display: none !important; }
 .kg-ap-mode-card {
     display: flex;
     flex-direction: column;

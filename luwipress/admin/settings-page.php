@@ -1298,7 +1298,7 @@ $email_plugin = $env['email']['plugin'] ?? 'wp_mail';
 					</tbody>
 				</table>
 				<p class="description" style="margin-top:8px;">
-					<?php esc_html_e( 'Reference bands (Tapadum SEO writing guide §1.10): Product 500-650-800, Blog post 1200-1500-2200, Static page 300-400-600. Per-vertical defaults can be filtered via', 'luwipress' ); ?>
+					<?php esc_html_e( 'Reference bands (LuwiPress SEO writing guide): Product 500-650-800, Blog post 1200-1500-2200, Static page 300-400-600. Per-vertical defaults can be filtered via', 'luwipress' ); ?>
 					<code>luwipress_word_count_targets</code>.
 				</p>
 			</div>

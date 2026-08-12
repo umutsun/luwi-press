@@ -54,6 +54,14 @@ class LuwiPress_Vendors {
 	const PRIMARY_GROUP_META    = '_lwp_vendor_primary_group'; // post meta: canonical group term_id
 	const TRANSIENT_GROUP_BASES = 'luwipress_vendor_group_bases_v1';
 
+	// Taxonomy-based attribution (3.16.0+). A vendor can be linked to one or
+	// more taxonomy terms; the Knowledge Graph then counts published posts (of
+	// any attributable post type) sitting in those terms — no per-post
+	// `_lwp_vendor_ids` write required. Canonical JSON shape:
+	//   {"<taxonomy>":[<term_id>,...], ...}   e.g. {"product_brand":[12,15]}
+	// Generic: taxonomy slug + term IDs are pure data, zero hardcoded names.
+	const ATTR_TERMS_META = '_lwp_vendor_attr_terms';
+
 	/**
 	 * Default config. Each value lives under
 	 * option key `luwipress_vendors_<key>`. Operator overrides via Settings UI
@@ -145,6 +153,14 @@ class LuwiPress_Vendors {
 
 		// WooCommerce integration (loaded only when WC is active)
 		add_action( 'woocommerce_init', array( $this, 'init_woocommerce_integration' ) );
+
+		// Generic CPT attribution (3.16.0+): register the `_lwp_vendor_ids`
+		// attribution meta on any post type a site opts in via the
+		// `luwipress_vendor_attributable_post_types` filter, so vendor → item
+		// attribution works on non-WooCommerce sites (CPT catalogs, directories,
+		// real-estate projects, etc.) exactly as it does for WC products.
+		// Late priority so operator-defined CPTs are already registered.
+		add_action( 'init', array( $this, 'register_cpt_attribution_meta' ), 99 );
 
 		// ── Per-group archive slugs (3.7.5) ──────────────────────────────
 		// Dynamic rewrite rules per group base (runs after register_cpt p5).
@@ -249,6 +265,115 @@ class LuwiPress_Vendors {
 				'attribution_role' => __( 'Made by', 'luwipress' ),
 			),
 		) );
+	}
+
+	/* ─── GENERIC CPT ATTRIBUTION (3.16.0+) ───────────────────────────── */
+
+	/**
+	 * Post types a vendor can be attributed to. Always includes `product`
+	 * (the historical WooCommerce surface); sites add their own CPTs via the
+	 * filter. Kept generic on purpose — core ships ZERO site-specific type
+	 * names; a theme/mu-plugin opts its catalog CPT in, e.g.:
+	 *
+	 *   add_filter( 'luwipress_vendor_attributable_post_types', function ( $t ) {
+	 *       $t[] = 'my_project'; return $t;
+	 *   } );
+	 *
+	 * @return string[] Sanitized, de-duplicated post-type slugs.
+	 */
+	public static function get_attributable_post_types() {
+		$types = apply_filters( 'luwipress_vendor_attributable_post_types', array( 'product' ) );
+		if ( ! is_array( $types ) ) {
+			$types = array( 'product' );
+		}
+		$types = array_values( array_unique( array_filter( array_map( 'sanitize_key', $types ) ) ) );
+		return empty( $types ) ? array( 'product' ) : $types;
+	}
+
+	/**
+	 * Register the `_lwp_vendor_ids` attribution meta on every opted-in CPT
+	 * (product is registered separately inside the WC integration). This gives
+	 * the meta a sanitize pass on EVERY write (update_post_meta, REST, MCP
+	 * meta_set, wp-cli) so CPT attribution shares the canonical
+	 * `["<id>","<id>"]` quoted-string shape the KG/templates query against.
+	 */
+	public function register_cpt_attribution_meta() {
+		foreach ( self::get_attributable_post_types() as $pt ) {
+			if ( 'product' === $pt || ! post_type_exists( $pt ) ) {
+				continue;
+			}
+			register_post_meta(
+				$pt,
+				self::PRODUCT_VENDORS_META,
+				array(
+					'type'              => 'string',
+					'single'            => true,
+					'show_in_rest'      => false,
+					'description'       => 'LuwiPress Vendors — attributed vendor post IDs (JSON array of strings).',
+					'sanitize_callback' => array( $this, 'normalize_product_vendor_ids' ),
+					'auth_callback'     => function () {
+						return current_user_can( 'edit_posts' );
+					},
+				)
+			);
+		}
+	}
+
+	/**
+	 * Sanitize-callback for the taxonomy attribution map meta. Accepts a JSON
+	 * string or array; emits canonical JSON `{"<taxonomy>":[int,...]}` (or '' to
+	 * clear). Drops empty taxonomies / non-positive term IDs.
+	 *
+	 * @param mixed $value
+	 * @return string
+	 */
+	public function normalize_attr_terms( $value ) {
+		if ( is_string( $value ) ) {
+			$decoded = json_decode( $value, true );
+		} elseif ( is_array( $value ) ) {
+			$decoded = $value;
+		} else {
+			$decoded = null;
+		}
+		if ( ! is_array( $decoded ) ) {
+			return '';
+		}
+		$clean = array();
+		foreach ( $decoded as $tax => $ids ) {
+			$tax = sanitize_key( (string) $tax );
+			if ( $tax === '' || ! is_array( $ids ) ) {
+				continue;
+			}
+			$ids = array_values( array_unique( array_filter( array_map( 'absint', $ids ) ) ) );
+			if ( ! empty( $ids ) ) {
+				$clean[ $tax ] = $ids;
+			}
+		}
+		return empty( $clean ) ? '' : (string) wp_json_encode( $clean );
+	}
+
+	/**
+	 * Read a vendor's taxonomy attribution map.
+	 *
+	 * @param int $vendor_id
+	 * @return array<string,int[]>  e.g. [ 'product_brand' => [12,15] ]
+	 */
+	public static function get_attr_terms( $vendor_id ) {
+		$raw = get_post_meta( (int) $vendor_id, self::ATTR_TERMS_META, true );
+		if ( ! is_string( $raw ) || $raw === '' ) {
+			return array();
+		}
+		$decoded = json_decode( $raw, true );
+		if ( ! is_array( $decoded ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( $decoded as $tax => $ids ) {
+			if ( is_array( $ids ) ) {
+				$out[ (string) $tax ] = array_values( array_filter( array_map( 'absint', $ids ) ) );
+			}
+		}
+		return $out;
 	}
 
 	/* ─── WOOCOMMERCE INTEGRATION ─────────────────────────────────────── */
@@ -1213,6 +1338,17 @@ class LuwiPress_Vendors {
 					$value = (string) $value;
 					return in_array( $value, array( 'organization', 'person', 'localbusiness' ), true ) ? $value : '';
 				},
+			) )
+		);
+
+		// Taxonomy-based attribution map (3.16.0+). JSON {taxonomy:[term_ids]}.
+		// Settable via REST /vendors/{id}/meta, MCP meta_set/vendor_meta_set, wp-cli.
+		register_post_meta(
+			self::POST_TYPE,
+			self::ATTR_TERMS_META,
+			array_merge( $base, array(
+				'description'       => 'LuwiPress Vendor — taxonomy attribution map, JSON {"<taxonomy>":[term_id,...]}. KG counts posts in these terms as attributed items.',
+				'sanitize_callback' => array( $this, 'normalize_attr_terms' ),
 			) )
 		);
 

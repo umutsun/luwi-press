@@ -38,6 +38,7 @@ class LuwiPress_Plugin_Detector {
 			'translation'      => $this->detect_translation(),
 			'email'            => $this->detect_email(),
 			'forms'            => $this->detect_forms(),
+			'backup'           => $this->detect_backup(),
 			'crm'              => $this->detect_crm(),
 			'customer_support' => $this->detect_customer_support(),
 			'page_builder'     => $this->detect_page_builder(),
@@ -437,6 +438,71 @@ class LuwiPress_Plugin_Detector {
 		}
 
 		$this->cache['forms'] = $result;
+		return $result;
+	}
+
+	// ------------------------------------------------------------------
+	// Backup / Migration Detection (UpdraftPlus / Duplicator / AIO WP Migration …)
+	// ------------------------------------------------------------------
+
+	/**
+	 * Detect the active backup/migration plugin — user's choice, like WPML vs
+	 * Polylang. Whichever is active surfaces as a green pill; LuwiPress's backup
+	 * bridge (REST /backup/*) drives it for scheduled backups + site migration.
+	 */
+	public function detect_backup() {
+		if ( isset( $this->cache['backup'] ) ) {
+			return $this->cache['backup'];
+		}
+
+		$result = array( 'plugin' => 'none', 'version' => null, 'features' => array() );
+
+		// UpdraftPlus — the LuwiPress-recommended backup + migration plugin.
+		if ( defined( 'UPDRAFTPLUS_DIR' ) || class_exists( 'UpdraftPlus' ) ) {
+			$ver = 'unknown';
+			if ( isset( $GLOBALS['updraftplus'] ) && is_object( $GLOBALS['updraftplus'] ) && isset( $GLOBALS['updraftplus']->version ) ) {
+				$ver = $GLOBALS['updraftplus']->version;
+			}
+			$result = array(
+				'plugin'   => 'updraftplus',
+				'version'  => $ver,
+				'features' => array( 'scheduled' => true, 'remote_storage' => true, 'migrate' => 'premium' ),
+			);
+		}
+		// All-in-One WP Migration — single-file export/import (good free migration).
+		elseif ( defined( 'AI1WM_PLUGIN_NAME' ) || class_exists( 'Ai1wm_Main_Controller' ) ) {
+			$result = array(
+				'plugin'   => 'all-in-one-wp-migration',
+				'version'  => defined( 'AI1WM_VERSION' ) ? constant( 'AI1WM_VERSION' ) : 'unknown',
+				'features' => array( 'migrate' => true ),
+			);
+		}
+		// Duplicator
+		elseif ( defined( 'DUPLICATOR_VERSION' ) || defined( 'DUPLICATOR_PRO_VERSION' ) ) {
+			$result = array(
+				'plugin'   => 'duplicator',
+				'version'  => defined( 'DUPLICATOR_VERSION' ) ? constant( 'DUPLICATOR_VERSION' ) : ( defined( 'DUPLICATOR_PRO_VERSION' ) ? constant( 'DUPLICATOR_PRO_VERSION' ) : 'unknown' ),
+				'features' => array( 'migrate' => true ),
+			);
+		}
+		// WPvivid
+		elseif ( defined( 'WPVIVID_PLUGIN_VERSION' ) ) {
+			$result = array(
+				'plugin'   => 'wpvivid-backuprestore',
+				'version'  => constant( 'WPVIVID_PLUGIN_VERSION' ),
+				'features' => array( 'migrate' => true ),
+			);
+		}
+		// BackWPup
+		elseif ( class_exists( 'BackWPup' ) ) {
+			$result = array(
+				'plugin'   => 'backwpup',
+				'version'  => defined( 'BackWPup::VERSION' ) ? constant( 'BackWPup::VERSION' ) : 'unknown',
+				'features' => array(),
+			);
+		}
+
+		$this->cache['backup'] = $result;
 		return $result;
 	}
 

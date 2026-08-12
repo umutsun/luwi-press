@@ -254,6 +254,12 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 				'gravity-forms'   => admin_url( 'admin.php?page=gf_edit_forms' ),
 				'forminator'      => admin_url( 'admin.php?page=forminator' ),
 				'contact-form-7'  => admin_url( 'admin.php?page=wpcf7' ),
+				// Backup / Migration
+				'updraftplus'             => admin_url( 'options-general.php?page=updraftplus' ),
+				'all-in-one-wp-migration' => admin_url( 'admin.php?page=ai1wm_export' ),
+				'duplicator'              => admin_url( 'admin.php?page=duplicator' ),
+				'wpvivid-backuprestore'   => admin_url( 'admin.php?page=WPvivid' ),
+				'backwpup'                => admin_url( 'admin.php?page=backwpup' ),
 				// Cache
 				'litespeed-cache' => admin_url( 'admin.php?page=litespeed' ),
 				'wp-rocket'       => admin_url( 'options-general.php?page=wprocket' ),
@@ -351,6 +357,18 @@ $provider_label  = $provider_labels[ $ai_provider ] ?? ucfirst( $ai_provider );
 			$pills[] = array( 'err', 'dashicons-feedback', __( 'No forms plugin', 'luwipress' ),
 				__( 'No form plugin detected. Click to install Fluent Forms (free — multi-step wizard + DB entries + native Elementor widget). WPForms / Gravity Forms / Forminator / CF7 also supported.', 'luwipress' ),
 				$install_url( 'fluentform' ) );
+		}
+
+		// Backup / Migration — user's choice (UpdraftPlus / AIO WP Migration / …).
+		$backup = $environment['backup'] ?? array( 'plugin' => 'none' );
+		if ( ! empty( $backup['plugin'] ) && 'none' !== $backup['plugin'] ) {
+			$pills[] = array( 'ok', 'dashicons-backup', $slug_label( $backup['plugin'] ),
+				sprintf( __( 'Backup plugin: %s. LuwiPress backup tools can run/inspect backups + assist site migration. Click to manage.', 'luwipress' ), $slug_label( $backup['plugin'] ) ),
+				$manage_url( $backup['plugin'] ) );
+		} else {
+			$pills[] = array( 'err', 'dashicons-backup', __( 'No backup plugin', 'luwipress' ),
+				__( 'No backup plugin detected. Click to install UpdraftPlus (free — scheduled backups + migration). Duplicator / All-in-One WP Migration also supported.', 'luwipress' ),
+				$install_url( 'updraftplus' ) );
 		}
 
 		// Cache — click → manage or install LiteSpeed.

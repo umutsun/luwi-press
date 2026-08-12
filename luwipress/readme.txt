@@ -4,7 +4,7 @@ Tags: woocommerce, ai, seo, translation, automation, product enrichment, multili
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.17.2
+Stable tag: 3.17.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,15 @@ Set a daily budget limit in Settings → AI API Keys. When reached, all AI featu
 6. Activity log with workflow results
 
 == Changelog ==
+
+= 3.17.3 — Knowledge Graph for every site, not just shops =
+* **The Knowledge Graph now works on sites without WooCommerce.** Stores were never the only thing worth mapping: directories, portfolios, real-estate listings and any other custom catalogue now appear in the graph with the same Catalog / Posts / Pages views, health scoring and one-click actions. Nothing to configure — the graph detects what your site actually publishes.
+* **AI content actions work on any content type.** "Generate SEO Meta", enrichment, FAQ and HowTo are no longer limited to products — they run on posts, pages and custom content, writing through whichever SEO plugin you already use.
+* **Clearer store-health readout.** The health panel now breaks the score into labelled, weakest-first bars so you can see at a glance where you are losing points, with a one-click jump to the weakest area. Milestone badges moved below the breakdown so they read as a reward, not as the main signal.
+* **Vendor/brand attribution beyond products.** Vendors can now be credited for any content type your site opts in, so brand pages show real counts on non-shop catalogues.
+* **Backup plugin now detected.** The dashboard status ribbon recognises UpdraftPlus, All-in-One WP Migration, Duplicator, WPvivid and BackWPup, and tells you when no backup plugin is installed at all.
+* **Fixed: two stray checkboxes in the Autopilot panel.** The Off / Dry-run / Live mode cards had two leftover checkboxes showing through underneath them. They are internal controls and are now correctly hidden.
+* **Fixed: customer chat no longer shows raw code.** If an AI reply was cut short by the length limit, the chat could print raw `{"reply": …}` text at the customer. It now recovers and shows the message. Links and bold text in chat replies also render properly instead of appearing as plain markdown.
 
 = 3.17.2 — Knowledge Graph schema signal is now honest =
 * **No more unfixable "missing Product Schema" tasks.** The Knowledge Graph used to flag products as missing structured data even when WooCommerce (or your SEO plugin — Rank Math, Yoast, AIOSEO, SEOPress) was already outputting it, leaving a task you could never clear. The graph now recognises that coverage: those products show as complete and the dead tasks disappear, so your store-health score reflects reality.

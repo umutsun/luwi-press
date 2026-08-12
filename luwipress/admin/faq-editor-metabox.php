@@ -64,7 +64,7 @@ $pill_bg = $status_color[ $status['status'] ] ?? '#666';
 	<p class="description">
 		<?php
 		esc_html_e(
-			'Each question + answer pair is emitted as a single FAQPage entry in this post\'s JSON-LD. Aim for 3-5 entries with answers in the 50-80 word range — that band tracks closely with the Tapadum SEO writing guide §2.5 and the AEO citability standard.',
+			'Each question + answer pair is emitted as a single FAQPage entry in this post\'s JSON-LD. Aim for 3-5 entries with answers in the 50-80 word range — that band tracks closely with the LuwiPress SEO writing guide and the AEO citability standard.',
 			'luwipress'
 		);
 		?>

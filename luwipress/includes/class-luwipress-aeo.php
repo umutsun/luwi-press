@@ -625,7 +625,11 @@ class LuwiPress_AEO {
      * Output AEO schema markup in <head>
      */
     public function output_aeo_schema() {
-        if (!is_singular('product')) {
+        // Generic CPT support: any post type generation writes into via
+        // content/generate (task=faq/howto/speakable) also renders here, not
+        // just WooCommerce products. Default stays product-only for back-compat.
+        $post_types = (array) apply_filters( 'luwipress_aeo_schema_post_types', array( 'product' ) );
+        if ( ! is_singular( $post_types ) ) {
             return;
         }
 

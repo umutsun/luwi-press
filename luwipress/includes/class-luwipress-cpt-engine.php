@@ -1803,7 +1803,8 @@ class LuwiPress_CPT_Engine {
 					continue;
 				}
 				if ( ! isset( $node[ $parent ] ) || ! is_array( $node[ $parent ] ) ) {
-					$node[ $parent ] = ( 'address' === $parent ) ? array( '@type' => 'PostalAddress' ) : array();
+					$nested_types = array( 'address' => 'PostalAddress', 'geo' => 'GeoCoordinates' );
+					$node[ $parent ] = isset( $nested_types[ $parent ] ) ? array( '@type' => $nested_types[ $parent ] ) : array();
 				}
 				$node[ $parent ][ $child ] = $this->engine_schema_sanitize( $val );
 				continue;
@@ -1836,7 +1837,10 @@ class LuwiPress_CPT_Engine {
 		if ( $thumb ) {
 			$node['image'] = esc_url_raw( $thumb );
 		}
-		return $node;
+		// Extension point: let site-local code add properties the generic field_schema
+		// mapping doesn't cover (e.g. geo/GeoCoordinates from server-only meta that is
+		// deliberately kept out of the editable field_schema) without a core CPT-specific hack.
+		return apply_filters( 'luwipress_cpt_engine_schema_node', $node, $post_id, $def, $at );
 	}
 
 	/**

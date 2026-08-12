@@ -363,7 +363,19 @@
             bubble.className = 'lp-chat-bubble';
 
             var html = this.escapeHtml(content);
+            // Markdown links [text](url) first, so their URLs aren't re-linkified below.
             html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+            // Bare URLs -> clickable links. The leading (^|[\s(]) guard skips URLs that
+            // already sit inside an href="..." from the markdown pass; trailing sentence
+            // punctuation is kept outside the anchor so "...tour/." doesn't 404.
+            html = html.replace(/(^|[\s(])(https?:\/\/[^\s<]+)/g, function (m, pre, url) {
+                var trail = '';
+                var p = url.match(/[).,;:!?]+$/);
+                if (p) { trail = p[0]; url = url.slice(0, url.length - trail.length); }
+                return pre + '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>' + trail;
+            });
+            // Basic markdown bold.
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
             html = html.replace(/\n/g, '<br>');
 
             bubble.innerHTML = html;
